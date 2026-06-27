@@ -324,6 +324,40 @@ class AuditRecorder:
             description=self._field_change_description(field_name, old_value, new_value),
         )
 
+    async def record_inventory_archive(
+        self,
+        item: InventoryItem,
+        *,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="inventory_item",
+            entity_id=str(item.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            inventory_item_id=item.id,
+            old_value={"is_archived": False},
+            new_value={"is_archived": True},
+            description=f"Inventory item archived (serial: {item.serial_number})",
+        )
+
+    async def record_inventory_restore(
+        self,
+        item: InventoryItem,
+        *,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="inventory_item",
+            entity_id=str(item.id),
+            action=AuditAction.RESTORE,
+            actor=actor,
+            inventory_item_id=item.id,
+            old_value={"is_archived": True},
+            new_value={"is_archived": False},
+            description=f"Inventory item restored (serial: {item.serial_number})",
+        )
+
     async def record_system_action(
         self,
         *,
@@ -452,6 +486,50 @@ class AuditRecorder:
             actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
             description=f"User '{user.username}' logged out",
             source=AuditSource.MANUAL,
+        )
+
+    async def record_recovery_key_generated(self, user: User, *, reason: str) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            new_value={"reason": reason},
+            description="Main Admin recovery key generated",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_recovery_key_used(self, user: User) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor.system(display_name="Recovery", role="system"),
+            description=f"Main Admin recovery key used for '{user.username}'",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_main_admin_password_recovered(self, user: User) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.UPDATE,
+            actor=AuditActor.system(display_name="Recovery", role="system"),
+            field_name="password",
+            old_value={"password_recovered": False},
+            new_value={"password_recovered": True},
+            description=f"Main Admin password recovered for '{user.username}'",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_recovery_key_regenerated(self, user: User) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor.system(display_name="Recovery", role="system"),
+            description=f"Main Admin recovery key regenerated for '{user.username}'",
+            source=AuditSource.SYSTEM,
         )
 
     @staticmethod

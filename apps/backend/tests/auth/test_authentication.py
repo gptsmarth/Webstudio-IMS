@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
 from webstudio_backend.infrastructure.database.enums import UserRole
-from webstudio_backend.infrastructure.repositories.exceptions import SystemAlreadyInitializedError
+from webstudio_backend.infrastructure.repositories.exceptions import (
+    SetupPendingRecoveryConfirmationError,
+    SystemAlreadyInitializedError,
+)
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
 from webstudio_backend.services.setup_service import SetupService
+
+RECOVERY_KEY_PATTERN = re.compile(r"^[A-F0-9]{4}(?:-[A-F0-9]{4}){3}$")
 
 
 @pytest.mark.asyncio
@@ -24,15 +31,19 @@ async def test_setup_status_uninitialized(db_session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_setup_initialize_creates_main_admin(db_session: AsyncSession) -> None:
-    user, company = await SetupService(db_session).initialize(
+    result = await SetupService(db_session).initialize(
         company_name="WEBSTUDIO",
         main_admin_name="Main Admin",
         username=MAIN_ADMIN_USERNAME,
         password=TEST_PASSWORD,
         confirm_password=TEST_PASSWORD,
     )
-    assert user.role is UserRole.MAIN_ADMIN
-    assert company == "WEBSTUDIO"
+    assert result.user.role is UserRole.MAIN_ADMIN
+    assert result.company_name == "WEBSTUDIO"
+    assert RECOVERY_KEY_PATTERN.fullmatch(result.recovery_key)
+    assert await SystemSettingRepository(db_session).is_system_initialized() is False
+
+    await SetupService(db_session).confirm_recovery_key()
     assert await SystemSettingRepository(db_session).is_system_initialized() is True
 
 

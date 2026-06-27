@@ -37,18 +37,20 @@ async def clean_auth_tables(db_session: AsyncSession) -> None:
             """,
         ),
     )
+    await db_session.commit()
 
 
 @pytest_asyncio.fixture
 async def initialized_system(db_session: AsyncSession) -> tuple[object, str]:
-    user, company = await SetupService(db_session).initialize(
+    result = await SetupService(db_session).initialize(
         company_name="WEBSTUDIO",
         main_admin_name="Main Admin",
         username=MAIN_ADMIN_USERNAME,
         password=TEST_PASSWORD,
         confirm_password=TEST_PASSWORD,
     )
-    return user, company
+    await SetupService(db_session).confirm_recovery_key()
+    return result.user, result.company_name
 
 
 @pytest_asyncio.fixture

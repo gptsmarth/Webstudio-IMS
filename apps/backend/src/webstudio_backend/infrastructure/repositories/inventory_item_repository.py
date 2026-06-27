@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
+from datetime import date
 
-from sqlalchemy import Select, inspect, select, text
+from sqlalchemy import Select, func, inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import InventoryStatus, ProductModelStatus
+from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
@@ -27,7 +30,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateSerialNumberError,
     InactiveLocationError,
     InactiveProductModelError,
+    InventoryItemArchiveNotAllowedError,
     InventoryItemDeleteNotAllowedError,
+    InventoryItemNotFoundError,
 )
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
     InventorySearchFilters,
@@ -41,6 +46,14 @@ from webstudio_backend.infrastructure.repositories.inventory_item_validation imp
 SCHEMA = "webstudio"
 
 
+@dataclass(frozen=True, slots=True)
+class InventoryItemDetailRow:
+    item: InventoryItem
+    product_model: ProductModel
+    brand: Brand
+    location: Location
+
+
 class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, InventoryItem)
@@ -50,9 +63,58 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
 
     async def find_by_serial_number(self, serial_number: str) -> InventoryItem | None:
         normalized = validate_serial_number(serial_number)
-        statement = select(InventoryItem).where(InventoryItem.serial_number == normalized)
+        statement = select(InventoryItem).where(
+            func.lower(InventoryItem.serial_number) == normalized.lower(),
+        )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
+
+    async def get_detail(self, entity_id: uuid.UUID) -> InventoryItemDetailRow | None:
+        statement = (
+            select(InventoryItem, ProductModel, Brand, Location)
+            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .join(Location, InventoryItem.current_location_id == Location.id)
+            .where(InventoryItem.id == entity_id)
+        )
+        result = await self._session.execute(statement)
+        row = result.one_or_none()
+        if row is None:
+            return None
+        item, product_model, brand, location = row
+        return InventoryItemDetailRow(
+            item=item,
+            product_model=product_model,
+            brand=brand,
+            location=location,
+        )
+
+    async def get_detail_by_serial(self, serial_number: str) -> InventoryItemDetailRow | None:
+        normalized = validate_serial_number(serial_number)
+        statement = (
+            select(InventoryItem, ProductModel, Brand, Location)
+            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .join(Location, InventoryItem.current_location_id == Location.id)
+            .where(func.lower(InventoryItem.serial_number) == normalized.lower())
+        )
+        result = await self._session.execute(statement)
+        row = result.one_or_none()
+        if row is None:
+            return None
+        item, product_model, brand, location = row
+        return InventoryItemDetailRow(
+            item=item,
+            product_model=product_model,
+            brand=brand,
+            location=location,
+        )
+
+    async def require_by_id(self, entity_id: uuid.UUID) -> InventoryItem:
+        item = await self.get_by_id(entity_id)
+        if item is None:
+            raise InventoryItemNotFoundError(str(entity_id))
+        return item
 
     async def create(
         self,
@@ -62,6 +124,8 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         color: str,
         current_location_id: int,
         status: InventoryStatus,
+        purchase_date: date | None = None,
+        warranty_expiry: date | None = None,
         actor: AuditActor | None = None,
     ) -> InventoryItem:
         normalized_serial = validate_serial_number(serial_number)
@@ -81,6 +145,8 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 color=normalized_color,
                 current_location_id=current_location_id,
                 status=validated_status,
+                purchase_date=purchase_date,
+                warranty_expiry=warranty_expiry,
             ),
         )
         await AuditRecorder(self._session).record_inventory_create(
@@ -93,10 +159,15 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         self,
         inventory_item: InventoryItem,
         *,
+        serial_number: str | None = None,
         product_model_id: uuid.UUID | None = None,
         color: str | None = None,
         current_location_id: int | None = None,
         status: InventoryStatus | None = None,
+        purchase_date: date | None = None,
+        warranty_expiry: date | None = None,
+        set_purchase_date: bool = False,
+        set_warranty_expiry: bool = False,
         actor: AuditActor | None = None,
     ) -> InventoryItem:
         audit_actor = actor or AuditActor.system()
@@ -106,7 +177,16 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         old_serial = inventory_item.serial_number
         old_color = inventory_item.color
         old_product_model_id = inventory_item.product_model_id
+        old_purchase_date = inventory_item.purchase_date
+        old_warranty_expiry = inventory_item.warranty_expiry
 
+        if serial_number is not None:
+            normalized_serial = validate_serial_number(serial_number)
+            if normalized_serial.lower() != inventory_item.serial_number.lower():
+                existing = await self.find_by_serial_number(normalized_serial)
+                if existing is not None and existing.id != inventory_item.id:
+                    raise DuplicateSerialNumberError(normalized_serial)
+                inventory_item.serial_number = normalized_serial
         if product_model_id is not None:
             await self._ensure_active_product_model(product_model_id)
             inventory_item.product_model_id = product_model_id
@@ -117,10 +197,22 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             inventory_item.current_location_id = current_location_id
         if status is not None:
             inventory_item.status = validate_status(status)
+        if set_purchase_date:
+            inventory_item.purchase_date = purchase_date
+        if set_warranty_expiry:
+            inventory_item.warranty_expiry = warranty_expiry
 
         await self._session.flush()
         await self._session.refresh(inventory_item)
 
+        if serial_number is not None and inventory_item.serial_number != old_serial:
+            await recorder.record_inventory_field_update(
+                inventory_item,
+                field_name="serial_number",
+                old_value={"serial_number": old_serial},
+                new_value={"serial_number": inventory_item.serial_number},
+                actor=audit_actor,
+            )
         if current_location_id is not None and current_location_id != old_location_id:
             await recorder.record_inventory_location_change(
                 inventory_item,
@@ -150,7 +242,67 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 new_value={"color": inventory_item.color},
                 actor=audit_actor,
             )
+        if set_purchase_date and inventory_item.purchase_date != old_purchase_date:
+            await recorder.record_inventory_field_update(
+                inventory_item,
+                field_name="purchase_date",
+                old_value={"purchase_date": old_purchase_date.isoformat() if old_purchase_date else None},
+                new_value={
+                    "purchase_date": inventory_item.purchase_date.isoformat()
+                    if inventory_item.purchase_date
+                    else None
+                },
+                actor=audit_actor,
+            )
+        if set_warranty_expiry and inventory_item.warranty_expiry != old_warranty_expiry:
+            await recorder.record_inventory_field_update(
+                inventory_item,
+                field_name="warranty_expiry",
+                old_value={
+                    "warranty_expiry": old_warranty_expiry.isoformat() if old_warranty_expiry else None
+                },
+                new_value={
+                    "warranty_expiry": inventory_item.warranty_expiry.isoformat()
+                    if inventory_item.warranty_expiry
+                    else None
+                },
+                actor=audit_actor,
+            )
 
+        return inventory_item
+
+    async def archive(
+        self,
+        inventory_item: InventoryItem,
+        *,
+        actor: AuditActor | None = None,
+    ) -> InventoryItem:
+        if inventory_item.is_archived:
+            return inventory_item
+        if inventory_item.status is InventoryStatus.SOLD:
+            raise InventoryItemArchiveNotAllowedError(str(inventory_item.id), "item is sold")
+        inventory_item.is_archived = True
+        await self._session.flush()
+        await AuditRecorder(self._session).record_inventory_archive(
+            inventory_item,
+            actor=actor or AuditActor.system(),
+        )
+        return inventory_item
+
+    async def restore(
+        self,
+        inventory_item: InventoryItem,
+        *,
+        actor: AuditActor | None = None,
+    ) -> InventoryItem:
+        if not inventory_item.is_archived:
+            return inventory_item
+        inventory_item.is_archived = False
+        await self._session.flush()
+        await AuditRecorder(self._session).record_inventory_restore(
+            inventory_item,
+            actor=actor or AuditActor.system(),
+        )
         return inventory_item
 
     async def delete(self, inventory_item: InventoryItem) -> None:
@@ -164,10 +316,35 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         filters: InventorySearchFilters,
         page_params: PageParams,
         sort_params: list[SortParam] | None = None,
-    ) -> PageResult[InventoryItem]:
-        statement = select(InventoryItem)
+    ) -> PageResult[InventoryItemDetailRow]:
+        statement = (
+            select(InventoryItem, ProductModel, Brand, Location)
+            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .join(Location, InventoryItem.current_location_id == Location.id)
+        )
         statement = self._apply_filters(statement, filters)
-        return await self._paginate(statement, page_params, sort_params)
+        if sort_params:
+            column_map = {column.key: column for column in InventoryItem.__table__.columns}
+            statement = apply_sorting(statement, sort_params, column_map)
+        else:
+            statement = statement.order_by(InventoryItem.updated_at.desc())
+
+        count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
+        total = int((await self._session.scalar(count_statement)) or 0)
+        offset = (page_params.page - 1) * page_params.page_size
+        paged = statement.offset(offset).limit(page_params.page_size)
+        result = await self._session.execute(paged)
+        items = [
+            InventoryItemDetailRow(item=item, product_model=pm, brand=brand, location=location)
+            for item, pm, brand, location in result.all()
+        ]
+        return PageResult(
+            items=items,
+            page=page_params.page,
+            page_size=page_params.page_size,
+            total_items=total,
+        )
 
     async def filter_by_brand(
         self,
@@ -231,30 +408,69 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
 
     def _apply_filters(
         self,
-        statement: Select[tuple[InventoryItem]],
+        statement: Select[tuple[InventoryItem, ProductModel, Brand, Location]],
         filters: InventorySearchFilters,
-    ) -> Select[tuple[InventoryItem]]:
-        if filters.brand_id is not None:
-            statement = statement.join(ProductModel).where(
-                ProductModel.brand_id == filters.brand_id,
-            )
+    ) -> Select[tuple[InventoryItem, ProductModel, Brand, Location]]:
+        if filters.is_archived is not None:
+            statement = statement.where(InventoryItem.is_archived.is_(filters.is_archived))
+        elif not filters.include_archived:
+            statement = statement.where(InventoryItem.is_archived.is_(False))
 
+        if filters.brand_id is not None:
+            statement = statement.where(Brand.id == filters.brand_id)
         if filters.product_model_id is not None:
-            statement = statement.where(
-                InventoryItem.product_model_id == filters.product_model_id,
-            )
+            statement = statement.where(InventoryItem.product_model_id == filters.product_model_id)
         if filters.color is not None:
-            statement = statement.where(InventoryItem.color.ilike(filters.color.strip()))
+            statement = statement.where(InventoryItem.color.ilike(f"%{filters.color.strip()}%"))
         if filters.current_location_id is not None:
-            statement = statement.where(
-                InventoryItem.current_location_id == filters.current_location_id,
-            )
+            statement = statement.where(InventoryItem.current_location_id == filters.current_location_id)
         if filters.status is not None:
             statement = statement.where(InventoryItem.status == filters.status)
+        if filters.serial_number is not None:
+            normalized = filters.serial_number.strip()
+            if normalized:
+                statement = statement.where(
+                    func.lower(InventoryItem.serial_number) == normalized.lower(),
+                )
+        if filters.brand_name is not None:
+            term = filters.brand_name.strip()
+            if term:
+                statement = statement.where(Brand.name.ilike(f"%{term}%"))
+        if filters.product_model is not None:
+            term = filters.product_model.strip()
+            if term:
+                statement = statement.where(
+                    or_(
+                        ProductModel.model_number.ilike(f"%{term}%"),
+                        ProductModel.model_name.ilike(f"%{term}%"),
+                    ),
+                )
+        if filters.location_name is not None:
+            term = filters.location_name.strip()
+            if term:
+                statement = statement.where(Location.name.ilike(f"%{term}%"))
         if filters.search:
             prefix = filters.search.strip()
             if prefix:
-                statement = statement.where(InventoryItem.serial_number.ilike(f"{prefix}%"))
+                statement = statement.where(
+                    or_(
+                        InventoryItem.serial_number.ilike(f"{prefix}%"),
+                        ProductModel.model_number.ilike(f"%{prefix}%"),
+                        ProductModel.model_name.ilike(f"%{prefix}%"),
+                        Brand.name.ilike(f"%{prefix}%"),
+                        Location.name.ilike(f"%{prefix}%"),
+                    ),
+                )
+        if filters.purchase_date_from is not None:
+            statement = statement.where(InventoryItem.purchase_date >= filters.purchase_date_from)
+        if filters.purchase_date_to is not None:
+            statement = statement.where(InventoryItem.purchase_date <= filters.purchase_date_to)
+        if filters.warranty_expiry_from is not None:
+            statement = statement.where(
+                InventoryItem.warranty_expiry >= filters.warranty_expiry_from,
+            )
+        if filters.warranty_expiry_to is not None:
+            statement = statement.where(InventoryItem.warranty_expiry <= filters.warranty_expiry_to)
         return statement
 
     async def _paginate(

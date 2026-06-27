@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.5
+Version: 1.8
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| **Version** | 1.5 |
+| Version | 1.8 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,9 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A implemented:** Inventory Core API at `/api/v1/inventory` — CRUD, archive/restore, search, filters, pagination, serial lookup; migration `0010_inventory_sprint_2a`; RBAC via `inventory:read` / `inventory:write`. |
+| 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Final Tally sync freeze:** processing status lifecycle; partial retry; crash recovery; line-level transactions. |
+| 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | **Frozen** Tally sync rules: invoice-level idempotency; Tally Sync Log; AVAILABLE-only matching; notification categories. |
 | 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history: removed movement table/APIs; location transfer endpoints; serial lifecycle via audit; expanded audit search. |
 | 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Tally ERP 9 synchronization: read-only invoices; multi-company sync; invoice line processing; dashboard; notifications; manual mark-as-sold (Admin/Main Admin only). |
 | 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: setup endpoints; login gated on `system_initialized`. |
@@ -192,8 +195,10 @@ Inventory items may be deleted only when not **Sold** and no movement, sale, or 
 
 | Operation | Key | Behaviour on Replay |
 |-----------|-----|---------------------|
-| Manual sale reflection | `invoice_number` + `serial_number` or `Idempotency-Key` header | `200` no-op if already Sold; Tally sync treats as same transaction |
-| Tally sale reflection | `tally_company` + `tally_voucher_number` + `serial_number` | `200` no-op; optional Duplicate Sale notification |
+| Tally invoice (fully processed) | `tally_voucher_guid` + company where `processing_status = success` | Skip — sync log `skipped` |
+| Tally invoice (partial) | Failed lines in `tally_processed_invoice_lines` | Retry failed lines only |
+| Tally line (duplicate sold) | Serial in **sold** inventory | Duplicate Sale notification; line completed |
+| Manual sale reflection | `invoice_number` + `serial_number` or `Idempotency-Key` header | `200` no-op if already Sold |
 | Excel sync trigger | `Idempotency-Key` header | Returns existing `sync_job` if pending/running with same key |
 | Bulk inventory create | `batch_id` in body (optional UUID) | Rejects duplicate `batch_id` with `409` or returns prior results |
 | Bulk movement | `batch_id` in body (optional UUID) | Same as bulk inventory |
@@ -210,6 +215,9 @@ Inventory items may be deleted only when not **Sold** and no movement, sale, or 
 | Settings | `setting.update` | key, before/after value |
 | Auth | `auth.login_success`, `auth.login_failure`, `auth.logout` | username (never password) |
 | System setup | `system.initialize` | company name, username (never password) |
+| Recovery key | `recovery_key.generated`, `recovery_key.used`, `recovery_key.regenerated` | reason metadata only — never the key |
+| Main Admin recovery | `user.update` (password recovered) | no password or key in audit |
+| Tally sync statistics | — | **Not audited** — Tally Sync Log only |
 | Sync | `sync.job_created`, `sync.job_completed` | job id, outcome |
 
 Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpoints.
@@ -242,6 +250,7 @@ Clients call setup status after connecting to the server and before showing Logi
 |-------|------|-------------|
 | `system_initialized` | boolean | `true` when setup is complete |
 | `company_name` | string \| null | Set after initialization; `null` when not initialized |
+| `awaiting_recovery_key_confirmation` | boolean | `true` when Main Admin exists but recovery key not yet confirmed |
 
 **Success Codes:** `200`
 
@@ -251,10 +260,11 @@ Clients call setup status after connecting to the server and before showing Logi
 
 **Client behaviour:**
 
-| `system_initialized` | Client action |
-|----------------------|---------------|
-| `true` | Show Login screen |
-| `false` | Launch First-Time Setup Wizard |
+| `system_initialized` | `awaiting_recovery_key_confirmation` | Client action |
+|----------------------|----------------------------------------|---------------|
+| `true` | — | Show Login screen |
+| `false` | `false` | Launch First-Time Setup Wizard |
+| `false` | `true` | Show Recovery Key confirmation step (setup cannot be skipped) |
 
 ---
 
@@ -264,8 +274,8 @@ Clients call setup status after connecting to the server and before showing Logi
 |---|---|
 | **Endpoint** | `POST /api/v1/setup/initialize` |
 | **Method** | `POST` |
-| **Purpose** | Complete first-time setup: create Main Admin and mark system initialized |
-| **Authentication Required** | No — only accepted when `system_initialized = false` |
+| **Purpose** | Create Main Admin, generate Recovery Key, and persist company name — **does not** complete setup until recovery key is confirmed |
+| **Authentication Required** | No — only accepted when `system_initialized = false` and no pending recovery confirmation |
 | **Required Role** | — |
 
 **Request Body:**
@@ -275,16 +285,17 @@ Clients call setup status after connecting to the server and before showing Logi
 | `company_name` | string | Yes | 1–200 chars; trimmed |
 | `main_admin_name` | string | Yes | Display name; 1–128 chars |
 | `username` | string | Yes | 3–64 chars; unique; trimmed |
-| `password` | string | Yes | Min 10 chars; stored as **bcrypt** hash only |
+| `password` | string | Yes | Min 10 chars; stored as **Argon2id** hash only |
 | `confirm_password` | string | Yes | Must match `password` |
 
 **Response Body (`201`):**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `system_initialized` | boolean | Always `true` on success |
+| `system_initialized` | boolean | Always `false` on success — setup completes after recovery key confirmation |
 | `company_name` | string | Persisted company name |
 | `main_admin` | `UserSummary` | Created Main Admin — see §19 |
+| `recovery_key` | string | **One-time display** — printable format `XXXX-XXXX-XXXX-XXXX`; never returned again |
 
 **Success Codes:** `201`
 
@@ -295,19 +306,58 @@ Clients call setup status after connecting to the server and before showing Logi
 | `VALIDATION_ERROR` | 422 | Password mismatch, weak password, invalid fields |
 | `USERNAME_DUPLICATE` | 409 | Username already exists |
 | `SYSTEM_ALREADY_INITIALIZED` | 409 | `system_initialized` is already `true` |
+| `SETUP_PENDING_RECOVERY_CONFIRMATION` | 409 | Main Admin exists; client must confirm recovery key or complete pending step |
 
-**Validation Rules:** Reject when `system_initialized = true`. Password never returned or logged.
+**Validation Rules:** Reject when `system_initialized = true`. Password and recovery key never returned or logged after this response.
 
-**Audit Behaviour:** `system.initialize` — username and company name only; never password.
+**Audit Behaviour:** `recovery_key.generated` (reason: `initial_setup`) — never stores the key.
 
-**Idempotency:** Not idempotent — second call after success returns `SYSTEM_ALREADY_INITIALIZED`.
+**Idempotency:** Not idempotent — second call while awaiting confirmation returns `SETUP_PENDING_RECOVERY_CONFIRMATION`.
 
 **Post-conditions:**
 
 1. Main Admin user created with `role = main_admin`, `status = active`
-2. `system_initialized` set to `true` in `system_settings`
+2. Recovery Key hash stored on Main Admin (`recovery_key_hash`, `recovery_key_created_at`)
 3. `company_name` persisted in `system_settings`
-4. Setup wizard must not be offered again unless database is intentionally reinitialized
+4. `system_initialized` remains `false` until `POST /api/v1/setup/confirm-recovery-key`
+5. Login blocked until confirmation completes
+
+---
+
+### 2.3 Confirm Recovery Key
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/setup/confirm-recovery-key` |
+| **Method** | `POST` |
+| **Purpose** | Acknowledge Recovery Key has been safely stored; mark system initialized |
+| **Authentication Required** | No — only when awaiting recovery key confirmation |
+| **Required Role** | — |
+
+**Request Body:** None
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `system_initialized` | boolean | Always `true` on success |
+
+**Success Codes:** `200`
+
+**Error Codes:**
+
+| Code | HTTP | Condition |
+|------|------|-----------|
+| `VALIDATION_ERROR` | 422 | Setup has not generated a recovery key yet |
+| `SYSTEM_ALREADY_INITIALIZED` | 409 | Setup already complete |
+
+**Audit Behaviour:** `system.initialize` — username and company name only.
+
+**Post-conditions:**
+
+1. `system_initialized` set to `true`
+2. Recovery Key is **not** re-displayed
+3. Client may proceed to Login screen
 
 ---
 
@@ -481,6 +531,93 @@ Clients call setup status after connecting to the server and before showing Logi
 **Error Codes:** `401`, `422` (`WEAK_PASSWORD`, `INVALID_CURRENT_PASSWORD`)
 
 **Audit Behaviour:** `user.update` (password change — no password in audit)
+
+---
+
+### 3.6 Password Recovery Policy
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/auth/password-recovery-policy` |
+| **Method** | `GET` |
+| **Purpose** | Return whether self-service password recovery is available for a role |
+| **Authentication Required** | No |
+| **Required Role** | — |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `role` | string | No | `main_admin`, `admin`, or `salesperson` |
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `self_service_available` | boolean | `true` only for Main Admin recovery flow |
+| `message` | string | User-facing guidance |
+
+**Client behaviour:** Admin and Salesperson accounts must show the message instructing contact with the Main Administrator — no self-service endpoint exists for those roles.
+
+---
+
+### 3.7 Main Admin Password Recovery
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/auth/main-admin/recover-password` |
+| **Method** | `POST` |
+| **Purpose** | Reset Main Admin password using a single-use Recovery Key |
+| **Authentication Required** | No — requires `system_initialized = true` |
+| **Required Role** | — |
+
+**Request Body:**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `recovery_key` | string | Yes | Format `XXXX-XXXX-XXXX-XXXX` (16 hex chars) |
+| `new_password` | string | Yes | Min 10 chars; Argon2id hash |
+| `confirm_password` | string | Yes | Must match `new_password` |
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Always `true` |
+| `recovery_key` | string | **New** Recovery Key — one-time display; old key permanently invalidated |
+
+**Success Codes:** `200`
+
+**Error Codes:**
+
+| Code | HTTP | Condition |
+|------|------|-----------|
+| `SYSTEM_NOT_INITIALIZED` | 403 | Setup not complete |
+| `INVALID_RECOVERY_KEY` | 401 | Key does not match stored hash |
+| `VALIDATION_ERROR` | 422 | Password mismatch or weak password |
+
+**Recovery workflow:**
+
+1. User enters Recovery Key on login screen ("Forgot Main Admin Password")
+2. System verifies hash (Argon2id — same standard as passwords)
+3. User sets new password
+4. All active Main Admin sessions revoked immediately
+5. New Recovery Key generated and returned once
+6. Previous Recovery Key permanently invalidated (single-use)
+
+**Audit Behaviour:**
+
+| Event | Description |
+|-------|-------------|
+| `recovery_key.used` | Recovery Key consumed — key value never logged |
+| `user.update` | Main Admin password recovered |
+| `recovery_key.regenerated` | New key issued — key value never logged |
+
+**Security notes:**
+
+- Recovery Key is never stored in plain text — only `recovery_key_hash` on `users`
+- Metadata: `recovery_key_created_at`, `recovery_key_last_used_at` (nullable)
+- Each successful recovery rotates the key; prior key cannot be reused
 
 ---
 
@@ -989,6 +1126,106 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ## 8. Inventory
 
+> **Sprint 2A (implemented):** The live backend exposes Inventory Core APIs at `/api/v1/inventory` (see §8.0). Sections §8.1–§8.9 below describe the full Version 1 contract at `/api/v1/inventory_items` — bulk create, grouped list, status transition, and delete remain future work.
+
+### 8.0 Inventory Core API — Sprint 2A (Implemented)
+
+Primary backend interface for inventory CRUD, search, filtering, pagination, and serial lookup. All endpoints require authentication. Mutations emit audit log entries in the same transaction.
+
+| Endpoint | Method | Permission | Purpose |
+|----------|--------|------------|---------|
+| `/api/v1/inventory` | GET | `inventory:read` | List/search/filter inventory with pagination |
+| `/api/v1/inventory` | POST | `inventory:write` | Create inventory item |
+| `/api/v1/inventory/{id}` | GET | `inventory:read` | Get single item by UUID |
+| `/api/v1/inventory/{id}` | PATCH | `inventory:write` | Update mutable fields |
+| `/api/v1/inventory/{id}/archive` | POST | `inventory:write` | Soft-archive item (`is_archived = true`) |
+| `/api/v1/inventory/{id}/restore` | POST | `inventory:write` | Restore archived item |
+| `/api/v1/inventory/by-serial/{serial_number}` | GET | `inventory:read` | Indexed case-insensitive serial lookup |
+
+**Authorization:**
+
+| Role | Access |
+|------|--------|
+| `salesperson` | View, search, serial lookup (`inventory:read`) |
+| `admin`, `main_admin` | Full CRUD (`inventory:read`, `inventory:write`) |
+
+**Create request (`POST /api/v1/inventory`):**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `serial_number` | string | Yes | Globally unique; case-insensitive uniqueness enforced |
+| `product_model_id` | UUID | Yes | Must reference **active** product model |
+| `color` | string | Yes | Non-empty |
+| `current_location_id` | integer | Yes | Must reference **active** location |
+| `status` | enum | No | Default `available` |
+| `purchase_date` | date | No | Optional purchase date |
+| `warranty_expiry` | date | No | Optional warranty expiry |
+
+**Update request (`PATCH /api/v1/inventory/{id}`):** All fields optional; send only fields to change. Set `purchase_date` or `warranty_expiry` to `null` to clear.
+
+**List query parameters (`GET /api/v1/inventory`):**
+
+| Parameter | Description |
+|-----------|-------------|
+| `brand_id` | Filter by brand (via product model join) |
+| `product_model_id` | Filter by product model UUID |
+| `current_location_id` | Filter by location |
+| `status` | Filter by lifecycle status |
+| `is_archived` | Filter by archive flag |
+| `include_archived` | Include archived items in results (default `false`) |
+| `serial_number` | Exact serial match (case-insensitive; returns at most one) |
+| `brand` | Case-insensitive brand name search |
+| `product_model` | Case-insensitive product model search |
+| `location` | Case-insensitive location name search |
+| `search` | General search across serial, brand, model, location |
+| `purchase_date_from`, `purchase_date_to` | Purchase date range |
+| `warranty_expiry_from`, `warranty_expiry_to` | Warranty expiry range |
+| `page`, `page_size` | Pagination (default page 1, page_size 50, max 100) |
+| `sort` | `{field}:{asc\|desc}` — fields: `serial_number`, `status`, `color`, `created_at`, `updated_at`, `purchase_date`, `warranty_expiry` |
+
+**Pagination metadata (`meta`):**
+
+| Field | Description |
+|-------|-------------|
+| `total_records` | Total matching records |
+| `total_pages` | Total pages |
+| `current_page` | Current page number |
+| `page_size` | Page size |
+| `page` | Alias for `current_page` |
+| `total_items` | Alias for `total_records` |
+
+**Response (`InventoryItemDetail`):**
+
+| Field | Type |
+|-------|------|
+| `id` | UUID |
+| `serial_number` | string |
+| `product_model_id` | UUID |
+| `brand_id`, `brand_name` | integer, string |
+| `model_number`, `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type` | Product model specification |
+| `color` | string |
+| `current_location_id`, `current_location_name` | integer, string |
+| `status` | `received`, `available`, `reserved`, `sold` |
+| `is_archived` | boolean |
+| `purchase_date`, `warranty_expiry` | date — nullable |
+| `created_at`, `updated_at` | datetime |
+
+**Error codes:**
+
+| HTTP | Condition |
+|------|-----------|
+| 401 | Unauthenticated |
+| 403 | Missing `inventory:read` or `inventory:write` |
+| 404 | Item or serial not found |
+| 409 | Duplicate serial number; archive blocked when item is sold |
+| 422 | Invalid product model, location, or request body |
+
+**Audit behaviour:** `CREATE`, `UPDATE`, `ARCHIVE`, `RESTORE` audit actions on successful mutations.
+
+**Database migration:** `0010_inventory_sprint_2a` adds `is_archived`, `purchase_date`, `warranty_expiry` columns and indexes.
+
+---
+
 ### 8.1 Create Inventory Item
 
 | | |
@@ -1416,13 +1653,68 @@ Location changes update `inventory_item.current_location_id` only. **No separate
 
 ---
 
-### 11.2 Process Invoice Line (Tally Worker)
+### 11.2 Process Invoice (Tally Worker)
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/integrations/tally/invoices/process` |
+| **Method** | `POST` |
+| **Purpose** | Process one Tally invoice — invoice-level idempotency + independent line evaluation (FR-TLY-16) |
+| **Authentication Required** | Yes — service account `tally_sync` |
+| **Required Role** | Service: `tally_sync` |
+
+**Request Body:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `tally_company_name` | string | Yes |
+| `tally_voucher_guid` | string | Yes — stable Tally identifier |
+| `tally_voucher_number` | string | Yes |
+| `voucher_type` | string | No |
+| `customer_name` | string | No |
+| `sold_at` | datetime | Yes |
+| `lines` | array | Yes — one object per invoice line |
+
+**Line object:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `serial_number` | string | No — omit for non-serial lines |
+| `product_model_number` | string | No |
+| `brand_name` | string | No |
+| `raw_payload_hash` | string | No |
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `processing_status` | enum | `success`, `partial_success`, `failed`, `skipped` — invoice state after this run |
+| `sync_run_id` | uuid | This execution attempt |
+| `tally_sync_log_id` | integer | Sync log record for this run |
+| `tally_processed_invoice_id` | integer | Invoice state record |
+| `line_results` | array | Per-line outcome when lines processed |
+
+**Processing algorithm:**
+
+1. Load `tally_processed_invoice` by voucher GUID.
+2. If `processing_status = success` → return `skipped`; write sync log only.
+3. If `partial_success` → process **failed lines only**.
+4. If `failed` or new → process all inventory-related lines.
+5. Each line in **independent transaction**.
+6. Derive final `processing_status` — SUCCESS only when all inventory-related lines complete.
+7. Append `tally_sync_log` for this run.
+
+**Line result `outcome` values:** `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `ignored`, `error`
+
+---
+
+### 11.3 Process Invoice Line (Tally Worker — Legacy)
 
 | | |
 |---|---|
 | **Endpoint** | `POST /api/v1/integrations/tally/sales/process-line` |
 | **Method** | `POST` |
-| **Purpose** | Tally Sync worker processes one invoice line per FR-TLY-05–07 |
+| **Purpose** | Process one invoice line — prefer §11.2 invoice-level endpoint |
 | **Authentication Required** | Yes — service account `tally_sync` |
 | **Required Role** | Service: `tally_sync` |
 
@@ -1443,35 +1735,27 @@ Location changes update `inventory_item.current_location_id` only. **No separate
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `outcome` | enum | `sale_applied`, `serial_not_found`, `model_mismatch`, `ignored`, `duplicate_sale` |
-| `sale` | `SaleDetail` | Present when `sale_applied` or `duplicate_sale` |
+| `outcome` | enum | `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `ignored` |
+| `sale` | `SaleDetail` | Present when `sale_applied` |
 | `notification_id` | integer | Present when notification created |
 
 **Success Codes:** `200` for all outcomes (including ignored lines)
 
-**Processing rules (exact match only):**
+**Processing rules:** Same as §11.2 line evaluation — search **available** inventory first, then **sold** for duplicate detection.
 
-| Match | Action |
-|-------|--------|
-| Serial + product model match | Mark Sold; create sale; audit |
-| Model exists; serial not found | Create `serial_not_found` notification |
-| Serial exists; model mismatch | Create `model_mismatch` notification |
-| Neither in IMS | Ignore — no notification |
-| Already sold (manual or prior sync) | Idempotent; optional `duplicate_sale` notification |
+**Idempotency:** Prefer invoice-level §11.2; line endpoint remains for diagnostics.
 
-**Idempotency:** `(tally_company_name, tally_voucher_number, serial_number)` — mandatory
-
-**Audit Behaviour:** `sale.reflect` when sold; `tally_integration_event` always
+**Audit Behaviour:** `sale.reflect` when sold only — sync stats in Tally Sync Log
 
 ---
 
-### 11.3 Reflect Sale (Tally Worker — Legacy Alias)
+### 11.4 Reflect Sale (Tally Worker — Legacy Alias)
 
 Deprecated alias for single-line processing — prefer §11.2. Endpoint `POST /api/v1/integrations/tally/sales/reflect` delegates to same logic.
 
 ---
 
-### 11.4 Get Sale
+### 11.5 Get Sale
 
 | | |
 |---|---|
@@ -1484,7 +1768,7 @@ Deprecated alias for single-line processing — prefer §11.2. Endpoint `POST /a
 
 ---
 
-### 11.5 List Sale History
+### 11.6 List Sale History
 
 | | |
 |---|---|
@@ -1772,6 +2056,8 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ## 15. Tally Integration
 
+> **Architecture status:** **Frozen** — [sync-strategy.md](../integrations/tally-erp9/sync-strategy.md)
+>
 > **Billing boundary:** IMS **reads** invoices from Tally only. IMS **never** creates invoices in Tally (FR-TLY-12, BR-32).
 >
 > **Implementation blocked** until Tally POC checklist passes (SYSTEM_ARCHITECTURE §14.3.1). API contract defined for implementation readiness.
@@ -1923,13 +2209,25 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
-**Query Parameters:** `notification_type`, `is_resolved`, `tally_company_name`, `page`, `page_size`
+**Query Parameters:** `notification_type` (`duplicate_sale`, `serial_number_missing`, `product_model_missing`, `tally_sync_completed`, `sync_failure`), `is_read`, `is_resolved`, `tally_company_name`, `page`, `page_size`
 
 **Response Body:** `Notification[]`
 
 ---
 
-### 15.9 Resolve Tally Notification
+### 15.9 Mark Notification Read
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/integrations/tally/notifications/{notification_id}/read` |
+| **Method** | `POST` |
+| **Required Role** | `main_admin`, `admin` |
+
+**Success Codes:** `200` — sets `is_read = true`
+
+---
+
+### 15.10 Resolve Tally Notification
 
 | | |
 |---|---|
@@ -1937,7 +2235,33 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | **Method** | `POST` |
 | **Required Role** | `main_admin`, `admin` |
 
-**Success Codes:** `200`
+**Success Codes:** `200` — sets `is_resolved = true`; notification retained permanently
+
+---
+
+### 15.11 List Tally Sync Log
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/integrations/tally/sync-log` |
+| **Method** | `GET` |
+| **Purpose** | Invoice-level synchronization log (FR-TLY-09) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin` |
+
+**Query Parameters:** `tally_company_name`, `processing_status`, `tally_voucher_number`, `sync_run_id`, `created_at_from`, `created_at_to`, `page`, `page_size`
+
+**Response Body:** `TallySyncLog[]` — sync time, invoice number, voucher type, item counts, overall result, error details
+
+---
+
+### 15.12 Get Tally Sync Log Entry
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/integrations/tally/sync-log/{log_id}` |
+| **Method** | `GET` |
+| **Required Role** | `main_admin`, `admin` |
 
 ---
 
@@ -2304,18 +2628,73 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | Field | Type |
 |-------|------|
 | `id` | integer |
-| `notification_type` | `serial_not_found`, `model_mismatch`, `duplicate_sale`, `sync_failure` |
+| `notification_type` | `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `tally_sync_completed`, `sync_failure` |
 | `severity` | `info`, `warning`, `error` |
 | `title` | string |
 | `message` | string |
 | `tally_company_name` | string \| null |
 | `tally_voucher_number` | string \| null |
+| `voucher_type` | string \| null |
+| `customer_name` | string \| null |
 | `serial_number` | string \| null |
 | `product_model_number` | string \| null |
-| `is_read` | boolean |
-| `is_resolved` | boolean |
+| `is_read` | boolean — Unread/Read |
+| `is_resolved` | boolean — Resolved (retained permanently) |
 | `created_at` | datetime |
 | `resolved_at` | datetime \| null |
+
+### 19.11.1 TallySyncLog
+
+| Field | Type |
+|-------|------|
+| `id` | integer |
+| `sync_run_id` | uuid |
+| `tally_processed_invoice_id` | integer \| null |
+| `tally_company_name` | string |
+| `tally_voucher_guid` | string |
+| `tally_voucher_number` | string |
+| `voucher_type` | string \| null |
+| `sync_started_at` | datetime |
+| `sync_completed_at` | datetime \| null |
+| `processing_duration_ms` | integer \| null |
+| `processing_status` | `success`, `partial_success`, `failed`, `skipped` |
+| `inventory_item_count` | integer |
+| `successfully_updated` | integer |
+| `already_sold` | integer |
+| `missing_serial` | integer |
+| `missing_model` | integer |
+| `ignored_items` | integer |
+| `retry_count` | integer |
+| `error_details` | string \| null |
+| `customer_name` | string \| null |
+| `created_at` | datetime |
+
+### 19.11.2 TallyProcessedInvoice
+
+| Field | Type |
+|-------|------|
+| `id` | integer |
+| `tally_company_name` | string |
+| `tally_voucher_guid` | string |
+| `tally_voucher_number` | string |
+| `processing_status` | `success`, `partial_success`, `failed` |
+| `first_attempt_at` | datetime |
+| `last_attempt_at` | datetime |
+| `completed_at` | datetime \| null |
+
+### 19.11.3 TallyProcessedInvoiceLine
+
+| Field | Type |
+|-------|------|
+| `id` | integer |
+| `tally_processed_invoice_id` | integer |
+| `line_index` | integer |
+| `serial_number` | string \| null |
+| `product_model_number` | string \| null |
+| `line_status` | `pending`, `completed`, `failed` |
+| `line_outcome` | `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `ignored`, `error` |
+| `inventory_item_id` | UUID \| null |
+| `completed_at` | datetime \| null |
 
 ### 19.12 AuditLogEntry
 
@@ -2404,7 +2783,7 @@ Permissions map to PRD §17.2 matrix. Enforced via `packages/auth/permissions.py
 | `locations:read` | all | GET locations |
 | `locations:write` | main_admin | POST/PATCH locations |
 | `inventory:read` | all | GET inventory, search |
-| `inventory:write` | main_admin, admin | Create/update/bulk/delete (conditional) |
+| `inventory:write` | main_admin, admin | Create/update/archive/restore inventory |
 | `inventory:transition` | main_admin, admin | received→available; available↔reserved |
 | `location:transfer` | main_admin, admin, salesperson | §9 location transfer |
 | `audit:lifecycle` | all authenticated | §16.4 serial lifecycle |

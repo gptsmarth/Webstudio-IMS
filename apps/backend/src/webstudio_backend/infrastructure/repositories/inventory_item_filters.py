@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from uuid import UUID
 
 from webstudio_backend.infrastructure.database.enums import InventoryStatus
@@ -15,4 +16,14 @@ class InventorySearchFilters:
     color: str | None = None
     current_location_id: int | None = None
     status: InventoryStatus | None = None
+    is_archived: bool | None = None
+    include_archived: bool = False
+    serial_number: str | None = None
+    brand_name: str | None = None
+    product_model: str | None = None
+    location_name: str | None = None
     search: str | None = None
+    purchase_date_from: date | None = None
+    purchase_date_to: date | None = None
+    warranty_expiry_from: date | None = None
+    warranty_expiry_to: date | None = None

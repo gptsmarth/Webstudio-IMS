@@ -206,7 +206,7 @@ async def test_pagination_and_sorting(
 
     assert page.total_items == 3
     assert len(page.items) == 2
-    assert page.items[0].serial_number <= page.items[1].serial_number
+    assert page.items[0].item.serial_number <= page.items[1].item.serial_number
 
 
 @pytest.mark.asyncio

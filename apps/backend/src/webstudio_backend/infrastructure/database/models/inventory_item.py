@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, String, Uuid
+from sqlalchemy import BigInteger, Boolean, Date, Enum, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -47,3 +48,6 @@ class InventoryItem(Base, UuidPrimaryKeyMixin, TimestampMixin):
         ),
         nullable=False,
     )
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    warranty_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -152,6 +152,26 @@ class UserRepository(SqlAlchemyRepository[User]):
         await self._session.refresh(user)
         return user
 
+    async def get_main_admin(self) -> User | None:
+        result = await self._session.execute(
+            select(User).where(User.role == UserRole.MAIN_ADMIN).limit(1),
+        )
+        return result.scalar_one_or_none()
+
+    async def set_recovery_key(self, user: User, recovery_key_hash: str) -> User:
+        user.recovery_key_hash = recovery_key_hash
+        user.recovery_key_created_at = datetime.now(UTC)
+        user.recovery_key_last_used_at = None
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
+    async def mark_recovery_key_used(self, user: User) -> User:
+        user.recovery_key_last_used_at = datetime.now(UTC)
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
 
 def timedelta_from_minutes(minutes: int):
     from datetime import timedelta

@@ -72,3 +72,12 @@ class User(PrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recovery_key_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recovery_key_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    recovery_key_last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

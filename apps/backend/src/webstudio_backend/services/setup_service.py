@@ -2,17 +2,32 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import SettingValueType, UserRole
-from webstudio_backend.infrastructure.repositories.exceptions import SystemAlreadyInitializedError
+from webstudio_backend.infrastructure.repositories.exceptions import (
+    SetupPendingRecoveryConfirmationError,
+    SystemAlreadyInitializedError,
+)
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.security.password import hash_password, validate_password_strength
+from webstudio_backend.infrastructure.security.recovery_key import (
+    generate_recovery_key,
+    hash_recovery_key,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SetupInitializeResult:
+    user: object
+    company_name: str
+    recovery_key: str
 
 
 class SetupService:
@@ -25,9 +40,16 @@ class SetupService:
     async def get_status(self) -> dict[str, object]:
         initialized = await self._settings.is_system_initialized()
         company_name = await self._settings.get_string("company_name")
+        main_admin = await self._users.get_main_admin()
+        awaiting_recovery_confirmation = (
+            not initialized
+            and main_admin is not None
+            and main_admin.recovery_key_hash is not None
+        )
         return {
             "system_initialized": initialized,
             "company_name": company_name,
+            "awaiting_recovery_key_confirmation": awaiting_recovery_confirmation,
         }
 
     async def initialize(
@@ -38,9 +60,11 @@ class SetupService:
         username: str,
         password: str,
         confirm_password: str,
-    ):
+    ) -> SetupInitializeResult:
         if await self._settings.is_system_initialized():
             raise SystemAlreadyInitializedError()
+        if await self._users.get_main_admin() is not None:
+            raise SetupPendingRecoveryConfirmationError()
         if password != confirm_password:
             raise ValueError("Password confirmation does not match")
         validate_password_strength(password)
@@ -56,21 +80,33 @@ class SetupService:
             display_name=main_admin_name.strip(),
             must_change_password=False,
         )
-        await self._settings.set_value(
-            "system_initialized",
-            "true",
-            value_type=SettingValueType.BOOLEAN,
-            updated_by_user_id=user.id,
-        )
+        recovery_key = generate_recovery_key()
+        await self._users.set_recovery_key(user, hash_recovery_key(recovery_key))
         await self._settings.set_value(
             "company_name",
             normalized_company,
             value_type=SettingValueType.STRING,
             updated_by_user_id=user.id,
         )
-        await self._recorder.record_system_initialize(
-            company_name=normalized_company,
-            main_admin_username=user.username,
-            user_id=user.id,
+        await self._recorder.record_recovery_key_generated(user, reason="initial_setup")
+        return SetupInitializeResult(user=user, company_name=normalized_company, recovery_key=recovery_key)
+
+    async def confirm_recovery_key(self) -> None:
+        if await self._settings.is_system_initialized():
+            raise SystemAlreadyInitializedError()
+        main_admin = await self._users.get_main_admin()
+        if main_admin is None or main_admin.recovery_key_hash is None:
+            raise ValueError("Setup has not generated a recovery key yet")
+
+        await self._settings.set_value(
+            "system_initialized",
+            "true",
+            value_type=SettingValueType.BOOLEAN,
+            updated_by_user_id=main_admin.id,
         )
-        return user, normalized_company
+        company_name = await self._settings.get_string("company_name") or ""
+        await self._recorder.record_system_initialize(
+            company_name=company_name,
+            main_admin_username=main_admin.username,
+            user_id=main_admin.id,
+        )

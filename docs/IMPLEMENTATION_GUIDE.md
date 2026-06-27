@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Implementation Guide
-Version: 1.2
+Version: 1.3
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | IMPL-001 |
-| **Version** | 1.1 |
+| **Version** | 1.3 |
 | **Status** | Active — engineering handbook for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md), [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md) |
 | **Purpose** | Define **how** WEBSTUDIO IMS is built — workflow, order, standards, and quality gates |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A complete:** Inventory Core API (`/api/v1/inventory`); migration `0010_inventory_sprint_2a`; `InventoryService`; RBAC; audit integration; 11 API integration tests. |
 | 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture; Sprint 1E = audit logs; Sprint 1F = `0008_users_authentication`. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap aligned with DATABASE_DESIGN §16.5: ownership columns deferred to `0008`. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial implementation handbook. Development philosophy, module build order, monorepo rules, coding standards, git workflow, testing strategy, dev environment, definition of done, AI rules, and sprint plan. |
@@ -108,7 +109,7 @@ Version 1 is built in dependency order. **Do not start a module until its prereq
 | 8 | **Search** | `SearchService`; combined filters (Brand, Model, Serial, CPU/GPU/RAM/Storage via product model fields, Color, Location, Status); pagination; `docs/specs/search-query-spec.md` completed first | Inventory Management, Product Models, Brands, Locations |
 | 9 | **Audit** | `AuditService`; immutable append-only writes; enrichment fields; audit query API; serial lifecycle endpoint (**Sprint 1E**) | Inventory Management (mutations emit audit entries) |
 | 10 | **Excel Sync** | `SyncJobService`; Excel worker in `apps/server`; job queue; paginated export API; openpyxl assembly; atomic file write | Inventory, Audit, Authentication (service account) |
-| 11 | **Tally Integration** | Tally worker; voucher parsing; idempotent sale API; `tally_integration_event` logging | Inventory, Sale reflection, Audit — **blocked until POC passes** (SYSTEM_ARCHITECTURE §14.3.1) |
+| 11 | **Tally Integration** | Tally worker; invoice processing status lifecycle; partial retry; crash recovery; line-level transactions per [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.1.0 — **architecture fully frozen**; **blocked until POC passes** | Inventory, Sale reflection, Audit (business events only) |
 | 12 | **Desktop UI** | Electron shell; React renderer; IPC to main process; screens for all operational flows; Light/Dark themes | Backend modules through Search (minimum); Audit and Sync as APIs stabilize |
 | 13 | **Android App** | React Native; operational subset (search, lookup, location transfer where permitted) | Stable OpenAPI + `packages/api-client`; Auth |
 | 14 | **Packaging & Deployment** | Windows Services (API, Excel, Tally); installers (.msi, .dmg, .apk); internal CA; backup scripts; deployment runbook verification | All server and client modules |
@@ -560,11 +561,11 @@ Optional: Docker Compose in `infra/docker/` for PostgreSQL when created.
 3. Copy `config/env/.env.example` to `config/env/.env.local` (or project-root `.env` per backend convention — **never commit**).
 4. Create local PostgreSQL database and role matching `DATABASE_URL`.
 5. Python: create venv in `apps/backend/`; install dependencies from requirements/poetry/uv lockfile when created.
-6. Run `alembic upgrade head` from `database/migrations/` (through `0007` minimum for auth and setup).
+6. Run `alembic upgrade head` from `database/migrations/` (through `0009` minimum for auth, setup, and recovery key).
 7. Verify reference seed data (brands, locations) and `GET /api/v1/setup/status` returns `system_initialized: false`.
 8. Start backend: Uvicorn with reload on `localhost` (HTTP acceptable for local dev per SYSTEM_ARCHITECTURE).
 9. JavaScript: `pnpm install` at monorepo root; start desktop Vite dev server and Electron.
-10. Complete the **First-Time Setup Wizard** to create the Main Admin (or call `POST /api/v1/setup/initialize`).
+10. Complete the **First-Time Setup Wizard**: call `POST /api/v1/setup/initialize`, store the displayed Recovery Key securely, then `POST /api/v1/setup/confirm-recovery-key`.
 11. Verify: `GET /health` returns 200; `GET /api/v1/setup/status` returns `system_initialized: true`; login succeeds with the wizard credentials.
 
 ### 7.4 Windows Deployment Target
@@ -757,7 +758,7 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | **S2** | Audit log foundation (**Sprint 1E**) | Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`; `AuditLogRepository`; serial lifecycle query API | S1 |
 | **S3** | Auth & Users (**Sprint 1F**) | Migration `0008_users_authentication`; Argon2id + JWT; setup, login, refresh, logout; RBAC; user CRUD | S2 |
 | **S4** | Reference Data APIs | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
-| **S5** | Inventory Core | Create/list/update inventory with Color; lifecycle transitions; serial uniqueness | S4 |
+| **S5** | Inventory Core (**Sprint 2A** — complete) | Migration `0010_inventory_sprint_2a`; `InventoryService`; `/api/v1/inventory` CRUD, archive/restore, search, filters, pagination, serial lookup; RBAC; audit on mutations | S4 |
 | **S6** | Sales | Manual sale reflection (`0008` sales when required); location transfer in `InventoryService` (audit-only history) | S5, S2 |
 | **S7** | Search | Combined filters; serial exact/prefix; product-spec search; color filter | S5 |
 | **S8** | Audit UI & Reports | Audit viewer; dashboard aggregates; settings API | S2, S7 |
@@ -796,7 +797,7 @@ S5 → S7 → S11 → S12 → S14 (desktop operational)
 S9 (Tally) can slip if manual sale fallback (S6) is verified — but S5 billing accuracy requires Tally before full go-live
 ```
 
-**Tally risk mitigation:** Complete POC during S4–S5 parallel window. Manual sale path (FR-SLS-04) allows partial operation if Tally slips.
+**Tally risk mitigation:** Complete POC during S4–S5 parallel window. Manual sale path (FR-SLS-04) allows partial operation if Tally slips. **Synchronization architecture is fully frozen** in [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.1.0 — **no further architectural changes required before Sprint 2**.
 
 ### 10.5 Post-V1
 

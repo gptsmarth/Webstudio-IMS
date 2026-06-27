@@ -90,6 +90,7 @@ class TokenResponse(BaseModel):
 class SetupStatusResponse(BaseModel):
     system_initialized: bool
     company_name: str | None = None
+    awaiting_recovery_key_confirmation: bool = False
 
 
 class SetupInitializeRequest(BaseModel):
@@ -101,9 +102,30 @@ class SetupInitializeRequest(BaseModel):
 
 
 class SetupInitializeResponse(BaseModel):
-    system_initialized: bool = True
+    system_initialized: bool = False
     company_name: str
     main_admin: UserSummary
+    recovery_key: str
+
+
+class SetupConfirmRecoveryKeyResponse(BaseModel):
+    system_initialized: bool = True
+
+
+class MainAdminRecoverPasswordRequest(BaseModel):
+    recovery_key: str
+    new_password: str
+    confirm_password: str
+
+
+class MainAdminRecoverPasswordResponse(BaseModel):
+    success: bool = True
+    recovery_key: str
+
+
+class PasswordRecoveryPolicyResponse(BaseModel):
+    self_service_available: bool
+    message: str
 
 
 class CreateUserRequest(BaseModel):

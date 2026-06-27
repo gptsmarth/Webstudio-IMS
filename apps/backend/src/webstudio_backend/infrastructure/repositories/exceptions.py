@@ -75,6 +75,13 @@ class InventoryItemNotFoundError(RepositoryError):
         super().__init__(f"Inventory item not found: {inventory_item_id}")
 
 
+class InventoryItemArchiveNotAllowedError(RepositoryError):
+    def __init__(self, inventory_item_id: str, reason: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        self.reason = reason
+        super().__init__(f"Inventory item {inventory_item_id} cannot be archived: {reason}")
+
+
 class DuplicateUsernameError(RepositoryError):
     def __init__(self, username: str) -> None:
         self.username = username
@@ -126,6 +133,21 @@ class InvalidRefreshTokenError(RepositoryError):
 class RefreshTokenReuseError(RepositoryError):
     def __init__(self) -> None:
         super().__init__("Refresh token reuse detected")
+
+
+class SetupPendingRecoveryConfirmationError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Setup is awaiting recovery key confirmation")
+
+
+class InvalidRecoveryKeyError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Invalid recovery key")
+
+
+class MainAdminNotFoundError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Main Admin account not found")
 
 
 class LocationNotFoundError(RepositoryError):

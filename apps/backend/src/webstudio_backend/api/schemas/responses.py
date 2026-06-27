@@ -19,6 +19,8 @@ class ResponseMeta(BaseModel):
     page_size: int | None = None
     total_items: int | None = None
     total_pages: int | None = None
+    total_records: int | None = None
+    current_page: int | None = None
     next_cursor: str | None = None
     has_more: bool | None = None
 

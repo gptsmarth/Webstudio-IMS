@@ -12,6 +12,9 @@ from webstudio_backend.api.schemas.user import (
     CurrentUserResponse,
     LoginRequest,
     LogoutRequest,
+    MainAdminRecoverPasswordRequest,
+    MainAdminRecoverPasswordResponse,
+    PasswordRecoveryPolicyResponse,
     RefreshRequest,
     TokenResponse,
     UserSummary,
@@ -23,11 +26,14 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     AccountDisabledError,
     AccountLockedError,
     InvalidCredentialsError,
+    InvalidRecoveryKeyError,
     InvalidRefreshTokenError,
+    MainAdminNotFoundError,
     RefreshTokenReuseError,
     SystemNotInitializedError,
 )
 from webstudio_backend.services.authentication_service import AuthenticationService
+from webstudio_backend.services.main_admin_recovery_service import MainAdminRecoveryService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -130,3 +136,38 @@ async def change_password(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return _envelope(request, {"success": True})
+
+
+@router.get("/password-recovery-policy")
+async def password_recovery_policy(
+    request: Request,
+    role: str | None = None,
+) -> dict:
+    message = MainAdminRecoveryService.password_recovery_message_for_role(role)
+    return _envelope(request, PasswordRecoveryPolicyResponse(**message).model_dump())
+
+
+@router.post("/main-admin/recover-password")
+async def recover_main_admin_password(
+    request: Request,
+    body: MainAdminRecoverPasswordRequest,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = MainAdminRecoveryService(db_session)
+    try:
+        result = await service.recover_password(
+            recovery_key=body.recovery_key,
+            new_password=body.new_password,
+            confirm_password=body.confirm_password,
+        )
+    except SystemNotInitializedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except InvalidRecoveryKeyError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except MainAdminNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    response = MainAdminRecoverPasswordResponse(recovery_key=result.new_recovery_key)
+    return _envelope(request, response.model_dump())
