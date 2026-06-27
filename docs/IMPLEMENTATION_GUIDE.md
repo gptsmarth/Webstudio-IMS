@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Implementation Guide
-Version: 1.7
+Version: 1.8
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | IMPL-001 |
-| **Version** | 1.7 |
+| **Version** | 1.8 |
 | **Status** | Active — engineering handbook for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md), [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md) |
 | **Purpose** | Define **how** WEBSTUDIO IMS is built — workflow, order, standards, and quality gates |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.3 complete:** Reports & Export APIs; Excel/PDF export; batched streaming; 13 report tests; 165 total backend tests. |
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.2 complete:** Notification Center APIs; migration `0013_notifications`; `NotificationService` + `NotificationRepository`; 17 notification tests; 152 total backend tests. |
 | 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.1 complete:** Dashboard APIs with aggregate queries, distribution, recent activity, insights; 11 dashboard tests; 135 total backend tests. |
 | 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C complete:** Inventory API production-ready — standardized errors, performance indexes, query optimization, 124 total backend tests passing. |
@@ -767,8 +768,9 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | **S5C** | Inventory API Hardening (**Sprint 2C** — complete) | Standardized errors; migration `0012_inventory_performance`; production-ready | S5B |
 | **S6** | Dashboard (**Sprint 3.1** — complete) | `DashboardService`; `/api/v1/dashboard` summary, distribution, recent activity | S5C |
 | **S6B** | Notification Center (**Sprint 3.2** — complete) | Migration `0013_notifications`; `NotificationService`; `/api/v1/notifications` list, get, read, resolve | S6 |
-| **S7** | Sales (Tally) | Tally-driven sale reflection via `SaleService`; sale history API | S6B, S2 |
-| **S8** | Audit UI & Reports | Audit viewer; reports API; settings API | S2, S5C |
+| **S6C** | Reports & Export (**Sprint 3.3** — complete) | `ReportService`; `/api/v1/reports` inventory, sales, audit, notifications; Excel/PDF export | S6B |
+| **S7** | Sales (Tally) | Tally-driven sale reflection via `SaleService`; sale history API | S6C, S2 |
+| **S8** | Audit UI & Settings | Audit viewer; settings API | S2, S5C |
 | **S9** | Excel Sync | Sync jobs; worker export; manual trigger; atomic file write | S8 |
 | **S10** | Tally POC + Integration | POC checklist; Tally worker; idempotent sale API — **gated** | S7, S9 |
 | **S11** | Desktop MVP | Auth, dashboard, search, inventory list/detail, add inventory, location transfer | S6, S8 |

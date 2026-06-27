@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.12
+Version: 1.13
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| Version | 1.12 |
+| Version | 1.13 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.13 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.3 implemented:** Reports & Export APIs — inventory, sales, audit, notifications JSON reports; Excel/PDF export for all report types including location, brand, product model aggregates. |
 | 1.12 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.2 implemented:** Notification Center — `GET /api/v1/notifications`, `GET /{id}`, `PATCH /{id}/read`, `PATCH /{id}/resolve`; migration `0013_notifications`; `NotificationService` for Tally reuse. |
 | 1.11 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.1 implemented:** Dashboard APIs — `GET /api/v1/dashboard`, `/recent-activity`, `/distribution`; `DashboardService` + `DashboardRepository`. |
 | 1.10 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C — Inventory API production-ready:** standardized error envelope; performance indexes (`0012`); query optimizations; RBAC/error/performance test suite. |
@@ -2056,9 +2057,39 @@ Returns business audit events only — inventory created, manual sale, location 
 
 ## 13. Reports
 
-Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate download endpoints.
+Supports FR-RPT-01–05.
 
-### 13.1 Inventory Summary by Location
+### 13.0 Reports & Export — Sprint 3.3 (Implemented)
+
+> **Sprint 3.3 (implemented):** Production reports at `/api/v1/reports` using `ReportService`, `ReportRepository`, and `ReportExportService`. Large exports fetch data in batches (500 rows) to avoid loading entire datasets into memory.
+
+**Permission:** `reports:read` (Main Admin, Admin)
+
+**Report types:** `inventory`, `sales`, `location`, `brand`, `product_model`, `audit`, `notification`
+
+**Shared filters:** `date_from`, `date_to`, `brand_id`, `location_id`, `product_model_id`, `user_id`, `status` (inventory status or notification status depending on report)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/reports/inventory` | GET | Paginated inventory report with status summary |
+| `/api/v1/reports/sales` | GET | Paginated sales report |
+| `/api/v1/reports/audit` | GET | Paginated audit report |
+| `/api/v1/reports/notifications` | GET | Paginated notification report |
+| `/api/v1/reports/export` | GET | Download Excel (`.xlsx`) or PDF export for any report type |
+
+**Export query parameters:** `report_type` (required), `format` (`xlsx` default, `pdf`), plus shared filters
+
+**Export response:** `200` streaming file download with `Content-Disposition: attachment`
+
+**JSON report response fields:** `report_type`, `generated_at`, `filters`, `summary` (inventory only), `rows`, pagination `meta`
+
+**Aggregate reports (location, brand, product_model):** Available via `/reports/export?report_type=location|brand|product_model` with counts by status (available, sold, received, reserved, archived, total).
+
+**Performance:** Repository uses batched offset queries for export; JSON endpoints paginated (max `page_size` 100).
+
+---
+
+### 13.1 Inventory Summary by Location (Legacy Contract)
 
 | | |
 |---|---|
