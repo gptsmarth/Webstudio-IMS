@@ -10,7 +10,7 @@ from webstudio_backend.core.config import Settings
 
 
 @pytest.fixture
-def test_settings() -> Settings:
+def health_test_settings() -> Settings:
     return Settings(
         app_env="test",
         database_url="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test",
@@ -19,8 +19,8 @@ def test_settings() -> Settings:
 
 
 @pytest.fixture
-def client(test_settings: Settings) -> TestClient:
-    app = create_app(test_settings)
+def client(health_test_settings: Settings) -> TestClient:
+    app = create_app(health_test_settings)
     with TestClient(app) as test_client:
         yield test_client
 

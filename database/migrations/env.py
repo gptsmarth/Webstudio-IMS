@@ -11,6 +11,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from webstudio_backend.core.config import get_settings
+from webstudio_backend.infrastructure.database import models as _models  # noqa: F401
 from webstudio_backend.infrastructure.database.base import Base
 
 config = context.config
