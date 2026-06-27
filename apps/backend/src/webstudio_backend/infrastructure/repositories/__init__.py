@@ -9,12 +9,20 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     InactiveProductModelError,
     InvalidFieldValueError,
     InventoryItemDeleteNotAllowedError,
+    InventoryItemNotFoundError,
+    LocationNotFoundError,
     ProductModelHasHistoryError,
     RepositoryError,
     RequiredFieldError,
+    SameLocationMovementError,
+    SoldItemCannotMoveError,
+    SourceLocationMismatchError,
 )
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
+)
+from webstudio_backend.infrastructure.repositories.inventory_movement_repository import (
+    InventoryMovementRepository,
 )
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
@@ -30,10 +38,16 @@ __all__ = [
     "InactiveProductModelError",
     "InvalidFieldValueError",
     "InventoryItemDeleteNotAllowedError",
+    "InventoryItemNotFoundError",
     "InventoryItemRepository",
+    "InventoryMovementRepository",
+    "LocationNotFoundError",
     "LocationRepository",
     "ProductModelHasHistoryError",
     "ProductModelRepository",
     "RepositoryError",
     "RequiredFieldError",
+    "SameLocationMovementError",
+    "SoldItemCannotMoveError",
+    "SourceLocationMismatchError",
 ]

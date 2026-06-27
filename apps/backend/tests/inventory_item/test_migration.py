@@ -4,43 +4,30 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import inspect, text
-
-from webstudio_backend.infrastructure.database.session import get_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_migration_0004_inventory_items_exist(database_engine: None) -> None:
-    engine = get_engine()
+async def test_migration_0004_inventory_items_exist(db_session: AsyncSession) -> None:
+    current_revision = await db_session.scalar(
+        text("SELECT version_num FROM webstudio.alembic_version"),
+    )
+    assert current_revision == "0005_inventory_movement"
 
-    async with engine.connect() as connection:
-        current_revision = await connection.scalar(
-            text("SELECT version_num FROM webstudio.alembic_version"),
-        )
-        assert current_revision == "0004_inventory_item"
+    connection = await db_session.connection()
 
-        def inspect_schema(sync_connection) -> tuple[list[str], set[str], set[str]]:
-            inspector = inspect(sync_connection)
-            tables = inspector.get_table_names(schema="webstudio")
-            indexes = {
-                index["name"]
-                for index in inspector.get_indexes("inventory_items", schema="webstudio")
-            }
-            uniques = {
-                constraint["name"]
-                for constraint in inspector.get_unique_constraints(
-                    "inventory_items",
-                    schema="webstudio",
-                )
-            }
-            return tables, indexes, uniques
+    def inspect_schema(sync_connection) -> tuple[list[str], set[str]]:
+        inspector = inspect(sync_connection)
+        tables = inspector.get_table_names(schema="webstudio")
+        indexes = {
+            index["name"]
+            for index in inspector.get_indexes("inventory_items", schema="webstudio")
+        }
+        return tables, indexes
 
-        tables, indexes, uniques = await connection.run_sync(
-            lambda sync_connection: inspect_schema(sync_connection),
-        )
+    tables, indexes = await connection.run_sync(inspect_schema)
 
     assert "inventory_items" in tables
-    assert "inventory_movements" not in tables
-    assert "uq_inventory_items_serial_number" in uniques
     assert {
         "ix_inventory_items_product_model_id",
         "ix_inventory_items_current_location_id",

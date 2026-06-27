@@ -65,3 +65,37 @@ class InventoryItemDeleteNotAllowedError(RepositoryError):
         self.inventory_item_id = inventory_item_id
         self.reason = reason
         super().__init__(f"Inventory item {inventory_item_id} cannot be deleted: {reason}")
+
+
+class InventoryItemNotFoundError(RepositoryError):
+    def __init__(self, inventory_item_id: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        super().__init__(f"Inventory item not found: {inventory_item_id}")
+
+
+class LocationNotFoundError(RepositoryError):
+    def __init__(self, location_id: int) -> None:
+        self.location_id = location_id
+        super().__init__(f"Location not found: {location_id}")
+
+
+class SameLocationMovementError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Source and destination locations must differ")
+
+
+class SoldItemCannotMoveError(RepositoryError):
+    def __init__(self, inventory_item_id: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        super().__init__(f"Sold inventory item cannot be moved: {inventory_item_id}")
+
+
+class SourceLocationMismatchError(RepositoryError):
+    def __init__(self, inventory_item_id: str, from_location_id: int) -> None:
+        self.inventory_item_id = inventory_item_id
+        self.from_location_id = from_location_id
+        super().__init__(
+            "Source location "
+            f"{from_location_id} does not match inventory item {inventory_item_id} "
+            "current location",
+        )

@@ -33,15 +33,27 @@ class InventoryStatus(StrEnum):
     SOLD = "sold"
 
 
+class MovementReason(StrEnum):
+    NEW_STOCK = "new_stock"
+    STORE_TRANSFER = "store_transfer"
+    DISPLAY = "display"
+    SALE_PREPARATION = "sale_preparation"
+    CORRECTION = "correction"
+    OTHER = "other"
+
+
 LOCATION_TYPE_ENUM_NAME = "location_type"
 PRODUCT_MODEL_STATUS_ENUM_NAME = "product_model_status"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
+MOVEMENT_REASON_ENUM_NAME = "movement_reason"
 
 __all__ = [
     "INVENTORY_STATUS_ENUM_NAME",
     "LOCATION_TYPE_ENUM_NAME",
+    "MOVEMENT_REASON_ENUM_NAME",
+    "MovementReason",
     "PRODUCT_MODEL_STATUS_ENUM_NAME",
     "STORAGE_TYPE_ENUM_NAME",
     "STORAGE_UNIT_ENUM_NAME",
