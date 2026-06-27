@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -22,6 +23,12 @@ def get_engine() -> AsyncEngine:
     if _engine is None:
         raise RuntimeError("Database engine is not initialized.")
     return _engine
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    if _session_factory is None:
+        raise RuntimeError("Database session factory is not initialized.")
+    return _session_factory
 
 
 async def init_db(settings: Settings | None = None) -> None:
@@ -45,10 +52,30 @@ async def close_db() -> None:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    if _session_factory is None:
-        raise RuntimeError("Database session factory is not initialized.")
-    async with _session_factory() as session:
+    factory = get_session_factory()
+    async with factory() as session:
         yield session
 
 
-__all__ = ["Base", "get_engine", "init_db", "close_db", "get_session"]
+@asynccontextmanager
+async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+    """Provide a transactional session scope with commit/rollback."""
+    factory = get_session_factory()
+    async with factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+__all__ = [
+    "Base",
+    "close_db",
+    "get_engine",
+    "get_session",
+    "get_session_factory",
+    "init_db",
+    "session_scope",
+]

@@ -33,7 +33,9 @@ known-first-party = ["webstudio_backend"]
 [tool.pytest.ini_options]
 testpaths = ["apps/backend/tests"]
 asyncio_mode = "auto"
-pythonpath = ["apps/backend/src"]
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+pythonpath = ["apps/backend/src", "apps/backend/tests"]
 
 [tool.mypy]
 python_version = "3.12"
