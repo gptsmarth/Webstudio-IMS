@@ -16,7 +16,7 @@ async def test_migration_0002_reference_tables_exist(database_engine: None) -> N
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision == "0002_reference_data"
+        assert current_revision in {"0002_reference_data", "0003_product_model"}
 
         def inspect_schema(sync_connection) -> tuple[list[str], list[str], list[str]]:
             inspector = inspect(sync_connection)

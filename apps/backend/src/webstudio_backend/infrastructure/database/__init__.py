@@ -2,9 +2,18 @@
 
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
-from webstudio_backend.infrastructure.database.enums import LocationType
-from webstudio_backend.infrastructure.database.mixins import PrimaryKeyMixin, TimestampMixin
-from webstudio_backend.infrastructure.database.models import Brand, Location
+from webstudio_backend.infrastructure.database.enums import (
+    LocationType,
+    ProductModelStatus,
+    StorageType,
+    StorageUnit,
+)
+from webstudio_backend.infrastructure.database.mixins import (
+    PrimaryKeyMixin,
+    TimestampMixin,
+    UuidPrimaryKeyMixin,
+)
+from webstudio_backend.infrastructure.database.models import Brand, Location, ProductModel
 from webstudio_backend.infrastructure.database.session import (
     close_db,
     get_engine,
@@ -21,7 +30,12 @@ __all__ = [
     "Location",
     "LocationType",
     "PrimaryKeyMixin",
+    "ProductModel",
+    "ProductModelStatus",
+    "StorageType",
+    "StorageUnit",
     "TimestampMixin",
+    "UuidPrimaryKeyMixin",
     "close_db",
     "get_engine",
     "get_session",
