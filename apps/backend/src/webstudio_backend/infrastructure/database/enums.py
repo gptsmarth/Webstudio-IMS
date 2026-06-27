@@ -38,6 +38,39 @@ class SaleSource(StrEnum):
     MANUAL = "manual"
 
 
+class NotificationType(StrEnum):
+    DUPLICATE_SALE = "duplicate_sale"
+    SERIAL_NUMBER_MISSING = "serial_number_missing"
+    PRODUCT_MODEL_MISSING = "product_model_missing"
+    TALLY_SYNC_COMPLETED = "tally_sync_completed"
+    SYNC_FAILURE = "sync_failure"
+    INVENTORY_ALERT = "inventory_alert"
+    SYSTEM_NOTIFICATION = "system_notification"
+
+
+class NotificationCategory(StrEnum):
+    TALLY_SYNC = "tally_sync"
+    INVENTORY = "inventory"
+    SYSTEM = "system"
+
+
+class NotificationSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class NotificationCreator(StrEnum):
+    SYSTEM = "system"
+    USER = "user"
+
+
+class NotificationStatus(StrEnum):
+    UNREAD = "unread"
+    READ = "read"
+    RESOLVED = "resolved"
+
+
 class AuditAction(StrEnum):
     CREATE = "CREATE"
     UPDATE = "UPDATE"
@@ -89,6 +122,10 @@ STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
 SALE_SOURCE_ENUM_NAME = "sale_source"
+NOTIFICATION_TYPE_ENUM_NAME = "notification_type"
+NOTIFICATION_CATEGORY_ENUM_NAME = "notification_category"
+NOTIFICATION_SEVERITY_ENUM_NAME = "notification_severity"
+NOTIFICATION_CREATOR_ENUM_NAME = "notification_creator"
 AUDIT_ACTION_ENUM_NAME = "audit_action"
 AUDIT_SOURCE_ENUM_NAME = "audit_source"
 USER_ROLE_ENUM_NAME = "user_role"
@@ -113,6 +150,15 @@ __all__ = [
     "USER_STATUS_ENUM_NAME",
     "SALE_SOURCE_ENUM_NAME",
     "InventoryStatus",
+    "NotificationCategory",
+    "NotificationCreator",
+    "NotificationSeverity",
+    "NotificationStatus",
+    "NotificationType",
+    "NOTIFICATION_CATEGORY_ENUM_NAME",
+    "NOTIFICATION_CREATOR_ENUM_NAME",
+    "NOTIFICATION_SEVERITY_ENUM_NAME",
+    "NOTIFICATION_TYPE_ENUM_NAME",
     "SaleSource",
     "LocationType",
     "ProductModelStatus",

@@ -1,4 +1,4 @@
-"""Audit log migration tests."""
+"""Notification migration tests."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from webstudio_backend.infrastructure.database.session import get_engine
 
 
 @pytest.mark.asyncio
-async def test_migration_0005_audit_logs_exist(db_session) -> None:
+async def test_migration_0013_notifications(db_session) -> None:
     engine = get_engine()
 
     async with engine.connect() as connection:
@@ -23,20 +23,17 @@ async def test_migration_0005_audit_logs_exist(db_session) -> None:
             tables = inspector.get_table_names(schema="webstudio")
             indexes = {
                 index["name"]
-                for index in inspector.get_indexes("audit_logs", schema="webstudio")
+                for index in inspector.get_indexes("notifications", schema="webstudio")
             }
             return tables, indexes
 
         tables, indexes = await connection.run_sync(inspect_schema)
 
-    assert "audit_logs" in tables
-    for expected in (
-        "ix_audit_logs_entity_type",
-        "ix_audit_logs_entity_id",
-        "ix_audit_logs_inventory_item_id",
-        "ix_audit_logs_actor_user_id",
-        "ix_audit_logs_action",
-        "ix_audit_logs_created_at",
-        "ix_audit_logs_source",
-    ):
-        assert expected in indexes
+    assert "notifications" in tables
+    assert {
+        "ix_notifications_notification_type",
+        "ix_notifications_category",
+        "ix_notifications_is_read",
+        "ix_notifications_is_resolved",
+        "ix_notifications_created_at",
+    }.issubset(indexes)

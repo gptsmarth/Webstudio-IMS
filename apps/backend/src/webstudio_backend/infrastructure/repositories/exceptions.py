@@ -150,6 +150,23 @@ class MainAdminNotFoundError(RepositoryError):
         super().__init__("Main Admin account not found")
 
 
+class NotificationNotFoundError(RepositoryError):
+    def __init__(self, notification_id: int) -> None:
+        self.notification_id = notification_id
+        super().__init__(f"Notification not found: {notification_id}")
+
+
+class NotificationAlreadyResolvedError(RepositoryError):
+    def __init__(self, notification_id: int) -> None:
+        self.notification_id = notification_id
+        super().__init__(f"Notification is already resolved: {notification_id}")
+
+
+class NotificationResolveNotAllowedError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Insufficient permission to resolve notifications")
+
+
 class LocationNotFoundError(RepositoryError):
     def __init__(self, location_id: int) -> None:
         self.location_id = location_id

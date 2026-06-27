@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.11
+Version: 1.12
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| Version | 1.11 |
+| Version | 1.12 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.12 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.2 implemented:** Notification Center — `GET /api/v1/notifications`, `GET /{id}`, `PATCH /{id}/read`, `PATCH /{id}/resolve`; migration `0013_notifications`; `NotificationService` for Tally reuse. |
 | 1.11 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.1 implemented:** Dashboard APIs — `GET /api/v1/dashboard`, `/recent-activity`, `/distribution`; `DashboardService` + `DashboardRepository`. |
 | 1.10 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C — Inventory API production-ready:** standardized error envelope; performance indexes (`0012`); query optimizations; RBAC/error/performance test suite. |
 | 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2B implemented:** Inventory operations — `PATCH /api/v1/inventory/{id}/location`, `PATCH /api/v1/inventory/{id}/mark-sold`; migration `0011_sales`; `SaleService`. |
@@ -57,6 +58,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 10. [Search](#10-search)
 11. [Sales](#11-sales)
 12. [Dashboard](#12-dashboard)
+12.5. [Notification Center](#125-notification-center--sprint-32-implemented)
 13. [Reports](#13-reports)
 14. [Excel Sync](#14-excel-sync)
 15. [Tally Integration](#15-tally-integration)
@@ -1999,6 +2001,59 @@ Returns business audit events only — inventory created, manual sale, location 
 
 ---
 
+## 12.5 Notification Center — Sprint 3.2 (Implemented)
+
+> **Sprint 3.2 (implemented):** Centralized Notification Center at `/api/v1/notifications`. Notifications are operator-facing alerts requiring attention; they are separate from audit logs (historical events). The Tally synchronization engine must create notifications via `NotificationService.create_notification()` — no duplicate notification implementation.
+
+**Lifecycle:** `unread` → `read` → `resolved` (resolved records retained permanently; no delete V1).
+
+**Notification types (extensible enum):** `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `tally_sync_completed`, `sync_failure`, `inventory_alert`, `system_notification`
+
+| Endpoint | Method | Permission | Purpose |
+|----------|--------|------------|---------|
+| `/api/v1/notifications` | GET | `notifications:read` | List notifications with filters and pagination |
+| `/api/v1/notifications/{id}` | GET | `notifications:read` | Get notification detail |
+| `/api/v1/notifications/{id}/read` | PATCH | `notifications:read` | Mark notification read |
+| `/api/v1/notifications/{id}/resolve` | PATCH | `notifications:resolve` | Mark notification resolved (Admin/Main Admin) |
+
+**List query parameters:** `notification_type`, `category` (`tally_sync`, `inventory`, `system`), `severity` (`info`, `warning`, `error`), `status` (`unread`, `read`, `resolved`), `is_read`, `is_resolved`, `tally_company_name`, `page`, `page_size`
+
+**Notification response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Notification ID |
+| `notification_type` | enum | Alert type |
+| `title` | string | Short title |
+| `description` | string | Full message body |
+| `category` | enum | `tally_sync`, `inventory`, `system` |
+| `severity` | enum | `info`, `warning`, `error` |
+| `status` | enum | Derived lifecycle: `unread`, `read`, `resolved` |
+| `created_by` | enum | `system` or `user` |
+| `created_by_user_id` | integer \| null | User who created (when `created_by=user`) |
+| `inventory_item_id` | UUID \| null | Related inventory item |
+| `invoice_number` | string \| null | Related invoice |
+| `tally_company_name` | string \| null | Tally company context |
+| `tally_voucher_number` | string \| null | Tally voucher reference |
+| `voucher_type` | string \| null | Tally voucher type |
+| `customer_name` | string \| null | Customer from invoice |
+| `serial_number` | string \| null | Serial referenced in alert |
+| `product_model_number` | string \| null | Product model referenced |
+| `is_read` | boolean | Read flag |
+| `is_resolved` | boolean | Resolved flag |
+| `resolved_at` | datetime \| null | Resolution timestamp |
+| `resolved_by_user_id` | integer \| null | User who resolved |
+| `created_at` | datetime | Created timestamp |
+| `updated_at` | datetime | Last updated timestamp |
+
+**Success codes:** `200` for all endpoints.
+
+**Error codes:** `404 NOT_FOUND` (missing notification), `409 NOTIFICATION_ALREADY_RESOLVED` (duplicate resolve), `403 PERMISSION_DENIED` (resolve without role).
+
+**Legacy Tally paths (§15.8–15.10):** Superseded by this unified Notification Center. Tally worker and UI should use `/api/v1/notifications`.
+
+---
+
 ## 13. Reports
 
 Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate download endpoints.
@@ -2939,12 +2994,14 @@ Permissions map to PRD §17.2 matrix. Enforced via `packages/auth/permissions.py
 | `sales:reflect` | main_admin, admin | Manual mark-as-sold §11.1 — Salesperson excluded |
 | `sales:read` | all | GET sales |
 | `dashboard:read` | all | §12 |
+| `notifications:read` | all | §12.5 list, get, mark read |
+| `notifications:resolve` | main_admin, admin | §12.5 resolve |
 | `reports:read` | main_admin, admin | §13 |
 | `sync:trigger` | main_admin, admin | §14.1–14.4 |
 | `sync:worker` | excel_sync service | §14.5–14.8 |
 | `tally:sync` | main_admin, admin | §15.2 Sync Now |
 | `tally:dashboard` | main_admin, admin | §15.1 dashboard |
-| `tally:notifications` | main_admin, admin | §15.8–15.9 |
+| `tally:notifications` | main_admin, admin | §15.8–15.10 (legacy; use §12.5) |
 | `tally:worker` | tally_sync service | §11.2, §15.7 |
 | `tally:admin` | main_admin, admin | §15.3–15.6 events; settings `main_admin` only |
 | `audit:read` | main_admin | §16 |
