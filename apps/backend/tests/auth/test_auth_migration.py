@@ -16,7 +16,7 @@ async def test_migration_0008_users_authentication(db_session) -> None:
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision == "0011_sales"
+        assert current_revision == "0012_inventory_performance"
 
         def inspect_schema(sync_connection) -> list[str]:
             inspector = inspect(sync_connection)

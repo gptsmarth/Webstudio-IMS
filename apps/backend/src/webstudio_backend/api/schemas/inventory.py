@@ -13,26 +13,26 @@ from webstudio_backend.infrastructure.repositories.inventory_item_repository imp
 
 
 class CreateInventoryItemRequest(BaseModel):
-    serial_number: str
+    serial_number: str = Field(min_length=1, max_length=128)
     product_model_id: uuid.UUID
-    color: str
-    current_location_id: int
+    color: str = Field(min_length=1, max_length=64)
+    current_location_id: int = Field(gt=0)
     status: InventoryStatus = InventoryStatus.AVAILABLE
     purchase_date: date | None = None
     warranty_expiry: date | None = None
 
 
 class UpdateInventoryItemRequest(BaseModel):
-    serial_number: str | None = None
+    serial_number: str | None = Field(default=None, min_length=1, max_length=128)
     product_model_id: uuid.UUID | None = None
-    color: str | None = None
+    color: str | None = Field(default=None, min_length=1, max_length=64)
     status: InventoryStatus | None = None
     purchase_date: date | None = None
     warranty_expiry: date | None = None
 
 
 class TransferLocationRequest(BaseModel):
-    location_id: int = Field(description="Destination location ID")
+    location_id: int = Field(gt=0, description="Destination location ID")
 
 
 class MarkSoldRequest(BaseModel):

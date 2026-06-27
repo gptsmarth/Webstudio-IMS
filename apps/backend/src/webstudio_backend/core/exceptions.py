@@ -69,9 +69,14 @@ def register_exception_handlers(app: FastAPI) -> None:
             code = "PERMISSION_DENIED"
         elif exc.status_code == 401:
             code = "INVALID_CREDENTIALS"
+        elif exc.status_code == 409:
+            code = "VALIDATION_ERROR"
+        elif exc.status_code == 422:
+            code = "VALIDATION_ERROR"
+        message = exc.detail if isinstance(exc.detail, str) else "Request failed."
         return JSONResponse(
             status_code=exc.status_code,
-            content=_error_payload(request, code, str(exc.detail)),
+            content=_error_payload(request, code, message),
             headers=_response_headers(request),
         )
 

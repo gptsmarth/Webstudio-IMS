@@ -271,7 +271,8 @@ async def test_location_transfer_sold_rejected(
         headers=main_admin_headers,
         json={"location_id": store.id},
     )
-    assert response.status_code == 409
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "SOLD_ITEM_CANNOT_MOVE"
 
 
 @pytest.mark.asyncio

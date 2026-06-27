@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Implementation Guide
-Version: 1.4
+Version: 1.5
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | IMPL-001 |
-| **Version** | 1.4 |
+| **Version** | 1.5 |
 | **Status** | Active — engineering handbook for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md), [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md) |
 | **Purpose** | Define **how** WEBSTUDIO IMS is built — workflow, order, standards, and quality gates |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C complete:** Inventory API production-ready — standardized errors, performance indexes, query optimization, 124 total backend tests passing. |
 | 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2B complete:** Manual mark-as-sold and location transfer APIs; migration `0011_sales`; `SaleService`; 14 operation tests. |
 | 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A complete:** Inventory Core API (`/api/v1/inventory`); migration `0010_inventory_sprint_2a`; `InventoryService`; RBAC; audit integration; 11 API integration tests. |
 | 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture; Sprint 1E = audit logs; Sprint 1F = `0008_users_authentication`. |
@@ -760,8 +761,9 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | **S3** | Auth & Users (**Sprint 1F**) | Migration `0008_users_authentication`; Argon2id + JWT; setup, login, refresh, logout; RBAC; user CRUD | S2 |
 | **S4** | Reference Data APIs | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
 | **S5** | Inventory Core (**Sprint 2A** — complete) | Migration `0010_inventory_sprint_2a`; `/api/v1/inventory` CRUD, archive/restore, search, filters, pagination, serial lookup | S4 |
-| **S5B** | Inventory Operations (**Sprint 2B** — complete) | Migration `0011_sales`; `SaleService`; location transfer; manual mark-as-sold; audit on operations | S5 |
-| **S6** | Sales (Tally) | Tally-driven sale reflection via `SaleService`; sale history API | S5B, S2 |
+| **S5B** | Inventory Operations (**Sprint 2B** — complete) | Migration `0011_sales`; `SaleService`; location transfer; manual mark-as-sold | S5 |
+| **S5C** | Inventory API Hardening (**Sprint 2C** — complete) | Standardized errors; migration `0012_inventory_performance`; query optimization; production-ready | S5B |
+| **S6** | Sales (Tally) | Tally-driven sale reflection via `SaleService`; sale history API | S5C, S2 |
 | **S7** | Search | Combined filters; serial exact/prefix; product-spec search; color filter | S5 |
 | **S8** | Audit UI & Reports | Audit viewer; dashboard aggregates; settings API | S2, S7 |
 | **S9** | Excel Sync | Sync jobs; worker export; manual trigger; atomic file write | S8 |

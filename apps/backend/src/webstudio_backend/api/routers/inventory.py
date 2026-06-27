@@ -6,10 +6,11 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.inventory_errors import raise_inventory_error
 from webstudio_backend.api.schemas.inventory import (
     CreateInventoryItemRequest,
     InventoryItemDetail,
@@ -21,25 +22,12 @@ from webstudio_backend.api.schemas.inventory import (
 )
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
+from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import InventoryStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
-from webstudio_backend.infrastructure.repositories.exceptions import (
-    ArchivedInventoryOperationError,
-    DuplicateSerialNumberError,
-    InactiveLocationError,
-    InactiveProductModelError,
-    InventoryAlreadySoldError,
-    InventoryItemArchiveNotAllowedError,
-    InventoryItemNotFoundError,
-    InventoryNotAvailableForSaleError,
-    LocationNotFoundError,
-    SameLocationMovementError,
-    SoldItemCannotMoveError,
-    UseLocationTransferEndpointError,
-)
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import InventorySearchFilters
 from webstudio_backend.services.inventory_service import InventoryService
 
@@ -49,6 +37,18 @@ InventoryReadDep = Annotated[AuthenticatedUser, Depends(require_permission("inve
 InventoryWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:write"))]
 LocationTransferDep = Annotated[AuthenticatedUser, Depends(require_permission("location:transfer"))]
 SalesReflectDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:reflect"))]
+
+_ALLOWED_SORT_FIELDS = frozenset(
+    {
+        "serial_number",
+        "status",
+        "color",
+        "created_at",
+        "updated_at",
+        "purchase_date",
+        "warranty_expiry",
+    },
+)
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
@@ -90,18 +90,17 @@ def _parse_sort(sort: str | None) -> list[SortParam]:
         field, direction = sort, "asc"
     direction = direction.lower()
     if direction not in {"asc", "desc"}:
-        raise ValueError(f"Invalid sort direction: {direction}")
-    allowed = {
-        "serial_number",
-        "status",
-        "color",
-        "created_at",
-        "updated_at",
-        "purchase_date",
-        "warranty_expiry",
-    }
-    if field not in allowed:
-        raise ValueError(f"Unsupported sort field: {field}")
+        raise AppError(
+            "VALIDATION_ERROR",
+            f"Invalid sort direction: {direction}",
+            status_code=422,
+        )
+    if field not in _ALLOWED_SORT_FIELDS:
+        raise AppError(
+            "VALIDATION_ERROR",
+            f"Unsupported sort field: {field}",
+            status_code=422,
+        )
     return [SortParam(field, direction)]
 
 
@@ -130,10 +129,7 @@ async def list_inventory(
     sort: str | None = Query(default="updated_at:desc"),
 ) -> dict:
     del current
-    try:
-        sort_params = _parse_sort(sort)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    sort_params = _parse_sort(sort)
 
     filters = InventorySearchFilters(
         brand_id=brand_id,
@@ -171,9 +167,8 @@ async def create_inventory(
     current: InventoryWriteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    service = InventoryService(db_session)
     try:
-        detail = await service.create_item(
+        detail = await InventoryService(db_session).create_item(
             serial_number=body.serial_number,
             product_model_id=body.product_model_id,
             color=body.color,
@@ -183,14 +178,8 @@ async def create_inventory(
             warranty_expiry=body.warranty_expiry,
             actor=_actor(current),
         )
-    except DuplicateSerialNumberError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except InactiveProductModelError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except InactiveLocationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise_inventory_error(exc)
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -204,7 +193,11 @@ async def get_inventory_by_serial(
     del current
     detail = await InventoryService(db_session).get_by_serial(serial_number)
     if detail is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+        raise AppError(
+            "SERIAL_NOT_FOUND",
+            "Inventory item not found for serial number.",
+            status_code=404,
+        )
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -218,7 +211,11 @@ async def get_inventory(
     del current
     detail = await InventoryService(db_session).get_item(inventory_id)
     if detail is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+        raise AppError(
+            "NOT_FOUND",
+            "Inventory item not found.",
+            status_code=404,
+        )
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -230,10 +227,15 @@ async def update_inventory(
     current: InventoryWriteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
+    if not body.model_fields_set:
+        raise AppError(
+            "VALIDATION_ERROR",
+            "At least one field must be provided for update.",
+            status_code=422,
+        )
     fields_set = body.model_fields_set
-    service = InventoryService(db_session)
     try:
-        detail = await service.update_item(
+        detail = await InventoryService(db_session).update_item(
             inventory_id,
             actor=_actor(current),
             serial_number=body.serial_number,
@@ -245,18 +247,8 @@ async def update_inventory(
             set_purchase_date="purchase_date" in fields_set,
             set_warranty_expiry="warranty_expiry" in fields_set,
         )
-    except InventoryItemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DuplicateSerialNumberError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except UseLocationTransferEndpointError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except InactiveProductModelError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except InactiveLocationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise_inventory_error(exc)
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -267,13 +259,10 @@ async def archive_inventory(
     current: InventoryWriteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    service = InventoryService(db_session)
     try:
-        detail = await service.archive_item(inventory_id, actor=_actor(current))
-    except InventoryItemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except InventoryItemArchiveNotAllowedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        detail = await InventoryService(db_session).archive_item(inventory_id, actor=_actor(current))
+    except Exception as exc:
+        raise_inventory_error(exc)
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -284,11 +273,10 @@ async def restore_inventory(
     current: InventoryWriteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    service = InventoryService(db_session)
     try:
-        detail = await service.restore_item(inventory_id, actor=_actor(current))
-    except InventoryItemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        detail = await InventoryService(db_session).restore_item(inventory_id, actor=_actor(current))
+    except Exception as exc:
+        raise_inventory_error(exc)
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -300,25 +288,14 @@ async def transfer_inventory_location(
     current: LocationTransferDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    service = InventoryService(db_session)
     try:
-        detail = await service.transfer_location(
+        detail = await InventoryService(db_session).transfer_location(
             inventory_id,
             to_location_id=body.location_id,
             actor=_actor(current),
         )
-    except InventoryItemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ArchivedInventoryOperationError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except SoldItemCannotMoveError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except SameLocationMovementError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except LocationNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except InactiveLocationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise_inventory_error(exc)
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
 
 
@@ -330,9 +307,8 @@ async def mark_inventory_sold(
     current: SalesReflectDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    service = InventoryService(db_session)
     try:
-        result = await service.mark_as_sold(
+        result = await InventoryService(db_session).mark_as_sold(
             inventory_id,
             invoice_number=body.invoice_number,
             customer_name=body.customer_name,
@@ -341,16 +317,8 @@ async def mark_inventory_sold(
             remarks=body.remarks,
             actor=_actor(current),
         )
-    except InventoryItemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ArchivedInventoryOperationError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except InventoryAlreadySoldError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except InventoryNotAvailableForSaleError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise_inventory_error(exc)
 
     response = MarkSoldResponse(
         inventory=InventoryItemDetail.from_row(result.inventory),

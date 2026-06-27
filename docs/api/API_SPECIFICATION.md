@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.9
+Version: 1.10
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| Version | 1.8 |
+| Version | 1.10 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.10 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C — Inventory API production-ready:** standardized error envelope; performance indexes (`0012`); query optimizations; RBAC/error/performance test suite. |
 | 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2B implemented:** Inventory operations — `PATCH /api/v1/inventory/{id}/location`, `PATCH /api/v1/inventory/{id}/mark-sold`; migration `0011_sales`; `SaleService`. |
 | 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A implemented:** Inventory Core API at `/api/v1/inventory` — CRUD, archive/restore, search, filters, pagination, serial lookup; migration `0010_inventory_sprint_2a`; RBAC via `inventory:read` / `inventory:write`. |
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Final Tally sync freeze:** processing status lifecycle; partial retry; crash recovery; line-level transactions. |
@@ -1245,7 +1246,7 @@ Operational workflows for manual sales and location transfers. Uses `SaleService
 **Location transfer rules:**
 
 - Archived inventory cannot be moved (`409`)
-- Sold inventory cannot be moved (`409`)
+- Sold inventory cannot be moved (`422` `SOLD_ITEM_CANNOT_MOVE`)
 - Destination location must exist and be active
 - Generates `LOCATION_CHANGE` audit entry
 
@@ -1281,6 +1282,47 @@ Operational workflows for manual sales and location transfers. Uses `SaleService
 **Database migration:** `0011_sales` creates `sales` table with `sale_source` enum.
 
 **Note:** `PATCH /api/v1/inventory/{id}` no longer accepts `current_location_id` — use the location transfer endpoint.
+
+---
+
+### 8.0.2 Inventory API Hardening — Sprint 2C (Production-Ready)
+
+The Inventory API module at `/api/v1/inventory` is **production-ready** as of Sprint 2C.
+
+**Hardening summary:**
+
+| Area | Implementation |
+|------|----------------|
+| Authentication | All endpoints require valid JWT via `Authorization: Bearer` |
+| Authorization | RBAC enforced per endpoint via `inventory:read`, `inventory:write`, `location:transfer`, `sales:reflect` |
+| Validation | Pydantic request schemas with field constraints; repository-level business rules |
+| Audit logging | All mutations emit append-only audit entries in the same transaction |
+| Error handling | Standardized `error` envelope with catalogue codes (`SERIAL_NUMBER_DUPLICATE`, `SERIAL_NOT_FOUND`, `ALREADY_SOLD`, etc.) |
+| Performance | Migration `0012_inventory_performance` — functional index on `lower(serial_number)`; composite indexes for list/filter queries |
+
+**Standard error response (all inventory endpoints):**
+
+```json
+{
+  "error": {
+    "code": "SERIAL_NUMBER_DUPLICATE",
+    "message": "Serial number already exists.",
+    "details": []
+  },
+  "request_id": "...",
+  "correlation_id": "...",
+  "timestamp": "..."
+}
+```
+
+**Performance optimizations:**
+
+- Serial lookup (`GET /by-serial/{serial}`) uses indexed `lower(serial_number)` query with `LIMIT 1`
+- List filter by exact `serial_number` short-circuits to single-item lookup (at most one result)
+- Pagination count query uses ID-only subquery (avoids sorting full row sets for count)
+- Composite indexes: `(is_archived, status, updated_at DESC)`, `(current_location_id, status)`, `(product_model_id, status)`
+
+**Test coverage:** 39 inventory API/repository tests including RBAC matrix, error envelope, audit integration, operations, and index verification.
 
 ---
 

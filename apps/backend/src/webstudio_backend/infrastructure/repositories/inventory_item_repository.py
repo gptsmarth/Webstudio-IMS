@@ -73,13 +73,12 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def get_detail(self, entity_id: uuid.UUID) -> InventoryItemDetailRow | None:
+    async def get_detail_by_serial(self, serial_number: str) -> InventoryItemDetailRow | None:
+        normalized = validate_serial_number(serial_number)
         statement = (
-            select(InventoryItem, ProductModel, Brand, Location)
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id)
-            .where(InventoryItem.id == entity_id)
+            self._detail_select()
+            .where(func.lower(InventoryItem.serial_number) == normalized.lower())
+            .limit(1)
         )
         result = await self._session.execute(statement)
         row = result.one_or_none()
@@ -93,15 +92,16 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             location=location,
         )
 
-    async def get_detail_by_serial(self, serial_number: str) -> InventoryItemDetailRow | None:
-        normalized = validate_serial_number(serial_number)
-        statement = (
+    def _detail_select(self) -> Select[tuple[InventoryItem, ProductModel, Brand, Location]]:
+        return (
             select(InventoryItem, ProductModel, Brand, Location)
             .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
             .join(Brand, ProductModel.brand_id == Brand.id)
             .join(Location, InventoryItem.current_location_id == Location.id)
-            .where(func.lower(InventoryItem.serial_number) == normalized.lower())
         )
+
+    async def get_detail(self, entity_id: uuid.UUID) -> InventoryItemDetailRow | None:
+        statement = self._detail_select().where(InventoryItem.id == entity_id)
         result = await self._session.execute(statement)
         row = result.one_or_none()
         if row is None:
@@ -341,23 +341,33 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         page_params: PageParams,
         sort_params: list[SortParam] | None = None,
     ) -> PageResult[InventoryItemDetailRow]:
-        statement = (
-            select(InventoryItem, ProductModel, Brand, Location)
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id)
+        if filters.serial_number and filters.serial_number.strip():
+            detail = await self.get_detail_by_serial(filters.serial_number)
+            items = [detail] if detail is not None else []
+            total = len(items)
+            return PageResult(
+                items=items,
+                page=1,
+                page_size=page_params.page_size,
+                total_items=total,
+            )
+
+        base = self._detail_select()
+        filtered = self._apply_filters(base, filters)
+
+        count_statement = select(func.count()).select_from(
+            filtered.with_only_columns(InventoryItem.id).order_by(None).subquery(),
         )
-        statement = self._apply_filters(statement, filters)
+        total = int((await self._session.scalar(count_statement)) or 0)
+
         if sort_params:
             column_map = {column.key: column for column in InventoryItem.__table__.columns}
-            statement = apply_sorting(statement, sort_params, column_map)
+            filtered = apply_sorting(filtered, sort_params, column_map)
         else:
-            statement = statement.order_by(InventoryItem.updated_at.desc())
+            filtered = filtered.order_by(InventoryItem.updated_at.desc())
 
-        count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
-        total = int((await self._session.scalar(count_statement)) or 0)
         offset = (page_params.page - 1) * page_params.page_size
-        paged = statement.offset(offset).limit(page_params.page_size)
+        paged = filtered.offset(offset).limit(page_params.page_size)
         result = await self._session.execute(paged)
         items = [
             InventoryItemDetailRow(item=item, product_model=pm, brand=brand, location=location)
