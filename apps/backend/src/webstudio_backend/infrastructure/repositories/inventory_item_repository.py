@@ -27,12 +27,16 @@ from webstudio_backend.infrastructure.database.repositories.sorting import (
     apply_sorting,
 )
 from webstudio_backend.infrastructure.repositories.exceptions import (
+    ArchivedInventoryOperationError,
     DuplicateSerialNumberError,
     InactiveLocationError,
     InactiveProductModelError,
     InventoryItemArchiveNotAllowedError,
     InventoryItemDeleteNotAllowedError,
     InventoryItemNotFoundError,
+    LocationNotFoundError,
+    SameLocationMovementError,
+    SoldItemCannotMoveError,
 )
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
     InventorySearchFilters,
@@ -162,7 +166,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         serial_number: str | None = None,
         product_model_id: uuid.UUID | None = None,
         color: str | None = None,
-        current_location_id: int | None = None,
         status: InventoryStatus | None = None,
         purchase_date: date | None = None,
         warranty_expiry: date | None = None,
@@ -172,7 +175,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
     ) -> InventoryItem:
         audit_actor = actor or AuditActor.system()
         recorder = AuditRecorder(self._session)
-        old_location_id = inventory_item.current_location_id
         old_status = inventory_item.status
         old_serial = inventory_item.serial_number
         old_color = inventory_item.color
@@ -192,9 +194,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             inventory_item.product_model_id = product_model_id
         if color is not None:
             inventory_item.color = validate_color(color)
-        if current_location_id is not None:
-            await self._ensure_active_location(current_location_id)
-            inventory_item.current_location_id = current_location_id
         if status is not None:
             inventory_item.status = validate_status(status)
         if set_purchase_date:
@@ -211,13 +210,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 field_name="serial_number",
                 old_value={"serial_number": old_serial},
                 new_value={"serial_number": inventory_item.serial_number},
-                actor=audit_actor,
-            )
-        if current_location_id is not None and current_location_id != old_location_id:
-            await recorder.record_inventory_location_change(
-                inventory_item,
-                old_location_id=old_location_id,
-                new_location_id=current_location_id,
                 actor=audit_actor,
             )
         if status is not None and status != old_status:
@@ -269,6 +261,38 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 actor=audit_actor,
             )
 
+        return inventory_item
+
+    async def transfer_location(
+        self,
+        inventory_item: InventoryItem,
+        *,
+        to_location_id: int,
+        actor: AuditActor,
+    ) -> InventoryItem:
+        if inventory_item.is_archived:
+            raise ArchivedInventoryOperationError(str(inventory_item.id), "moved")
+        if inventory_item.status is InventoryStatus.SOLD:
+            raise SoldItemCannotMoveError(str(inventory_item.id))
+        if to_location_id == inventory_item.current_location_id:
+            raise SameLocationMovementError()
+
+        location = await self._session.get(Location, to_location_id)
+        if location is None:
+            raise LocationNotFoundError(to_location_id)
+        if not location.is_active:
+            raise InactiveLocationError(to_location_id)
+
+        old_location_id = inventory_item.current_location_id
+        inventory_item.current_location_id = to_location_id
+        await self._session.flush()
+        await self._session.refresh(inventory_item)
+        await AuditRecorder(self._session).record_inventory_location_change(
+            inventory_item,
+            old_location_id=old_location_id,
+            new_location_id=to_location_id,
+            actor=actor,
+        )
         return inventory_item
 
     async def archive(

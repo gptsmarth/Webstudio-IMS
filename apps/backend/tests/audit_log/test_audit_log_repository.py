@@ -74,7 +74,7 @@ async def test_audit_descriptions(
     admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
+    await repository.transfer_location(inventory_item, to_location_id=store.id, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)
     result = await audit_repository.get_by_inventory_item(
@@ -97,7 +97,7 @@ async def test_audit_pagination(
     admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
+    await repository.transfer_location(inventory_item, to_location_id=store.id, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)
     page_one = await audit_repository.get_by_inventory_item(
@@ -124,9 +124,9 @@ async def test_automatic_location_change_audit(
     admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(
+    await repository.transfer_location(
         inventory_item,
-        current_location_id=store.id,
+        to_location_id=store.id,
         actor=admin_actor,
     )
 
@@ -180,7 +180,7 @@ async def test_serial_number_lifecycle_order(
     admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
+    await repository.transfer_location(inventory_item, to_location_id=store.id, actor=admin_actor)
     await repository.update(inventory_item, status=InventoryStatus.SOLD, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)

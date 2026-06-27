@@ -16,10 +16,12 @@ from webstudio_backend.infrastructure.repositories.inventory_item_repository imp
     InventoryItemDetailRow,
     InventoryItemRepository,
 )
+from webstudio_backend.services.sale_service import ManualSaleResult, SaleService
 
 
 class InventoryService:
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self._repo = InventoryItemRepository(session)
 
     async def list_items(
@@ -70,7 +72,6 @@ class InventoryService:
         serial_number: str | None = None,
         product_model_id: uuid.UUID | None = None,
         color: str | None = None,
-        current_location_id: int | None = None,
         status: InventoryStatus | None = None,
         purchase_date: date | None = None,
         warranty_expiry: date | None = None,
@@ -83,7 +84,6 @@ class InventoryService:
             serial_number=serial_number,
             product_model_id=product_model_id,
             color=color,
-            current_location_id=current_location_id,
             status=status,
             purchase_date=purchase_date,
             warranty_expiry=warranty_expiry,
@@ -108,3 +108,37 @@ class InventoryService:
         detail = await self._repo.get_detail(item_id)
         assert detail is not None
         return detail
+
+    async def transfer_location(
+        self,
+        item_id: uuid.UUID,
+        *,
+        to_location_id: int,
+        actor: AuditActor,
+    ) -> InventoryItemDetailRow:
+        item = await self._repo.require_by_id(item_id)
+        await self._repo.transfer_location(item, to_location_id=to_location_id, actor=actor)
+        detail = await self._repo.get_detail(item_id)
+        assert detail is not None
+        return detail
+
+    async def mark_as_sold(
+        self,
+        item_id: uuid.UUID,
+        *,
+        invoice_number: str,
+        customer_name: str,
+        payment_mode: str,
+        sale_date: date,
+        remarks: str | None,
+        actor: AuditActor,
+    ) -> ManualSaleResult:
+        return await SaleService(self._session).reflect_manual_sale(
+            item_id,
+            invoice_number=invoice_number,
+            customer_name=customer_name,
+            payment_mode=payment_mode,
+            sale_date=sale_date,
+            remarks=remarks,
+            actor=actor,
+        )

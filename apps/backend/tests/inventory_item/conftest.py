@@ -40,7 +40,7 @@ MAIN_ADMIN_USERNAME = "mainadmin"
 async def clean_inventory_tables(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
-            "TRUNCATE TABLE webstudio.audit_logs, webstudio.inventory_items, "
+            "TRUNCATE TABLE webstudio.audit_logs, webstudio.sales, webstudio.inventory_items, "
             "webstudio.product_models, webstudio.locations, webstudio.brands, "
             "webstudio.refresh_tokens, webstudio.users, webstudio.system_settings "
             "RESTART IDENTITY CASCADE",
@@ -142,6 +142,17 @@ async def login_headers(client: AsyncClient, username: str, password: str) -> di
 @pytest_asyncio.fixture
 async def main_admin_headers(api_client: AsyncClient, initialized_system) -> dict[str, str]:
     return await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+
+
+@pytest_asyncio.fixture
+async def admin_headers(db_session: AsyncSession, api_client: AsyncClient, initialized_system) -> dict[str, str]:
+    await UserRepository(db_session).create(
+        username="admin1",
+        password_hash=hash_password(TEST_PASSWORD),
+        role=UserRole.ADMIN,
+        display_name="Admin One",
+    )
+    return await login_headers(api_client, "admin1", TEST_PASSWORD)
 
 
 @pytest_asyncio.fixture

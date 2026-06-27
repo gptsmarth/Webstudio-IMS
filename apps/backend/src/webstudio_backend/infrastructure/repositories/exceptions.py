@@ -167,6 +167,33 @@ class SoldItemCannotMoveError(RepositoryError):
         super().__init__(f"Sold inventory item cannot be moved: {inventory_item_id}")
 
 
+class ArchivedInventoryOperationError(RepositoryError):
+    def __init__(self, inventory_item_id: str, operation: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        self.operation = operation
+        super().__init__(f"Archived inventory item cannot be {operation}: {inventory_item_id}")
+
+
+class InventoryNotAvailableForSaleError(RepositoryError):
+    def __init__(self, inventory_item_id: str, status: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        self.status = status
+        super().__init__(
+            f"Inventory item {inventory_item_id} is not available for sale (status: {status})",
+        )
+
+
+class InventoryAlreadySoldError(RepositoryError):
+    def __init__(self, inventory_item_id: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        super().__init__(f"Inventory item is already sold: {inventory_item_id}")
+
+
+class UseLocationTransferEndpointError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Use PATCH /api/v1/inventory/{id}/location to transfer location")
+
+
 class SourceLocationMismatchError(RepositoryError):
     def __init__(self, inventory_item_id: str, from_location_id: int) -> None:
         self.inventory_item_id = inventory_item_id

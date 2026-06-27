@@ -35,7 +35,7 @@ ADMIN_ACTOR = AuditActor(display_name="Admin User", role="admin")
 async def clean_audit_tables(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
-            "TRUNCATE TABLE webstudio.audit_logs, webstudio.inventory_items, "
+            "TRUNCATE TABLE webstudio.audit_logs, webstudio.sales, webstudio.inventory_items, "
             "webstudio.product_models, webstudio.locations, webstudio.brands, "
             "webstudio.refresh_tokens, webstudio.users "
             "RESTART IDENTITY CASCADE",

@@ -33,6 +33,11 @@ class InventoryStatus(StrEnum):
     SOLD = "sold"
 
 
+class SaleSource(StrEnum):
+    TALLY = "tally"
+    MANUAL = "manual"
+
+
 class AuditAction(StrEnum):
     CREATE = "CREATE"
     UPDATE = "UPDATE"
@@ -83,6 +88,7 @@ PRODUCT_MODEL_STATUS_ENUM_NAME = "product_model_status"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
+SALE_SOURCE_ENUM_NAME = "sale_source"
 AUDIT_ACTION_ENUM_NAME = "audit_action"
 AUDIT_SOURCE_ENUM_NAME = "audit_source"
 USER_ROLE_ENUM_NAME = "user_role"
@@ -105,7 +111,9 @@ __all__ = [
     "THEME_PREFERENCE_ENUM_NAME",
     "USER_ROLE_ENUM_NAME",
     "USER_STATUS_ENUM_NAME",
+    "SALE_SOURCE_ENUM_NAME",
     "InventoryStatus",
+    "SaleSource",
     "LocationType",
     "ProductModelStatus",
     "SettingValueType",

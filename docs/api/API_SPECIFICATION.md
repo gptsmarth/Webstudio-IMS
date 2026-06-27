@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.8
+Version: 1.9
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2B implemented:** Inventory operations — `PATCH /api/v1/inventory/{id}/location`, `PATCH /api/v1/inventory/{id}/mark-sold`; migration `0011_sales`; `SaleService`. |
 | 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A implemented:** Inventory Core API at `/api/v1/inventory` — CRUD, archive/restore, search, filters, pagination, serial lookup; migration `0010_inventory_sprint_2a`; RBAC via `inventory:read` / `inventory:write`. |
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Final Tally sync freeze:** processing status lifecycle; partial retry; crash recovery; line-level transactions. |
 | 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | **Frozen** Tally sync rules: invoice-level idempotency; Tally Sync Log; AVAILABLE-only matching; notification categories. |
@@ -1223,6 +1224,63 @@ Primary backend interface for inventory CRUD, search, filtering, pagination, and
 **Audit behaviour:** `CREATE`, `UPDATE`, `ARCHIVE`, `RESTORE` audit actions on successful mutations.
 
 **Database migration:** `0010_inventory_sprint_2a` adds `is_archived`, `purchase_date`, `warranty_expiry` columns and indexes.
+
+---
+
+### 8.0.1 Inventory Operations — Sprint 2B (Implemented)
+
+Operational workflows for manual sales and location transfers. Uses `SaleService.reflect_manual_sale()` internally — the same service future Tally synchronization will call.
+
+| Endpoint | Method | Permission | Purpose |
+|----------|--------|------------|---------|
+| `/api/v1/inventory/{id}/location` | PATCH | `location:transfer` | Transfer item to a new active location |
+| `/api/v1/inventory/{id}/mark-sold` | PATCH | `sales:reflect` | Manually mark available inventory as sold |
+
+**Location transfer request:**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `location_id` | integer | Yes | Must differ from current; must be an active location |
+
+**Location transfer rules:**
+
+- Archived inventory cannot be moved (`409`)
+- Sold inventory cannot be moved (`409`)
+- Destination location must exist and be active
+- Generates `LOCATION_CHANGE` audit entry
+
+**Authorization (location):** `main_admin`, `admin`, `salesperson` (`location:transfer`)
+
+**Mark-as-sold request:**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `invoice_number` | string | Yes | Invoice/voucher reference |
+| `customer_name` | string | Yes | Customer name (reference only) |
+| `payment_mode` | string | Yes | e.g. Cash, UPI, Card |
+| `sale_date` | date | Yes | Date of sale |
+| `remarks` | string | No | Optional notes stored on sale record |
+
+**Mark-as-sold rules:**
+
+- Inventory status must be `available` (`422` otherwise)
+- Already sold inventory cannot be sold again (`409`)
+- Archived inventory cannot be sold (`409`)
+- Creates immutable `sales` row and sets inventory status to `sold`
+- Generates `CREATE` (sale) and `STATUS_CHANGE` (inventory) audit entries
+
+**Authorization (mark-as-sold):** `main_admin`, `admin` only (`sales:reflect`) — **Salesperson excluded**
+
+**Mark-as-sold response:**
+
+| Field | Type |
+|-------|------|
+| `inventory` | `InventoryItemDetail` — updated item with `status = sold` |
+| `sale` | `SaleDetail` — immutable sale record |
+
+**Database migration:** `0011_sales` creates `sales` table with `sale_source` enum.
+
+**Note:** `PATCH /api/v1/inventory/{id}` no longer accepts `current_location_id` — use the location transfer endpoint.
 
 ---
 

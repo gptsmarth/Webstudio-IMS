@@ -6,6 +6,7 @@ from webstudio_backend.infrastructure.database.models.inventory_item import Inve
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
+from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.system_setting import SystemSetting
 from webstudio_backend.infrastructure.database.models.user import User
 
@@ -16,6 +17,7 @@ __all__ = [
     "Location",
     "ProductModel",
     "RefreshToken",
+    "Sale",
     "SystemSetting",
     "User",
 ]

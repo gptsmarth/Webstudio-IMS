@@ -13,6 +13,10 @@ from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_p
 from webstudio_backend.api.schemas.inventory import (
     CreateInventoryItemRequest,
     InventoryItemDetail,
+    MarkSoldRequest,
+    MarkSoldResponse,
+    SaleDetail,
+    TransferLocationRequest,
     UpdateInventoryItemRequest,
 )
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
@@ -23,11 +27,18 @@ from webstudio_backend.infrastructure.database.enums import InventoryStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
 from webstudio_backend.infrastructure.repositories.exceptions import (
+    ArchivedInventoryOperationError,
     DuplicateSerialNumberError,
     InactiveLocationError,
     InactiveProductModelError,
+    InventoryAlreadySoldError,
     InventoryItemArchiveNotAllowedError,
     InventoryItemNotFoundError,
+    InventoryNotAvailableForSaleError,
+    LocationNotFoundError,
+    SameLocationMovementError,
+    SoldItemCannotMoveError,
+    UseLocationTransferEndpointError,
 )
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import InventorySearchFilters
 from webstudio_backend.services.inventory_service import InventoryService
@@ -36,6 +47,8 @@ router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 
 InventoryReadDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:read"))]
 InventoryWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:write"))]
+LocationTransferDep = Annotated[AuthenticatedUser, Depends(require_permission("location:transfer"))]
+SalesReflectDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:reflect"))]
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
@@ -226,7 +239,6 @@ async def update_inventory(
             serial_number=body.serial_number,
             product_model_id=body.product_model_id,
             color=body.color,
-            current_location_id=body.current_location_id,
             status=body.status,
             purchase_date=body.purchase_date,
             warranty_expiry=body.warranty_expiry,
@@ -237,6 +249,8 @@ async def update_inventory(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DuplicateSerialNumberError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except UseLocationTransferEndpointError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except InactiveProductModelError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except InactiveLocationError as exc:
@@ -276,3 +290,73 @@ async def restore_inventory(
     except InventoryItemNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
+
+
+@router.patch("/{inventory_id}/location")
+async def transfer_inventory_location(
+    request: Request,
+    inventory_id: uuid.UUID,
+    body: TransferLocationRequest,
+    current: LocationTransferDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = InventoryService(db_session)
+    try:
+        detail = await service.transfer_location(
+            inventory_id,
+            to_location_id=body.location_id,
+            actor=_actor(current),
+        )
+    except InventoryItemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ArchivedInventoryOperationError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SoldItemCannotMoveError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SameLocationMovementError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except LocationNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InactiveLocationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _envelope(request, InventoryItemDetail.from_row(detail).model_dump())
+
+
+@router.patch("/{inventory_id}/mark-sold")
+async def mark_inventory_sold(
+    request: Request,
+    inventory_id: uuid.UUID,
+    body: MarkSoldRequest,
+    current: SalesReflectDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = InventoryService(db_session)
+    try:
+        result = await service.mark_as_sold(
+            inventory_id,
+            invoice_number=body.invoice_number,
+            customer_name=body.customer_name,
+            payment_mode=body.payment_mode,
+            sale_date=body.sale_date,
+            remarks=body.remarks,
+            actor=_actor(current),
+        )
+    except InventoryItemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ArchivedInventoryOperationError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InventoryAlreadySoldError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InventoryNotAvailableForSaleError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    response = MarkSoldResponse(
+        inventory=InventoryItemDetail.from_row(result.inventory),
+        sale=SaleDetail.from_model(
+            result.sale,
+            serial_number=result.inventory.item.serial_number,
+        ),
+    )
+    return _envelope(request, response.model_dump())

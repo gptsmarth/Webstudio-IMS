@@ -18,6 +18,7 @@ from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
 
@@ -356,6 +357,30 @@ class AuditRecorder:
             old_value={"is_archived": True},
             new_value={"is_archived": False},
             description=f"Inventory item restored (serial: {item.serial_number})",
+        )
+
+    async def record_sale_create(
+        self,
+        sale: Sale,
+        *,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="sale",
+            entity_id=str(sale.id),
+            action=AuditAction.CREATE,
+            actor=actor,
+            inventory_item_id=sale.inventory_item_id,
+            new_value={
+                "sale_id": sale.id,
+                "sale_source": sale.sale_source.value,
+                "invoice_number": sale.invoice_number,
+                "customer_name": sale.customer_name,
+                "payment_mode": sale.payment_mode,
+                "sold_at": sale.sold_at.isoformat(),
+                "notes": sale.notes,
+            },
+            description=f"Sale recorded (Invoice: {sale.invoice_number})",
         )
 
     async def record_system_action(
