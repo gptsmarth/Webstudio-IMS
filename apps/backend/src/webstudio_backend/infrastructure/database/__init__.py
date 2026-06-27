@@ -3,6 +3,7 @@
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
 from webstudio_backend.infrastructure.database.enums import (
+    InventoryStatus,
     LocationType,
     ProductModelStatus,
     StorageType,
@@ -13,7 +14,12 @@ from webstudio_backend.infrastructure.database.mixins import (
     TimestampMixin,
     UuidPrimaryKeyMixin,
 )
-from webstudio_backend.infrastructure.database.models import Brand, Location, ProductModel
+from webstudio_backend.infrastructure.database.models import (
+    Brand,
+    InventoryItem,
+    Location,
+    ProductModel,
+)
 from webstudio_backend.infrastructure.database.session import (
     close_db,
     get_engine,
@@ -27,6 +33,8 @@ __all__ = [
     "DATABASE_SCHEMA",
     "Base",
     "Brand",
+    "InventoryItem",
+    "InventoryStatus",
     "Location",
     "LocationType",
     "PrimaryKeyMixin",

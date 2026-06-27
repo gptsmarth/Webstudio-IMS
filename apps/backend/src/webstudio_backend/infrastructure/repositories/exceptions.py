@@ -40,3 +40,28 @@ class ProductModelHasHistoryError(RepositoryError):
             "Product model "
             f"{product_model_id} cannot be deleted because historical references exist",
         )
+
+
+class DuplicateSerialNumberError(RepositoryError):
+    def __init__(self, serial_number: str) -> None:
+        self.serial_number = serial_number
+        super().__init__(f"Serial number already exists: {serial_number}")
+
+
+class InactiveProductModelError(RepositoryError):
+    def __init__(self, product_model_id: str) -> None:
+        self.product_model_id = product_model_id
+        super().__init__(f"Product model {product_model_id} is not active")
+
+
+class InactiveLocationError(RepositoryError):
+    def __init__(self, location_id: int) -> None:
+        self.location_id = location_id
+        super().__init__(f"Location {location_id} is not active")
+
+
+class InventoryItemDeleteNotAllowedError(RepositoryError):
+    def __init__(self, inventory_item_id: str, reason: str) -> None:
+        self.inventory_item_id = inventory_item_id
+        self.reason = reason
+        super().__init__(f"Inventory item {inventory_item_id} cannot be deleted: {reason}")
