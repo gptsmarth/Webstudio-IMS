@@ -14,7 +14,9 @@ from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
 from webstudio_backend.infrastructure.database.enums import (
     AUDIT_ACTION_ENUM_NAME,
+    AUDIT_SOURCE_ENUM_NAME,
     AuditAction,
+    AuditSource,
 )
 
 
@@ -48,6 +50,17 @@ class AuditLog(Base):
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
         nullable=False,
+    )
+    source: Mapped[AuditSource] = mapped_column(
+        Enum(
+            AuditSource,
+            name=AUDIT_SOURCE_ENUM_NAME,
+            schema=DATABASE_SCHEMA,
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=AuditSource.MANUAL,
     )
     field_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     old_value: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

@@ -8,7 +8,12 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import AuditAction, InventoryStatus
+from webstudio_backend.infrastructure.audit.audit_snapshots import entity_ref
+from webstudio_backend.infrastructure.database.enums import (
+    AuditAction,
+    AuditSource,
+    InventoryStatus,
+)
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
@@ -35,7 +40,11 @@ class AuditRecorder:
         old_value: dict[str, Any] | None = None,
         new_value: dict[str, Any] | None = None,
         description: str | None = None,
+        source: AuditSource | None = None,
     ) -> None:
+        resolved_source = source or (
+            AuditSource.MANUAL if actor.user_id is not None else AuditSource.SYSTEM
+        )
         await self._repository.create(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -48,6 +57,7 @@ class AuditRecorder:
             old_value=old_value,
             new_value=new_value,
             description=description,
+            source=resolved_source,
         )
 
     async def record_brand_create(self, brand: Brand, *, actor: AuditActor) -> None:
@@ -56,7 +66,10 @@ class AuditRecorder:
             entity_id=str(brand.id),
             action=AuditAction.CREATE,
             actor=actor,
-            new_value={"name": brand.name, "is_active": brand.is_active},
+            new_value={
+                "brand": entity_ref(entity_id=brand.id, name=brand.name),
+                "is_active": brand.is_active,
+            },
             description=f"Brand '{brand.name}' created",
         )
 
@@ -87,7 +100,7 @@ class AuditRecorder:
             action=AuditAction.CREATE,
             actor=actor,
             new_value={
-                "name": location.name,
+                "location": entity_ref(entity_id=location.id, name=location.name),
                 "location_type": location.location_type.value,
                 "is_active": location.is_active,
             },
@@ -210,8 +223,8 @@ class AuditRecorder:
         new_location_id: int,
         actor: AuditActor,
     ) -> None:
-        old_name = await self._location_name(old_location_id)
-        new_name = await self._location_name(new_location_id)
+        old_ref = await self._location_ref(old_location_id)
+        new_ref = await self._location_ref(new_location_id)
         await self.record(
             entity_type="inventory_item",
             entity_id=str(item.id),
@@ -219,9 +232,11 @@ class AuditRecorder:
             actor=actor,
             inventory_item_id=item.id,
             field_name="current_location",
-            old_value={"current_location": old_name, "current_location_id": old_location_id},
-            new_value={"current_location": new_name, "current_location_id": new_location_id},
-            description=f"Location changed from {old_name} to {new_name}",
+            old_value={"current_location": old_ref},
+            new_value={"current_location": new_ref},
+            description=(
+                f"Location changed from {old_ref['name']} to {new_ref['name']}"
+            ),
         )
 
     async def record_inventory_status_change(
@@ -232,6 +247,7 @@ class AuditRecorder:
         new_status: InventoryStatus,
         actor: AuditActor,
         extra_new_value: dict[str, Any] | None = None,
+        source: AuditSource | None = None,
     ) -> None:
         old_label = old_status.value.replace("_", " ").title()
         new_label = new_status.value.replace("_", " ").title()
@@ -259,6 +275,31 @@ class AuditRecorder:
             },
             new_value=new_value,
             description=description,
+            source=source,
+        )
+
+    async def record_inventory_product_model_change(
+        self,
+        item: InventoryItem,
+        *,
+        old_product_model_id: uuid.UUID,
+        new_product_model_id: uuid.UUID,
+        actor: AuditActor,
+    ) -> None:
+        old_ref = await self._product_model_ref(old_product_model_id)
+        new_ref = await self._product_model_ref(new_product_model_id)
+        await self.record(
+            entity_type="inventory_item",
+            entity_id=str(item.id),
+            action=AuditAction.UPDATE,
+            actor=actor,
+            inventory_item_id=item.id,
+            field_name="product_model",
+            old_value={"product_model": old_ref},
+            new_value={"product_model": new_ref},
+            description=(
+                f"Product model changed from {old_ref['name']} to {new_ref['name']}"
+            ),
         )
 
     async def record_inventory_field_update(
@@ -293,6 +334,7 @@ class AuditRecorder:
         field_name: str | None = None,
         old_value: dict[str, Any] | None = None,
         new_value: dict[str, Any] | None = None,
+        source: AuditSource = AuditSource.SYSTEM,
     ) -> None:
         """Record a system-initiated audit entry (e.g. future Tally sync)."""
         await self.record(
@@ -305,6 +347,7 @@ class AuditRecorder:
             old_value=old_value,
             new_value=new_value,
             description=description,
+            source=source,
         )
 
     @staticmethod
@@ -313,29 +356,49 @@ class AuditRecorder:
         old_value: dict[str, Any],
         new_value: dict[str, Any],
     ) -> str:
-        old_display = old_value.get(field_name, old_value)
-        new_display = new_value.get(field_name, new_value)
+        old_display = AuditRecorder._display_value(old_value.get(field_name, old_value))
+        new_display = AuditRecorder._display_value(new_value.get(field_name, new_value))
         label = field_name.replace("_", " ").title()
         return f"{label} changed from {old_display} to {new_display}"
 
-    async def _location_name(self, location_id: int) -> str:
+    @staticmethod
+    def _display_value(value: object) -> object:
+        if isinstance(value, dict) and "name" in value:
+            return value["name"]
+        return value
+
+    async def _location_ref(self, location_id: int) -> dict[str, Any]:
         location = await self._session.get(Location, location_id)
-        return location.name if location is not None else f"Location #{location_id}"
+        name = location.name if location is not None else f"Location #{location_id}"
+        return entity_ref(entity_id=location_id, name=name)
+
+    async def _brand_ref(self, brand_id: int) -> dict[str, Any]:
+        brand = await self._session.get(Brand, brand_id)
+        name = brand.name if brand is not None else f"Brand #{brand_id}"
+        return entity_ref(entity_id=brand_id, name=name)
+
+    async def _product_model_ref(self, product_model_id: uuid.UUID) -> dict[str, Any]:
+        product_model = await self._session.get(ProductModel, product_model_id)
+        if product_model is None:
+            return entity_ref(entity_id=product_model_id, name=f"Model {product_model_id}")
+        return {
+            "id": str(product_model.id),
+            "name": product_model.model_name,
+            "model_number": product_model.model_number,
+        }
 
     async def _inventory_snapshot(self, item: InventoryItem) -> dict[str, Any]:
-        location_name = await self._location_name(item.current_location_id)
         return {
             "serial_number": item.serial_number,
             "color": item.color,
             "status": item.status.value,
-            "current_location": location_name,
-            "current_location_id": item.current_location_id,
-            "product_model_id": str(item.product_model_id),
+            "current_location": await self._location_ref(item.current_location_id),
+            "product_model": await self._product_model_ref(item.product_model_id),
         }
 
     async def _product_model_snapshot(self, product_model: ProductModel) -> dict[str, Any]:
         return {
-            "brand_id": product_model.brand_id,
+            "brand": await self._brand_ref(product_model.brand_id),
             "model_number": product_model.model_number,
             "model_name": product_model.model_name,
             "cpu": product_model.cpu,

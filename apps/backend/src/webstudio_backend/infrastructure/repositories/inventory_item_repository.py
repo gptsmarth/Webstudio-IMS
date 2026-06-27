@@ -136,11 +136,10 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 actor=audit_actor,
             )
         if product_model_id is not None and product_model_id != old_product_model_id:
-            await recorder.record_inventory_field_update(
+            await recorder.record_inventory_product_model_change(
                 inventory_item,
-                field_name="product_model_id",
-                old_value={"product_model_id": str(old_product_model_id)},
-                new_value={"product_model_id": str(product_model_id)},
+                old_product_model_id=old_product_model_id,
+                new_product_model_id=product_model_id,
                 actor=audit_actor,
             )
         if color is not None and inventory_item.color != old_color:

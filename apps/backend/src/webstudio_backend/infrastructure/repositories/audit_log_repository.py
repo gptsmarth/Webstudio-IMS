@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.enums import AuditAction
+from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
@@ -44,6 +44,7 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
         old_value: dict[str, Any] | None = None,
         new_value: dict[str, Any] | None = None,
         description: str | None = None,
+        source: AuditSource = AuditSource.MANUAL,
     ) -> AuditLog:
         return await self.add(
             AuditLog(
@@ -58,6 +59,7 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
                 old_value=old_value,
                 new_value=new_value,
                 description=description,
+                source=source,
             ),
         )
 
@@ -142,6 +144,8 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             statement = statement.where(AuditLog.actor_user_id == filters.actor_user_id)
         if filters.action is not None:
             statement = statement.where(AuditLog.action == filters.action)
+        if filters.source is not None:
+            statement = statement.where(AuditLog.source == filters.source)
         if filters.created_at_from is not None:
             statement = statement.where(AuditLog.created_at >= filters.created_at_from)
         if filters.created_at_to is not None:

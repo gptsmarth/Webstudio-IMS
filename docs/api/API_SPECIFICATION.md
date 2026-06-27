@@ -1965,6 +1965,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | `product_model_id` | Filter inventory-related entries for a model |
 | `brand_id` | Filter inventory-related entries for a brand |
 | `actor_user_id` | Who performed the action |
+| `source` | `MANUAL`, `TALLY_SYNC`, `BACKGROUND_JOB`, `SYSTEM` |
 | `created_at_from`, `created_at_to` | Date range |
 | `page`, `page_size` | Default sort `created_at:desc` |
 
@@ -2328,8 +2329,9 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | `actor_display_name` | string \| null |
 | `actor_role` | string \| null |
 | `action` | enum (`CREATE`, `UPDATE`, `ARCHIVE`, `RESTORE`, `STATUS_CHANGE`, `LOCATION_CHANGE`, `SYSTEM_ACTION`) |
+| `source` | enum (`MANUAL`, `TALLY_SYNC`, `BACKGROUND_JOB`, `SYSTEM`) |
 | `field_name` | string \| null |
-| `old_value` | object \| null — human-readable snapshots (e.g. location names) |
+| `old_value` | object \| null — immutable `{id, name}` snapshots for referenced entities |
 | `new_value` | object \| null — may include Tally metadata (`invoice_number`, `voucher_type`) |
 | `description` | string \| null — human-readable summary |
 | `created_at` | datetime |

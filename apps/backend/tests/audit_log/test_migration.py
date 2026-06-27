@@ -16,7 +16,7 @@ async def test_migration_0005_audit_logs_exist(db_session) -> None:
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision == "0006_audit_log_description"
+        assert current_revision == "0007_audit_log_source"
 
         def inspect_schema(sync_connection) -> tuple[list[str], set[str]]:
             inspector = inspect(sync_connection)
@@ -37,5 +37,6 @@ async def test_migration_0005_audit_logs_exist(db_session) -> None:
         "ix_audit_logs_actor_user_id",
         "ix_audit_logs_action",
         "ix_audit_logs_created_at",
+        "ix_audit_logs_source",
     ):
         assert expected in indexes

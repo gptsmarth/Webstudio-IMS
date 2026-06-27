@@ -7,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from audit_log.conftest import ADMIN_ACTOR
 from webstudio_backend.infrastructure.audit import AuditActor
-from webstudio_backend.infrastructure.database.enums import AuditAction, InventoryStatus
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
+from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource, InventoryStatus
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories import PageParams
 from webstudio_backend.infrastructure.repositories import (
     AuditLogRepository,
     InventoryItemRepository,
+    LocationRepository,
 )
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.exceptions import InventoryItemNotFoundError
@@ -56,7 +58,12 @@ async def test_automatic_inventory_create_audit(
     assert entry.actor_display_name == ADMIN_ACTOR.display_name
     assert entry.new_value is not None
     assert entry.new_value.get("serial_number") == "SN-LIFECYCLE-001"
-    assert entry.new_value.get("current_location") == "Warehouse"
+    location = entry.new_value["current_location"]
+    assert location["id"] == str(inventory_item.current_location_id)
+    assert location["name"] == "Warehouse"
+    product_model = entry.new_value["product_model"]
+    assert product_model["name"] == "Vivobook 15"
+    assert product_model["model_number"] == "X1502ZA-EJ541WS"
 
 
 @pytest.mark.asyncio
@@ -110,6 +117,7 @@ async def test_audit_pagination(
 async def test_automatic_location_change_audit(
     db_session: AsyncSession,
     inventory_item,
+    warehouse: Location,
     store: Location,
 ) -> None:
     repository = InventoryItemRepository(db_session)
@@ -129,8 +137,10 @@ async def test_automatic_location_change_audit(
     assert entry.field_name == "current_location"
     assert entry.old_value is not None
     assert entry.new_value is not None
-    assert entry.old_value["current_location"] == "Warehouse"
-    assert entry.new_value["current_location"] == "ASUS Store"
+    assert entry.old_value["current_location"]["name"] == "Warehouse"
+    assert entry.new_value["current_location"]["name"] == "ASUS Store"
+    assert entry.old_value["current_location"]["id"] == str(warehouse.id)
+    assert entry.new_value["current_location"]["id"] == str(store.id)
 
 
 @pytest.mark.asyncio
@@ -205,6 +215,71 @@ async def test_search_serial_not_found(db_session: AsyncSession) -> None:
             "MISSING-SERIAL",
             PageParams(page=1, page_size=10),
         )
+
+
+@pytest.mark.asyncio
+async def test_historical_location_name_preserved_after_rename(
+    db_session: AsyncSession,
+    inventory_item,
+    warehouse: Location,
+) -> None:
+    await LocationRepository(db_session).update_name(warehouse, "Renamed Warehouse", actor=ADMIN_ACTOR)
+
+    audit_repository = AuditLogRepository(db_session)
+    create_entry = (
+        await audit_repository.get_by_inventory_item(
+            inventory_item.id,
+            PageParams(page=1, page_size=10),
+        )
+    ).items[0]
+    assert create_entry.new_value is not None
+    assert create_entry.new_value["current_location"]["name"] == "Warehouse"
+
+
+@pytest.mark.asyncio
+async def test_manual_source_on_user_actions(
+    db_session: AsyncSession,
+    inventory_item,
+) -> None:
+    audit_repository = AuditLogRepository(db_session)
+    entry = (
+        await audit_repository.get_by_inventory_item(
+            inventory_item.id,
+            PageParams(page=1, page_size=1),
+        )
+    ).items[0]
+    assert entry.source is AuditSource.MANUAL
+
+
+@pytest.mark.asyncio
+async def test_filter_by_audit_source(
+    db_session: AsyncSession,
+    inventory_item,
+) -> None:
+    recorder = AuditRecorder(db_session)
+    await recorder.record_inventory_status_change(
+        inventory_item,
+        old_status=InventoryStatus.AVAILABLE,
+        new_status=InventoryStatus.SOLD,
+        actor=AuditActor.system(display_name="System (Tally Sync)", role="system"),
+        extra_new_value={"invoice_number": "325", "voucher_type": "Sales"},
+        source=AuditSource.TALLY_SYNC,
+    )
+
+    audit_repository = AuditLogRepository(db_session)
+    tally_entries = await audit_repository.search(
+        AuditLogSearchFilters(source=AuditSource.TALLY_SYNC),
+        PageParams(page=1, page_size=10),
+    )
+    manual_entries = await audit_repository.search(
+        AuditLogSearchFilters(source=AuditSource.MANUAL),
+        PageParams(page=1, page_size=10),
+    )
+    assert tally_entries.total_items == 1
+    assert tally_entries.items[0].source is AuditSource.TALLY_SYNC
+    assert tally_entries.items[0].new_value is not None
+    assert tally_entries.items[0].new_value["invoice_number"] == "325"
+    assert manual_entries.total_items >= 1
 
 
 @pytest.mark.asyncio

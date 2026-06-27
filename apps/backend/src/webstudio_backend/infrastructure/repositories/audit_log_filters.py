@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from webstudio_backend.infrastructure.database.enums import AuditAction
+from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,5 +19,6 @@ class AuditLogSearchFilters:
     brand_id: int | None = None
     actor_user_id: int | None = None
     action: AuditAction | None = None
+    source: AuditSource | None = None
     created_at_from: datetime | None = None
     created_at_to: datetime | None = None

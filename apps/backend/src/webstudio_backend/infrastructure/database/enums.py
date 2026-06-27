@@ -43,16 +43,26 @@ class AuditAction(StrEnum):
     SYSTEM_ACTION = "SYSTEM_ACTION"
 
 
+class AuditSource(StrEnum):
+    MANUAL = "MANUAL"
+    TALLY_SYNC = "TALLY_SYNC"
+    BACKGROUND_JOB = "BACKGROUND_JOB"
+    SYSTEM = "SYSTEM"
+
+
 LOCATION_TYPE_ENUM_NAME = "location_type"
 PRODUCT_MODEL_STATUS_ENUM_NAME = "product_model_status"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
 AUDIT_ACTION_ENUM_NAME = "audit_action"
+AUDIT_SOURCE_ENUM_NAME = "audit_source"
 
 __all__ = [
     "AUDIT_ACTION_ENUM_NAME",
+    "AUDIT_SOURCE_ENUM_NAME",
     "AuditAction",
+    "AuditSource",
     "INVENTORY_STATUS_ENUM_NAME",
     "LOCATION_TYPE_ENUM_NAME",
     "PRODUCT_MODEL_STATUS_ENUM_NAME",

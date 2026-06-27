@@ -12,7 +12,7 @@ from webstudio_backend.api.schemas.audit_log import AuditLogEntry
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
-from webstudio_backend.infrastructure.database.enums import AuditAction
+from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
@@ -52,6 +52,7 @@ async def search_audit_logs(
     brand_id: int | None = None,
     actor_user_id: int | None = None,
     action: AuditAction | None = None,
+    source: AuditSource | None = None,
     created_at_from: datetime | None = None,
     created_at_to: datetime | None = None,
     page: int = Query(default=1, ge=1),
@@ -67,6 +68,7 @@ async def search_audit_logs(
         brand_id=brand_id,
         actor_user_id=actor_user_id,
         action=action,
+        source=source,
         created_at_from=created_at_from,
         created_at_to=created_at_to,
     )

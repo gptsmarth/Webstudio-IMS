@@ -766,6 +766,17 @@ Sprint 1E implements a compact action enum on `audit_logs.action`. Future integr
 
 Entity context is captured in `entity_type` + `entity_id` (e.g. `inventory_item`, `{uuid}`).
 
+### 6.9 AuditSource
+
+| Value | Meaning |
+|-------|---------|
+| `MANUAL` | Human user action (default when `actor_user_id` is set) |
+| `TALLY_SYNC` | Future Tally synchronization worker |
+| `BACKGROUND_JOB` | Scheduled or async background task |
+| `SYSTEM` | Generic system action (default when no user actor) |
+
+Filterable via `GET /api/v1/audit_logs?source=TALLY_SYNC`.
+
 ### 6.9 TallyEventType
 
 | Value | Meaning |
@@ -955,13 +966,15 @@ Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 | `old_value` | Optional | JSON snapshot of previous value(s) — human-readable where possible |
 | `new_value` | Optional | JSON snapshot of new value(s); may include Tally metadata (`invoice_number`, `voucher_type`) |
 | `description` | Optional | Human-readable summary — e.g. `Location changed from Warehouse to ASUS Store` |
+| `source` | Yes | Origin of the action — §6.9 (`MANUAL`, `TALLY_SYNC`, `BACKGROUND_JOB`, `SYSTEM`); filterable |
 | `created_at` | Yes | UTC timestamp — immutable |
 
 **Design notes:**
 
 - Current inventory location is stored only on `inventory_item.current_location_id`.
 - Complete location/status lifecycle is reconstructed from `audit_logs` — **no** `inventory_movements` table.
-- `old_value` / `new_value` preserve readable names (location names, status labels) so history remains understandable if master data changes later.
+- Referenced entities (location, brand, product model, user) are snapshotted as `{id, name}` (plus relevant labels) in `old_value` / `new_value` at write time so history never depends on current master data.
+- `old_value` / `new_value` preserve readable names so history remains understandable if master data changes later.
 
 ### 9.2 Immutability
 
@@ -979,8 +992,8 @@ For `LOCATION_CHANGE` actions, the audit log is the **only** persistence of loca
 
 | Concern | `audit_logs` |
 |---------|--------------|
-| From location | `old_value.current_location`, `old_value.current_location_id` |
-| To location | `new_value.current_location`, `new_value.current_location_id` |
+| From location | `old_value.current_location` → `{id, name}` |
+| To location | `new_value.current_location` → `{id, name}` |
 | Actor | `actor_user_id`, `actor_display_name`, `actor_role` |
 | Transfer time | `created_at` |
 | Summary | `description` — e.g. `Location changed from Warehouse to ASUS Store` |
@@ -1015,6 +1028,7 @@ Audit queries must support filtering by:
 | User (actor) | `actor_user_id` |
 | Date range | `created_at` |
 | Action type | `action` |
+| Source | `source` |
 
 ### 9.6 Relationship to Domain Events
 
@@ -1405,8 +1419,9 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 | 4 | `0004_inventory_item` | `inventory_items` |
 | 5 | `0005_audit_logs` | `audit_logs` — append-only history per §9 |
 | 6 | `0006_audit_log_description` | `audit_logs.description` column |
-| 7 | `0007_users_authentication` (planned) | `users`, `refresh_tokens`, `system_settings` (including `system_initialized = false` seed) |
-| 8 | `0008_ownership_columns` (planned) | `created_by_user_id`, `updated_by_user_id` on `brands`, `locations`, `product_models`, `inventory_items` |
+| 7 | `0007_audit_log_source` | `audit_logs.source` enum + index |
+| 8 | `0008_users_authentication` (planned) | `users`, `refresh_tokens`, `system_settings` (including `system_initialized = false` seed) |
+| 9 | `0009_ownership_columns` (planned) | `created_by_user_id`, `updated_by_user_id` on `brands`, `locations`, `product_models`, `inventory_items` |
 | 9 | `0009_integrations` (planned) | `sales`, `sync_jobs`, `tally_integration_events`, `tally_company_syncs`, `notifications`; additional `system_settings` keys as needed |
 
 **Dependency rationale:** Operational ownership columns require the `users` table — applied in `0008` after `0007_users_authentication`.
@@ -1418,7 +1433,7 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 - `audit_logs.actor_user_id` is created nullable in `0005`; FK to `users` is enforced in `0007_users_authentication` once authentication entities exist.
 - Seed data: reference brands/locations in `0002`; `system_initialized = false` in `0007` — Main Admin created by First-Time Setup Wizard via API, not seed.
 
-**Sprint 1E scope:** Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`, `AuditLogRepository`, and audit APIs per this design.
+**Sprint 1E scope:** Migrations `0005_audit_logs` through `0007_audit_log_source`; `AuditRecorder`, `AuditLogRepository`, and audit APIs per this design.
 
 ---
 

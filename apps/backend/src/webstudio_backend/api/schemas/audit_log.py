@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from webstudio_backend.infrastructure.database.enums import AuditAction
+from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 
 
@@ -21,6 +21,7 @@ class AuditLogEntry(BaseModel):
     actor_display_name: str | None = None
     actor_role: str | None = None
     action: AuditAction
+    source: AuditSource
     field_name: str | None = None
     old_value: dict[str, Any] | None = None
     new_value: dict[str, Any] | None = None
@@ -38,6 +39,7 @@ class AuditLogEntry(BaseModel):
             actor_display_name=audit_log.actor_display_name,
             actor_role=audit_log.actor_role,
             action=audit_log.action,
+            source=audit_log.source,
             field_name=audit_log.field_name,
             old_value=audit_log.old_value,
             new_value=audit_log.new_value,
@@ -55,6 +57,7 @@ class AuditLogSearchQuery(BaseModel):
     brand_id: int | None = None
     actor_user_id: int | None = None
     action: AuditAction | None = None
+    source: AuditSource | None = None
     created_at_from: datetime | None = None
     created_at_to: datetime | None = None
     page: int = Field(default=1, ge=1)
