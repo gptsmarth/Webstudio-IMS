@@ -1,0 +1,10 @@
+# WEBSTUDIO IMS — ci-server
+# Workflow to be configured when development begins
+name: ci-server
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Workflow placeholder'

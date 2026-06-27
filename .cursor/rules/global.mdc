@@ -1,0 +1,13 @@
+---
+description: Global rules for WEBSTUDIO IMS development
+globs: **/*
+alwaysApply: true
+---
+
+# WEBSTUDIO IMS — Global Rules
+
+- Read AGENTS.md and .ai/CONTEXT.md before making changes
+- Follow naming conventions in docs/meta/style-guide.md
+- Never commit secrets or credentials
+- Update documentation alongside code changes
+- Reference ADR and spec IDs in commits

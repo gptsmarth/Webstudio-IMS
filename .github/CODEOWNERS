@@ -1,0 +1,14 @@
+# WEBSTUDIO IMS — Code Owners
+
+*                           @webstudio/core-team
+
+/adr/                       @webstudio/architects
+/docs/architecture/         @webstudio/architects
+/specs/                     @webstudio/architects @webstudio/product
+
+/apps/backend/              @webstudio/backend
+/apps/desktop/              @webstudio/desktop
+/apps/mobile/               @webstudio/mobile
+/apps/server/               @webstudio/server
+/database/                  @webstudio/backend
+/infra/                     @webstudio/devops

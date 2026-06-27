@@ -1,0 +1,10 @@
+# WEBSTUDIO IMS — ci-docs
+# Workflow to be configured when development begins
+name: ci-docs
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Workflow placeholder'

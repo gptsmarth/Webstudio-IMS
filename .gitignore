@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+dist-electron/
+.pnpm-store/
+
+# Environment
+.env
+.env.*
+!config/env/.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Build
+apps/mobile/android/app/build/
+apps/mobile/android/.gradle/
+apps/desktop/dist/
+
+# Logs
+*.log

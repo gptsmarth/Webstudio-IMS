@@ -1,0 +1,23 @@
+name: Documentation
+description: Report an issue for WEBSTUDIO IMS
+title: "[{title}] "
+labels: []
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: Issue
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggestion
+    validations:
+      required: true

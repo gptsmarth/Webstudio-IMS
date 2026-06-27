@@ -1,0 +1,10 @@
+---
+description: Database migration rules
+globs: database/**
+---
+
+# Database Rules
+
+- Never edit applied migrations
+- Document schema changes in docs/database/
+- Follow docs/database/naming-conventions.md

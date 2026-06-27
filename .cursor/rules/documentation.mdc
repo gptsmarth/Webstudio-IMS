@@ -1,0 +1,10 @@
+---
+description: Documentation authoring rules
+globs: docs/**,adr/**,specs/**
+---
+
+# Documentation Rules
+
+- Include metadata header in all formal documents
+- Use kebab-case for file names
+- Cross-link related ADRs and specs

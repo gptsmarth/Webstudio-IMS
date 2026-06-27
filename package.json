@@ -1,0 +1,29 @@
+{
+  "name": "webstudio-ims",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WEBSTUDIO Inventory Management System monorepo",
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json}\" \"packages/**/*.{ts,tsx,js,jsx,json}\"",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "desktop:dev": "pnpm --filter @webstudio/desktop dev",
+    "desktop:build": "pnpm --filter @webstudio/desktop build",
+    "mobile:start": "pnpm --filter @webstudio/mobile start",
+    "mobile:typecheck": "pnpm --filter @webstudio/mobile typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "eslint": "^9.16.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

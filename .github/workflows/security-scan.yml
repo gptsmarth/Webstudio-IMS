@@ -1,0 +1,10 @@
+# WEBSTUDIO IMS — security-scan
+# Workflow to be configured when development begins
+name: security-scan
+on:
+  workflow_dispatch:
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Workflow placeholder'

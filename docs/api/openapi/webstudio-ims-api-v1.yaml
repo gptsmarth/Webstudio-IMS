@@ -1,0 +1,8 @@
+# WEBSTUDIO IMS API v1 — OpenAPI Specification
+# Canonical API contract — to be defined during API design phase
+openapi: 3.1.0
+info:
+  title: WEBSTUDIO IMS API
+  version: 1.0.0
+  description: Placeholder — API specification to be authored
+paths: {}

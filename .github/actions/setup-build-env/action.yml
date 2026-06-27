@@ -1,0 +1,7 @@
+name: Setup Build Environment
+description: Reusable build environment setup for WEBSTUDIO IMS
+runs:
+  using: composite
+  steps:
+    - run: echo 'Build environment setup — to be configured'
+      shell: bash

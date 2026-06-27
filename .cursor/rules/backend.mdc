@@ -1,0 +1,10 @@
+---
+description: Backend development rules
+globs: apps/backend/**,packages/**
+---
+
+# Backend Rules
+
+- API changes require OpenAPI spec updates first
+- Database changes require migrations in database/migrations/
+- Follow docs/development/platform-guides/backend.md
