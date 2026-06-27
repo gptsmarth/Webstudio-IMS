@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     )
 
     jwt_secret: str = Field(default="change-me-in-production")
+    jwt_issuer: str = "webstudio-ims"
+    jwt_audience: str = "webstudio-ims-api"
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 7
+    default_lockout_threshold: int = 5
+    default_lockout_duration_minutes: int = 15
 
     tls_cert_path: str = ""
     tls_key_path: str = ""

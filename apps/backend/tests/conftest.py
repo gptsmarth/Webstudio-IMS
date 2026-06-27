@@ -22,7 +22,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
-    return get_settings()
+    base = get_settings()
+    return base.model_copy(
+        update={
+            "app_env": "test",
+            "jwt_secret": "test-jwt-secret-for-unit-tests-32bytes!",
+        },
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

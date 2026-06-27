@@ -1420,7 +1420,7 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 | 5 | `0005_audit_logs` | `audit_logs` — append-only history per §9 |
 | 6 | `0006_audit_log_description` | `audit_logs.description` column |
 | 7 | `0007_audit_log_source` | `audit_logs.source` enum + index |
-| 8 | `0008_users_authentication` (planned) | `users`, `refresh_tokens`, `system_settings` (including `system_initialized = false` seed) |
+| 8 | `0008_users_authentication` | `users`, `refresh_tokens`, `system_settings`; `system_initialized=false` seed; FK `audit_logs.actor_user_id` |
 | 9 | `0009_ownership_columns` (planned) | `created_by_user_id`, `updated_by_user_id` on `brands`, `locations`, `product_models`, `inventory_items` |
 | 9 | `0009_integrations` (planned) | `sales`, `sync_jobs`, `tally_integration_events`, `tally_company_syncs`, `notifications`; additional `system_settings` keys as needed |
 
@@ -1433,7 +1433,7 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 - `audit_logs.actor_user_id` is created nullable in `0005`; FK to `users` is enforced in `0007_users_authentication` once authentication entities exist.
 - Seed data: reference brands/locations in `0002`; `system_initialized = false` in `0007` — Main Admin created by First-Time Setup Wizard via API, not seed.
 
-**Sprint 1E scope:** Migrations `0005_audit_logs` through `0007_audit_log_source`; `AuditRecorder`, `AuditLogRepository`, and audit APIs per this design.
+**Sprint 1F scope:** Migration `0008_users_authentication`; `SetupService`, `AuthenticationService`, `UserService`; JWT + Argon2id; setup/auth/users APIs per API spec §2–4.
 
 ---
 

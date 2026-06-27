@@ -1,5 +1,7 @@
 """Repository-layer validation errors."""
 
+from datetime import datetime
+
 
 class RepositoryError(Exception):
     """Base class for repository validation failures."""
@@ -71,6 +73,59 @@ class InventoryItemNotFoundError(RepositoryError):
     def __init__(self, inventory_item_id: str) -> None:
         self.inventory_item_id = inventory_item_id
         super().__init__(f"Inventory item not found: {inventory_item_id}")
+
+
+class DuplicateUsernameError(RepositoryError):
+    def __init__(self, username: str) -> None:
+        self.username = username
+        super().__init__(f"Username already exists: {username}")
+
+
+class UserNotFoundError(RepositoryError):
+    def __init__(self, user_id: int | str) -> None:
+        self.user_id = user_id
+        super().__init__(f"User not found: {user_id}")
+
+
+class LastMainAdminError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Cannot modify the last active Main Admin account")
+
+
+class SystemAlreadyInitializedError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("System is already initialized")
+
+
+class SystemNotInitializedError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("System is not initialized")
+
+
+class InvalidCredentialsError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Invalid username or password")
+
+
+class AccountLockedError(RepositoryError):
+    def __init__(self, locked_until: datetime | None = None) -> None:
+        self.locked_until = locked_until
+        super().__init__("Account is temporarily locked")
+
+
+class AccountDisabledError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Account is disabled")
+
+
+class InvalidRefreshTokenError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Invalid or expired refresh token")
+
+
+class RefreshTokenReuseError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Refresh token reuse detected")
 
 
 class LocationNotFoundError(RepositoryError):

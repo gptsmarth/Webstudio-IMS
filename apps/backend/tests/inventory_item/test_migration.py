@@ -17,6 +17,7 @@ async def test_migration_0004_inventory_items_exist(db_session: AsyncSession) ->
         "0005_audit_logs",
         "0006_audit_log_description",
         "0007_audit_log_source",
+        "0008_users_authentication",
     }
 
     connection = await db_session.connection()

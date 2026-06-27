@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from audit_log.conftest import ADMIN_ACTOR
-from webstudio_backend.infrastructure.audit import AuditActor
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource, InventoryStatus
 from webstudio_backend.infrastructure.database.models.location import Location
@@ -71,9 +71,10 @@ async def test_audit_descriptions(
     db_session: AsyncSession,
     inventory_item,
     store: Location,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=ADMIN_ACTOR)
+    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)
     result = await audit_repository.get_by_inventory_item(
@@ -93,9 +94,10 @@ async def test_audit_pagination(
     db_session: AsyncSession,
     inventory_item,
     store: Location,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=ADMIN_ACTOR)
+    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)
     page_one = await audit_repository.get_by_inventory_item(
@@ -119,12 +121,13 @@ async def test_automatic_location_change_audit(
     inventory_item,
     warehouse: Location,
     store: Location,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
     await repository.update(
         inventory_item,
         current_location_id=store.id,
-        actor=ADMIN_ACTOR,
+        actor=admin_actor,
     )
 
     audit_repository = AuditLogRepository(db_session)
@@ -147,12 +150,13 @@ async def test_automatic_location_change_audit(
 async def test_automatic_status_change_audit(
     db_session: AsyncSession,
     inventory_item,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
     await repository.update(
         inventory_item,
         status=InventoryStatus.SOLD,
-        actor=ADMIN_ACTOR,
+        actor=admin_actor,
     )
 
     audit_repository = AuditLogRepository(db_session)
@@ -173,10 +177,11 @@ async def test_serial_number_lifecycle_order(
     db_session: AsyncSession,
     inventory_item,
     store: Location,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
-    await repository.update(inventory_item, current_location_id=store.id, actor=ADMIN_ACTOR)
-    await repository.update(inventory_item, status=InventoryStatus.SOLD, actor=ADMIN_ACTOR)
+    await repository.update(inventory_item, current_location_id=store.id, actor=admin_actor)
+    await repository.update(inventory_item, status=InventoryStatus.SOLD, actor=admin_actor)
 
     audit_repository = AuditLogRepository(db_session)
     lifecycle = await audit_repository.get_by_serial_number(
@@ -222,8 +227,11 @@ async def test_historical_location_name_preserved_after_rename(
     db_session: AsyncSession,
     inventory_item,
     warehouse: Location,
+    admin_actor: AuditActor,
 ) -> None:
-    await LocationRepository(db_session).update_name(warehouse, "Renamed Warehouse", actor=ADMIN_ACTOR)
+    await LocationRepository(db_session).update_name(
+        warehouse, "Renamed Warehouse", actor=admin_actor,
+    )
 
     audit_repository = AuditLogRepository(db_session)
     create_entry = (
@@ -287,6 +295,7 @@ async def test_audit_rollback_not_persisted(
     db_session: AsyncSession,
     product_model: ProductModel,
     warehouse: Location,
+    admin_actor: AuditActor,
 ) -> None:
     repository = InventoryItemRepository(db_session)
     await repository.create(
@@ -295,7 +304,7 @@ async def test_audit_rollback_not_persisted(
         color="Black",
         current_location_id=warehouse.id,
         status=InventoryStatus.AVAILABLE,
-        actor=ADMIN_ACTOR,
+        actor=admin_actor,
     )
     await db_session.rollback()
 

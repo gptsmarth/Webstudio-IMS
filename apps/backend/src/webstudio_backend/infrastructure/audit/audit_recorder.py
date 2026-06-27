@@ -18,6 +18,7 @@ from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
 
 
@@ -349,6 +350,118 @@ class AuditRecorder:
             description=description,
             source=source,
         )
+
+    async def record_user_create(self, user: User, *, actor: AuditActor) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.CREATE,
+            actor=actor,
+            new_value=self._user_snapshot(user),
+            description=f"User '{user.username}' created",
+        )
+
+    async def record_user_update(
+        self,
+        user: User,
+        *,
+        field_name: str,
+        old_value: dict[str, Any],
+        new_value: dict[str, Any],
+        actor: AuditActor,
+        description: str | None = None,
+    ) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.UPDATE,
+            actor=actor,
+            field_name=field_name,
+            old_value=old_value,
+            new_value=new_value,
+            description=description or self._field_change_description(field_name, old_value, new_value),
+        )
+
+    async def record_user_disable(self, user: User, *, actor: AuditActor) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            field_name="status",
+            old_value={"status": "active"},
+            new_value={"status": "disabled"},
+            description=f"User '{user.username}' deactivated",
+        )
+
+    async def record_user_enable(self, user: User, *, actor: AuditActor) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.RESTORE,
+            actor=actor,
+            field_name="status",
+            old_value={"status": "disabled"},
+            new_value={"status": "active"},
+            description=f"User '{user.username}' activated",
+        )
+
+    async def record_system_initialize(
+        self,
+        *,
+        company_name: str,
+        main_admin_username: str,
+        user_id: int,
+    ) -> None:
+        await self.record(
+            entity_type="system",
+            entity_id="initialization",
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor(user_id=user_id, display_name=main_admin_username, role="main_admin"),
+            new_value={"company_name": company_name, "username": main_admin_username},
+            description=f"System initialized for {company_name}",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_auth_login_success(self, user: User) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            description=f"User '{user.username}' logged in",
+            source=AuditSource.MANUAL,
+        )
+
+    async def record_auth_login_failure(self, username: str) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=username,
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor.system(display_name="Unknown", role="system"),
+            new_value={"username": username},
+            description=f"Failed login attempt for '{username}'",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_auth_logout(self, user: User) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            description=f"User '{user.username}' logged out",
+            source=AuditSource.MANUAL,
+        )
+
+    @staticmethod
+    def _user_snapshot(user: User) -> dict[str, Any]:
+        return {
+            "username": user.username,
+            "display_name": user.display_name,
+            "role": user.role.value,
+            "status": user.status.value,
+        }
 
     @staticmethod
     def _field_change_description(

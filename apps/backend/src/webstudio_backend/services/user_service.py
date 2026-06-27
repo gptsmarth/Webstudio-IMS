@@ -1,0 +1,152 @@
+"""User management service."""
+
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
+from webstudio_backend.infrastructure.database.enums import UserRole, UserStatus
+from webstudio_backend.infrastructure.database.models.user import User
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
+from webstudio_backend.infrastructure.repositories.exceptions import LastMainAdminError, UserNotFoundError
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
+from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
+from webstudio_backend.infrastructure.repositories.user_validation import validate_human_role
+from webstudio_backend.infrastructure.security.password import hash_password, validate_password_strength
+
+
+class UserService:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._users = UserRepository(session)
+        self._refresh_tokens = RefreshTokenRepository(session)
+        self._recorder = AuditRecorder(session)
+
+    async def list_users(
+        self,
+        page_params: PageParams,
+        *,
+        status: UserStatus | None = None,
+        role: UserRole | None = None,
+        search: str | None = None,
+    ) -> PageResult[User]:
+        return await self._users.list_users(
+            page_params,
+            status=status,
+            role=role,
+            search=search,
+        )
+
+    async def get_user(self, user_id: int) -> User:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(user_id)
+        return user
+
+    async def create_user(
+        self,
+        *,
+        username: str,
+        role: UserRole,
+        temporary_password: str,
+        display_name: str | None,
+        actor: AuditActor,
+    ) -> User:
+        validate_human_role(role)
+        validate_password_strength(temporary_password)
+        user = await self._users.create(
+            username=username,
+            password_hash=hash_password(temporary_password),
+            role=role,
+            display_name=display_name,
+            must_change_password=True,
+            created_by_user_id=actor.user_id,
+        )
+        await self._recorder.record_user_create(user, actor=actor)
+        return user
+
+    async def update_display_name(
+        self,
+        user_id: int,
+        *,
+        display_name: str,
+        actor: AuditActor,
+    ) -> User:
+        user = await self.get_user(user_id)
+        old_name = user.display_name
+        updated = await self._users.update_display_name(user, display_name, actor_id=actor.user_id or 0)
+        await self._recorder.record_user_update(
+            updated,
+            field_name="display_name",
+            old_value={"display_name": old_name},
+            new_value={"display_name": display_name},
+            actor=actor,
+        )
+        return updated
+
+    async def update_role(self, user_id: int, *, role: UserRole, actor: AuditActor) -> User:
+        validate_human_role(role)
+        user = await self.get_user(user_id)
+        if user.role == UserRole.MAIN_ADMIN and role != UserRole.MAIN_ADMIN:
+            await self._ensure_not_last_main_admin(user)
+        old_role = user.role.value
+        updated = await self._users.update_role(user, role, actor_id=actor.user_id or 0)
+        await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._recorder.record_user_update(
+            updated,
+            field_name="role",
+            old_value={"role": old_role},
+            new_value={"role": role.value},
+            actor=actor,
+            description=f"Role changed from {old_role} to {role.value}",
+        )
+        return updated
+
+    async def reset_password(
+        self,
+        user_id: int,
+        *,
+        temporary_password: str,
+        actor: AuditActor,
+    ) -> User:
+        validate_password_strength(temporary_password)
+        user = await self.get_user(user_id)
+        updated = await self._users.set_password(
+            user,
+            hash_password(temporary_password),
+            must_change_password=True,
+            actor_id=actor.user_id,
+        )
+        await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._recorder.record_user_update(
+            updated,
+            field_name="password",
+            old_value={"password_reset": False},
+            new_value={"password_reset": True},
+            actor=actor,
+            description=f"Password reset for user '{user.username}'",
+        )
+        return updated
+
+    async def disable_user(self, user_id: int, *, actor: AuditActor) -> User:
+        user = await self.get_user(user_id)
+        if user.role == UserRole.MAIN_ADMIN:
+            await self._ensure_not_last_main_admin(user)
+        updated = await self._users.set_status(user, UserStatus.DISABLED, actor_id=actor.user_id or 0)
+        await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._recorder.record_user_disable(updated, actor=actor)
+        return updated
+
+    async def enable_user(self, user_id: int, *, actor: AuditActor) -> User:
+        user = await self.get_user(user_id)
+        updated = await self._users.set_status(user, UserStatus.ACTIVE, actor_id=actor.user_id or 0)
+        await self._recorder.record_user_enable(updated, actor=actor)
+        return updated
+
+    async def _ensure_not_last_main_admin(self, user: User) -> None:
+        if user.role != UserRole.MAIN_ADMIN:
+            return
+        count = await self._users.count_by_role(UserRole.MAIN_ADMIN, active_only=True)
+        if count <= 1:
+            raise LastMainAdminError()

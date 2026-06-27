@@ -28,7 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
-| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture; Sprint 1E = `0005_audit_logs` + `0006_audit_log_description`; `AuditRecorder` / `AuditLogRepository`; removed Inventory Movement module from build order. |
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture; Sprint 1E = audit logs; Sprint 1F = `0008_users_authentication`. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap aligned with DATABASE_DESIGN §16.5: ownership columns deferred to `0008`. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial implementation handbook. Development philosophy, module build order, monorepo rules, coding standards, git workflow, testing strategy, dev environment, definition of done, AI rules, and sprint plan. |
 
@@ -755,7 +755,7 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | **S0** | Foundation | Repo scaffold, CI skeleton, health endpoint, dev setup documented | — |
 | **S1** | Database (core) | Migrations `0001`–`0004` applied; reference seed; repository layer | S0 |
 | **S2** | Audit log foundation (**Sprint 1E**) | Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`; `AuditLogRepository`; serial lifecycle query API | S1 |
-| **S3** | Auth & Users | Migration `0006_users_authentication`; migration `0007_ownership_columns`; login, JWT refresh, RBAC, user CRUD, lockout | S2 |
+| **S3** | Auth & Users (**Sprint 1F**) | Migration `0008_users_authentication`; Argon2id + JWT; setup, login, refresh, logout; RBAC; user CRUD | S2 |
 | **S4** | Reference Data APIs | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
 | **S5** | Inventory Core | Create/list/update inventory with Color; lifecycle transitions; serial uniqueness | S4 |
 | **S6** | Sales | Manual sale reflection (`0008` sales when required); location transfer in `InventoryService` (audit-only history) | S5, S2 |
