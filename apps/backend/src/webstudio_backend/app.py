@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
-from webstudio_backend.api.routers import audit_logs, auth, health, inventory, metadata, setup, users
+from webstudio_backend.api.routers import audit_logs, auth, dashboard, health, inventory, metadata, setup, users
 from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
@@ -60,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(inventory.router)
+    app.include_router(dashboard.router)
     app.include_router(audit_logs.router)
 
     return app

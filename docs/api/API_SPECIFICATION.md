@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.10
+Version: 1.11
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| Version | 1.10 |
+| Version | 1.11 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.11 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.1 implemented:** Dashboard APIs — `GET /api/v1/dashboard`, `/recent-activity`, `/distribution`; `DashboardService` + `DashboardRepository`. |
 | 1.10 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2C — Inventory API production-ready:** standardized error envelope; performance indexes (`0012`); query optimizations; RBAC/error/performance test suite. |
 | 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2B implemented:** Inventory operations — `PATCH /api/v1/inventory/{id}/location`, `PATCH /api/v1/inventory/{id}/mark-sold`; migration `0011_sales`; `SaleService`. |
 | 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 2A implemented:** Inventory Core API at `/api/v1/inventory` — CRUD, archive/restore, search, filters, pagination, serial lookup; migration `0010_inventory_sprint_2a`; RBAC via `inventory:read` / `inventory:write`. |
@@ -1897,7 +1898,55 @@ Deprecated alias for single-line processing — prefer §11.2. Endpoint `POST /a
 
 ## 12. Dashboard
 
-### 12.1 KPI Summary
+> **Sprint 3.1 (implemented):** Production dashboard APIs at `/api/v1/dashboard` using dedicated `DashboardService` and `DashboardRepository` with aggregate SQL queries. UI layers must not query inventory repositories directly.
+
+### 12.0 Dashboard API — Sprint 3.1 (Implemented)
+
+| Endpoint | Method | Permission | Purpose |
+|----------|--------|------------|---------|
+| `/api/v1/dashboard` | GET | `dashboard:read` | Full dashboard summary, sales summary, and insights |
+| `/api/v1/dashboard/recent-activity` | GET | `dashboard:read` | Latest business audit events (excludes sync) |
+| `/api/v1/dashboard/distribution` | GET | `dashboard:read` | Inventory distribution by brand, location, product model |
+
+**Authorization:** All authenticated roles (`salesperson`, `admin`, `main_admin`) via `dashboard:read`.
+
+**Main dashboard response (`GET /api/v1/dashboard`):**
+
+| Section | Fields |
+|---------|--------|
+| `summary` | `total_inventory`, `available_inventory`, `sold_inventory`, `archived_inventory`, `total_brands`, `total_product_models`, `total_locations`, `active_users` |
+| `sales_summary` | `sales_today`, `sales_this_week`, `sales_this_month` — includes manual and Tally sales via `sales` table |
+| `insights` | `archived_inventory_count`, `recently_added_inventory[]`, `recently_sold_inventory[]`, `warranty_expiring_soon[]`, `warranty_threshold_days` |
+| `as_of` | Server timestamp (UTC) |
+
+**Query parameters (main dashboard):**
+
+| Parameter | Default | Max | Description |
+|-----------|---------|-----|-------------|
+| `insights_limit` | 10 | 50 | Max insight list items per category |
+| `warranty_threshold_days` | 30 | 365 | Days ahead for warranty expiry insight |
+
+**Distribution response (`GET /api/v1/dashboard/distribution`):**
+
+Each group (`by_brand`, `by_location`, `by_product_model`) contains rows with `id`, `name`, `available`, `sold`, `total`.
+
+**Recent activity (`GET /api/v1/dashboard/recent-activity`):**
+
+| Parameter | Default | Max |
+|-----------|---------|-----|
+| `limit` | 20 | 50 |
+
+Returns business audit events only — inventory created, manual sale, location transfer, user created. Excludes `TALLY_SYNC` and `BACKGROUND_JOB` sources and sync entity types.
+
+**Activity `activity_type` values:** `inventory_created`, `manual_sale`, `location_transfer`, `user_created`, `status_change`, `inventory_archived`, `inventory_restored`
+
+**Performance:** All counts use SQL `COUNT`/`FILTER` aggregates. Distribution uses `GROUP BY`. Insight lists use indexed `ORDER BY ... LIMIT`. No full-table inventory loads.
+
+**Audit behaviour:** None (read-only endpoints).
+
+---
+
+### 12.1 KPI Summary (Legacy Contract)
 
 | | |
 |---|---|
