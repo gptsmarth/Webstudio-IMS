@@ -17,7 +17,7 @@ from webstudio_backend.infrastructure.repositories import BrandRepository
 async def clean_product_model_tables(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
-            "TRUNCATE TABLE webstudio.inventory_items, webstudio.product_models, "
+            "TRUNCATE TABLE webstudio.audit_logs, webstudio.inventory_items, webstudio.product_models, "
             "webstudio.brands RESTART IDENTITY CASCADE",
         ),
     )

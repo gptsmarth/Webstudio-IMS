@@ -1,0 +1,23 @@
+"""Audit log search filter parameters."""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+from webstudio_backend.infrastructure.database.enums import AuditAction
+
+
+@dataclass(frozen=True, slots=True)
+class AuditLogSearchFilters:
+    entity_type: str | None = None
+    entity_id: str | None = None
+    inventory_item_id: uuid.UUID | None = None
+    serial_number: str | None = None
+    product_model_id: uuid.UUID | None = None
+    brand_id: int | None = None
+    actor_user_id: int | None = None
+    action: AuditAction | None = None
+    created_at_from: datetime | None = None
+    created_at_to: datetime | None = None

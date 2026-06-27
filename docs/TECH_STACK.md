@@ -1,7 +1,7 @@
 ---
 Title: WEBSTUDIO IMS — Technology Stack Decision Document
-Version: 1.1
-Status: Proposed
+Version: 1.2
+Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
 Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, adr/README.md, docs/research/README.md
@@ -12,8 +12,8 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | TS-001 |
-| **Version** | 1.1 |
-| **Status** | Proposed — pending formal approval |
+| **Version** | 1.2 |
+| **Status** | **Active** — governing stack for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md) |
 | **Purpose** | Freeze the official technology stack for architecture and implementation |
 
@@ -27,6 +27,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Status set to Active; ADR index aligned with ADR-0010/0011 and consolidated ADR-0002–0009. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Windows Server revision. Production server changed to Windows 11 Pro; removed V1 reverse proxy requirement; added Windows Services, deployment philosophy, and Windows maintenance guidance. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial technology stack decision document. Critical review of candidate stack, security architecture, Electron vs Tauri evaluation, compatibility matrix, environments, risks, and approval checklist. |
 
@@ -857,23 +858,23 @@ Security is a **first-class design goal**. All enforcement occurs in the **Backe
 
 | # | Gate | Status |
 |---|------|--------|
-| 1 | TECH_STACK.md approved (this document) | **Pending** |
-| 2 | ADR-0002: Backend stack (FastAPI + PostgreSQL) | **Required** |
-| 3 | ADR-0003: Desktop stack (Electron + React) | **Required** |
-| 4 | ADR-0004: Mobile stack (React Native Android) | **Required** |
-| 5 | ADR-0005: Authentication (JWT + bcrypt + RBAC) | **Required** |
-| 6 | Tally integration POC | **Required** |
+| 1 | TECH_STACK.md approved (this document) | **Active** |
+| 2 | ADR-0002: Backend stack (FastAPI + PostgreSQL) | **Consolidated** — this document §4–5 |
+| 3 | ADR-0003: Desktop stack (Electron + React) | **Consolidated** — this document §6 |
+| 4 | ADR-0004: Mobile stack (React Native Android) | **Consolidated** — this document §7 |
+| 5 | ADR-0010: Authentication (JWT + bcrypt + RBAC) | **Accepted** |
+| 6 | Tally integration POC | **Required** — gate for [ADR-0011](../adr/ADR-0011-tally-integration-strategy.md) |
 | 7 | PRD TBD items (lifecycle default, config field structure) | **Recommended** |
 
 ### 18.2 Recommended Changes Before Architecture
 
 | Change | Priority |
 |--------|----------|
-| Record ADRs 0002–0005 mirroring this document | Critical |
+| Record ADRs 0002–0005 mirroring this document | **Done** — consolidated in TECH_STACK; auth in ADR-0010 |
 | Define monorepo workspace layout (`pnpm` + Python project) | Critical |
 | Validate Tally XML POC on production Tally version | Critical |
 | ADR-0006: Windows Server deployment (services, firewall, backup paths) | High |
-| Document reverse proxy / TLS strategy ADR when remote access is required | Medium |
+| Document reverse proxy / TLS strategy ADR when remote access is required | Medium — **ADR-0012 reserved** |
 | Define OpenAPI-first vs code-first generation policy | High |
 | Pin exact dependency versions at project init | High |
 | Update PROJECT_BIBLE Product Identity — Primary Language | Medium |
@@ -932,16 +933,16 @@ Security is a **first-class design goal**. All enforcement occurs in the **Backe
 
 | # | Item | Owner | Status |
 |---|------|-------|--------|
-| 1 | TECH_STACK.md reviewed by technical lead | WEBSTUDIO IMS Team | **Pending** |
+| 1 | TECH_STACK.md reviewed by technical lead | WEBSTUDIO IMS Team | **Active** |
 | 2 | Business owner accepts Electron memory tradeoff | Business Owner | **Pending** |
 | 3 | Tally POC successful on live instance | Engineering | **Pending** |
-| 4 | ADR-0002 through ADR-0005 created and Accepted | Architecture | **Pending** |
+| 4 | ADR-0010 Accepted; ADR-0002–0009 consolidated per [adr/README.md](../adr/README.md) | Architecture | **Done** |
 | 5 | Security checklist Critical items planned | Engineering | **Pending** |
-| 6 | PROJECT_BIBLE updated — technologies no longer TBD | Documentation | **Pending** |
+| 6 | PROJECT_BIBLE updated — technologies no longer TBD | Documentation | **Done** |
 | 7 | PRD non-functional security requirements mapped to stack | QA | **Pending** |
 | 8 | Dedicated Windows 11 Pro Server PC hardware spec agreed | Operations | **Pending** |
 
-**Upon completion:** Change this document status from **Proposed** to **Active** and version to **1.0 (Frozen)**.
+**Status:** This document is **Active** (TS-001 v1.2). Stack decisions for Version 1 are frozen; amendments require ADR supersession.
 
 ---
 

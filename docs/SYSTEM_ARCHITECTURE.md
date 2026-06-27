@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — System Architecture
-Version: 1.2
+Version: 1.8
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | ARCH-001 |
-| **Version** | 1.2 |
+| **Version** | 1.8 |
 | **Status** | Active — frozen for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md) |
 | **Purpose** | Definitive engineering blueprint for building and maintaining WEBSTUDIO IMS |
@@ -25,6 +25,12 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Audit-only history:** removed `InventoryMovement` module; location transfers update `current_location_id` + `audit_logs` only; `AuditRecorder` is single source of truth; Sprint 1E = `0005_audit_logs`, `0006_audit_log_description`. |
+| 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | Finalized Tally ERP 9 synchronization: read-only invoices; multi-company sync; invoice line matching; Tally Sync Dashboard; notifications; manual mark-as-sold (Admin/Main Admin only). |
+| 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: `system_initialized` setting; first-time setup wizard; client discovery and manual configuration; login gated on setup status; Main Admin-only user management. |
+| 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap: `0005` movement → `0006` audit → `0007` users → `0008` ownership columns (deferred until `users` exists). |
+| 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Authentication & audit strategy: Salesperson movement; operational ownership fields on business entities; enriched audit log with actor snapshots and movement fields. |
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Synchronized with Sprint 1D: `current_location_id` on inventory; `reserved` status; Product Model structured specs; movement history via InventoryMovement; removed inventory `configuration`/`row_version`. |
 | 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Business model refinements: Product Model Active/Archived lifecycle; mandatory Color on inventory items; expanded search dimensions; excluded Purchase Date/Cost/Remarks from V1. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | ARB finalization. HTTPS mandatory in production (internal CA); sync job orchestration; service boundaries; domain mapping; idempotency; threat model; audit enrichment; deployment workflow; engineering conventions. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial system architecture. Complete engineering blueprint for on-premise Windows deployment, backend authority model, integration boundaries, security, and future evolution. |
@@ -56,6 +62,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
     - [20.8 Installation & Deployment Workflow](#208-installation--deployment-workflow)
     - [20.9 Service Startup & Shutdown Order](#209-service-startup--shutdown-order)
     - [20.10 Update Strategy](#2010-update-strategy)
+    - [20.11 Server Initialization & Client Onboarding](#2011-server-initialization--client-onboarding)
 21. [Performance Strategy](#21-performance-strategy)
 22. [Future Evolution](#22-future-evolution)
     - [22.5 Engineering Conventions](#225-engineering-conventions)
@@ -97,7 +104,7 @@ This architecture explains **what exists**, **why it exists**, **how components 
 |-------------|----------|-------------|
 | **Production** (store LAN) | **HTTPS only** | Mandatory — satisfies NFR-SEC-01 |
 | **Development** (local) | HTTP on `localhost` | Permitted for developer convenience |
-| **Future remote access** | HTTPS | Public CA or VPN; may add reverse proxy per ADR-0010 |
+| **Future remote access** | HTTPS | Public CA or VPN; optional reverse proxy per ADR-0012 (reserved — not authored) |
 
 **Production rule:** The Backend API exposes **HTTPS endpoints only**. Plain HTTP is not accepted in production deployments.
 
@@ -113,7 +120,7 @@ This architecture explains **what exists**, **why it exists**, **how components 
 
 **Future migration:** If the software is later accessed outside the office, replace or supplement the internal CA with a public certificate (Let's Encrypt, commercial CA) or terminate TLS at a reverse proxy. Client installers must support updating the trusted CA/cert bundle without reinstall.
 
-> **Governance note:** This architecture refines TS-001 v1.1 transport guidance for production. ADR-0005 shall record HTTPS-from-day-one with internal CA as the binding production decision.
+> **Governance note:** This architecture refines TS-001 v1.1 transport guidance for production. [ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) records HTTPS-from-day-one with internal CA as the binding production decision.
 
 ---
 
@@ -180,7 +187,7 @@ Every structural decision in WEBSTUDIO IMS is evaluated against the following ob
 
 | Objective | Architectural Response |
 |-----------|------------------------|
-| Search feels instant | Indexed serial lookup; trigram configuration search; server-side filtering |
+| Search feels instant | Indexed serial lookup; Product Model specification search; server-side filtering |
 | Correctness over speed for mutations | Synchronous transactions; audit in same transaction |
 | Non-blocking UI | Async client requests; loading states mandatory |
 | Acceptable sync windows | Scheduled off-peak Excel export; Tally poll interval configurable |
@@ -208,8 +215,8 @@ Every structural decision in WEBSTUDIO IMS is evaluated against the following ob
 
 | Actor | Interacts With | Primary Goals |
 |-------|----------------|---------------|
-| **Salesperson** | Desktop, Android | Search, verify availability, manual sale fallback |
-| **Admin** | Desktop, Android | Add inventory, movement, reports, manual sync trigger |
+| **Salesperson** | Desktop, Android | Search, verify availability, movement |
+| **Admin** | Desktop, Android | Add inventory, movement, reports, manual mark-as-sold, Tally Sync Now |
 | **Main Admin** | Desktop | Full configuration, users, integrations, backup, audit |
 | **System (Tally Sync)** | Tally → API | Reflect sales automatically |
 | **System (Excel Sync)** | API → Excel | Keep spreadsheet current |
@@ -327,7 +334,7 @@ sequenceDiagram
     A->>S: move_inventory(command)
     S->>S: Business rules + lifecycle check
     S->>R: persist within transaction
-    R->>D: INSERT movement + UPDATE location + INSERT audit
+    R->>D: UPDATE current_location_id + INSERT audit
     D-->>R: commit
     R-->>S: result
     S-->>A: domain result
@@ -480,12 +487,12 @@ These principles govern all design and implementation decisions. They map direct
 
 | Aspect | Detail |
 |--------|--------|
-| **Purpose** | Detect Tally billing events and reflect sales in inventory via API |
-| **Responsibilities** | Poll or receive Tally XML, parse vouchers, map serial numbers, call API to mark sold, log all events |
+| **Purpose** | Read invoices from Tally ERP 9 and reflect laptop sales in inventory via API — **never write to Tally** |
+| **Responsibilities** | Poll Tally per company on configurable interval (default 30 minutes); parse invoice lines; exact serial + product model match; call API to mark sold or create notifications; update per-company sync cursor; log all events |
 | **Dependencies** | Backend API, `packages/integrations/tally`, Tally ERP 9 HTTP/XML interface |
 | **Interfaces** | Inbound: Tally XML over HTTP (**mechanism Requires POC**); Outbound: REST to API |
-| **Failure modes** | Tally offline → log, continue polling; ambiguous serial mapping → log, skip, surface for manual reconciliation |
-| **Recovery** | Idempotent processing by voucher ID + serial; manual sale fallback in UI |
+| **Failure modes** | Tally offline → log, continue next interval; per-company failure isolated; serial/model mismatch → notification, no mutation |
+| **Recovery** | Sync Now from dashboard; manual mark-as-sold (Admin/Main Admin); review Notification Center |
 
 **Why separate service:** Tally is the most volatile integration; isolation limits blast radius (I1, highest risk per TECH_STACK).
 
@@ -596,11 +603,10 @@ flowchart TB
     subgraph APP["Application / Service Layer — apps/backend/services/"]
         INV_SVC[InventoryService]
         SALE_SVC[SaleService]
-        MOV_SVC[MovementService]
         SRCH_SVC[SearchService]
         AUTH_SVC[AuthenticationService]
         USER_SVC[UserService]
-        AUDIT_SVC[AuditService]
+        AUDIT_SVC[AuditRecorder]
         SETTINGS_SVC[SettingsService]
         SYNC_SVC[SyncJobService]
     end
@@ -634,7 +640,7 @@ flowchart TB
 
 | Concern | Design |
 |---------|--------|
-| **Routers** | One router per domain: `auth`, `inventory`, `search`, `movement`, `brands`, `product_models`, `locations`, `users`, `settings`, `audit`, `reports`, `health`, `sync` |
+| **Routers** | One router per domain: `auth`, `inventory`, `search`, `brands`, `product_models`, `locations`, `users`, `settings`, `audit`, `reports`, `health`, `sync` |
 | **Versioning** | URL prefix `/api/v1/` — breaking changes require v2 |
 | **Validation** | Pydantic v2 models on every request body and query parameter |
 | **Dependencies** | FastAPI `Depends()` for: DB session, current user, permission checks |
@@ -649,10 +655,9 @@ Core domain services and their boundaries:
 
 | Service | Responsibility | Does NOT |
 |---------|----------------|----------|
-| **InventoryService** | Create inventory; update attributes (including **Color**); lifecycle transitions (Received ↔ Available); enforce LC rules; validate Product Model is **Active** for new units | Process sales; move locations; execute search queries |
+| **InventoryService** | Create inventory; update attributes (including **Color**); lifecycle transitions (Received ↔ Available); **location transfers** (updates `current_location_id` + audit); enforce LC rules; validate Product Model is **Active** for new units | Process sales; execute search queries |
 | **ProductModelService** | Create product models; Archive/Restore lifecycle; enforce permanent-delete preconditions | Inventory mutations; sales |
-| **SaleService** | Reflect Tally sales; manual sale fallback; idempotent mark-sold; sales history records | Create inventory; change location |
-| **MovementService** | Location transfers; movement history; enforce LC-03/LC-04 | Change lifecycle state; process sales |
+| **SaleService** | Reflect Tally invoice lines; manual mark-as-sold (Admin/Main Admin); idempotent sale by invoice/voucher + serial; sales history; duplicate protection manual↔Tally | Create inventory; change location |
 | **SearchService** | Query parsing; search execution; pagination; result grouping | Mutate inventory |
 | **AuthenticationService** | Login; token issue/refresh/revoke; lockout; session invalidation; password verify | User profile CRUD (delegates to UserService) |
 
@@ -661,7 +666,7 @@ Supporting services:
 | Service | Responsibility |
 |---------|----------------|
 | **UserService** | CRUD users; role assignment; password reset by Main Admin |
-| **AuditService** | Append-only audit record creation with enrichment fields |
+| **AuditRecorder** | Append-only audit record creation with human-readable snapshots — **single source of truth** for inventory history, location changes, and lifecycle traceability |
 | **SettingsService** | System configuration read/write |
 | **ReportService** | Aggregate queries for dashboard and reports |
 | **SyncJobService** | Create and track sync jobs; authorize manual triggers; job status for workers |
@@ -675,7 +680,7 @@ Supporting services:
 
 | Concern | Design |
 |---------|--------|
-| **Pattern** | Repository per aggregate: `InventoryRepository`, `MovementRepository`, `UserRepository`, `AuditRepository` |
+| **Pattern** | Repository per aggregate: `InventoryRepository`, `AuditRepository`, `UserRepository` |
 | **ORM** | SQLAlchemy 2.x with typed models |
 | **Queries** | Parameterized only — no string concatenation (SQL injection prevention) |
 | **Transactions** | Unit of Work pattern: service opens transaction, repository participates, commit on success |
@@ -760,8 +765,8 @@ The following operations **must be idempotent** — repeated execution never dup
 
 | Operation | Idempotency Key | Behaviour on Repeat |
 |-----------|-----------------|---------------------|
-| **Tally sale reflection** | `voucher_id` + `serial_number` | No-op; log duplicate |
-| **Manual sale reflection** | `inventory_id` + `sale_request_id` or client `Idempotency-Key` header | No-op if already Sold |
+| **Tally sale reflection** | `tally_company` + `tally_voucher_number` + `serial_number` | No-op; optional Duplicate Sale notification |
+| **Manual sale reflection** | `invoice_number` + `serial_number` (or `Idempotency-Key`) | No-op if already Sold; Tally sync treats as same transaction |
 | **Excel sync job** | `sync_job_id` | Overwrite export file; update job status |
 | **Sync job creation** | Optional client `Idempotency-Key` | Return existing job if duplicate trigger |
 
@@ -851,7 +856,7 @@ All IPC payloads validated with Zod in preload script.
 | Inventory cache | **None V1** | Online-first |
 | Offline queue | **None V1** | Mutations require API |
 
-### 8.7 Authentication Flow (Desktop)
+### 8.7 Client Connection & Authentication Flow (Desktop)
 
 ```mermaid
 sequenceDiagram
@@ -860,15 +865,26 @@ sequenceDiagram
     participant M as Main Process
     participant A as Backend API
 
-    U->>R: Enter credentials
-    R->>M: IPC auth:login
-    M->>A: POST /auth/login
-    A-->>M: access + refresh tokens
-    M->>M: Store refresh in keychain
-    M-->>R: success + user profile
-    R->>M: IPC api:request (with auto token)
-    M->>A: Bearer access token
+    Note over R,M: First launch — server discovery or manual HTTPS URL
+    M->>A: GET /api/v1/setup/status
+    alt system_initialized = false
+        R->>U: First-Time Setup Wizard
+        R->>M: IPC setup:initialize
+        M->>A: POST /api/v1/setup/initialize
+        A-->>M: Main Admin created; system_initialized = true
+    else system_initialized = true
+        U->>R: Enter credentials
+        R->>M: IPC auth:login
+        M->>A: POST /auth/login
+        A-->>M: access + refresh tokens
+        M->>M: Store refresh in keychain
+        M-->>R: success + user profile
+        R->>M: IPC api:request (with auto token)
+        M->>A: Bearer access token
+    end
 ```
+
+**Rules:** Client installations never create users locally. Users authenticate only against the Backend. Clients store server URL and tokens — not business data (V1 online-first).
 
 ### 8.8 Update Strategy
 
@@ -974,7 +990,7 @@ Android does not run sync jobs. Excel and Tally synchronization are server-side 
 |-----------|---------------------|
 | Create inventory | Insert inventory + insert audit — single transaction |
 | Lifecycle transition | Update status + insert audit + insert sales history (if sold) — single transaction |
-| Movement | Update location + insert movement record + insert audit — single transaction |
+| Location transfer | Update `current_location_id` + insert `audit_logs` (`LOCATION_CHANGE`) — single transaction |
 | Sale reflection (Tally) | Update status + sales history + audit — single transaction |
 | Settings change | Update setting + audit — single transaction |
 
@@ -996,7 +1012,7 @@ Expected concurrency is low (small staff, one building). Row-level locking on ho
 | Constraint | Enforcement |
 |------------|-------------|
 | Global serial uniqueness | UNIQUE index on serial number |
-| One location per laptop | NOT NULL foreign key to locations |
+| One location per laptop | NOT NULL `current_location_id` FK to locations; **history in `audit_log` only** |
 | One lifecycle state | NOT NULL enum/check constraint |
 | Valid lifecycle transitions | Service layer + optional DB check constraint |
 | Immutable audit | INSERT only — no UPDATE/DELETE grants for audit table |
@@ -1009,13 +1025,13 @@ Expected concurrency is low (small staff, one building). Row-level locking on ho
 | Serial number exact lookup | B-tree unique index — primary search path |
 | Serial number prefix search | B-tree `varchar_pattern_ops` or `LIKE 'prefix%'` |
 | Model + brand grouping | Composite index on (brand_id, model_number) |
-| Location + status filters | Composite index on (location_id, status) |
-| Configuration text search | `pg_trgm` GIN index on configuration text — FR-SRH-05/06 |
+| Location + status filters | Composite index on (`current_location_id`, `status`) |
+| Product Model specification search | B-tree / ILIKE on `product_model` `cpu`, `gpu`, `ram_gb`, storage fields — FR-SRH-05/06 |
 | Color exact / partial search | B-tree on `color`; optional `pg_trgm` GIN — FR-SRH-13 |
 | Active product models only | Index on `product_model.status` for creation flows |
 | Dashboard aggregates | Indexes supporting `COUNT(*) WHERE status = 'available' GROUP BY brand/location` |
 | Audit log queries | Index on (created_at DESC), (entity_type, entity_id) |
-| Movement history | Index on (inventory_id, created_at DESC) |
+| Inventory history | Index on `audit_log` (`entity_identifier`, `created_at DESC`) and (`entity_type`, `entity_id`, `created_at DESC`) |
 
 Full index design follows query analysis during schema specification.
 
@@ -1030,6 +1046,7 @@ Full index design follows query analysis during schema specification.
 | Rollback | Downgrade scripts for non-destructive changes |
 | Production | `alembic upgrade head` during deployment window |
 | Data migrations | Separate scripts with backup requirement |
+| Version 1 sequence | `0005` audit logs (**Sprint 1E**) → `0006` users & authentication → `0007` ownership columns → `0008` integrations — see [DATABASE_DESIGN.md §16.5](database/DATABASE_DESIGN.md#165-implementation-order-recommended) |
 
 ### 10.7 Backup Philosophy
 
@@ -1048,7 +1065,7 @@ Full index design follows query analysis during schema specification.
 
 | Extension | Purpose |
 |-----------|---------|
-| `pg_trgm` | Configuration-aware search (FR-SRH-05/06) |
+| `pg_trgm` | Optional color partial search (FR-SRH-13); product spec search uses structured `product_model` fields |
 | `pgcrypto` | Cryptographic functions if used for token hashing |
 
 **Migration prerequisites:**
@@ -1105,7 +1122,7 @@ sequenceDiagram
 | **Access token** | 15 minutes (default, configurable) | Client memory | `sub`, `role`, `permissions`, `exp`, `iss`, `aud` |
 | **Refresh token** | 7 days (rotatable) | Keychain / Keystore | Opaque or JWT — stored hashed server-side |
 
-- Algorithm: HS256 or RS256 — **TBD in ADR-0005**; RS256 preferred if multi-service validation needed
+- Algorithm: HS256 or RS256 — **TBD**; RS256 preferred if multi-service validation needed ([ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) specifies JWT; algorithm pin at implementation)
 - Validation on every request: signature, expiry, issuer, audience
 - Refresh rotation: new refresh token issued on each refresh; reuse detection revokes family
 
@@ -1121,7 +1138,7 @@ sequenceDiagram
 | **First login** | Force password change |
 | **Reset** | Main Admin reset only V1 |
 
-> **Note:** Argon2id is architecturally preferable for new systems but is not the approved V1 algorithm. Implementation must use bcrypt unless ADR-0005 is amended.
+> **Note:** Argon2id is architecturally preferable for new systems but is not the approved V1 algorithm. Implementation must use bcrypt unless [ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) is superseded.
 
 ### 11.4 RBAC Model
 
@@ -1136,9 +1153,19 @@ flowchart LR
 |------|-------|
 | **Main Admin** | All permissions |
 | **Admin** | Inventory, movement, reports, brands, limited sync — per PRD matrix |
-| **Salesperson** | Search, view, manual sale fallback |
+| **Salesperson** | Search, view, move inventory |
 
 Permissions are defined as constants in `packages/auth/permissions.py`. Roles map to permission sets in `packages/auth/role_permissions.py`. Adding a role = new mapping — no schema redesign.
+
+### 11.4.1 Operational Ownership vs Audit
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Business entities** | Store `created_by_user_id` and `updated_by_user_id` only — set automatically by the backend from the authenticated user |
+| **Audit log** | Store complete history: actor ID, display name snapshot, role snapshot, action, entity, before/after values, optional IP/platform/reason |
+| **Location transfer** | `audit_logs` entry (`LOCATION_CHANGE`) with from/to location names in `old_value`/`new_value`, actor, timestamp — updates `current_location_id` |
+
+**Excluded from business entities V1:** `sold_by_user_id`, `reserved_by_user_id`, `approved_by_user_id`. Sale attribution uses `sale.recorded_by_user_id` (manual) or audit/Tally events — not a column on `inventory_item`.
 
 ### 11.5 Permission Enforcement
 
@@ -1195,17 +1222,21 @@ Permissions are defined as constants in `packages/auth/permissions.py`. Roles ma
 
 ### 12.1 Inventory Lifecycle
 
-Version 1 states: **Received**, **Available**, **Sold**.
+Version 1 states: **Received**, **Available**, **Reserved**, **Sold**.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Received : Add Inventory
     Received --> Available : Admin confirms ready
+    Available --> Reserved : Customer hold
+    Reserved --> Available : Hold released
     Available --> Sold : Tally sale / manual fallback
+    Reserved --> Sold : Tally sale / manual fallback
     Sold --> [*] : Terminal V1
 
     note right of Received : New stock intake
     note right of Available : Sellable and movable
+    note right of Reserved : Held for customer
     note right of Sold : No movement V1
 ```
 
@@ -1215,17 +1246,17 @@ stateDiagram-v2
 |---------|-------------|
 | LC-01 | Exactly one state per laptop — `InventoryService` |
 | LC-02 | Every transition creates audit entry — same transaction |
-| LC-03 | Movement does not change lifecycle state — `MovementService` |
-| LC-04 | Sold laptops cannot move — `MovementService` rejects |
+| LC-03 | Location transfer does not change lifecycle state — `InventoryService` |
+| LC-04 | Sold laptops cannot transfer location — `InventoryService` rejects |
 | LC-05 | Transitions only via API — clients request, service validates |
 
-### 12.3 Movement Rules
+### 12.3 Location Transfer Rules
 
 | Rule | Service Behaviour |
 |------|-------------------|
 | Source ≠ destination | Reject identical move |
-| Status must be Available | **V1 policy:** only **Available** laptops may move; Received must transition to Available first |
-| Record full history | Source, destination, actor, timestamp, optional reason |
+| Status must be Available or Reserved | **V1 policy:** only **Available** or **Reserved** laptops may move; Received must transition to Available first |
+| Record full history | **Audit log only** — source, destination, actor, timestamp, optional reason; human-readable location names |
 | Location count | Denormalized counts updated via query — not separate quantity table |
 
 ### 12.4 Validation Rules (Representative)
@@ -1233,10 +1264,12 @@ stateDiagram-v2
 | Operation | Validations |
 |-----------|-------------|
 | **Create** | Serial unique; brand exists; **product model exists and is Active**; location exists; **color required**; required fields present |
-| **Update attributes** | Role check; audit before/after; cannot change serial to duplicate; **color editable** |
+| **Update attributes** | Role check; audit before/after; serial editable with uniqueness enforced; **color editable** |
 | **Receive → Available** | Role: Admin+; current state must be Received |
-| **Mark sold** | Current state must be Available; idempotent if already Sold — via `SaleService` |
-| **Move** | Not Sold; valid destination; role check |
+| **Available ↔ Reserved** | Role: Admin+; hold and release |
+| **Mark sold** | Current state must be Available or Reserved; idempotent if already Sold — via `SaleService` |
+| **Transfer location** | Not Sold; valid destination; role check; updates `current_location_id`; `audit_logs` (`LOCATION_CHANGE`) |
+| **Delete** | Only when not Sold and no sale/audit references — FR-INV-07 |
 
 ### 12.5 Audit Trail
 
@@ -1245,15 +1278,18 @@ Every inventory operation produces an audit record:
 | Field | Content |
 |-------|---------|
 | **User** | Actor user ID or service account ID |
+| **User name** | Optional display name snapshot at time of action |
+| **User role** | Role snapshot at time of action |
 | **Timestamp** | UTC stored; displayed in business timezone **TBD** |
 | **Request ID** | `X-Request-ID` correlation identifier |
 | **Client platform** | `windows-desktop`, `macos-desktop`, `android`, `excel-sync`, `tally-sync` |
 | **IP address** | Client source IP from request |
 | **Device information** | User-agent / app version where available |
-| **Action** | `inventory.create`, `inventory.transition`, `inventory.move`, `sale.reflect`, etc. |
+| **Action** | `CREATE`, `UPDATE`, `LOCATION_CHANGE`, `STATUS_CHANGE`, `SYSTEM_ACTION`, etc. |
 | **Entity** | Inventory ID + serial number |
-| **Before / after** | JSON snapshot of changed fields |
-| **Reason** | Optional reason for change (movement, manual sale fallback) |
+| **Before / after** | JSON snapshot of changed fields (previous and new values) |
+| **Reason** | Optional note on location transfer or manual sale |
+| **Location transfer (when applicable)** | From location, to location, actor, timestamp — FR-AUD-08 |
 
 Audit records are **immutable** — no UPDATE or DELETE.
 
@@ -1290,7 +1326,7 @@ Search is a **first-class capability** (N12, BR-13). It must be:
 1. **Accessible** — global search on every primary screen including dashboard
 2. **Fast** — perceived instant response on desktop
 3. **Correct** — results reflect current authoritative state
-4. **Configuration-aware** — finds laptops by CPU, GPU, RAM, storage terms in configuration text
+4. **Product-specification-aware** — finds laptops by CPU, GPU, RAM, storage via Product Model fields
 5. **Color-aware** — exact and partial match on per-unit Color attribute
 6. **Multi-filter** — Brand, Model, Serial, CPU/GPU/RAM/Storage, Color, Location, and Status combinable
 7. **Keyboard-first** — desktop shortcuts; barcode scanner compatible
@@ -1303,7 +1339,7 @@ Search is a **first-class capability** (N12, BR-13). It must be:
 | **Model Number** | Exact + partial | High — grouped results |
 | **Brand** | Exact + partial | High |
 | **Color** | Exact + partial | High — per-unit attribute |
-| **CPU / GPU / RAM / Storage** | Trigram match in `configuration` | High — `4060`, `i7`, `16GB` |
+| **CPU / GPU / RAM / Storage** | Match on `product_model` specification fields | High — `4060`, `i7`, `16` |
 | **Location** | Filter / exact | Medium |
 | **Status** | Filter / exact | Medium |
 | **Combined** | AND composition | All selected filters applied |
@@ -1317,7 +1353,7 @@ flowchart LR
     C -->|Serial exact| D1[Direct lookup index]
     C -->|Serial prefix| D2[Prefix scan]
     C -->|Color filter| D5[B-tree / ILIKE on color]
-    C -->|Config term| D3[pg_trgm search]
+    C -->|Spec term| D3[Product Model field match]
     C -->|Model/brand| D4[Grouped query]
     D1 & D2 & D3 & D4 & D5 --> R[Paginated results]
     R --> API[JSON response]
@@ -1328,7 +1364,7 @@ flowchart LR
 | Query Pattern | Response Shape |
 |---------------|----------------|
 | Exact serial match | Single unit detail |
-| Model / brand / config | Grouped by brand → model with available count; expandable serials |
+| Model / brand / spec | Grouped by brand → model with available count; expandable serials |
 | Location / status filter | Filtered list with pagination |
 
 Presentation rules per PRD Section 11 — UI renders groups; API returns structured groups.
@@ -1340,17 +1376,17 @@ Presentation rules per PRD Section 11 — UI renders groups; API returns structu
 | Index | Purpose |
 |-------|---------|
 | `UNIQUE (serial_number)` | O(1) exact serial lookup |
-| `GIN (configuration gin_trgm_ops)` | Partial CPU/GPU/RAM/storage search |
+| `(product_model.cpu)`, `(product_model.gpu)`, etc. | Product specification search |
 | `(color)` or `GIN (color gin_trgm_ops)` | Color exact and partial filter |
 | `(brand_id, model_number)` | Model-grouped browsing |
-| `(location_id, status)` | Location dashboard filters |
+| `(current_location_id, status)` | Location dashboard filters |
 
 ### 13.6 Performance Targets
 
 Numeric targets **TBD** in NFR-PERF-01. Architectural commitment:
 
 - Serial exact lookup: < 50ms server-side at V1 scale
-- Configuration search: < 200ms server-side at V1 scale
+- Product specification search: < 200ms server-side at V1 scale
 - All list endpoints paginated — default page size 50
 - No unbounded `SELECT *` without `LIMIT`
 
@@ -1392,7 +1428,7 @@ sequenceDiagram
 | **Schedule** | APScheduler creates sync jobs via internal API call or job table poll — default **TBD** |
 | **Manual trigger** | `POST /api/v1/sync/excel/trigger` → `SyncJobService` creates job; **API never writes Excel** |
 | **Export** | Paginated API export (`?cursor=`) — worker assembles workbook; avoids memory exhaustion at scale |
-| **Columns** | Brand, Model, Serial, **Color**, Configuration, Location, Status — per FR-XLS-03 |
+| **Columns** | Brand, Model, Serial, **Color**, CPU, GPU, RAM, Storage (from Product Model), Current Location, Status — per FR-XLS-03 |
 | **File permissions** | NTFS: sync service account write-only on export dir; staff read via share optional |
 | **Conflict** | Excel file locked → skip job cycle, log warning, retry next run |
 | **Atomic write** | Write to `.tmp` then rename — preserve last-known-good copy in `exports/archive/` |
@@ -1401,33 +1437,53 @@ sequenceDiagram
 
 ### 14.3 Tally Integration
 
+**Billing boundary:** Tally ERP 9 remains the billing system. WEBSTUDIO IMS reads invoices only. IMS **never** creates invoices, credit notes, or billing entries in Tally.
+
 ```mermaid
 sequenceDiagram
     participant T as Tally ERP 9
     participant S as Tally Sync Service
     participant A as Backend API
 
-    loop Poll interval
-        S->>T: XML request — sales vouchers
-        T-->>S: XML response
-        S->>S: parse with defusedxml
-        S->>S: extract serial numbers
-        S->>A: POST /integrations/tally/sale {voucher, serial, ...}
-        A->>A: validate + mark sold (idempotent)
-        A-->>S: 200 / 409 / 404
-        S->>S: log outcome
+    loop Every sync interval (default 30 min)
+        loop Each configured company (WEBSTUDIO, ASUS Exclusive Store, ...)
+            S->>T: Read invoices since last_processed_voucher
+            T-->>S: Invoice XML
+            S->>S: parse with defusedxml
+            loop Each invoice line
+                S->>A: POST /integrations/tally/sales/process-line
+                alt serial + model match
+                    A->>A: mark sold + sale + audit (idempotent)
+                else model exists, serial missing
+                    A->>A: create Serial Not Found notification
+                else serial exists, model mismatch
+                    A->>A: create Model Mismatch notification
+                else neither in IMS
+                    A->>A: ignore line (accessory)
+                end
+            end
+            S->>A: PATCH company sync state (last_successful_sync_time, last_voucher)
+        end
     end
 ```
 
 | Concern | Design |
 |---------|--------|
-| **Mechanism** | **Requires Proof of Concept** — poll vs push; Tally HTTP port configuration |
-| **Mapping** | Serial number in voucher narration or custom field — **TBD in integration spec** |
-| **Idempotency** | Voucher number + serial as idempotency key |
-| **Validation** | All XML untrusted — schema validation; reject malformed |
-| **Partial failure** | One voucher failure does not block others — continue batch |
-| **Manual fallback** | Admin/Salesperson marks sold via UI when sync fails (FR-SLS-04) |
-| **Reconciliation** | Main Admin dashboard shows unmatched vouchers — **TBD** |
+| **Direction** | Tally → IMS read-only; no writes to Tally |
+| **Multi-company** | Independent sync state per Tally company; failure in one company does not block others |
+| **Initial companies** | WEBSTUDIO; ASUS Exclusive Store |
+| **Per-company state** | `last_successful_sync_time`, `last_processed_voucher_identifier` |
+| **Interval** | Configurable via `system_settings` — default **1800 seconds (30 minutes)** |
+| **Manual trigger** | `POST /integrations/tally/sync/trigger` — Admin and Main Admin (**Sync Now**) |
+| **Matching** | **Exact** serial number AND **exact** product model (brand + model number) — no fuzzy matching |
+| **Line outcomes** | Match → Sold + sale + audit; model-only → notification; serial-only → notification; neither → ignore (no notification) |
+| **Idempotency** | `(tally_company, tally_voucher_number, serial_number)` — manual sale with same invoice + serial is same transaction |
+| **Validation** | All XML untrusted — `defusedxml`; schema validation |
+| **Partial failure** | One line or company failure does not roll back other lines or companies |
+| **Manual mark-as-sold** | Admin/Main Admin only via `POST /sales/reflect` — invoice number required |
+| **Dashboard** | Tally Synchronization Dashboard — connection, companies, last sync, next sync, pending notifications, last error, Sync Now |
+| **Notifications** | Serial Not Found, Model Mismatch, Duplicate Sale, Synchronization Failure — Notification Center |
+| **V1 exclusions** | Returns, refunds, credit notes, cancellation, auto inventory creation from Tally |
 
 ### 14.3.1 Tally POC Acceptance Checklist
 
@@ -1444,14 +1500,14 @@ sequenceDiagram
 | 7 | Recorded XML fixtures added to `packages/testing/fixtures/tally/` | Yes |
 | 8 | POC report published in `docs/research/tally-poc-report.md` | Yes |
 
-**Gate:** ADR-0007 Accepted only after all criteria pass.
+**Gate:** [ADR-0011](../adr/ADR-0011-tally-integration-strategy.md) Accepted only after all criteria pass.
 
 ### 14.4 Scheduling
 
 | Service | Scheduler | Config |
 |---------|-----------|--------|
 | Excel Sync | APScheduler in worker process | Cron from settings table |
-| Tally Sync | APScheduler | Poll interval from settings table |
+| Tally Sync | APScheduler | `tally_sync_interval_seconds` from settings — default **1800** (30 min) |
 | DB Backup | Windows Task Scheduler | External script |
 
 ### 14.5 Retries
@@ -1461,7 +1517,9 @@ sequenceDiagram
 | API unreachable (sync worker) | Exponential backoff: 1m, 2m, 5m, 15m — max 5 attempts per cycle |
 | Tally unreachable | Continue next poll interval; log warning |
 | Excel locked | Skip cycle; retry next schedule |
-| Sale mapping 404 (serial not found) | No retry — log for manual reconciliation |
+| Sale mapping 404 (serial not found) | Create notification; no retry |
+| Model mismatch on line | Create notification; no retry |
+| Company sync failure | Log; create Synchronization Failure notification; continue other companies |
 
 ### 14.6 Failure Isolation
 
@@ -1474,8 +1532,11 @@ sequenceDiagram
 | Conflict | Resolution |
 |----------|------------|
 | Excel vs PostgreSQL | PostgreSQL wins always — Excel is overwritten on next sync |
-| Tally sale vs already sold | Idempotent no-op; log duplicate |
-| Tally sale vs unknown serial | Log; surface for manual reconciliation; no inventory mutation |
+| Tally sale vs already sold (manual or prior sync) | Idempotent no-op; optional Duplicate Sale notification |
+| Tally sale vs unknown serial | Serial Not Found notification; no inventory mutation |
+| Tally sale vs model mismatch | Model Mismatch notification; no inventory mutation |
+| Tally line — neither serial nor model in IMS | Ignore; no notification (accessory/non-laptop) |
+| Manual sale vs later Tally import (same invoice + serial) | Same transaction — no duplicate sale (FR-TLY-14) |
 | Manual sale vs pending Tally sync | First successful write wins; second is idempotent |
 
 ---
@@ -1557,7 +1618,7 @@ Barcode wedge keyboards work on Android when supported by device. Camera-based s
 
 **Production rule:** Plain HTTP to the API is **rejected** in production configuration.
 
-**Future remote access:** Public CA or VPN-terminated TLS; optional reverse proxy per ADR-0010.
+**Future remote access:** Public CA or VPN-terminated TLS; optional reverse proxy per ADR-0012 (reserved — not authored).
 
 ### 16.3 JWT Security
 
@@ -1741,7 +1802,7 @@ Concise STRIDE-oriented threat model for on-premise LAN deployment with HTTPS.
 | **Power failure** | Unclean shutdown | Services down | UPS recommended; BIOS auto-power-on; verify DB integrity |
 | **Network outage** | Clients cannot reach API | Client error UI | Staff wait; no local queue V1 |
 | **Excel file locked** | Sync skipped | Sync log warning | Retry next schedule; notify Main Admin |
-| **Tally unavailable** | Sales not auto-reflected | Tally sync log | Manual sale fallback; reconcile when Tally returns |
+| **Tally unavailable** | Sales not auto-reflected | Tally sync log + Synchronization Failure notification | Manual mark-as-sold (Admin/Main Admin); Sync Now when Tally returns |
 | **Client disconnected** | Single user affected | Client retry | Reconnect; refresh token or re-login |
 | **Disk full** | DB and sync fail | Health check disk monitor | Alert; expand volume; prune logs/backups |
 
@@ -1803,22 +1864,28 @@ flowchart TB
 
 ### 19.3 Database-Managed Settings
 
-| Setting | Configurable By |
-|---------|-----------------|
-| Excel sync schedule | Main Admin |
-| Tally poll interval | Main Admin |
-| Session timeout | Main Admin |
-| Lockout threshold | Main Admin |
-| Barcode auto-submit | Main Admin |
-| Business display name | Main Admin |
+| Setting | Key | Configurable By | Notes |
+|---------|-----|-----------------|-------|
+| System initialized | `system_initialized` | First-Time Setup only | `boolean` — **not** inferred from Main Admin existence; controls setup wizard |
+| Company name | `company_name` | First-Time Setup | Set during initialization |
+| Excel sync schedule | `excel_sync_cron` | Main Admin | |
+| Tally poll interval | `tally_poll_interval_seconds` | Main Admin | |
+| Session timeout | `session_timeout_minutes` | Main Admin | |
+| Lockout threshold | `lockout_threshold` | Main Admin | |
+| Barcode auto-submit | `barcode_auto_submit` | Main Admin | |
+| Business display name | `business_display_name` | Main Admin | May mirror `company_name` after setup |
 
 ### 19.4 Client Settings
 
-| Setting | Storage |
-|---------|---------|
-| Server URL | Config file / first-run setup |
-| Theme preference | Local + API user preference |
-| Window size/position | Local |
+| Setting | Storage | Notes |
+|---------|---------|-------|
+| Server HTTPS URL | Encrypted local config | Set via discovery confirmation or manual configuration |
+| Theme preference | Local + API user preference | |
+| Window size/position | Local | Desktop only |
+
+**First launch:** automatic LAN server discovery → confirm single server / select among multiple / fall back to manual URL with Test Connection. After connection, client calls `GET /api/v1/setup/status` before Login or Setup Wizard.
+
+**Future:** mDNS / Bonjour or equivalent for discovery — **TBD** in ADR.
 
 ### 19.5 Versioning
 
@@ -1867,7 +1934,7 @@ All services: **Automatic (Delayed Start)**; run under dedicated service account
 | macOS | `.dmg` — manual install |
 | Android | Signed `.apk` — sideload V1 |
 
-First-run: install internal CA root; configure server URL (`https://...`); verify connectivity; login.
+First-run: install internal CA root; automatic server discovery or manual HTTPS URL configuration; `GET /api/v1/setup/status`; First-Time Setup Wizard or login. Client installations **never** create users.
 
 ### 20.4 Network Configuration
 
@@ -1891,7 +1958,7 @@ HTTPS is **mandatory** for all production deployments. See [§1.4](#14-transport
 | 4 | Distribute CA root to Windows, macOS, and Android clients |
 | 5 | Verify `https://{server}:8443/health` from each client platform |
 
-**Future remote access:** Public CA or VPN; optional reverse proxy per ADR-0010.
+**Future remote access:** Public CA or VPN; optional reverse proxy per ADR-0012 (reserved — not authored).
 
 ### 20.6 Backups & Recovery
 
@@ -1944,9 +2011,9 @@ Official sequence for fresh production deployment:
 | **10** | Register Excel Sync and Tally Sync services — Automatic start | Services running; logs clean |
 | **11** | Configure Windows Firewall — 8443 from store subnet only | Port scan from LAN |
 | **12** | Schedule backup task + monthly restore verification script | Test dump created |
-| **13** | Install desktop clients (.msi / .dmg); distribute internal CA root | HTTPS login succeeds |
-| **14** | Install Android APK; configure network security config with CA | HTTPS login succeeds |
-| **15** | Create initial Main Admin account (force password change) | Login + RBAC verified |
+| **13** | Install desktop clients (.msi / .dmg); distribute internal CA root | HTTPS connectivity and setup status check succeed |
+| **14** | Install Android APK; configure network security config with CA | HTTPS connectivity and setup status check succeed |
+| **15** | Complete First-Time Setup Wizard from any connected client (if `system_initialized = false`) | Main Admin created; `system_initialized = true`; login succeeds |
 | **16** | Run system verification checklist (health, search, add inventory, sync job, backup) | All pass — see `docs/deployment/server/` |
 
 ### 20.9 Service Startup & Shutdown Order
@@ -1981,6 +2048,53 @@ Configure Windows Service **dependencies** where supported. Post-reboot verifica
 
 **Future automatic updates:** Electron auto-update and Android Play distribution deferred — see §22.6. V1 uses manual distribution.
 
+### 20.11 Server Initialization & Client Onboarding
+
+#### 20.11.1 Server Initialization (One-Time)
+
+The Dedicated Server PC is installed once. On startup the Backend reads `system_initialized` from `system_settings`. **Do not** treat Main Admin user existence as the initialization signal.
+
+| State | Backend behaviour | Client behaviour |
+|-------|-------------------|------------------|
+| `system_initialized = false` | Accept `POST /api/v1/setup/initialize`; reject login and inventory mutations requiring users | Show First-Time Setup Wizard after connection |
+| `system_initialized = true` | Reject duplicate initialize; enforce authentication on business endpoints | Show Login screen after connection |
+
+**First-Time Setup Wizard** collects: Company Name, Main Admin Name, Username, Password, Confirm Password. On success:
+
+1. Create Main Admin user (password stored as **bcrypt** hash only)
+2. Set `system_initialized = true`
+3. Persist `company_name`
+
+The wizard must not appear again unless the database is intentionally reinitialized (restore/migration reset — operator procedure only).
+
+#### 20.11.2 Client Installation & Discovery
+
+Client installations (desktop, Android) **never create users**. First launch:
+
+```mermaid
+flowchart TD
+    A[Client first launch] --> B[Attempt LAN server discovery]
+    B --> C{Servers found?}
+    C -->|One| D[Show server info — confirm]
+    C -->|Multiple| E[User selects server]
+    C -->|None / failed| F[Manual Server Configuration]
+    F --> G[HTTPS URL + Test Connection + Save]
+    D --> H[GET /api/v1/setup/status]
+    E --> H
+    G --> H
+    H --> I{system_initialized?}
+    I -->|true| J[Login screen]
+    I -->|false| K[First-Time Setup Wizard]
+```
+
+**Manual configuration** fields: Server HTTPS URL, Test Connection, Save Configuration.
+
+**Future:** automatic discovery may use mDNS / Bonjour or equivalent — protocol **TBD**; workflow is binding for V1.
+
+#### 20.11.3 User Management Authority
+
+Only **Main Admin** may: create users, disable users, reset passwords, assign roles. All user records and credential hashes live in PostgreSQL via the Backend API. Clients authenticate against the Backend only and do not store business data locally.
+
 ---
 
 ## 21. Performance Strategy
@@ -2005,7 +2119,7 @@ Configure Windows Service **dependencies** where supported. Post-reboot verifica
 ### 21.3 Search Performance
 
 - Serial exact: unique index — sub-millisecond DB time
-- Configuration trigram: GIN index — target < 200ms at 5K units
+- Product specification search: target < 200ms at 5K units
 - Dashboard aggregates: SQL `COUNT` with indexes — cache 30s **optional TBD**
 - Client-side: debounce search input 300ms; show loading skeleton
 
@@ -2116,6 +2230,7 @@ The following are **explicitly out of Version 1 scope**. Do not implement withou
 | **Secret Rotation automation** | Manual rotation documented in ops runbook first |
 | **Settings change notifications to workers** | Workers poll settings on interval V1; restart acceptable |
 | **Native Android networking module** | JS token handling acceptable with HTTPS + short TTL |
+| **mDNS / Bonjour server discovery** | Manual URL + workflow defined V1; protocol selection **TBD** |
 | **Redis / caching layer** | PostgreSQL performance sufficient at V1 scale |
 | **Audit cold archival** | Monitor growth; archive when retention policy requires |
 
@@ -2144,20 +2259,24 @@ The following are **explicitly out of Version 1 scope**. Do not implement withou
 | AD-15 | Sync orchestration | Sync Job table; worker execution | Manual trigger safety |
 | AD-16 | Domain mapping | ORM ↔ domain ↔ DTO separation | §7.11 |
 
-### 23.2 Recommended ADRs
+### 23.2 ADR Index
 
 | ADR | Title | Priority | Status |
 |-----|-------|----------|--------|
-| ADR-0001 | Monorepo structure | — | Proposed |
-| ADR-0002 | Backend stack (FastAPI + PostgreSQL + SQLAlchemy) | Critical | **Required** |
-| ADR-0003 | Desktop stack (Electron + React + Vite) | Critical | **Required** |
-| ADR-0004 | Mobile stack (React Native Android) | Critical | **Required** |
-| ADR-0005 | Authentication & security (JWT + bcrypt + HTTPS internal CA) | Critical | **Required** |
-| ADR-0006 | Windows Server deployment (services, firewall, backup) | High | **Required** |
-| ADR-0007 | Tally integration mechanism | Critical | **Requires POC** |
-| ADR-0008 | Excel sync schedule and file format | High | **Required** |
-| ADR-0009 | Search indexing strategy (pg_trgm) | High | **Required** |
-| ADR-0010 | Reverse proxy / TLS (future) | Medium | Deferred |
+| ADR-0001 | Monorepo structure | — | Proposed — [0001-monorepo-structure.md](../adr/records/0001-monorepo-structure.md) |
+| ADR-0002 | Backend stack (FastAPI + PostgreSQL + SQLAlchemy) | Critical | **Consolidated** — [TECH_STACK.md](TECH_STACK.md) §4–5 |
+| ADR-0003 | Desktop stack (Electron + React + Vite) | Critical | **Consolidated** — [TECH_STACK.md](TECH_STACK.md) §6 |
+| ADR-0004 | Mobile stack (React Native Android) | Critical | **Consolidated** — [TECH_STACK.md](TECH_STACK.md) §7 |
+| ADR-0005 | Authentication & security (JWT + bcrypt + HTTPS internal CA) | Critical | **Superseded by ADR-0010** |
+| ADR-0006 | Windows deployment (services, firewall, backup) | High | **Consolidated** — §20, [DEPLOYMENT_GUIDE.md](deployment/DEPLOYMENT_GUIDE.md) |
+| ADR-0007 | Tally integration mechanism | Critical | **Superseded by ADR-0011** |
+| ADR-0008 | Excel sync schedule and file format | High | **Consolidated** — §14, [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md) §10 |
+| ADR-0009 | Search indexing strategy (pg_trgm) | High | **Consolidated** — [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md), [TECH_STACK.md](TECH_STACK.md) |
+| ADR-0010 | Authentication & Initialization | Critical | **Accepted** — [ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) |
+| ADR-0011 | Tally Integration Strategy | Critical | **Accepted** — [ADR-0011](../adr/ADR-0011-tally-integration-strategy.md) |
+| ADR-0012 | Reverse proxy / TLS (future remote access) | Medium | **Reserved** — not authored |
+
+See [adr/README.md](../adr/README.md) for the authoritative index.
 
 ### 23.3 Risks & Mitigations
 
@@ -2181,9 +2300,9 @@ The following are **explicitly out of Version 1 scope**. Do not implement withou
 |-------|--------|------------|
 | **Database schema design** | **Yes** | Proceed; resolve lifecycle default on add (Received vs Available) with business |
 | **OpenAPI specification** | **Yes** | Derive from PRD + this architecture |
-| **Backend implementation** | **Yes** | ADR-0002, ADR-0005, ADR-0006 Proposed minimum; follow §22.5 conventions |
-| **Desktop implementation** | **Conditional** | ADR-0003; internal CA in installer; OpenAPI client generated |
-| **Android implementation** | **Conditional** | ADR-0004; network security config with CA |
+| **Backend implementation** | **Yes** | [ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) Accepted; TECH_STACK Active; follow §22.5 conventions |
+| **Desktop implementation** | **Conditional** | TECH_STACK §6; internal CA in installer; OpenAPI client generated |
+| **Android implementation** | **Conditional** | TECH_STACK §7; network security config with CA |
 | **Excel Sync implementation** | **Yes** | After SyncJob schema defined |
 | **Tally Sync implementation** | **No — blocked** | Tally POC checklist §14.3.1 must pass |
 | **Production deployment** | **No** | Full installation workflow §20.8; backup restore verified; security checklist |
@@ -2196,31 +2315,30 @@ The following are **explicitly out of Version 1 scope**. Do not implement withou
 |------|-------|--------|
 | Tally XML POC (§14.3.1) | Engineering | Tally Sync service only |
 | Default lifecycle on add: Received vs Available | Business + Product | Inventory create default |
-| Configuration field structure (free text vs structured) | Product | Search parsing spec |
+| Configuration field structure (free text vs structured) | Product | **Resolved** — structured fields on `product_model` |
 | Excel sync schedule default | Business | Scheduler config |
 | Tally serial number field mapping | Business + Engineering | Tally integration spec |
 | Numeric performance targets | Product + Engineering | SLA documentation |
-| Salesperson movement permission | Business | RBAC matrix refinement |
+| Salesperson movement permission | Product | **Resolved** — PRD §17.2; API RBAC |
 | Internal CA tooling choice (step-ca vs OpenSSL vs AD CS) | Operations | Certificate install docs |
 
 ### 24.3 Recommended Next Artifacts
 
 | Order | Artifact | Path |
 |-------|----------|------|
-| 1 | ADR-0002 through ADR-0006 | `adr/records/` |
+| 1 | Tally integration POC report | `docs/research/` — gate for [ADR-0011](../adr/ADR-0011-tally-integration-strategy.md) |
 | 2 | Database schema specification | `database/schema/` |
 | 3 | OpenAPI v1 specification | `docs/api/openapi/` |
-| 4 | Tally integration POC report | `docs/research/` |
-| 5 | Excel sync specification | `docs/integrations/excel/` |
-| 6 | Backend platform guide | `docs/development/platform-guides/backend.md` |
-| 7 | Security threat model | `docs/security/` — implements §16.14 |
-| 8 | Deployment runbook | `docs/deployment/server/` |
+| 4 | Excel sync specification | `docs/integrations/excel/` |
+| 5 | Backend platform guide | `docs/development/platform-guides/backend.md` |
+| 6 | Security threat model | `docs/security/` — implements §16.14 |
+| 7 | Deployment runbook | `docs/deployment/server/` |
 
 ### 24.4 Architecture Quality Checklist
 
 - [x] All PRD mandatory requirements architecturally supported
 - [x] Project Bible non-negotiable rules (N1–N18) respected
-- [x] TECH_STACK approved technologies used (HTTPS refines transport per ADR-0005)
+- [x] TECH_STACK approved technologies used (HTTPS refines transport per [ADR-0010](../adr/ADR-0010-authentication-and-initialization.md))
 - [x] Business logic location defined (Backend service layer)
 - [x] Integration boundaries isolated; API-only data access enforced
 - [x] Security architecture and threat model documented
@@ -2228,7 +2346,7 @@ The following are **explicitly out of Version 1 scope**. Do not implement withou
 - [x] Deployment workflow and update strategy documented
 - [x] Engineering conventions defined
 - [x] Future enhancements explicitly deferred (§22.6)
-- [ ] ADRs 0002–0007 recorded and Accepted
+- [x] ADR-0010 and ADR-0011 Accepted; ADR-0002–0009 consolidated per [adr/README.md](../adr/README.md)
 - [ ] Tally POC completed
 - [ ] Open product decisions resolved
 

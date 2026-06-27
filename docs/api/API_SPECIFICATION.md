@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.0
+Version: 1.5
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| **Version** | 1.0 |
+| **Version** | 1.5 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,11 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history: removed movement table/APIs; location transfer endpoints; serial lifecycle via audit; expanded audit search. |
+| 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Tally ERP 9 synchronization: read-only invoices; multi-company sync; invoice line processing; dashboard; notifications; manual mark-as-sold (Admin/Main Admin only). |
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: setup endpoints; login gated on `system_initialized`. |
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Authentication & audit strategy: Salesperson movement permission; `created_by_user_id` / `updated_by_user_id` on business DTOs; enriched audit log schema; movement audit fields. |
+| 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Synchronized with Sprint 1D: UUID keys on `product_model` and `inventory_item`; structured ProductModel DTO; `current_location_id`; `reserved` status; serial number editable; conditional inventory delete; removed `configuration`, `row_version`, `created_by` from inventory. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial Version 1 API contract. All modules, bulk operations, standards, and worker endpoints. |
 
 ---
@@ -35,25 +40,26 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 ## Table of Contents
 
 1. [Global Standards](#1-global-standards)
-2. [Authentication](#2-authentication)
-3. [Users](#3-users)
-4. [Brands](#4-brands)
-5. [Product Models](#5-product-models)
-6. [Locations](#6-locations)
-7. [Inventory](#7-inventory)
-8. [Inventory Movement](#8-inventory-movement)
-9. [Search](#9-search)
-10. [Sales](#10-sales)
-11. [Dashboard](#11-dashboard)
-12. [Reports](#12-reports)
-13. [Excel Sync](#13-excel-sync)
-14. [Tally Integration](#14-tally-integration)
-15. [Audit](#15-audit)
-16. [Settings](#16-settings)
-17. [Health](#17-health)
-18. [Shared Schemas](#18-shared-schemas)
-19. [Error Catalogue](#19-error-catalogue)
-20. [Permission Reference](#20-permission-reference)
+2. [System Setup](#2-system-setup)
+3. [Authentication](#3-authentication)
+4. [Users](#4-users)
+5. [Brands](#5-brands)
+6. [Product Models](#6-product-models)
+7. [Locations](#7-locations)
+8. [Inventory](#8-inventory)
+9. [Inventory Movement](#9-inventory-movement)
+10. [Search](#10-search)
+11. [Sales](#11-sales)
+12. [Dashboard](#12-dashboard)
+13. [Reports](#13-reports)
+14. [Excel Sync](#14-excel-sync)
+15. [Tally Integration](#15-tally-integration)
+16. [Audit](#16-audit)
+17. [Settings](#17-settings)
+18. [Health](#18-health)
+19. [Shared Schemas](#19-shared-schemas)
+20. [Error Catalogue](#20-error-catalogue)
+21. [Permission Reference](#21-permission-reference)
 
 ---
 
@@ -66,7 +72,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | **Prefix** | All business endpoints under `/api/v1/` |
 | **Health** | `/health`, `/health/ready`, `/health/version` — outside versioned prefix |
 | **Resource names** | Plural `snake_case` nouns | `inventory_items`, `product_models`, `sync_jobs` |
-| **Path parameters** | `{resource_id}` — integer surrogate keys unless noted |
+| **Path parameters** | `{resource_id}` — integer surrogate keys for reference entities (`brand`, `location`, `user`); UUID for `product_model` and `inventory_item` |
 | **Actions** | Sub-resource verbs as nested paths | `POST /product_models/{id}/archive` |
 | **No trailing slashes** | `/api/v1/brands` not `/api/v1/brands/` |
 
@@ -78,15 +84,15 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | `POST` | Create; actions; bulk operations |
 | `PATCH` | Partial update of mutable fields |
 | `PUT` | Full replacement — **not used V1** except where noted |
-| `DELETE` | Permanent removal — **restricted** (product models with no history only) |
+| `DELETE` | Permanent removal — **restricted** (product models and inventory items with no history only) |
 
-Inventory items are **never deleted** (FR-INV-07). Use status transitions instead.
+Inventory items may be deleted only when not **Sold** and no movement, sale, or audit references exist (FR-INV-07). Otherwise use status transitions.
 
 ### 1.3 Authentication
 
 | Header | Purpose |
 |--------|---------|
-| `Authorization: Bearer {access_token}` | Required on all endpoints except login, refresh, and unauthenticated health |
+| `Authorization: Bearer {access_token}` | Required on all endpoints except login, refresh, setup (when not initialized), and unauthenticated health |
 | `X-Request-ID` | Client may supply UUID; server generates if absent; echoed in response and logs |
 | `X-Client-Version` | Client application version — required on authenticated requests |
 | `X-Client-Platform` | `windows_desktop`, `macos_desktop`, `android`, `excel_sync`, `tally_sync` |
@@ -186,42 +192,134 @@ Inventory items are **never deleted** (FR-INV-07). Use status transitions instea
 
 | Operation | Key | Behaviour on Replay |
 |-----------|-----|---------------------|
-| Manual sale reflection | `Idempotency-Key` header | `409` with existing sale in body, or `200` no-op |
-| Tally sale reflection | `tally_voucher_number` + `serial_number` | `200` no-op; no duplicate sale |
+| Manual sale reflection | `invoice_number` + `serial_number` or `Idempotency-Key` header | `200` no-op if already Sold; Tally sync treats as same transaction |
+| Tally sale reflection | `tally_company` + `tally_voucher_number` + `serial_number` | `200` no-op; optional Duplicate Sale notification |
 | Excel sync trigger | `Idempotency-Key` header | Returns existing `sync_job` if pending/running with same key |
 | Bulk inventory create | `batch_id` in body (optional UUID) | Rejects duplicate `batch_id` with `409` or returns prior results |
 | Bulk movement | `batch_id` in body (optional UUID) | Same as bulk inventory |
 
-### 1.9 Optimistic Concurrency
-
-Inventory updates accept optional `row_version` in request body. Mismatch returns `409` with code `ROW_VERSION_CONFLICT`.
-
-### 1.10 Audit Behaviour Summary
+### 1.9 Audit Behaviour Summary
 
 | Mutation Category | Audit Action | Fields Captured |
 |-------------------|--------------|-----------------|
 | Inventory create/update/transition | `inventory.create`, `inventory.update`, `inventory.transition` | `before_state`, `after_state`, serial as `entity_identifier` |
-| Movement | `inventory.move` | from/to location, reason |
+| Movement | `inventory.move` | from/to location names, optional reason; updates `current_location_id` only |
 | Sale | `sale.reflect` | sale source, voucher reference |
 | User management | `user.create`, `user.update`, `user.disable` | role/status changes |
 | Product model lifecycle | `product_model.archive`, `product_model.restore`, `product_model.delete` | status |
 | Settings | `setting.update` | key, before/after value |
 | Auth | `auth.login_success`, `auth.login_failure`, `auth.logout` | username (never password) |
+| System setup | `system.initialize` | company name, username (never password) |
 | Sync | `sync.job_created`, `sync.job_completed` | job id, outcome |
 
 Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpoints.
 
 ---
 
-## 2. Authentication
+## 2. System Setup
 
-### 2.1 Login
+Setup endpoints gate first-time server initialization. Initialization state is stored as `system_initialized` in `system_settings` — **not** inferred from Main Admin user existence (FR-INIT-01, BR-28).
+
+Clients call setup status after connecting to the server and before showing Login or the First-Time Setup Wizard (FR-CLIENT-05).
+
+### 2.1 Setup Status
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/setup/status` |
+| **Method** | `GET` |
+| **Purpose** | Return whether the system has completed first-time initialization |
+| **Authentication Required** | No |
+| **Required Role** | — |
+
+**Path Parameters:** None
+
+**Query Parameters:** None
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `system_initialized` | boolean | `true` when setup is complete |
+| `company_name` | string \| null | Set after initialization; `null` when not initialized |
+
+**Success Codes:** `200`
+
+**Error Codes:** `503` if database unavailable
+
+**Audit Behaviour:** None
+
+**Client behaviour:**
+
+| `system_initialized` | Client action |
+|----------------------|---------------|
+| `true` | Show Login screen |
+| `false` | Launch First-Time Setup Wizard |
+
+---
+
+### 2.2 Initialize System
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/setup/initialize` |
+| **Method** | `POST` |
+| **Purpose** | Complete first-time setup: create Main Admin and mark system initialized |
+| **Authentication Required** | No — only accepted when `system_initialized = false` |
+| **Required Role** | — |
+
+**Request Body:**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `company_name` | string | Yes | 1–200 chars; trimmed |
+| `main_admin_name` | string | Yes | Display name; 1–128 chars |
+| `username` | string | Yes | 3–64 chars; unique; trimmed |
+| `password` | string | Yes | Min 10 chars; stored as **bcrypt** hash only |
+| `confirm_password` | string | Yes | Must match `password` |
+
+**Response Body (`201`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `system_initialized` | boolean | Always `true` on success |
+| `company_name` | string | Persisted company name |
+| `main_admin` | `UserSummary` | Created Main Admin — see §19 |
+
+**Success Codes:** `201`
+
+**Error Codes:**
+
+| Code | HTTP | Condition |
+|------|------|-----------|
+| `VALIDATION_ERROR` | 422 | Password mismatch, weak password, invalid fields |
+| `USERNAME_DUPLICATE` | 409 | Username already exists |
+| `SYSTEM_ALREADY_INITIALIZED` | 409 | `system_initialized` is already `true` |
+
+**Validation Rules:** Reject when `system_initialized = true`. Password never returned or logged.
+
+**Audit Behaviour:** `system.initialize` — username and company name only; never password.
+
+**Idempotency:** Not idempotent — second call after success returns `SYSTEM_ALREADY_INITIALIZED`.
+
+**Post-conditions:**
+
+1. Main Admin user created with `role = main_admin`, `status = active`
+2. `system_initialized` set to `true` in `system_settings`
+3. `company_name` persisted in `system_settings`
+4. Setup wizard must not be offered again unless database is intentionally reinitialized
+
+---
+
+## 3. Authentication
+
+### 3.1 Login
 
 | | |
 |---|---|
 | **Endpoint** | `POST /api/v1/auth/login` |
 | **Method** | `POST` |
-| **Purpose** | Authenticate user; issue access and refresh tokens |
+| **Purpose** | Authenticate user; issue access and refresh tokens — only when `system_initialized = true` |
 | **Authentication Required** | No |
 | **Required Role** | — |
 
@@ -240,7 +338,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 | `refresh_token` | string | Opaque token — 7 days default |
 | `token_type` | string | `"bearer"` |
 | `expires_in` | integer | Access token TTL seconds |
-| `user` | `UserSummary` | See §18 |
+| `user` | `UserSummary` | See §19 |
 
 **Success Codes:** `200`
 
@@ -248,6 +346,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 | Code | HTTP | Condition |
 |------|------|-----------|
+| `SYSTEM_NOT_INITIALIZED` | 403 | `system_initialized = false` — client must run setup first |
 | `INVALID_CREDENTIALS` | 401 | Wrong username/password — generic message |
 | `ACCOUNT_LOCKED` | 403 | Lockout active — include `locked_until` |
 | `ACCOUNT_DISABLED` | 403 | User status disabled |
@@ -261,7 +360,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 ---
 
-### 2.2 Refresh Token
+### 3.2 Refresh Token
 
 | | |
 |---|---|
@@ -295,7 +394,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 ---
 
-### 2.3 Logout
+### 3.3 Logout
 
 | | |
 |---|---|
@@ -323,7 +422,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 ---
 
-### 2.4 Current User
+### 3.4 Current User
 
 | | |
 |---|---|
@@ -358,7 +457,7 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 ---
 
-### 2.5 Change Own Password
+### 3.5 Change Own Password
 
 | | |
 |---|---|
@@ -385,11 +484,11 @@ Audit records are **append-only** (FR-AUD-06). API exposes read-only audit endpo
 
 ---
 
-## 3. Users
+## 4. Users
 
-All user management endpoints require **Main Admin** unless noted.
+All user management endpoints require **Main Admin** (FR-USER-01). Only Main Admin may create users, disable users, reset passwords, and assign roles. Client applications never create users.
 
-### 3.1 List Users
+### 4.1 List Users
 
 | | |
 |---|---|
@@ -409,7 +508,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.2 Create User
+### 4.2 Create User
 
 | | |
 |---|---|
@@ -438,7 +537,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.3 Get User
+### 4.3 Get User
 
 | | |
 |---|---|
@@ -452,7 +551,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.4 Update User
+### 4.4 Update User
 
 | | |
 |---|---|
@@ -470,7 +569,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.5 Update User Role
+### 4.5 Update User Role
 
 | | |
 |---|---|
@@ -492,7 +591,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.6 Reset User Password
+### 4.6 Reset User Password
 
 | | |
 |---|---|
@@ -510,7 +609,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.7 Disable User
+### 4.7 Disable User
 
 | | |
 |---|---|
@@ -528,7 +627,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 3.8 Enable User
+### 4.8 Enable User
 
 | | |
 |---|---|
@@ -544,9 +643,9 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-## 4. Brands
+## 5. Brands
 
-### 4.1 List Brands
+### 5.1 List Brands
 
 | | |
 |---|---|
@@ -564,7 +663,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 4.2 Create Brand
+### 5.2 Create Brand
 
 | | |
 |---|---|
@@ -588,7 +687,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 4.3 Get Brand
+### 5.3 Get Brand
 
 | | |
 |---|---|
@@ -601,7 +700,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 4.4 Update Brand
+### 5.4 Update Brand
 
 | | |
 |---|---|
@@ -616,7 +715,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 4.5 Deactivate Brand
+### 5.5 Deactivate Brand
 
 | | |
 |---|---|
@@ -632,7 +731,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 4.6 Activate Brand
+### 5.6 Activate Brand
 
 | | |
 |---|---|
@@ -645,9 +744,9 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-## 5. Product Models
+## 6. Product Models
 
-### 5.1 List Product Models
+### 6.1 List Product Models
 
 | | |
 |---|---|
@@ -673,7 +772,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.2 Create Product Model
+### 6.2 Create Product Model
 
 | | |
 |---|---|
@@ -688,7 +787,13 @@ All user management endpoints require **Main Admin** unless noted.
 |-------|------|----------|------------|
 | `brand_id` | integer | Yes | Brand must exist and be active |
 | `model_number` | string | Yes | Unique per brand; 1–64 chars |
-| `display_name` | string | No | Max 128 |
+| `model_name` | string | Yes | Max 128 |
+| `cpu` | string | Yes | Max 128 |
+| `gpu` | string | No | Max 128 |
+| `ram_gb` | integer | Yes | Positive |
+| `storage_value` | number | Yes | Positive |
+| `storage_unit` | enum | Yes | `GB`, `TB` |
+| `storage_type` | enum | Yes | `SSD`, `HDD` |
 
 **Response:** `ProductModel` with `status: active`
 
@@ -700,7 +805,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.3 Get Product Model
+### 6.3 Get Product Model
 
 | | |
 |---|---|
@@ -709,13 +814,13 @@ All user management endpoints require **Main Admin** unless noted.
 | **Authentication Required** | Yes |
 | **Required Role** | Any authenticated user |
 
-**Response includes:** `id`, `brand_id`, `brand_name`, `model_number`, `display_name`, `status`, `inventory_count`, `created_at`, `updated_at`
+**Response includes:** `id` (UUID), `brand_id`, `brand_name`, `model_number`, `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type`, `status`, `inventory_count`, `created_at`, `updated_at`
 
 **Success Codes:** `200`, `404`
 
 ---
 
-### 5.4 Update Product Model
+### 6.4 Update Product Model
 
 | | |
 |---|---|
@@ -724,7 +829,7 @@ All user management endpoints require **Main Admin** unless noted.
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
-**Request Body:** `model_number`, `display_name` (optional fields)
+**Request Body:** `model_number`, `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type` (optional fields)
 
 **Validation Rules:** `brand_id` immutable after inventory linked
 
@@ -732,7 +837,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.5 Archive Product Model
+### 6.5 Archive Product Model
 
 | | |
 |---|---|
@@ -750,7 +855,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.6 Restore Product Model
+### 6.6 Restore Product Model
 
 | | |
 |---|---|
@@ -766,7 +871,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.7 Delete Product Model (Conditional)
+### 6.7 Delete Product Model (Conditional)
 
 | | |
 |---|---|
@@ -784,7 +889,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.8 Bulk Archive Product Models
+### 6.8 Bulk Archive Product Models
 
 | | |
 |---|---|
@@ -797,7 +902,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 | Field | Type | Required |
 |-------|------|----------|
-| `product_model_ids` | integer[] | Yes — max 100 per request |
+| `product_model_ids` | UUID[] | Yes — max 100 per request |
 
 **Response Body:**
 
@@ -814,7 +919,7 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-### 5.9 Bulk Restore Product Models
+### 6.9 Bulk Restore Product Models
 
 | | |
 |---|---|
@@ -827,11 +932,11 @@ All user management endpoints require **Main Admin** unless noted.
 
 ---
 
-## 6. Locations
+## 7. Locations
 
 Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01).
 
-### 6.1 List Locations
+### 7.1 List Locations
 
 | | |
 |---|---|
@@ -846,7 +951,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 6.2 Create Location
+### 7.2 Create Location
 
 | | |
 |---|---|
@@ -861,7 +966,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 6.3 Get / Update Location
+### 7.3 Get / Update Location
 
 | | |
 |---|---|
@@ -870,7 +975,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 6.4 Deactivate / Activate Location
+### 7.4 Deactivate / Activate Location
 
 | | |
 |---|---|
@@ -882,9 +987,9 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-## 7. Inventory
+## 8. Inventory
 
-### 7.1 Create Inventory Item
+### 8.1 Create Inventory Item
 
 | | |
 |---|---|
@@ -899,12 +1004,10 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
 | `serial_number` | string | Yes | Globally unique; trimmed; non-empty (BR-01) |
-| `product_model_id` | integer | Yes | Must reference **active** product model (FR-PM-04) |
+| `product_model_id` | UUID | Yes | Must reference **active** product model (FR-PM-04) |
 | `color` | string | Yes | Non-empty; max 64 (BR-22) |
-| `configuration` | string | Yes | Free text — CPU/GPU/RAM/storage (BD-02) |
-| `location_id` | integer | Yes | Active location |
+| `current_location_id` | integer | Yes | Active location |
 | `status` | enum | No | `received` or `available` — default per BD-01 open decision |
-| `row_version` | — | — | Not on create |
 
 **Excluded V1 fields:** `purchase_date`, `purchase_cost`, `remarks` — not accepted.
 
@@ -926,7 +1029,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 7.2 Bulk Create Inventory Items
+### 8.2 Bulk Create Inventory Items
 
 | | |
 |---|---|
@@ -965,7 +1068,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 7.3 Get Inventory Item
+### 8.3 Get Inventory Item
 
 | | |
 |---|---|
@@ -979,25 +1082,25 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 | Field | Type |
 |-------|------|
-| `id` | integer |
+| `id` | UUID |
 | `serial_number` | string |
-| `product_model_id` | integer |
+| `product_model_id` | UUID |
 | `brand_id`, `brand_name` | |
 | `model_number` | string |
+| `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type` | Product Model specification fields |
 | `color` | string |
-| `configuration` | string |
-| `location_id`, `location_name` | |
-| `status` | `received`, `available`, `sold` |
-| `row_version` | integer |
+| `current_location_id`, `current_location_name` | |
+| `status` | `received`, `available`, `reserved`, `sold` |
 | `sale` | `SaleSummary` — nullable; present when sold |
-| `created_at`, `updated_at` | datetime |
 | `created_by` | `UserSummary` |
+| `updated_by` | `UserSummary` |
+| `created_at`, `updated_at` | datetime |
 
 **Success Codes:** `200`, `404`
 
 ---
 
-### 7.4 Get Inventory Item by Serial
+### 8.4 Get Inventory Item by Serial
 
 | | |
 |---|---|
@@ -1011,7 +1114,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 7.5 List Inventory Items
+### 8.5 List Inventory Items
 
 | | |
 |---|---|
@@ -1025,8 +1128,8 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 | Parameter | Description |
 |-----------|-------------|
-| `status` | Filter by lifecycle status |
-| `location_id` | Filter by location |
+| `status` | Filter by lifecycle status (`received`, `available`, `reserved`, `sold`) |
+| `current_location_id` | Filter by current location |
 | `brand_id` | Filter via product model join |
 | `product_model_id` | Filter by model |
 | `color` | Partial match |
@@ -1039,7 +1142,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 7.6 List Inventory Groups
+### 8.6 List Inventory Groups
 
 | | |
 |---|---|
@@ -1061,7 +1164,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
       "brand_name": "ASUS",
       "product_model_id": 10,
       "model_number": "VivoBook 15",
-      "status_summary": { "available": 5, "received": 1, "sold": 12 },
+      "status_summary": { "available": 5, "received": 1, "reserved": 0, "sold": 12 },
       "serials": [ ]
     }
   ]
@@ -1072,7 +1175,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 7.7 Update Inventory Item
+### 8.7 Update Inventory Item
 
 | | |
 |---|---|
@@ -1086,23 +1189,22 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 | Field | Validation |
 |-------|------------|
+| `serial_number` | Globally unique if changed; trimmed; non-empty |
 | `color` | Non-empty if provided |
-| `configuration` | Non-empty if provided |
-| `location_id` | Use movement endpoint for transfers — **rejected here** with `422` `USE_MOVEMENT_ENDPOINT` |
+| `current_location_id` | Use location transfer endpoint (§9.1) — **rejected here** with `422` `USE_LOCATION_TRANSFER_ENDPOINT` |
 | `product_model_id` | Rare; audited; must be active |
-| `row_version` | Required for optimistic locking |
 
-**Immutable:** `serial_number`
+**Immutable:** none — all listed fields are mutable by authorized roles subject to validation
 
 **Success Codes:** `200`
 
-**Error Codes:** `409` `ROW_VERSION_CONFLICT`, `422`
+**Error Codes:** `409` `SERIAL_NUMBER_DUPLICATE`, `422`
 
 **Audit Behaviour:** `inventory.update`
 
 ---
 
-### 7.8 Transition Inventory Status
+### 8.8 Transition Inventory Status
 
 | | |
 |---|---|
@@ -1110,16 +1212,15 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 | **Method** | `POST` |
 | **Purpose** | Lifecycle state change (FR-INV-13) |
 | **Authentication Required** | Yes |
-| **Required Role** | `received→available`: `main_admin`, `admin`; `available→sold`: see Sales §10 |
+| **Required Role** | `received→available`, `available↔reserved`: `main_admin`, `admin`; `available→sold`, `reserved→sold`: see Sales §10 |
 
 **Request Body:**
 
 | Field | Type | Required |
 |-------|------|----------|
-| `to_status` | enum | Yes — `available` from `received` only in this endpoint |
-| `row_version` | integer | Yes |
+| `to_status` | enum | Yes — `available`, `reserved` from `received`/`available`; see transition matrix |
 
-**Allowed via this endpoint:** `received` → `available` only
+**Allowed via this endpoint:** `received` → `available`; `available` ↔ `reserved`
 
 **Validation Rules:** Invalid transitions — `422` `INVALID_STATUS_TRANSITION`
 
@@ -1127,49 +1228,68 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-## 8. Inventory Movement
-
-### 8.1 Move Inventory Item
+### 8.9 Delete Inventory Item (Conditional)
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/inventory_items/{inventory_item_id}/move` |
-| **Method** | `POST` |
-| **Purpose** | Transfer unit to new location (FR-MOV-01–03) |
+| **Endpoint** | `DELETE /api/v1/inventory_items/{inventory_item_id}` |
+| **Method** | `DELETE` |
+| **Purpose** | Permanent delete only when no history (FR-INV-07) |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
+
+**Validation Rules:** Reject with `409` `INVENTORY_ITEM_HAS_HISTORY` if status is `sold` or any sale or audit reference exists
+
+**Success Codes:** `204`
+
+**Audit Behaviour:** `inventory.delete`
+
+---
+
+## 9. Inventory Location Transfer
+
+Location changes update `inventory_item.current_location_id` only. **No separate movement table or movement history API.** Every transfer creates an `audit_log` entry (`inventory.move`) that is the authoritative history (FR-MOV-02, FR-AUD-01).
+
+### 9.1 Transfer Inventory Item Location
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/inventory_items/{inventory_item_id}/transfer-location` |
+| **Method** | `POST` |
+| **Purpose** | Transfer unit to a new location (FR-MOV-01–03) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin`, `salesperson` |
 
 **Request Body:**
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `to_location_id` | integer | Yes | Must differ from current |
-| `reason` | string | No | Max 512 |
-| `row_version` | integer | Yes | |
+| `to_location_id` | integer | Yes | Must differ from current; must be active |
+| `reason` | string | No | Max 512 — optional note stored on audit entry |
 
 **Validation Rules:**
 
-- Status must be `available` (LC-04, FR-MOV-06) — `422` `SOLD_ITEM_CANNOT_MOVE`
+- Status must be `available` or `reserved` (LC-04, FR-MOV-06) — `422` `SOLD_ITEM_CANNOT_MOVE`
 - `to_location_id` must be active
 
-**Response Body:** Updated `InventoryItemDetail` + `movement` record
+**Response Body:** Updated `InventoryItemDetail` (no movement record)
 
 **Success Codes:** `200`
 
-**Audit Behaviour:** `inventory.move` + `inventory_movement` insert
+**Audit Behaviour:** `inventory.move` — captures actor, timestamp, from/to locations with human-readable names, `before_state`/`after_state`
 
 **Idempotency:** Same `Idempotency-Key` within 24h returns original result `200`
 
 ---
 
-### 8.2 Bulk Move Inventory Items
+### 9.2 Bulk Location Transfer
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/inventory_items/bulk/move` |
+| **Endpoint** | `POST /api/v1/inventory_items/bulk/transfer-location` |
 | **Method** | `POST` |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin`, `admin` |
+| **Required Role** | `main_admin`, `admin`, `salesperson` |
 
 **Request Body:**
 
@@ -1177,50 +1297,22 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 |-------|------|----------|
 | `batch_id` | UUID | No |
 | `to_location_id` | integer | Yes — shared destination |
-| `reason` | string | No |
+| `reason` | string | No — applied to all successful transfers |
 | `items` | array | Yes — max **50** |
-| `items[].inventory_item_id` | integer | Yes |
-| `items[].row_version` | integer | Yes |
+| `items[].inventory_item_id` | UUID | Yes |
 | `continue_on_error` | boolean | No — default false |
 
 **Response:** Per-item success/failure summary
 
 **Audit Behaviour:** `inventory.move` per successful item
 
----
-
-### 8.3 Movement History (Global)
-
-| | |
-|---|---|
-| **Endpoint** | `GET /api/v1/movements` |
-| **Method** | `GET` |
-| **Purpose** | Paginated movement log (FR-MOV-04, FR-RPT-03) |
-| **Authentication Required** | Yes |
-| **Required Role** | Any authenticated user |
-
-**Query Parameters:** `inventory_item_id`, `from_location_id`, `to_location_id`, `performed_by_user_id`, `moved_at_from`, `moved_at_to`, `page`, `page_size`, `sort` (default `moved_at:desc`)
-
-**Response Body:** `Movement[]`
+**History:** Use `GET /api/v1/audit_logs` or `GET /api/v1/audit_logs/lifecycle/by-serial/{serial_number}` (§16)
 
 ---
 
-### 8.4 Movement History (Per Item)
+## 10. Search
 
-| | |
-|---|---|
-| **Endpoint** | `GET /api/v1/inventory_items/{inventory_item_id}/movements` |
-| **Method** | `GET` |
-| **Authentication Required** | Yes |
-| **Required Role** | Any authenticated user |
-
-**Success Codes:** `200`
-
----
-
-## 9. Search
-
-### 9.1 Combined Search
+### 10.1 Combined Search
 
 | | |
 |---|---|
@@ -1234,21 +1326,20 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 | Parameter | Type | Match | Notes |
 |-----------|------|-------|-------|
-| `q` | string | — | Free-text — serial exact/prefix OR config trigram if no structured filters |
+| `q` | string | — | Free-text — serial exact/prefix OR product-model spec match if no structured filters |
 | `serial_number` | string | exact | Highest priority — returns single detail mode |
 | `serial_number_prefix` | string | prefix | |
 | `brand_id` | integer | exact | |
 | `brand_name` | string | partial | |
-| `product_model_id` | integer | exact | |
+| `product_model_id` | UUID | exact | |
 | `model_number` | string | partial | |
 | `color` | string | partial | FR-SRH-13 |
-| `location_id` | integer | exact | |
-| `status` | enum | exact | Comma-separated multi-value |
-| `cpu` | string | config trigram | Maps to configuration search |
-| `gpu` | string | config trigram | e.g. `4060` |
-| `ram` | string | config trigram | e.g. `16GB` |
-| `storage` | string | config trigram | |
-| `configuration` | string | trigram | General config term (FR-SRH-05/06) |
+| `current_location_id` | integer | exact | |
+| `status` | enum | exact | `received`, `available`, `reserved`, `sold` — comma-separated multi-value |
+| `cpu` | string | partial | Product Model `cpu` field |
+| `gpu` | string | partial | Product Model `gpu` field — e.g. `4060` |
+| `ram_gb` | integer | exact | Product Model `ram_gb` — e.g. `16` |
+| `storage` | string | partial | Product Model storage fields |
 | `include_archived_models` | boolean | — | Default false for Salesperson |
 | `group_by_model` | boolean | — | Default `true` for model/config queries; `false` for serial |
 | `page`, `page_size`, `sort` | | | |
@@ -1267,7 +1358,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 9.2 Quick Search (Dashboard)
+### 10.2 Quick Search (Dashboard)
 
 | | |
 |---|---|
@@ -1283,54 +1374,55 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-## 10. Sales
+## 11. Sales
 
-### 10.1 Reflect Sale (Manual)
+### 11.1 Reflect Sale (Manual)
 
 | | |
 |---|---|
 | **Endpoint** | `POST /api/v1/sales/reflect` |
 | **Method** | `POST` |
-| **Purpose** | Mark inventory as sold — manual fallback (FR-SLS-04) |
+| **Purpose** | Manually mark inventory as Sold (FR-SLS-04, §8.6.2) |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin`, `admin`, `salesperson` |
+| **Required Role** | `main_admin`, `admin` only — **Salesperson excluded** |
 
 **Request Body:**
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
 | `serial_number` | string | Yes* | *Or `inventory_item_id` |
-| `inventory_item_id` | integer | Yes* | |
+| `inventory_item_id` | UUID | Yes* | |
+| `invoice_number` | string | Yes | Tally invoice/voucher reference |
 | `customer_name` | string | No | Reference only — not billing |
-| `customer_contact` | string | No | |
-| `invoice_reference` | string | No | Tally invoice/voucher reference |
+| `payment_mode` | string | No | e.g., Cash, UPI, Card |
+| `sold_at` | datetime | No | Defaults to now |
 | `notes` | string | No | |
-| `row_version` | integer | Yes | |
 
 **Validation Rules:**
 
-- Status must be `available` — `422` `INVALID_STATUS_TRANSITION`
+- Status must be `available` or `reserved` — `422` `INVALID_STATUS_TRANSITION`
 - `received` → `sold` blocked (LC rules)
+- Duplicate `(invoice_number, inventory_item_id)` → `200` idempotent no-op (FR-SLS-06)
 
 **Response Body (`201`):** `SaleDetail`
 
-**Success Codes:** `201`
+**Success Codes:** `201`, `200` (idempotent duplicate)
 
-**Error Codes:** `404` serial not found, `409` already sold
+**Error Codes:** `404` serial not found, `409` already sold (different invoice)
 
 **Audit Behaviour:** `sale.reflect` + `inventory.transition`
 
-**Idempotency:** `Idempotency-Key` header — replay returns existing sale `200`
+**Idempotency:** `Idempotency-Key` header or `(invoice_number, serial_number)` pair
 
 ---
 
-### 10.2 Reflect Sale (Tally Worker)
+### 11.2 Process Invoice Line (Tally Worker)
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/integrations/tally/sales/reflect` |
+| **Endpoint** | `POST /api/v1/integrations/tally/sales/process-line` |
 | **Method** | `POST` |
-| **Purpose** | Tally Sync worker applies sale (FR-TLY-03) — **implementation blocked until POC** |
+| **Purpose** | Tally Sync worker processes one invoice line per FR-TLY-05–07 |
 | **Authentication Required** | Yes — service account `tally_sync` |
 | **Required Role** | Service: `tally_sync` |
 
@@ -1338,22 +1430,48 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 | Field | Type | Required |
 |-------|------|----------|
+| `tally_company_name` | string | Yes |
 | `tally_voucher_number` | string | Yes |
 | `serial_number` | string | Yes |
+| `product_model_number` | string | Yes |
+| `brand_name` | string | No — used with model for match |
 | `sold_at` | datetime | Yes |
-| `invoice_reference` | string | No |
-| `customer_name` | string | No |
+| `invoice_number` | string | Yes — same as voucher identifier |
 | `raw_payload_hash` | string | No — SHA-256 for audit |
 
-**Success Codes:** `201` (new sale), `200` (idempotent no-op), `404` (`SERIAL_NOT_FOUND` — worker logs skip)
+**Response Body (`200`):**
 
-**Idempotency:** `(tally_voucher_number, serial_number)` — mandatory
+| Field | Type | Description |
+|-------|------|-------------|
+| `outcome` | enum | `sale_applied`, `serial_not_found`, `model_mismatch`, `ignored`, `duplicate_sale` |
+| `sale` | `SaleDetail` | Present when `sale_applied` or `duplicate_sale` |
+| `notification_id` | integer | Present when notification created |
 
-**Audit Behaviour:** `sale.reflect`; worker also creates `tally_integration_event`
+**Success Codes:** `200` for all outcomes (including ignored lines)
+
+**Processing rules (exact match only):**
+
+| Match | Action |
+|-------|--------|
+| Serial + product model match | Mark Sold; create sale; audit |
+| Model exists; serial not found | Create `serial_not_found` notification |
+| Serial exists; model mismatch | Create `model_mismatch` notification |
+| Neither in IMS | Ignore — no notification |
+| Already sold (manual or prior sync) | Idempotent; optional `duplicate_sale` notification |
+
+**Idempotency:** `(tally_company_name, tally_voucher_number, serial_number)` — mandatory
+
+**Audit Behaviour:** `sale.reflect` when sold; `tally_integration_event` always
 
 ---
 
-### 10.3 Get Sale
+### 11.3 Reflect Sale (Tally Worker — Legacy Alias)
+
+Deprecated alias for single-line processing — prefer §11.2. Endpoint `POST /api/v1/integrations/tally/sales/reflect` delegates to same logic.
+
+---
+
+### 11.4 Get Sale
 
 | | |
 |---|---|
@@ -1366,7 +1484,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 10.4 List Sale History
+### 11.5 List Sale History
 
 | | |
 |---|---|
@@ -1393,9 +1511,9 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-## 11. Dashboard
+## 12. Dashboard
 
-### 11.1 KPI Summary
+### 12.1 KPI Summary
 
 | | |
 |---|---|
@@ -1430,7 +1548,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-### 11.2 Recent Activity
+### 12.2 Recent Activity
 
 | | |
 |---|---|
@@ -1448,11 +1566,11 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 
 ---
 
-## 12. Reports
+## 13. Reports
 
 Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate download endpoints.
 
-### 12.1 Inventory Summary by Location
+### 13.1 Inventory Summary by Location
 
 | | |
 |---|---|
@@ -1464,7 +1582,7 @@ Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate d
 
 ---
 
-### 12.2 Sold Inventory Report
+### 13.2 Sold Inventory Report
 
 | | |
 |---|---|
@@ -1476,7 +1594,7 @@ Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate d
 
 ---
 
-### 12.3 Stock Count Report
+### 13.3 Stock Count Report
 
 | | |
 |---|---|
@@ -1487,7 +1605,7 @@ Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate d
 
 ---
 
-### 12.4 Export Report to Excel
+### 13.4 Export Report to Excel
 
 | | |
 |---|---|
@@ -1502,11 +1620,11 @@ Supports FR-RPT-01–05. Export formats: JSON in API; file export via separate d
 
 ---
 
-## 13. Excel Sync
+## 14. Excel Sync
 
 Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues jobs; worker executes (SYSTEM_ARCHITECTURE §14.2).
 
-### 13.1 Trigger Excel Sync
+### 14.1 Trigger Excel Sync
 
 | | |
 |---|---|
@@ -1532,7 +1650,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.2 Excel Sync Status
+### 14.2 Excel Sync Status
 
 | | |
 |---|---|
@@ -1559,7 +1677,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.3 Excel Sync History
+### 14.3 Excel Sync History
 
 | | |
 |---|---|
@@ -1575,7 +1693,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.4 Get Sync Job
+### 14.4 Get Sync Job
 
 | | |
 |---|---|
@@ -1586,7 +1704,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.5 Worker: List Pending Jobs
+### 14.5 Worker: List Pending Jobs
 
 | | |
 |---|---|
@@ -1600,7 +1718,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.6 Worker: Claim / Start Job
+### 14.6 Worker: Claim / Start Job
 
 | | |
 |---|---|
@@ -1613,7 +1731,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.7 Worker: Complete Job
+### 14.7 Worker: Complete Job
 
 | | |
 |---|---|
@@ -1634,7 +1752,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 13.8 Worker: Export Data Page
+### 14.8 Worker: Export Data Page
 
 | | |
 |---|---|
@@ -1646,45 +1764,83 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 **Query Parameters:** `cursor`, `page_size` (default 500, max 500)
 
-**Response columns per row:** `brand_name`, `model_number`, `serial_number`, `color`, `configuration`, `location_name`, `status`
+**Response columns per row:** `brand_name`, `model_number`, `serial_number`, `color`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type`, `current_location_name`, `status`
 
 **Success Codes:** `200`
 
 ---
 
-## 14. Tally Integration
+## 15. Tally Integration
 
-> **Implementation blocked** until Tally POC checklist passes (SYSTEM_ARCHITECTURE §14.3.1). API contract is defined for implementation readiness.
+> **Billing boundary:** IMS **reads** invoices from Tally only. IMS **never** creates invoices in Tally (FR-TLY-12, BR-32).
+>
+> **Implementation blocked** until Tally POC checklist passes (SYSTEM_ARCHITECTURE §14.3.1). API contract defined for implementation readiness.
 
-### 14.1 Integration Status
+### 15.1 Tally Synchronization Dashboard
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/integrations/tally/dashboard` |
+| **Method** | `GET` |
+| **Purpose** | Tally Sync Dashboard (FR-TLY-11) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin` |
+
+**Response Body (`200`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connection_status` | enum | `connected`, `disconnected`, `error` |
+| `enabled` | boolean | Master Tally sync enabled |
+| `sync_interval_seconds` | integer | Configured interval — default **1800** |
+| `next_scheduled_sync_at` | datetime | |
+| `companies` | array | Per-company sync state |
+| `companies[].company_name` | string | e.g., WEBSTUDIO, ASUS Exclusive Store |
+| `companies[].last_successful_sync_time` | datetime \| null | |
+| `companies[].last_processed_voucher_identifier` | string \| null | |
+| `companies[].last_error` | string \| null | |
+| `pending_notifications_count` | integer | Unresolved Tally notifications |
+| `last_error` | string \| null | Most recent global error |
+
+---
+
+### 15.2 Trigger Tally Sync (Sync Now)
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/integrations/tally/sync/trigger` |
+| **Method** | `POST` |
+| **Purpose** | Manual sync — **Sync Now** (FR-TLY-10) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin` |
+
+**Request Body (optional):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `company_name` | string | No | Sync one company only; omit for all enabled companies |
+
+**Response Body (`202`):** `{ "status": "accepted", "correlation_id": "..." }`
+
+**Audit Behaviour:** `sync.tally_triggered`
+
+---
+
+### 15.3 Integration Status
 
 | | |
 |---|---|
 | **Endpoint** | `GET /api/v1/integrations/tally/status` |
 | **Method** | `GET` |
-| **Purpose** | Connection health and last poll (FR-TLY-05, FR-SET-06) |
+| **Purpose** | Lightweight connection health (FR-SET-06) |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
-**Response Body:**
-
-```json
-{
-  "data": {
-    "enabled": true,
-    "last_poll_at": "2026-06-27T10:29:00Z",
-    "last_success_at": "2026-06-27T10:29:00Z",
-    "last_error": null,
-    "consecutive_failures": 0,
-    "sales_applied_today": 14,
-    "poc_completed": false
-  }
-}
-```
+**Response Body:** Summary subset of §15.1 — connection, last poll, consecutive failures
 
 ---
 
-### 14.2 Tally Event History
+### 15.4 Tally Event History
 
 | | |
 |---|---|
@@ -1692,14 +1848,15 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | **Method** | `GET` |
 | **Purpose** | Integration event log (FR-TLY-04) |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
 **Query Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `event_type` | `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `error` |
-| `outcome` | `success`, `skipped`, `failed` |
+| `event_type` | `poll`, `company_sync_started`, `company_sync_completed`, `invoice_line_processed`, `sale_applied`, `error` |
+| `outcome` | `success`, `skipped`, `ignored`, `failed` |
+| `tally_company_name` | Filter by company |
 | `serial_number` | |
 | `tally_voucher_number` | |
 | `created_at_from`, `created_at_to` | |
@@ -1709,25 +1866,25 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 14.3 Get Tally Event
+### 15.5 Get Tally Event
 
 | | |
 |---|---|
 | **Endpoint** | `GET /api/v1/integrations/tally/events/{event_id}` |
 | **Method** | `GET` |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
 ---
 
-### 14.4 Retry Failed Event
+### 15.6 Retry Failed Event
 
 | | |
 |---|---|
 | **Endpoint** | `POST /api/v1/integrations/tally/events/{event_id}/retry` |
 | **Method** | `POST` |
-| **Purpose** | Re-attempt sale reflection for failed/skipped voucher (FR-TLY-08) |
+| **Purpose** | Re-attempt invoice line processing (FR-TLY-08 reconciliation) |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
 **Validation Rules:** Only events with `outcome=failed` and retryable error codes
 
@@ -1741,7 +1898,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 14.5 Worker: Record Tally Event
+### 15.7 Worker: Record Tally Event
 
 | | |
 |---|---|
@@ -1750,21 +1907,49 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | **Purpose** | Tally worker logs poll/voucher outcomes |
 | **Required Role** | Service: `tally_sync` |
 
-**Request Body:** `TallyIntegrationEventCreate` — event_type, outcome, voucher, serial, error fields
+**Request Body:** `TallyIntegrationEventCreate` — event_type, outcome, tally_company_name, voucher, serial, product_model_number, error fields
 
 **Success Codes:** `201`
 
 ---
 
-## 15. Audit
+### 15.8 List Tally Notifications
 
-### 15.1 Search Audit Logs
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/integrations/tally/notifications` |
+| **Method** | `GET` |
+| **Purpose** | Tally notifications for Notification Center (FR-NOT-01) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin` |
+
+**Query Parameters:** `notification_type`, `is_resolved`, `tally_company_name`, `page`, `page_size`
+
+**Response Body:** `Notification[]`
+
+---
+
+### 15.9 Resolve Tally Notification
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/integrations/tally/notifications/{notification_id}/resolve` |
+| **Method** | `POST` |
+| **Required Role** | `main_admin`, `admin` |
+
+**Success Codes:** `200`
+
+---
+
+## 16. Audit
+
+### 16.1 Search Audit Logs
 
 | | |
 |---|---|
 | **Endpoint** | `GET /api/v1/audit_logs` |
 | **Method** | `GET` |
-| **Purpose** | Search and filter audit trail (FR-AUD-05) |
+| **Purpose** | Search and filter audit trail — **single source of truth** for inventory history (FR-AUD-05, FR-MOV-04) |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin` |
 
@@ -1772,16 +1957,18 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 | Parameter | Description |
 |-----------|-------------|
-| `audit_action` | e.g. `inventory.create` |
-| `entity_type` | e.g. `inventory_item` |
-| `entity_id` | |
-| `entity_identifier` | Serial number search |
-| `actor_user_id` | |
-| `created_at_from`, `created_at_to` | |
-| `client_platform` | |
-| `page`, `page_size`, `sort` | Default `created_at:desc` |
+| `action` | e.g. `CREATE`, `LOCATION_CHANGE`, `STATUS_CHANGE`, `SYSTEM_ACTION` |
+| `entity_type` | e.g. `inventory_item`, `product_model`, `brand`, `location`, `user` |
+| `entity_id` | Inventory item UUID or other entity PK |
+| `inventory_item_id` | Filter by inventory item UUID |
+| `serial_number` | Serial number — returns full laptop lifecycle when used |
+| `product_model_id` | Filter inventory-related entries for a model |
+| `brand_id` | Filter inventory-related entries for a brand |
+| `actor_user_id` | Who performed the action |
+| `created_at_from`, `created_at_to` | Date range |
+| `page`, `page_size` | Default sort `created_at:desc` |
 
-**Response Body:** `AuditLogEntry[]`
+**Response Body:** `AuditLogEntry[]` with human-readable `old_value`, `new_value`, and `description`
 
 **Success Codes:** `200`
 
@@ -1789,7 +1976,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 15.2 Get Audit Log Entry
+### 16.2 Get Audit Log Entry
 
 | | |
 |---|---|
@@ -1799,13 +1986,29 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin` |
 
-**Response Body:** `AuditLogDetail` with `before_state`, `after_state` JSON
+**Response Body:** `AuditLogEntry` with `old_value`, `new_value`, and `description`
 
 **Success Codes:** `200`, `404`
 
 ---
 
-### 15.3 Audit History for Entity
+### 16.4 Serial Number Lifecycle
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/v1/audit_logs/lifecycle/by-serial/{serial_number}` |
+| **Method** | `GET` |
+| **Purpose** | Complete chronological history for one laptop (FR-MOV-04, FR-AUD-04) |
+| **Authentication Required** | Yes |
+| **Required Role** | `main_admin`, `admin`, `salesperson` |
+
+**Response includes:** creation, every location change (who/when/from/to), status changes, Tally sale reflection, archive/restore impacts, and other audited modifications — ordered `created_at:asc`.
+
+**Success Codes:** `200`, `404` (serial not found)
+
+---
+
+### 16.5 Audit History for Entity
 
 | | |
 |---|---|
@@ -1815,9 +2018,9 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-## 16. Settings
+## 17. Settings
 
-### 16.1 List All Settings
+### 17.1 List All Settings
 
 | | |
 |---|---|
@@ -1833,7 +2036,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 16.2 Get Setting
+### 17.2 Get Setting
 
 | | |
 |---|---|
@@ -1843,7 +2046,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 16.3 Update Setting
+### 17.3 Update Setting
 
 | | |
 |---|---|
@@ -1859,7 +2062,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 16.4 System Settings (Grouped)
+### 17.4 System Settings (Grouped)
 
 | | |
 |---|---|
@@ -1872,7 +2075,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 16.5 Excel Configuration (Grouped)
+### 17.5 Excel Configuration (Grouped)
 
 | | |
 |---|---|
@@ -1885,20 +2088,20 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-### 16.6 Tally Configuration (Grouped)
+### 17.6 Tally Configuration (Grouped)
 
 | | |
 |---|---|
 | **Endpoint** | `GET /api/v1/settings/groups/tally` |
 | **PATCH** | `PATCH /api/v1/settings/groups/tally` |
 
-**Keys:** `tally_poll_interval_seconds`, `tally_host`, `tally_port`, `tally_enabled`
+**Keys:** `tally_sync_interval_seconds` (default **1800**), `tally_host`, `tally_port`, `tally_enabled`
 
 **Required Role:** `main_admin`
 
 ---
 
-### 16.7 User Theme Preference
+### 17.7 User Theme Preference
 
 | | |
 |---|---|
@@ -1911,11 +2114,11 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
-## 17. Health
+## 18. Health
 
 Health endpoints are **unversioned** — used by monitoring and deployment verification.
 
-### 17.1 Health (Liveness)
+### 18.1 Health (Liveness)
 
 | | |
 |---|---|
@@ -1937,7 +2140,7 @@ Health endpoints are **unversioned** — used by monitoring and deployment verif
 
 ---
 
-### 17.2 Readiness
+### 18.2 Readiness
 
 | | |
 |---|---|
@@ -1961,7 +2164,7 @@ Health endpoints are **unversioned** — used by monitoring and deployment verif
 
 ---
 
-### 17.3 Version
+### 18.3 Version
 
 | | |
 |---|---|
@@ -1972,7 +2175,7 @@ Health endpoints are **unversioned** — used by monitoring and deployment verif
 
 ---
 
-### 17.4 Integration Health
+### 18.4 Integration Health
 
 | | |
 |---|---|
@@ -1986,11 +2189,11 @@ Health endpoints are **unversioned** — used by monitoring and deployment verif
 
 ---
 
-## 18. Shared Schemas
+## 19. Shared Schemas
 
 Reusable object definitions referenced across endpoints.
 
-### 18.1 UserSummary
+### 19.1 UserSummary
 
 | Field | Type |
 |-------|------|
@@ -2000,7 +2203,7 @@ Reusable object definitions referenced across endpoints.
 | `role` | enum |
 | `status` | enum |
 
-### 18.2 Brand
+### 19.2 Brand
 
 | Field | Type |
 |-------|------|
@@ -2009,19 +2212,27 @@ Reusable object definitions referenced across endpoints.
 | `is_active` | boolean |
 | `created_at`, `updated_at` | datetime |
 
-### 18.3 ProductModel
+### 19.3 ProductModel
 
 | Field | Type |
 |-------|------|
-| `id` | integer |
+| `id` | UUID |
 | `brand_id` | integer |
 | `brand_name` | string |
 | `model_number` | string |
-| `display_name` | string \| null |
+| `model_name` | string |
+| `cpu` | string |
+| `gpu` | string \| null |
+| `ram_gb` | integer |
+| `storage_value` | number |
+| `storage_unit` | `GB` \| `TB` |
+| `storage_type` | `SSD` \| `HDD` |
 | `status` | `active` \| `archived` |
+| `created_by` | `UserSummary` |
+| `updated_by` | `UserSummary` |
 | `created_at`, `updated_at` | datetime |
 
-### 18.4 Location
+### 19.4 Location
 
 | Field | Type |
 |-------|------|
@@ -2029,44 +2240,33 @@ Reusable object definitions referenced across endpoints.
 | `name` | string |
 | `is_active` | boolean |
 
-### 18.5 InventoryItemDetail
+### 19.5 InventoryItemDetail
 
 See §7.3. **Excluded fields:** `purchase_date`, `purchase_cost`, `remarks`.
 
-### 18.6 InventoryItemSummary
+### 19.6 InventoryItemSummary
 
-Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, `configuration`, `location_name`, `status`, `updated_at`
+Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type`, `current_location_name`, `status`, `updated_at`
 
-### 18.7 Movement
-
-| Field | Type |
-|-------|------|
-| `id` | integer |
-| `inventory_item_id` | integer |
-| `serial_number` | string |
-| `from_location_id`, `from_location_name` | |
-| `to_location_id`, `to_location_name` | |
-| `performed_by` | UserSummary |
-| `reason` | string \| null |
-| `moved_at` | datetime |
-
-### 18.8 SaleDetail
+### 19.7 SaleDetail
 
 | Field | Type |
 |-------|------|
 | `id` | integer |
-| `inventory_item_id` | integer |
+| `inventory_item_id` | UUID |
 | `serial_number` | string |
 | `sale_source` | `manual` \| `tally` |
 | `sold_at` | datetime |
 | `recorded_by` | UserSummary \| null |
-| `customer_name`, `customer_contact` | string \| null |
-| `invoice_reference` | string \| null |
+| `invoice_number` | string |
+| `customer_name` | string \| null |
+| `payment_mode` | string \| null |
+| `tally_company_name` | string \| null |
 | `tally_voucher_number` | string \| null |
 | `notes` | string \| null |
 | `created_at` | datetime |
 
-### 18.9 SyncJob
+### 19.9 SyncJob
 
 | Field | Type |
 |-------|------|
@@ -2081,36 +2281,60 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | `retry_count` | integer |
 | `created_at` | datetime |
 
-### 18.10 TallyIntegrationEvent
+### 19.10 TallyIntegrationEvent
 
 | Field | Type |
 |-------|------|
 | `id` | integer |
 | `event_type` | enum |
 | `outcome` | enum |
+| `tally_company_name` | string |
 | `tally_voucher_number` | string \| null |
 | `serial_number` | string \| null |
-| `inventory_item_id` | integer \| null |
+| `product_model_number` | string \| null |
+| `inventory_item_id` | UUID \| null |
+| `skip_reason` | string \| null |
 | `error_code`, `error_message` | string \| null |
 | `correlation_id` | string |
 | `created_at` | datetime |
 
-### 18.11 AuditLogEntry
+### 19.11 Notification
 
 | Field | Type |
 |-------|------|
 | `id` | integer |
-| `audit_action` | string |
-| `actor` | UserSummary \| null |
-| `actor_service` | string \| null |
+| `notification_type` | `serial_not_found`, `model_mismatch`, `duplicate_sale`, `sync_failure` |
+| `severity` | `info`, `warning`, `error` |
+| `title` | string |
+| `message` | string |
+| `tally_company_name` | string \| null |
+| `tally_voucher_number` | string \| null |
+| `serial_number` | string \| null |
+| `product_model_number` | string \| null |
+| `is_read` | boolean |
+| `is_resolved` | boolean |
+| `created_at` | datetime |
+| `resolved_at` | datetime \| null |
+
+### 19.12 AuditLogEntry
+
+| Field | Type |
+|-------|------|
+| `id` | uuid |
 | `entity_type` | string |
-| `entity_id` | integer |
-| `entity_identifier` | string \| null |
-| `client_platform` | string \| null |
-| `request_id` | string |
+| `entity_id` | string |
+| `inventory_item_id` | uuid \| null |
+| `actor_user_id` | integer \| null |
+| `actor_display_name` | string \| null |
+| `actor_role` | string \| null |
+| `action` | enum (`CREATE`, `UPDATE`, `ARCHIVE`, `RESTORE`, `STATUS_CHANGE`, `LOCATION_CHANGE`, `SYSTEM_ACTION`) |
+| `field_name` | string \| null |
+| `old_value` | object \| null — human-readable snapshots (e.g. location names) |
+| `new_value` | object \| null — may include Tally metadata (`invoice_number`, `voucher_type`) |
+| `description` | string \| null — human-readable summary |
 | `created_at` | datetime |
 
-### 18.12 SystemSetting
+### 19.13 SystemSetting
 
 | Field | Type |
 |-------|------|
@@ -2123,7 +2347,7 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 
 ---
 
-## 19. Error Catalogue
+## 20. Error Catalogue
 
 Standard `error.code` values for Version 1.
 
@@ -2131,6 +2355,8 @@ Standard `error.code` values for Version 1.
 |------|------|-------------|
 | `VALIDATION_ERROR` | 422 | Generic validation failure |
 | `INVALID_CREDENTIALS` | 401 | Login failed |
+| `SYSTEM_NOT_INITIALIZED` | 403 | Login blocked until first-time setup completes |
+| `SYSTEM_ALREADY_INITIALIZED` | 409 | Setup initialize rejected — system already initialized |
 | `ACCOUNT_LOCKED` | 403 | Lockout active |
 | `ACCOUNT_DISABLED` | 403 | User disabled |
 | `PERMISSION_DENIED` | 403 | RBAC failure |
@@ -2141,13 +2367,14 @@ Standard `error.code` values for Version 1.
 | `PRODUCT_MODEL_HAS_HISTORY` | 409 | PM-06 — delete rejected |
 | `BRAND_HAS_ACTIVE_INVENTORY` | 409 | FR-BRD-03 |
 | `LOCATION_HAS_INVENTORY` | 409 | FR-LOC-03 |
-| `MODEL_NUMBER_DUPLICATE` | 409 | Unique per brand |
+| `MODEL_MISMATCH` | 422 | Tally line — serial exists; model does not match |
+| `TALLY_LINE_IGNORED` | 200 | Accessory/non-IMS line — not an error |
 | `BRAND_NAME_DUPLICATE` | 409 | |
 | `USERNAME_DUPLICATE` | 409 | |
 | `LAST_MAIN_ADMIN` | 409 | FR-USER-03 |
 | `INVALID_STATUS_TRANSITION` | 422 | Lifecycle violation |
+| `INVENTORY_ITEM_HAS_HISTORY` | 409 | FR-INV-07 — delete rejected |
 | `SOLD_ITEM_CANNOT_MOVE` | 422 | LC-04 |
-| `ROW_VERSION_CONFLICT` | 409 | Optimistic lock |
 | `USE_MOVEMENT_ENDPOINT` | 422 | Location change via PATCH rejected |
 | `ALREADY_SOLD` | 409 | Sale idempotency / duplicate |
 | `RATE_LIMITED` | 429 | Login throttled |
@@ -2159,13 +2386,13 @@ Standard `error.code` values for Version 1.
 
 ---
 
-## 20. Permission Reference
+## 21. Permission Reference
 
 Permissions map to PRD §17.2 matrix. Enforced via `packages/auth/permissions.py`.
 
 | Permission Code | Roles | Endpoints |
 |-----------------|-------|-----------|
-| `auth:login` | all | §2 |
+| `auth:login` | all | §3 |
 | `users:manage` | main_admin | §3 |
 | `brands:read` | all | GET brands |
 | `brands:write` | main_admin, admin | POST/PATCH brands |
@@ -2175,19 +2402,22 @@ Permissions map to PRD §17.2 matrix. Enforced via `packages/auth/permissions.py
 | `locations:read` | all | GET locations |
 | `locations:write` | main_admin | POST/PATCH locations |
 | `inventory:read` | all | GET inventory, search |
-| `inventory:write` | main_admin, admin | Create/update/bulk |
-| `inventory:transition` | main_admin, admin | received→available |
-| `movement:execute` | main_admin, admin | §8 |
-| `movement:read` | all | GET movements |
-| `sales:reflect` | all | Manual sale §10.1 |
+| `inventory:write` | main_admin, admin | Create/update/bulk/delete (conditional) |
+| `inventory:transition` | main_admin, admin | received→available; available↔reserved |
+| `location:transfer` | main_admin, admin, salesperson | §9 location transfer |
+| `audit:lifecycle` | all authenticated | §16.4 serial lifecycle |
+| `sales:reflect` | main_admin, admin | Manual mark-as-sold §11.1 — Salesperson excluded |
 | `sales:read` | all | GET sales |
-| `dashboard:read` | all | §11 |
-| `reports:read` | main_admin, admin | §12 |
-| `sync:trigger` | main_admin, admin | §13.1–13.4 |
-| `sync:worker` | excel_sync service | §13.5–13.8 |
-| `tally:worker` | tally_sync service | §14.2, §14.5, §10.2 |
-| `tally:admin` | main_admin | §14.1, §14.3–14.4 |
-| `audit:read` | main_admin | §15 |
+| `dashboard:read` | all | §12 |
+| `reports:read` | main_admin, admin | §13 |
+| `sync:trigger` | main_admin, admin | §14.1–14.4 |
+| `sync:worker` | excel_sync service | §14.5–14.8 |
+| `tally:sync` | main_admin, admin | §15.2 Sync Now |
+| `tally:dashboard` | main_admin, admin | §15.1 dashboard |
+| `tally:notifications` | main_admin, admin | §15.8–15.9 |
+| `tally:worker` | tally_sync service | §11.2, §15.7 |
+| `tally:admin` | main_admin, admin | §15.3–15.6 events; settings `main_admin` only |
+| `audit:read` | main_admin | §16 |
 | `settings:read` | main_admin | GET settings |
 | `settings:write` | main_admin | PATCH settings |
 | `health:integrations` | main_admin | §17.4 |

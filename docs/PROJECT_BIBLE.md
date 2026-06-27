@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Project Bible
-Version: 1.0
+Version: 1.3
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -21,6 +21,9 @@ Related Documents: docs/README.md, AGENTS.md, adr/README.md, docs/business/READM
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture: removed InventoryMovement module; `audit_log` is single source of truth for inventory lifecycle; Sprint 1E = audit logs migration. |
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Documentation consistency resolution: ADR index alignment; architecture frozen for Version 1 development. |
+| 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: `system_initialized` setting; first-time setup wizard; client discovery and manual server configuration; login gated on setup status; Main Admin-only user management; clients never store business data. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Architecture Review Revision 1. Strengthened backend authority, added product identity, lifecycle, quality standards, design principles, data ownership, integration principles, performance goals, observability, and expanded architecture philosophy. Frozen as governing document. |
 | 0.1 | 2026-06-27 | WEBSTUDIO IMS Team | Initial draft. Establishes project constitution, principles, scope, and collaboration rules. |
 
@@ -39,13 +42,14 @@ Permanent metadata for WEBSTUDIO IMS. Update this table when release, ownership,
 | **Deployment Model** | On-premise (initial); cloud deployment **TBD** — see [future architecture](architecture/future/cloud-deployment.md) |
 | **License Type** | Proprietary — see [legal/LICENSE](../legal/LICENSE) |
 | **Current Release** | 0.1.0 — Pre-development |
-| **Document Version** | 1.0 (this Bible) |
+| **Document Version** | 1.3 (this Bible) |
 | **Target Users** | Store staff, warehouse staff, managers |
 | **Project Type** | Commercial internal platform (laptop retail inventory) |
 | **Supported Platforms** | Windows Desktop, macOS Desktop, Android, Dedicated Server, Backend API |
 | **Primary Language** | Python (backend), TypeScript (clients) — see [TECH_STACK.md](TECH_STACK.md) |
 | **Authoritative Datastore** | PostgreSQL — accessed exclusively via Backend API |
 | **Primary Integrations** | Tally ERP 9 (billing), Excel (synchronized representation) |
+| **Architecture Status** | **FROZEN FOR VERSION 1 DEVELOPMENT** |
 
 ---
 
@@ -112,6 +116,8 @@ Future Enhancements
 22. [Architecture Philosophy](#22-architecture-philosophy)
 23. [Integration Principles](#23-integration-principles)
 24. [Deployment Philosophy](#24-deployment-philosophy)
+    - [24.4 Server Initialization](#244-server-initialization)
+    - [24.5 Client Onboarding](#245-client-onboarding)
 25. [Product Scope](#25-product-scope)
 26. [Out of Scope](#26-out-of-scope)
 27. [Business Constraints](#27-business-constraints)
@@ -137,7 +143,7 @@ The system replaces manual Excel-based inventory tracking while preserving Tally
 | **Project Name** | WEBSTUDIO IMS |
 | **Full Form** | WEBSTUDIO Inventory Management System |
 | **Version** | 0.1.0 — Pre-development (see [Product Identity](#product-identity)) |
-| **Status** | Active — governed by this Bible v1.0 |
+| **Status** | Active — governed by this Bible v1.1 |
 | **Primary Users** | Store staff, warehouse staff, managers |
 | **Primary Integrations** | Tally ERP 9, Excel |
 | **Data Store** | PostgreSQL |
@@ -390,7 +396,8 @@ Every dataset has exactly one owning system. No dataset may have competing autho
 | **Excel Representation** | Excel file (derived) | Synchronized copy of inventory for business continuity. **Not authoritative.** Owned as a file by the business; content is derived from WEBSTUDIO IMS. See [Excel integration](integrations/excel/README.md). |
 | **Images** | WEBSTUDIO IMS (Backend API) | Product images, attachments, and media metadata. Storage mechanism **TBD** in ADR. |
 | **Settings** | WEBSTUDIO IMS (Backend API) | User preferences, theme selection, display options. |
-| **Application Configuration** | WEBSTUDIO IMS (Backend API + deployment config) | System-level settings: locations, categories, sync schedules. Deployment values in [infra/](../infra/README.md) and [config/env/](../config/env/). |
+| **Application Configuration** | WEBSTUDIO IMS (Backend API + deployment config) | System-level settings: locations, categories, sync schedules, `system_initialized`. Deployment values in [infra/](../infra/README.md) and [config/env/](../config/env/). |
+| **Client Local Storage** | Client device (derived / ephemeral) | Server HTTPS URL, theme preference, window layout, and authentication tokens only. **No business data** (inventory, users, audit) persisted locally in Version 1. |
 
 > **Rule:** If ownership is unclear, it is **TBD** until documented in a spec or ADR. Never assume shared ownership. Never write to another system's data domain without a defined integration interface.
 
@@ -982,8 +989,6 @@ Integration principles govern how WEBSTUDIO IMS connects to external systems —
 
 **Why it exists:** Undocumented deployment processes become single points of failure.
 
-**How to apply it:** Maintain deployment scripts in `infra/`. Document procedures in [deployment documentation](deployment/README.md).
-
 **How to apply it:** Maintain deployment scripts in [infra/](../infra/README.md). Document procedures in [deployment documentation](deployment/README.md).
 
 ### 24.3 Safe Upgrades
@@ -993,6 +998,40 @@ Integration principles govern how WEBSTUDIO IMS connects to external systems —
 **Why it exists:** Inventory data loss is catastrophic and potentially unrecoverable.
 
 **How to apply it:** Database migrations must be backward-compatible or paired with rollback scripts. Test upgrades against production-like data before deployment. See [migration runbook](deployment/database/migration-runbook.md).
+
+### 24.4 Server Initialization
+
+**What it means:** The Dedicated Server PC is installed **once**. During installation the Backend checks whether the system has already been initialized. Initialization state is stored as a dedicated `system_settings` key — `system_initialized` — **not** inferred from whether a Main Admin user exists.
+
+**Why it exists:** A reliable, explicit initialization flag prevents the first-time setup wizard from reappearing after successful setup and gives clients a single API signal (`GET /api/v1/setup/status`) to decide between setup and login.
+
+**How to apply it:**
+
+| Phase | Behaviour |
+|-------|-----------|
+| **Fresh database** | Seed reference data (brands, locations) and `system_initialized = false`. **Do not** seed a Main Admin user. |
+| **First-time setup** | When `system_initialized = false`, present the First-Time Setup Wizard (Company Name, Main Admin Name, Username, Password, Confirm Password). Passwords are stored only as **bcrypt** hashes on the server. |
+| **After setup** | Create the Main Admin user; set `system_initialized = true` and persist `company_name`. The wizard must not appear again unless the database is intentionally reinitialized. |
+| **Reinitialization** | Deliberate operator action only (restore empty database or documented reset procedure) — never automatic. |
+
+### 24.5 Client Onboarding
+
+**What it means:** Desktop and Android clients are installed on staff workstations and devices. **Client installations never create users.** Clients connect to the Backend, check setup status, then show either the First-Time Setup Wizard (server not initialized — typically only from the first client after server install) or the Login screen.
+
+**Why it exists:** User accounts and credentials are authoritative on the server. Separating server install from client install allows multiple clients to join an already-initialized system without duplicating admin creation logic on each device.
+
+**How to apply it:**
+
+| Step | Client behaviour |
+|------|------------------|
+| **1. First launch** | Attempt automatic server discovery on the LAN. |
+| **2. One server found** | Display server information; ask for confirmation. |
+| **3. Multiple servers found** | Let the user select one. |
+| **4. Discovery fails** | Automatically switch to Manual Server Configuration (HTTPS URL, Test Connection, Save Configuration). |
+| **5. After connection** | Call `GET /api/v1/setup/status`. If initialized → Login screen. If not → First-Time Setup Wizard. |
+| **6. Authentication** | Users authenticate **only** against the Backend. Clients store tokens and connection settings locally — **never** business inventory data. |
+
+**Future:** Automatic discovery may use mDNS / Bonjour or an equivalent LAN discovery protocol. Version 1 documents the workflow; protocol choice is **TBD** in an ADR.
 
 ---
 
@@ -1230,7 +1269,7 @@ Extended business terminology is **TBD** in [business glossary](business/busines
 
 | Document | Path | Status |
 |----------|------|--------|
-| **This document** | `docs/PROJECT_BIBLE.md` | Active — v1.0 |
+| **This document** | `docs/PROJECT_BIBLE.md` | Active — v1.2 |
 | Documentation Index | [docs/README.md](README.md) | Active |
 | AI Agent Instructions | [AGENTS.md](../AGENTS.md) | Active |
 | AI Context | [.ai/CONTEXT.md](../.ai/CONTEXT.md) | Draft |
@@ -1238,8 +1277,10 @@ Extended business terminology is **TBD** in [business glossary](business/busines
 | AI Glossary | [.ai/GLOSSARY.md](../.ai/GLOSSARY.md) | Draft |
 | AI Context Guide | [docs/ai/context-guide.md](ai/context-guide.md) | Draft |
 | AI Prompt Library | [docs/ai/prompt-library/](ai/prompt-library/README.md) | Draft |
-| ADR Index | [adr/README.md](../adr/README.md) | Draft |
+| ADR Index | [adr/README.md](../adr/README.md) | Active |
 | ADR-0001: Monorepo Structure | [adr/records/0001-monorepo-structure.md](../adr/records/0001-monorepo-structure.md) | Proposed |
+| ADR-0010: Authentication & Initialization | [adr/ADR-0010-authentication-and-initialization.md](../adr/ADR-0010-authentication-and-initialization.md) | Accepted |
+| ADR-0011: Tally Integration Strategy | [adr/ADR-0011-tally-integration-strategy.md](../adr/ADR-0011-tally-integration-strategy.md) | Accepted |
 | Architecture Overview | [docs/architecture/](architecture/README.md) | Draft |
 | Design System (future) | [docs/ui-ux/design-system/](ui-ux/design-system/) | Draft |
 | Business Documentation | [docs/business/](business/README.md) | Draft |
@@ -1253,13 +1294,13 @@ Extended business terminology is **TBD** in [business glossary](business/busines
 | Database Documentation | [docs/database/](database/README.md) | Draft |
 | UI/UX Documentation | [docs/ui-ux/](ui-ux/README.md) | Draft |
 | Development Guide | [docs/development/](development/README.md) | Draft |
-| Deployment Guide | [docs/deployment/](deployment/README.md) | Draft |
+| Deployment Guide | [docs/deployment/DEPLOYMENT_GUIDE.md](deployment/DEPLOYMENT_GUIDE.md) | Active — v1.0 |
 | Testing Strategy | [docs/testing/](testing/README.md) | Draft |
 | Security Documentation | [docs/security/](security/README.md) | Draft |
 | Operations / Monitoring | [docs/operations/](operations/README.md) | Draft |
 | Research | [docs/research/](research/README.md) | Draft |
-| Product Requirements (v1) | [docs/product/PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md) | Active — v1.1 |
-| Technology Stack | [docs/TECH_STACK.md](TECH_STACK.md) | Proposed — TS-001 |
+| Product Requirements (v1) | [docs/product/PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md) | Active — v1.6 |
+| Technology Stack | [docs/TECH_STACK.md](TECH_STACK.md) | Active — TS-001 v1.2 |
 | Product Requirements (legacy stub) | [docs/product/requirements/prd-v1.0-inventory-core.md](product/requirements/prd-v1.0-inventory-core.md) | Superseded by PRODUCT_REQUIREMENTS.md |
 | Product Roadmap | [docs/product/vision/roadmap.md](product/vision/roadmap.md) | Draft |
 | Future Architecture | [docs/architecture/future/](architecture/future/) | Draft |

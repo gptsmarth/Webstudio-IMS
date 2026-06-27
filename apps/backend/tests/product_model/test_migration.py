@@ -19,7 +19,8 @@ async def test_migration_0003_product_models_exist(database_engine: None) -> Non
         assert current_revision in {
             "0003_product_model",
             "0004_inventory_item",
-            "0005_inventory_movement",
+            "0005_audit_logs",
+            "0006_audit_log_description",
         }
 
         def inspect_schema(sync_connection) -> tuple[list[str], set[str], set[str]]:

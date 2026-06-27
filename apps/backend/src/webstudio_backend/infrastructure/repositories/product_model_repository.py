@@ -8,6 +8,9 @@ from decimal import Decimal
 from sqlalchemy import Select, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
+
 from webstudio_backend.infrastructure.database.enums import (
     ProductModelStatus,
     StorageType,
@@ -69,6 +72,7 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         storage_type: StorageType,
         gpu: str | None = None,
         status: ProductModelStatus = ProductModelStatus.ACTIVE,
+        actor: AuditActor | None = None,
     ) -> ProductModel:
         payload = self._validated_payload(
             brand_id=brand_id,
@@ -84,7 +88,12 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         )
         if await self.exists(payload["brand_id"], payload["model_number"]):
             raise DuplicateModelNumberError(payload["brand_id"], payload["model_number"])
-        return await self.add(ProductModel(**payload))
+        product_model = await self.add(ProductModel(**payload))
+        await AuditRecorder(self._session).record_product_model_create(
+            product_model,
+            actor=actor or AuditActor.system(),
+        )
+        return product_model
 
     async def update(
         self,
@@ -98,7 +107,10 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         storage_value: Decimal | None = None,
         storage_unit: StorageUnit | None = None,
         storage_type: StorageType | None = None,
+        actor: AuditActor | None = None,
     ) -> ProductModel:
+        audit_actor = actor or AuditActor.system()
+        recorder = AuditRecorder(self._session)
         next_model_number = (
             validate_model_number(model_number)
             if model_number is not None
@@ -107,10 +119,28 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         if next_model_number != product_model.model_number:
             if await self.exists(product_model.brand_id, next_model_number):
                 raise DuplicateModelNumberError(product_model.brand_id, next_model_number)
+            old_value = {"model_number": product_model.model_number}
             product_model.model_number = next_model_number
+            await self._session.flush()
+            await recorder.record_product_model_field_update(
+                product_model,
+                field_name="model_number",
+                old_value=old_value,
+                new_value={"model_number": next_model_number},
+                actor=audit_actor,
+            )
 
         if model_name is not None:
+            old_value = {"model_name": product_model.model_name}
             product_model.model_name = validate_model_name(model_name)
+            if product_model.model_name != old_value["model_name"]:
+                await recorder.record_product_model_field_update(
+                    product_model,
+                    field_name="model_name",
+                    old_value=old_value,
+                    new_value={"model_name": product_model.model_name},
+                    actor=audit_actor,
+                )
         if cpu is not None:
             product_model.cpu = validate_cpu(cpu)
         if gpu is not None:
@@ -128,16 +158,34 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         await self._session.refresh(product_model)
         return product_model
 
-    async def archive(self, product_model: ProductModel) -> ProductModel:
+    async def archive(
+        self,
+        product_model: ProductModel,
+        *,
+        actor: AuditActor | None = None,
+    ) -> ProductModel:
         product_model.status = ProductModelStatus.ARCHIVED
         await self._session.flush()
         await self._session.refresh(product_model)
+        await AuditRecorder(self._session).record_product_model_archive(
+            product_model,
+            actor=actor or AuditActor.system(),
+        )
         return product_model
 
-    async def restore(self, product_model: ProductModel) -> ProductModel:
+    async def restore(
+        self,
+        product_model: ProductModel,
+        *,
+        actor: AuditActor | None = None,
+    ) -> ProductModel:
         product_model.status = ProductModelStatus.ACTIVE
         await self._session.flush()
         await self._session.refresh(product_model)
+        await AuditRecorder(self._session).record_product_model_restore(
+            product_model,
+            actor=actor or AuditActor.system(),
+        )
         return product_model
 
     async def delete(self, product_model: ProductModel) -> None:

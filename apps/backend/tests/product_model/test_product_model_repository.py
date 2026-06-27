@@ -39,8 +39,16 @@ async def test_product_model_crud(db_session: AsyncSession, brand: Brand) -> Non
     updated = await repository.update(loaded, model_name="Vivobook 15 OLED")
     assert updated.model_name == "Vivobook 15 OLED"
 
-    await repository.delete(updated)
-    assert await repository.get_by_id(created.id) is None
+    from sqlalchemy import text
+
+    result = await db_session.execute(
+        text(
+            "SELECT COUNT(*) FROM webstudio.audit_logs "
+            "WHERE entity_type = 'product_model' AND entity_id = :id",
+        ),
+        {"id": str(created.id)},
+    )
+    assert int(result.scalar_one()) >= 2
 
 
 @pytest.mark.asyncio

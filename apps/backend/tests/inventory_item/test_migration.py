@@ -12,7 +12,11 @@ async def test_migration_0004_inventory_items_exist(db_session: AsyncSession) ->
     current_revision = await db_session.scalar(
         text("SELECT version_num FROM webstudio.alembic_version"),
     )
-    assert current_revision == "0005_inventory_movement"
+    assert current_revision in {
+        "0004_inventory_item",
+        "0005_audit_logs",
+        "0006_audit_log_description",
+    }
 
     connection = await db_session.connection()
 

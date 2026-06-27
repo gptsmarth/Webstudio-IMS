@@ -7,6 +7,8 @@ import uuid
 from sqlalchemy import Select, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import InventoryStatus, ProductModelStatus
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
@@ -60,6 +62,7 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         color: str,
         current_location_id: int,
         status: InventoryStatus,
+        actor: AuditActor | None = None,
     ) -> InventoryItem:
         normalized_serial = validate_serial_number(serial_number)
         normalized_color = validate_color(color)
@@ -71,7 +74,7 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         await self._ensure_active_product_model(product_model_id)
         await self._ensure_active_location(current_location_id)
 
-        return await self.add(
+        item = await self.add(
             InventoryItem(
                 serial_number=normalized_serial,
                 product_model_id=product_model_id,
@@ -80,6 +83,11 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 status=validated_status,
             ),
         )
+        await AuditRecorder(self._session).record_inventory_create(
+            item,
+            actor=actor or AuditActor.system(),
+        )
+        return item
 
     async def update(
         self,
@@ -89,7 +97,16 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         color: str | None = None,
         current_location_id: int | None = None,
         status: InventoryStatus | None = None,
+        actor: AuditActor | None = None,
     ) -> InventoryItem:
+        audit_actor = actor or AuditActor.system()
+        recorder = AuditRecorder(self._session)
+        old_location_id = inventory_item.current_location_id
+        old_status = inventory_item.status
+        old_serial = inventory_item.serial_number
+        old_color = inventory_item.color
+        old_product_model_id = inventory_item.product_model_id
+
         if product_model_id is not None:
             await self._ensure_active_product_model(product_model_id)
             inventory_item.product_model_id = product_model_id
@@ -103,6 +120,38 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
 
         await self._session.flush()
         await self._session.refresh(inventory_item)
+
+        if current_location_id is not None and current_location_id != old_location_id:
+            await recorder.record_inventory_location_change(
+                inventory_item,
+                old_location_id=old_location_id,
+                new_location_id=current_location_id,
+                actor=audit_actor,
+            )
+        if status is not None and status != old_status:
+            await recorder.record_inventory_status_change(
+                inventory_item,
+                old_status=old_status,
+                new_status=status,
+                actor=audit_actor,
+            )
+        if product_model_id is not None and product_model_id != old_product_model_id:
+            await recorder.record_inventory_field_update(
+                inventory_item,
+                field_name="product_model_id",
+                old_value={"product_model_id": str(old_product_model_id)},
+                new_value={"product_model_id": str(product_model_id)},
+                actor=audit_actor,
+            )
+        if color is not None and inventory_item.color != old_color:
+            await recorder.record_inventory_field_update(
+                inventory_item,
+                field_name="color",
+                old_value={"color": old_color},
+                new_value={"color": inventory_item.color},
+                actor=audit_actor,
+            )
+
         return inventory_item
 
     async def delete(self, inventory_item: InventoryItem) -> None:
@@ -235,28 +284,11 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
     async def _delete_block_reason(self, inventory_item: InventoryItem) -> str | None:
         if inventory_item.status is InventoryStatus.SOLD:
             return "item is sold"
-        if await self._has_movement_references(inventory_item.id):
-            return "movement references exist"
         if await self._has_sale_references(inventory_item.id):
             return "sale references exist"
         if await self._has_audit_references(inventory_item.id):
             return "audit references exist"
         return None
-
-    async def _has_movement_references(self, inventory_item_id: uuid.UUID) -> bool:
-        if not await self._table_exists("inventory_movements"):
-            return False
-        result = await self._session.execute(
-            text(f"""
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM {SCHEMA}.inventory_movements
-                    WHERE inventory_item_id = :inventory_item_id
-                )
-                """),
-            {"inventory_item_id": inventory_item_id},
-        )
-        return bool(result.scalar_one())
 
     async def _has_sale_references(self, inventory_item_id: uuid.UUID) -> bool:
         if not await self._table_exists("sales"):
@@ -281,11 +313,14 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 SELECT EXISTS (
                     SELECT 1
                     FROM {SCHEMA}.audit_logs
-                    WHERE entity_type = 'inventory_item'
-                      AND entity_id = :inventory_item_id
+                    WHERE inventory_item_id = :inventory_item_id
+                       OR (entity_type = 'inventory_item' AND entity_id = :entity_id)
                 )
                 """),
-            {"inventory_item_id": str(inventory_item_id)},
+            {
+                "inventory_item_id": inventory_item_id,
+                "entity_id": str(inventory_item_id),
+            },
         )
         return bool(result.scalar_one())
 

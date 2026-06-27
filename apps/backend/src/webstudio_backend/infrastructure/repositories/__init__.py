@@ -1,5 +1,6 @@
 """Entity repositories."""
 
+from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateModelNumberError,
@@ -21,15 +22,13 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
 )
-from webstudio_backend.infrastructure.repositories.inventory_movement_repository import (
-    InventoryMovementRepository,
-)
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
 
 __all__ = [
+    "AuditLogRepository",
     "BrandRepository",
     "DuplicateModelNumberError",
     "DuplicateNameError",
@@ -40,7 +39,6 @@ __all__ = [
     "InventoryItemDeleteNotAllowedError",
     "InventoryItemNotFoundError",
     "InventoryItemRepository",
-    "InventoryMovementRepository",
     "LocationNotFoundError",
     "LocationRepository",
     "ProductModelHasHistoryError",

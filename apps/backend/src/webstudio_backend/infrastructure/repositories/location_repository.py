@@ -5,6 +5,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import LocationType
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
@@ -30,11 +32,12 @@ class LocationRepository(SqlAlchemyRepository[Location]):
         is_active: bool = True,
         sort_order: int | None = None,
         branch_id: int | None = None,
+        actor: AuditActor | None = None,
     ) -> Location:
         normalized = normalize_required_name(name)
         if await self.get_by_name(normalized) is not None:
             raise DuplicateNameError("Location", normalized)
-        return await self.add(
+        location = await self.add(
             Location(
                 name=normalized,
                 location_type=location_type,
@@ -43,13 +46,32 @@ class LocationRepository(SqlAlchemyRepository[Location]):
                 branch_id=branch_id,
             ),
         )
+        await AuditRecorder(self._session).record_location_create(
+            location,
+            actor=actor or AuditActor.system(),
+        )
+        return location
 
-    async def update_name(self, location: Location, name: str) -> Location:
+    async def update_name(
+        self,
+        location: Location,
+        name: str,
+        *,
+        actor: AuditActor | None = None,
+    ) -> Location:
         normalized = normalize_required_name(name)
         existing = await self.get_by_name(normalized)
         if existing is not None and existing.id != location.id:
             raise DuplicateNameError("Location", normalized)
+        old_name = location.name
         location.name = normalized
         await self._session.flush()
         await self._session.refresh(location)
+        await AuditRecorder(self._session).record_location_update(
+            location,
+            field_name="name",
+            old_value={"name": old_name},
+            new_value={"name": normalized},
+            actor=actor or AuditActor.system(),
+        )
         return location

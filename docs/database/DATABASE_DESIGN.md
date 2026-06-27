@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Database Design (Logical Model)
-Version: 1.1
+Version: 1.7
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | DB-001 |
-| **Version** | 1.1 |
+| **Version** | 1.7 |
 | **Status** | Active — logical model frozen for Version 1 implementation |
 | **Governing Documents** | [PROJECT_BIBLE.md](../PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](../product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](../TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) |
 | **Purpose** | Authoritative logical data model for PostgreSQL implementation |
@@ -28,6 +28,12 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Audit-only history:** removed `InventoryMovement` entity and `inventory_movements` table; location changes update `current_location_id` only; complete traceability via `audit_log`. Migration `0005` is `audit_logs`. |
+| 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Tally synchronization: multi-company sync state; notifications; sale invoice/payment fields; invoice line matching persistence. |
+| 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization: `system_initialized` and `company_name` system settings; Main Admin created by setup wizard — not migration seed. |
+| 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap: `0005` inventory movement; `0006` audit logs; `0007` users & authentication; `0008` ownership columns (deferred until `users` exists). |
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Authentication & audit strategy: `created_by_user_id` / `updated_by_user_id` on business entities; enriched audit log actor snapshots; movement audit fields; excluded action-specific user columns. |
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Synchronized with Sprint 1D implementation: `current_location_id`; structured ProductModel specs; `reserved` inventory status; removed `configuration`, `row_version` from `inventory_item`; UUID keys on `product_model` and `inventory_item`; conditional delete rules. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Product Model Active/Archived lifecycle; mandatory `color` on inventory_item; expanded search indexes; excluded Purchase Date/Cost/Remarks from V1. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial logical data model. |
 
@@ -62,7 +68,7 @@ PostgreSQL is mandated by the Project Bible as the **single authoritative datast
 
 - **ACID transactions** — inventory mutations and audit records commit atomically
 - **Referential integrity** — foreign keys enforce location, brand, and model relationships
-- **Advanced indexing** — B-tree for serial lookup; `pg_trgm` for configuration-aware search (FR-SRH-05/06)
+- **Advanced indexing** — B-tree for serial lookup; indexed ProductModel specification fields for product-specification search (FR-SRH-05/06)
 - **Long-term viability** — 10+ year maintainability requirement (N14)
 - **Operational maturity** — backup, restore, and on-premise Windows deployment are well understood
 
@@ -73,7 +79,7 @@ Version 1 uses **Third Normal Form (3NF)** for core entities:
 | Principle | Application |
 |-----------|-------------|
 | **No redundant master data** | Brand name stored once in `brand`; referenced by `product_model` and derived in queries |
-| **One fact per place** | Current location on `inventory_item`; movement history in `inventory_movement` |
+| **One fact per place** | Current location on `inventory_item` only; complete history in `audit_log` |
 | **Derived data is computed** | Available unit counts per model group are query aggregates — not stored quantity columns |
 | **Controlled denormalization** | None in V1; dashboard aggregates computed at query time |
 
@@ -101,7 +107,7 @@ The database enforces serial uniqueness at the constraint level. All sale and mo
 | **Future expansion** | Accessories may later use quantity-based models; laptops remain serial-linked to `product_model` |
 | **Search performance** | Composite indexes on `(brand_id, model_number)` support model-first browsing |
 
-Each `inventory_item` references exactly one `product_model`. **Configuration** (CPU, RAM, GPU, storage) and **Color** remain on the **unit** because two laptops of the same model may differ in specs and finish color.
+Each `inventory_item` references exactly one `product_model`. **Hardware specifications** (CPU, GPU, RAM, storage) are stored on `product_model`. **Color** is stored on the **unit** because two laptops of the same model may differ in finish color.
 
 ### 1.5 Why the Database Is the Single Source of Truth
 
@@ -127,10 +133,12 @@ The Version 1 logical model comprises **four bounded areas**:
 │  (Permission — app-level)   │  • Location                       │
 ├─────────────────────────────┼───────────────────────────────────┤
 │  INVENTORY CORE             │  OPERATIONS & INTEGRATION         │
-│  • InventoryItem            │  • InventoryMovement              │
+│  • InventoryItem            │  • AuditLog (complete history)    │
 │  • Sale                     │  • AuditLog                       │
 │                             │  • SyncJob                        │
 │                             │  • TallyIntegrationEvent          │
+│                             │  • TallyCompanySync               │
+│                             │  • Notification                   │
 │                             │  • SystemSetting                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -146,11 +154,13 @@ The Version 1 logical model comprises **four bounded areas**:
 | **ProductModel** | Product SKU (model number) within a brand; **Active/Archived** lifecycle |
 | **Location** | Physical store or warehouse area; current location of each unit |
 | **InventoryItem** | One physical laptop; serial identity; current status and location |
-| **InventoryMovement** | Immutable history of location transfers |
+| **AuditLog** | Append-only system-wide history — **single source of truth** for inventory lifecycle, location changes, and integrations |
 | **Sale** | Immutable record when a unit becomes Sold; links to Tally invoice reference |
 | **AuditLog** | Append-only record of all material system actions |
 | **SyncJob** | Excel export job queue and execution status |
-| **TallyIntegrationEvent** | Log of every Tally poll/voucher processing attempt |
+| **TallyIntegrationEvent** | Log of every Tally poll and invoice line processing attempt |
+| **TallyCompanySync** | Per–Tally-company synchronization cursor and status |
+| **Notification** | Operator-facing Tally integration alerts (Notification Center) |
 | **SystemSetting** | Admin-configurable key-value settings |
 
 ---
@@ -164,10 +174,8 @@ erDiagram
     BRAND ||--o{ PRODUCT_MODEL : has
     PRODUCT_MODEL ||--o{ INVENTORY_ITEM : instances
     LOCATION ||--o{ INVENTORY_ITEM : holds
-    INVENTORY_ITEM ||--o{ INVENTORY_MOVEMENT : history
+    INVENTORY_ITEM ||--o{ AUDIT_LOG : history
     INVENTORY_ITEM ||--o| SALE : sold_as
-    USER ||--o{ INVENTORY_ITEM : created
-    USER ||--o{ INVENTORY_MOVEMENT : performed
     USER ||--o{ SALE : recorded
     USER ||--o{ AUDIT_LOG : actor
     USER ||--o{ SYNC_JOB : triggered
@@ -181,9 +189,16 @@ erDiagram
     }
 
     PRODUCT_MODEL {
-        bigint id PK
+        uuid id PK
         bigint brand_id FK
         string model_number
+        string model_name
+        string cpu
+        string gpu
+        int ram_gb
+        numeric storage_value
+        enum storage_unit
+        enum storage_type
         enum status
     }
 
@@ -194,22 +209,12 @@ erDiagram
     }
 
     INVENTORY_ITEM {
-        bigint id PK
+        uuid id PK
         string serial_number UK
-        bigint product_model_id FK
-        bigint location_id FK
-        string configuration
+        uuid product_model_id FK
         string color
+        bigint current_location_id FK
         enum status
-        int row_version
-    }
-
-    INVENTORY_MOVEMENT {
-        bigint id PK
-        bigint inventory_item_id FK
-        bigint from_location_id FK
-        bigint to_location_id FK
-        bigint performed_by_user_id FK
     }
 
     SALE {
@@ -246,10 +251,9 @@ erDiagram
 |--------------|-------------|-----------|-------|
 | Brand → ProductModel | 1:N | Brand owns models | Archive/delete rules per §12.7 |
 | ProductModel → InventoryItem | 1:N | Model classifies units | **Archived** models hidden from new inventory; historical links retained |
-| Location → InventoryItem | 1:N | Location holds units | Exactly one current location per item |
-| InventoryItem → InventoryMovement | 1:N | Item owns movement history | Movements immutable |
+| Location → InventoryItem | 1:N | Location holds units | Exactly one current location per item (`current_location_id`) |
+| InventoryItem → AuditLog | 1:N | Item is audited entity | Complete lifecycle history — location, status, field changes |
 | InventoryItem → Sale | 1:0..1 | Item has at most one sale V1 | Sold is terminal; sale row created once |
-| User → InventoryItem | 1:N | User created item | `created_by_user_id` |
 | User → AuditLog | 1:N | User is actor | Nullable for system/service accounts |
 | User → RefreshToken | 1:N | User owns tokens | Revocable |
 | SyncJob → TallyIntegrationEvent | 1:N | Optional link | Tally events may occur outside excel jobs |
@@ -259,7 +263,7 @@ erDiagram
 **No many-to-many tables are required in Version 1.**
 
 - User–Role: single `role` enum on `user` (three roles V1)
-- Inventory–Location history: resolved via `inventory_movement` (not M:N on current state)
+- Inventory–Location history: resolved via `audit_log` (`inventory.move` and `inventory.update` with location change) — not M:N on current state
 - Permission–Role: application-level mapping in `packages/auth/`
 
 Future multi-role per user would introduce `user_role` junction table via ADR.
@@ -335,6 +339,8 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | `id` | Yes | Immutable | |
 | `name` | Yes | Yes | Unique; e.g., "ASUS", "Lenovo" |
 | `is_active` | Yes | Yes | Cannot deactivate if active inventory references exist (FR-BRD-03) |
+| `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create (FR-AUD-09) |
+| `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
 | `updated_at` | Yes | Auto | |
 
@@ -349,11 +355,19 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 
 | Attribute | Required | Mutable | Notes |
 |-----------|----------|---------|-------|
-| `id` | Yes | Immutable | |
+| `id` | Yes | Immutable | UUID primary key |
 | `brand_id` | Yes | No* | FK → brand; *immutable after inventory linked |
 | `model_number` | Yes | Yes | Unique per brand (composite uniqueness) |
-| `display_name` | Optional | Yes | Optional friendly label |
+| `model_name` | Yes | Yes | Display name — e.g., Vivobook 15 |
+| `cpu` | Yes | Yes | Processor specification |
+| `gpu` | No | Yes | Optional GPU specification |
+| `ram_gb` | Yes | Yes | RAM in gigabytes; must be > 0 |
+| `storage_value` | Yes | Yes | Storage capacity numeric value; must be > 0 |
+| `storage_unit` | Yes | Yes | Enum: `GB`, `TB` |
+| `storage_type` | Yes | Yes | Enum: `SSD`, `HDD` |
 | `status` | Yes | Yes | Enum: `active`, `archived` — see §6.10 |
+| `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create |
+| `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
 | `updated_at` | Yes | Auto | |
 
@@ -387,6 +401,8 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | `is_active` | Yes | Yes | Cannot deactivate if inventory present (FR-LOC-03) |
 | `sort_order` | Optional | Yes | Display ordering |
 | `branch_id` | Optional | Future | Null V1; reserved for multi-branch |
+| `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create |
+| `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
 | `updated_at` | Yes | Auto | |
 
@@ -401,61 +417,38 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 
 | Attribute | Required | Mutable | Notes |
 |-----------|----------|---------|-------|
-| `id` | Yes | Immutable | Internal surrogate key |
-| `serial_number` | Yes | **Immutable** | Globally unique (BR-01); primary business identity |
+| `id` | Yes | Immutable | UUID primary key |
+| `serial_number` | Yes | Yes* | Globally unique (BR-01); *mutable by authorized users; uniqueness always enforced |
 | `product_model_id` | Yes | Yes* | FK → product_model; must reference **active** model on create |
-| `configuration` | Yes | Yes | Free text V1 — CPU, GPU, RAM, storage, screen |
 | `color` | Yes | Yes | **Mandatory** per-unit color — e.g., Black, Silver, Blue; not on product_model |
-| `location_id` | Yes | Yes | FK → location; current location only |
-| `status` | Yes | Yes | Enum: `received`, `available`, `sold` |
-| `row_version` | Yes | Auto | Optimistic locking |
-| `created_by_user_id` | Yes | Immutable | FK → user |
+| `current_location_id` | Yes | Yes | FK → location; **only** location field on inventory — history in `audit_log` |
+| `status` | Yes | Yes | Enum: `received`, `available`, `reserved`, `sold` — see §6.1 |
+| `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create (FR-AUD-09) |
+| `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
 | `updated_at` | Yes | Auto | Status/location change timestamp |
 
-**Immutable fields after create:** `serial_number`, `created_by_user_id`, `created_at`
+**Immutable fields after create:** `created_at`, `created_by_user_id`
 
 **Validation rules:**
 
-- Serial number: globally unique; trimmed; non-empty
+- Serial number: globally unique; trimmed; non-empty; may be corrected by authorized users with duplicate rejection
 - Color: required; non-empty; searchable (trimmed)
-- Product model: must be `active` on create
+- Product model: must be `active` on create; location must be `is_active = true`
 - Status transitions: only allowed paths per §12.1
-- Movement: only when `status = available` (LC-04 for sold)
-- No hard delete (FR-INV-07) — status change only
+- Movement: only when `status = available` or `reserved` (LC-04 for sold)
+- **Conditional delete:** permitted only when `status != sold` and no `sale` or `audit_log` references exist; no cascade delete
 
-**Excluded Version 1 fields (not columns):** `purchase_date`, `purchase_cost`, `remarks` — see §12.8.
-
----
-
-### 4.7 InventoryMovement
-
-| Aspect | Definition |
-|--------|------------|
-| **Purpose** | Immutable audit of location transfers |
-| **Business description** | Every move records source, destination, actor, and time (BR-04, FR-MOV-02). Does not change lifecycle status (LC-03). |
-
-| Attribute | Required | Notes |
-|-----------|----------|-------|
-| `id` | Yes | Surrogate PK |
-| `inventory_item_id` | Yes | FK → inventory_item |
-| `from_location_id` | Yes | FK → location |
-| `to_location_id` | Yes | FK → location; must differ from `from` |
-| `performed_by_user_id` | Yes | FK → user |
-| `reason` | Optional | Free text |
-| `moved_at` | Yes | Timestamp of movement |
-| `created_at` | Yes | Record creation time |
-
-**Immutable:** entire row — insert only, no updates or deletes.
+**Excluded Version 1 fields (not columns):** `purchase_date`, `purchase_cost`, `remarks`, `configuration`, `row_version`, `sold_by_user_id`, `reserved_by_user_id`, `approved_by_user_id` — see §12.8.
 
 ---
 
-### 4.8 Sale
+### 4.7 Sale
 
 | Aspect | Definition |
 |--------|------------|
 | **Purpose** | Immutable sales history record when inventory becomes Sold |
-| **Business description** | Created when Tally reflects a sale or manual fallback is used (FR-SLS-01). Stores customer and invoice **references** — Tally remains billing authority (BR-15). |
+| **Business description** | Created when Tally invoice line matches (FR-TLY-06) or Admin/Main Admin manually marks sold (FR-SLS-04). Stores invoice **references** — Tally remains billing authority (BR-05, BR-15). |
 
 | Attribute | Required | Notes |
 |-----------|----------|-------|
@@ -463,22 +456,29 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | `inventory_item_id` | Yes | FK → inventory_item; **unique** (one sale per unit V1) |
 | `sale_source` | Yes | Enum: `tally`, `manual` |
 | `sold_at` | Yes | Sale date/time |
-| `recorded_by_user_id` | Optional | FK → user; null for automated Tally |
+| `invoice_number` | Yes | Tally voucher/invoice number — required for manual; set from Tally for sync |
+| `recorded_by_user_id` | Optional | FK → user; required for manual; null for automated Tally |
 | `customer_name` | Optional | Reference copy — not authoritative billing |
-| `customer_contact` | Optional | Phone/email reference |
-| `invoice_reference` | Optional | Tally voucher/invoice number reference |
-| `tally_voucher_number` | Optional | For Tally idempotency; required when `sale_source = tally` |
+| `payment_mode` | Optional | Manual sales — e.g., Cash, UPI, Card |
+| `tally_company_name` | Optional | Tally company identifier when `sale_source = tally` |
+| `tally_voucher_number` | Optional | Duplicate of invoice identifier for Tally idempotency queries |
 | `notes` | Optional | Manual sale notes |
 | `idempotency_key` | Optional | Client-provided key for manual sales |
 | `created_at` | Yes | Immutable |
 
-**Composite uniqueness (Tally idempotency):** `(tally_voucher_number, inventory_item_id)` unique where `sale_source = tally` and voucher not null.
+**Idempotency keys:**
+
+| Source | Unique constraint |
+|--------|-------------------|
+| Tally | `(tally_company_name, tally_voucher_number, inventory_item_id)` where `sale_source = tally` |
+| Manual | `(invoice_number, inventory_item_id)` where `sale_source = manual` |
+| Cross-source | Same `invoice_number` + `inventory_item_id` — manual and Tally treated as one transaction (FR-TLY-14) |
 
 **Immutable:** entire row after insert — no updates or deletes (FR-SLS, sale immutability).
 
 ---
 
-### 4.9 AuditLog
+### 4.8 AuditLog
 
 | Aspect | Definition |
 |--------|------------|
@@ -489,7 +489,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.10 SyncJob
+### 4.9 SyncJob
 
 | Aspect | Definition |
 |--------|------------|
@@ -516,21 +516,24 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.11 TallyIntegrationEvent
+### 4.10 TallyIntegrationEvent
 
 | Aspect | Definition |
 |--------|------------|
 | **Purpose** | Log every Tally poll and voucher processing attempt |
-| **Business description** | Supports reconciliation, failure surfacing (FR-TLY-04/05), and operational diagnostics. Does not replace `sale` — successful processing also creates sale + inventory update via API. |
+| **Business description** | Supports reconciliation, failure surfacing (FR-TLY-09), and operational diagnostics. Does not replace `sale` or `notification` — successful line match also creates sale + inventory update via API. |
 
 | Attribute | Required | Notes |
 |-----------|----------|-------|
 | `id` | Yes | |
-| `event_type` | Yes | Enum: `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `error` |
-| `tally_voucher_number` | Optional | |
-| `serial_number` | Optional | As extracted from voucher |
+| `tally_company_sync_id` | Yes | FK → tally_company_sync |
+| `event_type` | Yes | Enum: see §6.9 |
+| `tally_voucher_number` | Optional | Invoice/voucher identifier |
+| `serial_number` | Optional | As extracted from invoice line |
+| `product_model_number` | Optional | As extracted from invoice line |
 | `inventory_item_id` | Optional | FK if matched |
-| `outcome` | Yes | Enum: `success`, `skipped`, `failed` |
+| `outcome` | Yes | Enum: `success`, `skipped`, `ignored`, `failed` |
+| `skip_reason` | Optional | e.g., `serial_not_found`, `model_mismatch`, `already_sold`, `accessory_ignored` |
 | `error_code` | Optional | |
 | `error_message` | Optional | |
 | `correlation_id` | Yes | |
@@ -539,12 +542,65 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.12 SystemSetting
+### 4.11 TallyCompanySync
 
 | Aspect | Definition |
 |--------|------------|
-| **Purpose** | Admin-configurable application settings |
-| **Business description** | Key-value store for sync schedules, session timeout, lockout thresholds, barcode behaviour, display name (FR-SET-01–07). |
+| **Purpose** | Per–Tally-company synchronization state (FR-TLY-02, FR-TLY-03) |
+| **Business description** | Each configured Tally company (e.g., WEBSTUDIO, ASUS Exclusive Store) maintains independent sync cursor. Failure in one row does not affect others. |
+
+| Attribute | Required | Notes |
+|-----------|----------|-------|
+| `id` | Yes | Surrogate PK |
+| `company_name` | Yes | Unique — Tally company name as configured |
+| `is_enabled` | Yes | Default `true` |
+| `last_successful_sync_time` | Optional | Last completed successful sync for this company |
+| `last_processed_voucher_identifier` | Optional | Cursor for incremental invoice read |
+| `last_error_message` | Optional | Most recent error for this company |
+| `last_error_at` | Optional | |
+| `consecutive_failures` | Yes | Default 0 — reset on success |
+| `created_at` | Yes | |
+| `updated_at` | Yes | |
+
+**Seed (migration):** WEBSTUDIO; ASUS Exclusive Store — enabled with null cursors.
+
+---
+
+### 4.12 Notification
+
+| Aspect | Definition |
+|--------|------------|
+| **Purpose** | Operator-facing alerts for Tally integration issues (FR-NOT-01–06) |
+| **Business description** | Surfaced in Notification Center and Tally Sync Dashboard pending count. Not created for ignored accessory lines. |
+
+| Attribute | Required | Notes |
+|-----------|----------|-------|
+| `id` | Yes | Surrogate PK |
+| `notification_type` | Yes | Enum: see §6.11 |
+| `severity` | Yes | Enum: `info`, `warning`, `error` |
+| `title` | Yes | Short display title |
+| `message` | Yes | Detail text |
+| `tally_company_sync_id` | Optional | FK when company-specific |
+| `tally_voucher_number` | Optional | Related invoice |
+| `serial_number` | Optional | |
+| `product_model_number` | Optional | |
+| `inventory_item_id` | Optional | FK when applicable |
+| `is_read` | Yes | Default `false` |
+| `is_resolved` | Yes | Default `false` |
+| `created_at` | Yes | Immutable |
+| `resolved_at` | Optional | |
+| `resolved_by_user_id` | Optional | FK → user |
+
+**Append-only creation** — notifications are not deleted V1; mark resolved.
+
+---
+
+### 4.13 SystemSetting
+
+| Aspect | Definition |
+|--------|------------|
+| **Purpose** | Admin-configurable application settings and system lifecycle flags |
+| **Business description** | Key-value store for sync schedules, session timeout, lockout thresholds, barcode behaviour, display name (FR-SET-01–07), and **server initialization state** (FR-INIT-01–05). |
 
 | Attribute | Required | Notes |
 |-----------|----------|-------|
@@ -553,14 +609,31 @@ See [Section 9](#9-audit-model) for complete attribute list.
 | `setting_value` | Yes | Text or JSON string |
 | `value_type` | Yes | Enum: `string`, `integer`, `boolean`, `json`, `cron` |
 | `description` | Optional | Admin UI help text |
-| `updated_by_user_id` | Optional | Last modifier |
+| `updated_by_user_id` | Optional | Last modifier — null during first-time setup |
 | `updated_at` | Yes | |
 
-**Known keys (non-exhaustive):** `excel_sync_cron`, `tally_poll_interval_seconds`, `session_timeout_minutes`, `lockout_threshold`, `lockout_duration_minutes`, `barcode_auto_submit`, `business_display_name`
+**Known keys (non-exhaustive):**
+
+| Key | Type | Initial value | Notes |
+|-----|------|---------------|-------|
+| `system_initialized` | `boolean` | `false` | **Authoritative** initialization flag — setup wizard when `false`; **do not** infer from Main Admin user existence (BR-28) |
+| `company_name` | `string` | — | Set during First-Time Setup Wizard |
+| `excel_sync_cron` | `cron` | Default schedule | Main Admin configurable |
+| `tally_sync_interval_seconds` | `integer` | **1800** (30 minutes) | Main Admin configurable — FR-TLY-01 |
+| `tally_host` | `string` | — | Tally ERP 9 connection |
+| `tally_port` | `integer` | — | Tally ERP 9 connection |
+| `tally_enabled` | `boolean` | `true` | Master enable |
+| `session_timeout_minutes` | `integer` | Default timeout | Main Admin configurable |
+| `lockout_threshold` | `integer` | Default threshold | Main Admin configurable |
+| `lockout_duration_minutes` | `integer` | Default duration | Main Admin configurable |
+| `barcode_auto_submit` | `boolean` | Default behaviour | Main Admin configurable |
+| `business_display_name` | `string` | — | Main Admin configurable; may mirror `company_name` |
+
+**Initialization rule:** Migrations and seed scripts set `system_initialized = false`. The Main Admin user is created only by `POST /api/v1/setup/initialize` — never by seed data.
 
 ---
 
-### 4.13 Permission (Conceptual — Not Persisted V1)
+### 4.14 Permission (Conceptual — Not Persisted V1)
 
 | Aspect | Definition |
 |--------|------------|
@@ -581,22 +654,24 @@ See [Section 9](#9-audit-model) for complete attribute list.
 | **BR-22** Color per unit | Mandatory on inventory_item | `NOT NULL color` |
 | **BR-24** Product Model lifecycle | Archive vs delete rules | `status` enum; service-layer delete guard |
 | **BR-25** Excluded V1 fields | No purchase_date, purchase_cost, remarks | Not in schema |
-| **BR-03** One location per item | Service enforces | `NOT NULL location_id` on inventory_item |
-| **BR-04** Movements logged | Service creates movement row | `inventory_movement` insert-only |
+| **BR-03** One location per item | Service enforces | `NOT NULL current_location_id` on inventory_item |
+| **BR-04** Location changes logged | Service updates `current_location_id` + `audit_log` | `audit_log` insert with `inventory.move` |
 | **BR-07** Excel not authoritative | No import path | No table reads from Excel |
 | **BR-11** Sold cannot sell again | Service idempotency | `status = sold` terminal; unique sale per item |
 | **BR-18** Lifecycle transitions | SaleService/InventoryService | Optional CHECK or service-only |
-| **LC-04** Sold cannot move | MovementService | Service rejects; status check |
-| **FR-INV-07** No delete | Soft lifecycle only | No DELETE grant on inventory_item for app user |
+| **LC-04** Sold cannot move | InventoryService | Service rejects; status check |
+| **FR-INV-07** Conditional delete | Repository enforces | Delete only when not `sold` and no sale/audit references |
 | **FR-AUD-06** Audit immutable | Append-only | INSERT only on audit_log |
-| **Tally idempotency** | SaleService | UNIQUE `(tally_voucher_number, inventory_item_id)` on sale |
+| **BR-28** Initialization flag | SetupService | `system_initialized` in `system_settings` — not user table probe |
+| **BR-36** Duplicate sale protection | SaleService | `(invoice_number, inventory_item_id)` across manual and Tally |
+| **BR-37** Multi-company Tally isolation | TallySyncService | Per `tally_company_sync` row |
 
 ### 5.2 Business-Only Constraints (Not DB-Enforced)
 
 | Constraint | Enforced By |
 |------------|-------------|
 | Received → Sold blocked | InventoryService |
-| Only Available may move | MovementService |
+| Only Available/Reserved may change location | InventoryService |
 | Archived product model on create | InventoryService |
 | Product model permanent delete | ProductModelService |
 | Role permission matrix | API RBAC |
@@ -625,6 +700,7 @@ All enums stored as PostgreSQL `ENUM` types or `VARCHAR` with CHECK constraints 
 |-------|---------|
 | `received` | Registered; not yet sellable |
 | `available` | Sellable and movable |
+| `reserved` | Held for a customer; not yet billed |
 | `sold` | Billed; terminal V1 |
 
 ### 6.2 UserRole
@@ -633,7 +709,7 @@ All enums stored as PostgreSQL `ENUM` types or `VARCHAR` with CHECK constraints 
 |-------|---------|
 | `main_admin` | Full system access |
 | `admin` | Inventory and operational management |
-| `salesperson` | Search, view, manual sale fallback |
+| `salesperson` | Search, view, movement |
 | `service_account` | Automated sync workers only |
 
 ### 6.3 UserStatus
@@ -676,40 +752,73 @@ All enums stored as PostgreSQL `ENUM` types or `VARCHAR` with CHECK constraints 
 
 ### 6.8 AuditAction
 
-| Value | Examples |
-|-------|----------|
-| `inventory.create` | New unit registered |
-| `inventory.update` | Attribute change |
-| `inventory.transition` | Status change |
-| `inventory.move` | Location change |
-| `sale.reflect` | Sale recorded |
-| `user.create` | User management |
-| `user.update` | |
-| `user.disable` | |
-| `setting.update` | Configuration change |
-| `auth.login_success` | |
-| `auth.login_failure` | |
-| `auth.logout` | |
-| `sync.job_created` | |
-| `sync.job_completed` | |
-| `product_model.create` | Product model management |
-| `product_model.archive` | |
-| `product_model.restore` | |
-| `product_model.delete` | Permanent delete (no history only) |
-| `permission.denied` | |
+Sprint 1E implements a compact action enum on `audit_logs.action`. Future integrations (Tally, scheduled jobs) use `SYSTEM_ACTION` with enriched `new_value` / `description` until finer-grained values are added.
 
-### 6.9 TallyEventType / TallyEventOutcome
+| Value | Meaning |
+|-------|---------|
+| `CREATE` | Entity created |
+| `UPDATE` | Field or attribute changed |
+| `ARCHIVE` | Entity archived (e.g. product model) |
+| `RESTORE` | Entity restored from archived |
+| `STATUS_CHANGE` | Inventory status transition (e.g. Available → Sold) |
+| `LOCATION_CHANGE` | Inventory location transfer |
+| `SYSTEM_ACTION` | Automated/system-initiated change (Tally sync, jobs) |
 
-See §4.11 — `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `error` / `success`, `skipped`, `failed`.
+Entity context is captured in `entity_type` + `entity_id` (e.g. `inventory_item`, `{uuid}`).
 
-### 6.10 ProductModelStatus
+### 6.9 TallyEventType
+
+| Value | Meaning |
+|-------|---------|
+| `poll` | Scheduled or manual sync poll started |
+| `company_sync_started` | Processing began for one Tally company |
+| `company_sync_completed` | Company sync finished successfully |
+| `invoice_line_processed` | Single invoice line evaluated |
+| `sale_applied` | Line matched — inventory marked Sold |
+| `error` | Integration error |
+
+### 6.10 TallyEventOutcome
+
+| Value | Meaning |
+|-------|---------|
+| `success` | Expected completion |
+| `skipped` | Line skipped — notification created (serial not found, model mismatch) |
+| `ignored` | Accessory/non-IMS line — no notification |
+| `failed` | Error — Synchronization Failure notification |
+
+### 6.11 NotificationType
+
+| Value | Meaning |
+|-------|---------|
+| `serial_not_found` | Model exists; serial not in IMS |
+| `model_mismatch` | Serial exists; model does not match |
+| `duplicate_sale` | Invoice+serial already recorded |
+| `sync_failure` | Company or connection-level failure |
+
+See §4.11 — legacy `voucher_received`, `sale_skipped` mapped to above in application layer if needed.
+
+### 6.12 ProductModelStatus
 
 | Value | Meaning |
 |-------|---------|
 | `active` | Available for new inventory; visible in default views |
 | `archived` | Hidden from inventory creation and Salesperson default views; historical data retained |
 
-### 6.11 ClientPlatform
+### 6.13 StorageUnit
+
+| Value | Meaning |
+|-------|---------|
+| `GB` | Gigabytes |
+| `TB` | Terabytes |
+
+### 6.14 StorageType
+
+| Value | Meaning |
+|-------|---------|
+| `SSD` | Solid-state storage |
+| `HDD` | Hard-disk storage |
+
+### 6.15 ClientPlatform
 
 | Value | Used In |
 |-------|---------|
@@ -730,14 +839,18 @@ See §4.11 — `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `erro
 |-------|-------|---------|
 | `inventory_item` | UNIQUE `(serial_number)` | Exact serial lookup — highest priority |
 | `inventory_item` | `(status)` | Dashboard counts |
-| `inventory_item` | `(location_id, status)` | Location summary |
+| `inventory_item` | `(current_location_id, status)` | Location summary |
 | `inventory_item` | `(product_model_id)` | Model group expansion |
+| `product_model` | `(cpu)`, `(model_name)` | Specification search |
 | `inventory_item` | `(color)` | Color filter and search |
 | `inventory_item` | `(updated_at DESC)` | Recently updated list |
 | `product_model` | UNIQUE `(brand_id, model_number)` | Model identity |
 | `product_model` | `(brand_id)` | Brand grouping |
 | `product_model` | `(status)` | Filter active models for inventory creation |
-| `inventory_movement` | `(inventory_item_id, moved_at DESC)` | Movement history |
+| `audit_log` | `(entity_type, entity_id, created_at DESC)` | Entity history |
+| `audit_log` | `(entity_identifier, created_at DESC)` | Serial number lifecycle |
+| `audit_log` | `(actor_user_id, created_at DESC)` | User activity |
+| `audit_log` | `(audit_action, created_at DESC)` | Action-type reports |
 | `sale` | `(sold_at DESC)` | Sales reports |
 | `sale` | `(inventory_item_id)` UNIQUE | One sale per unit |
 | `audit_log` | `(created_at DESC)` | Audit search |
@@ -745,11 +858,11 @@ See §4.11 — `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `erro
 | `sync_job` | `(status, scheduled_at)` | Worker job pickup |
 | `tally_integration_event` | `(created_at DESC)` | Reconciliation UI |
 
-### 7.2 Configuration and Color Search
+### 7.2 Product Model Specification and Color Search
 
 | Index | Purpose |
 |-------|---------|
-| GIN `(configuration gin_trgm_ops)` on `inventory_item` | Partial match: `4060`, `i7`, `16GB` (FR-SRH-06) |
+| B-tree / ILIKE on `product_model.cpu`, `product_model.model_name`, `product_model.gpu` | Partial match: `4060`, `i7`, `16GB` (FR-SRH-06) |
 | GIN `(color gin_trgm_ops)` on `inventory_item` (optional) | Partial color match at scale |
 | B-tree `(color)` on `inventory_item` | Exact and prefix color filter |
 
@@ -777,9 +890,9 @@ See §4.11 — `poll`, `voucher_received`, `sale_applied`, `sale_skipped`, `erro
 | Exact serial | UNIQUE index on `serial_number` |
 | Serial prefix | B-tree prefix scan |
 | Model / brand | Join `product_model` → `brand` |
-| Configuration term (CPU/GPU/RAM/Storage) | `pg_trgm` on `configuration` |
+| Configuration term (CPU/GPU/RAM/Storage) | Join `product_model`; match `cpu`, `gpu`, `ram_gb`, storage fields |
 | Color exact / partial | B-tree or `ILIKE` on `color`; GIN trigram optional |
-| Location / status filter | Composite `(location_id, status)` |
+| Location / status filter | Composite `(current_location_id, status)` |
 
 Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 
@@ -799,7 +912,7 @@ Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 |-----------|----------------|-------------------|
 | **Inventory addition** | `inventory_item` INSERT, `audit_log` INSERT | Single transaction |
 | **Status transition** (Received→Available) | `inventory_item` UPDATE, `audit_log` INSERT | Single transaction |
-| **Inventory movement** | `inventory_item` UPDATE `location_id`, `inventory_movement` INSERT, `audit_log` INSERT | Single transaction |
+| **Location transfer** | `inventory_item` UPDATE `current_location_id`, `audit_log` INSERT (`inventory.move`) | Single transaction |
 | **Sale reflection** | `inventory_item` UPDATE `status=sold`, `sale` INSERT, `audit_log` INSERT | Single transaction |
 | **Attribute update** | `inventory_item` UPDATE, `audit_log` INSERT | Single transaction |
 | **User creation** | `user` INSERT, `audit_log` INSERT | Single transaction |
@@ -814,7 +927,7 @@ Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 ### 8.3 Isolation
 
 - Default PostgreSQL `READ COMMITTED` sufficient for V1 concurrency
-- Optimistic locking on `inventory_item.row_version` prevents lost updates
+- Concurrent updates use database transactions; movement and sale flows enforce row-level consistency
 - Sale idempotency checked within transaction before insert
 
 ### 8.4 Excel & Tally Sync
@@ -830,23 +943,25 @@ Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Surrogate PK |
-| `audit_action` | Yes | Enum — §6.8 |
-| `actor_user_id` | Optional | FK → user; null for unauthenticated failures |
-| `actor_service` | Optional | `excel_sync`, `tally_sync` when service account |
-| `entity_type` | Yes | e.g., `inventory_item`, `user`, `sync_job` |
-| `entity_id` | Yes | Primary key of affected entity |
-| `entity_identifier` | Optional | Human-readable — e.g., serial number |
-| `before_state` | Optional | JSON snapshot of changed fields |
-| `after_state` | Optional | JSON snapshot of changed fields |
-| `reason` | Optional | Movement reason, manual sale note |
-| `request_id` | Yes | `X-Request-ID` correlation |
-| `correlation_id` | Optional | Cross-service trace |
-| `client_platform` | Optional | Enum — §6.10 |
-| `client_ip_address` | Optional | Source IP |
-| `client_user_agent` | Optional | Device/browser information |
-| `client_app_version` | Optional | Desktop/Android version |
+| `id` | Yes | UUID primary key |
+| `entity_type` | Yes | e.g. `brand`, `location`, `product_model`, `inventory_item`, `user` |
+| `entity_id` | Yes | Primary key of affected entity (string) |
+| `inventory_item_id` | Optional | FK → `inventory_item`; set for inventory lifecycle entries |
+| `actor_user_id` | Optional | FK → user (nullable for system actions); enforced in migration `0006_users_authentication` |
+| `actor_display_name` | Optional | Human-readable actor snapshot at action time |
+| `actor_role` | Optional | Role snapshot — e.g. `admin`, `salesperson`, `system` |
+| `action` | Yes | Enum — §6.8 (`CREATE`, `UPDATE`, `ARCHIVE`, `RESTORE`, `STATUS_CHANGE`, `LOCATION_CHANGE`, `SYSTEM_ACTION`) |
+| `field_name` | Optional | Changed field label — e.g. `current_location`, `status` |
+| `old_value` | Optional | JSON snapshot of previous value(s) — human-readable where possible |
+| `new_value` | Optional | JSON snapshot of new value(s); may include Tally metadata (`invoice_number`, `voucher_type`) |
+| `description` | Optional | Human-readable summary — e.g. `Location changed from Warehouse to ASUS Store` |
 | `created_at` | Yes | UTC timestamp — immutable |
+
+**Design notes:**
+
+- Current inventory location is stored only on `inventory_item.current_location_id`.
+- Complete location/status lifecycle is reconstructed from `audit_logs` — **no** `inventory_movements` table.
+- `old_value` / `new_value` preserve readable names (location names, status labels) so history remains understandable if master data changes later.
 
 ### 9.2 Immutability
 
@@ -858,9 +973,52 @@ Formal query parsing: `docs/specs/search-query-spec.md` (**TBD**).
 
 Audit records are the legal and operational evidence of who changed inventory and when. Immutability is non-negotiable.
 
-### 9.3 Relationship to Domain Events
+### 9.3 Location Change Audit Enrichment
 
-Inventory status changes are captured in `audit_log` with `before_state`/`after_state`. A separate `inventory_status_history` table is **not required V1** — audit provides sufficient traceability. Add only if reporting performance requires it (future).
+For `LOCATION_CHANGE` actions, the audit log is the **only** persistence of location transfer history:
+
+| Concern | `audit_logs` |
+|---------|--------------|
+| From location | `old_value.current_location`, `old_value.current_location_id` |
+| To location | `new_value.current_location`, `new_value.current_location_id` |
+| Actor | `actor_user_id`, `actor_display_name`, `actor_role` |
+| Transfer time | `created_at` |
+| Summary | `description` — e.g. `Location changed from Warehouse to ASUS Store` |
+
+`inventory_item` holds **only** `current_location_id` — no historical location columns.
+
+### 9.4 Serial Number Lifecycle (Audit as History)
+
+Searching audit logs by serial number (`get_by_serial_number`) or by `inventory_item_id` returns the **complete lifecycle** of a laptop:
+
+| Event | Typical `action` |
+|-------|-------------------|
+| Added to inventory | `CREATE` |
+| Location transfer | `LOCATION_CHANGE` |
+| Status change | `STATUS_CHANGE` |
+| Attribute update | `UPDATE` |
+| Tally sale reflection (future) | `STATUS_CHANGE` or `SYSTEM_ACTION` with invoice metadata in `new_value` |
+| Product model archive affecting visibility | Related `ARCHIVE` on `product_model` |
+
+Future Tally synchronization writes `audit_logs` entries via `AuditRecorder` — not a separate movement or event history table.
+
+### 9.5 Audit Search Dimensions
+
+Audit queries must support filtering by:
+
+| Dimension | Source field(s) |
+|-----------|-----------------|
+| Serial number | Join via `inventory_item_id` or serial lookup |
+| Inventory item | `inventory_item_id` or `entity_type` + `entity_id` |
+| Product model | Join via `inventory_item` → `product_model` |
+| Brand | Join via inventory item → product model → brand |
+| User (actor) | `actor_user_id` |
+| Date range | `created_at` |
+| Action type | `action` |
+
+### 9.6 Relationship to Domain Events
+
+Inventory status changes are captured in `audit_logs` with `old_value` / `new_value` and `description`. A separate `inventory_status_history` table is **not required V1** — audit provides sufficient traceability.
 
 ---
 
@@ -890,29 +1048,34 @@ stateDiagram-v2
 | **Failure** | `failed` status + `error_message`; alert Main Admin |
 | **Recovery** | Manual re-trigger creates new job; last-known-good Excel preserved |
 
-**Export columns (V1):** Brand, Model, Serial, **Color**, Configuration, Location, Status — per FR-XLS-03. No Purchase Date, Purchase Cost, or Remarks.
+**Export columns (V1):** Brand, Model, Serial, **Color**, CPU, GPU, RAM, Storage (from Product Model), Current Location, Status — per FR-XLS-03. No Purchase Date, Purchase Cost, or Remarks.
 
-### 10.2 Tally Integration Events
+### 10.2 Tally Integration
 
-Tally does not use `sync_job` for each voucher — continuous polling model:
+Tally Sync reads invoices from Tally ERP 9 — **write operations to Tally are prohibited**.
 
 | Concern | Design |
 |---------|--------|
-| **Logging** | Every poll and voucher attempt → `tally_integration_event` |
-| **Success** | `sale_applied` event + `sale` row + inventory `status=sold` in one API transaction |
-| **Idempotency** | `SaleService` checks existing sale by `(tally_voucher_number, inventory_item_id)` |
-| **Unknown serial** | `sale_skipped` event; no inventory mutation |
-| **Duplicate voucher** | No-op; `sale_skipped` with reason `already_processed` |
-| **Reconciliation** | Main Admin queries failed/skipped events |
+| **Multi-company** | One `tally_company_sync` row per company; isolated failure handling |
+| **Cursor** | `last_successful_sync_time`, `last_processed_voucher_identifier` updated per company on success |
+| **Interval** | `tally_sync_interval_seconds` — default **1800** (30 minutes) |
+| **Logging** | Every poll and invoice line → `tally_integration_event` |
+| **Match success** | `sale_applied` event + `sale` row + inventory `status=sold` + `audit_log` in one API transaction |
+| **Serial not found** | `notification` (`serial_not_found`); `outcome=skipped` event |
+| **Model mismatch** | `notification` (`model_mismatch`); `outcome=skipped` event |
+| **Accessory / ignored line** | `outcome=ignored`; **no** notification |
+| **Duplicate sale** | Idempotent no-op; optional `duplicate_sale` notification |
+| **Company failure** | `sync_failure` notification; other companies continue |
+| **Idempotency** | `(tally_company_name, tally_voucher_number, inventory_item_id)`; cross-source with manual via `invoice_number` |
 
 ### 10.3 Status Tracking
 
 | Integration | Primary Status Store |
 |-------------|---------------------|
 | Excel | `sync_job.status` + latest completed job timestamp |
-| Tally | Latest `tally_integration_event` + last successful `sale_applied` timestamp |
+| Tally | `tally_company_sync` per company + `tally_integration_event` + unresolved `notification` count |
 
-Dashboard settings (FR-SET-06) read from these tables via API.
+Tally Synchronization Dashboard (FR-TLY-11) reads from `tally_company_sync`, settings, and notifications via API.
 
 ---
 
@@ -945,8 +1108,9 @@ Aligned with SYSTEM_ARCHITECTURE §22.5 and `webstudio` schema.
 | Foreign key | `{entity_singular}_id` → `product_model_id` |
 | Boolean | `is_{adjective}` → `is_active` |
 | Timestamps | `created_at`, `updated_at`, `{action}_at` |
+| Operational ownership | `created_by_user_id`, `updated_by_user_id` → FK `users` — set by backend only |
 | Enums | `{noun}` or `{noun}_type` → `status`, `sale_source` |
-| Free text | Descriptive noun → `configuration`, `reason` |
+| Free text | Descriptive noun → `reason`, `model_name`, `cpu` |
 
 ### 11.4 Constraints
 
@@ -955,15 +1119,15 @@ Aligned with SYSTEM_ARCHITECTURE §22.5 and `webstudio` schema.
 | Primary key | `pk_{table}` | `pk_inventory_items` |
 | Foreign key | `fk_{table}_{referenced}` | `fk_inventory_items_product_model` |
 | Unique | `uq_{table}_{column(s)}` | `uq_inventory_items_serial_number` |
-| Check | `ck_{table}_{rule}` | `ck_inventory_movement_different_locations` |
+| Check | `ck_{table}_{rule}` | `ck_inventory_items_status` (example) |
 
 ### 11.5 Indexes
 
 | Type | Pattern | Example |
 |------|---------|---------|
-| B-tree | `ix_{table}_{column(s)}` | `ix_inventory_items_location_id_status` |
+| B-tree | `ix_{table}_{column(s)}` | `ix_inventory_items_current_location_id_status` |
 | Unique | `uq_{table}_{column(s)}` | (may coincide with constraint) |
-| GIN trigram | `ix_{table}_{column}_trgm` | `ix_inventory_items_configuration_trgm` |
+| GIN trigram | `ix_{table}_{column}_trgm` | `ix_product_models_cpu_trgm` (optional) |
 
 ### 11.6 Enums (PostgreSQL TYPE)
 
@@ -993,22 +1157,27 @@ Aligned with SYSTEM_ARCHITECTURE §22.5 and `webstudio` schema.
 stateDiagram-v2
     [*] --> received : Register (Add Inventory)
     received --> available : Admin confirms ready
+    available --> reserved : Customer hold
+    reserved --> available : Hold released
     available --> sold : Sale reflected
+    reserved --> sold : Sale reflected
     sold --> [*] : Terminal V1
 
     note right of available : Movement allowed
+    note right of reserved : Movement allowed
     note right of sold : No movement V1
 ```
 
 | Phase | Data Behaviour |
 |-------|----------------|
-| **Register** | INSERT `inventory_item`; initial status `received` or `available` (**open decision**) |
+| **Register** | INSERT `inventory_item`; initial status `received` or `available` |
 | **Confirm** | UPDATE `status` → `available`; audit |
-| **Move** | UPDATE `location_id`; INSERT `inventory_movement` |
+| **Reserve** | UPDATE `status` → `reserved`; audit |
+| **Move** | UPDATE `current_location_id`; INSERT `audit_log` (`inventory.move`) |
 | **Sell** | UPDATE `status` → `sold`; INSERT `sale` |
-| **Archive (future)** | New status `archived` — not V1 |
+| **Delete** | DELETE `inventory_item` only when not `sold` and no sale/audit references |
 
-**No hard delete** — records persist for audit and sales history.
+**Sold and referenced records persist** for audit and sales history.
 
 ### 12.2 User
 
@@ -1065,6 +1234,9 @@ The following are **not** columns in any Version 1 table:
 - `purchase_date`
 - `purchase_cost`
 - `remarks`
+- `configuration` (replaced by structured `product_model` specification fields)
+- `row_version` (not used V1)
+- `sold_by_user_id`, `reserved_by_user_id`, `approved_by_user_id` (use audit log and domain-specific tables instead)
 
 May be added in a future migration with ADR.
 
@@ -1088,13 +1260,13 @@ May be added in a future migration with ADR.
 | Operation | Target (server-side) |
 |-----------|---------------------|
 | Serial exact lookup | < 10 ms |
-| Configuration trigram search | < 200 ms at 5K items |
+| Product specification search | < 200 ms at 5K items |
 | Color filter / partial match | < 100 ms at 5K items |
 | Dashboard aggregates | < 500 ms |
 
 ### 13.3 Concurrent Users
 
-- Row-level locking + optimistic `row_version` sufficient
+- Row-level locking and transactional updates sufficient
 - Connection pool 10–20 connections
 - No read replicas required V1
 
@@ -1151,10 +1323,10 @@ Items **not guessed** — require explicit resolution before or during implement
 | ID | Decision | Impact | Owner |
 |----|----------|--------|-------|
 | BD-01 | **Default status on add:** `received` vs `available` | Initial INSERT value | Business + Product |
-| BD-02 | **Configuration structure:** free text vs structured JSON fields | `inventory_item.configuration` shape; search parsing | Product |
+| BD-02 | ~~Configuration structure~~ | **Resolved** — structured fields on `product_model` (`cpu`, `gpu`, `ram_gb`, `storage_*`) | Product |
 | BD-03 | **Customer/invoice field list** on sale | `sale` column set | Business |
 | BD-04 | **Sold units in model group UI** — show in group vs separate view (PR-06) | Query filters only | Business |
-| BD-05 | **Salesperson movement permission** (PRD matrix TBD) | API authorization only | Business |
+| BD-05 | **Salesperson movement permission** | API authorization only | **Resolved** — PRD §17.2 |
 | BD-06 | **Audit retention period** | Archival policy | Business + Operations |
 
 ### 15.2 Architecture Decisions
@@ -1189,12 +1361,12 @@ Items **not guessed** — require explicit resolution before or during implement
 
 | Phase | Ready? | Notes |
 |-------|--------|-------|
-| **Alembic migration authoring** | **Yes** | Include `color`, `product_model.status`; no excluded V1 fields |
+| **Alembic migration authoring** | **Yes** | Ownership columns deferred to `0008` (after `users`); see §16.5 |
 | **SQLAlchemy ORM models** | **Yes** | Follow §7.11 domain mapping in architecture |
 | **Repository implementation** | **Yes** | One repository per aggregate |
 | **OpenAPI / API design** | **Yes** | DTOs map from entities in §4 |
 | **Tally integration persistence** | **Conditional** | Schema ready; implementation blocked on POC |
-| **Seed data scripts** | **Yes** | Brands, locations, Main Admin, default settings |
+| **Seed data scripts** | **Yes** | Brands, locations, `system_initialized = false` — **no** Main Admin user |
 
 **Recommendation:** The logical model is **ready for implementation**. Proceed with Alembic migrations and ORM models in parallel with OpenAPI specification.
 
@@ -1214,7 +1386,7 @@ Items **not guessed** — require explicit resolution before or during implement
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Configuration free-text search quality | Medium | BD-02 decision; trigram helps but not perfect |
+| Configuration free-text search quality | Medium | Resolved — structured `product_model` fields replace free-text `configuration` |
 | Tally voucher mapping unknown | High | POC before Tally service |
 | Audit table unbounded growth | Low | Retention policy BD-06; partition future |
 | Default status on add undecided | Low | BD-01 — does not block schema |
@@ -1225,12 +1397,28 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 
 ### 16.5 Implementation Order (Recommended)
 
-1. Migration `0001`: extensions, enums, `users`, `refresh_tokens`
-2. Migration `0002`: `brands`, `product_models`, `locations`
-3. Migration `0003`: `inventory_items`, `inventory_movements`
-4. Migration `0004`: `sales`, `audit_logs`
-5. Migration `0005`: `sync_jobs`, `tally_integration_events`, `system_settings`
-6. Seed: three locations, default settings, Main Admin user
+| # | Migration | Scope |
+|---|-----------|-------|
+| 1 | `0001_initial` | Schema bootstrap; `pg_trgm` / `pgcrypto` extensions |
+| 2 | `0002_reference_data` | `brands`, `locations` |
+| 3 | `0003_product_model` | `product_models` |
+| 4 | `0004_inventory_item` | `inventory_items` |
+| 5 | `0005_audit_logs` | `audit_logs` — append-only history per §9 |
+| 6 | `0006_audit_log_description` | `audit_logs.description` column |
+| 7 | `0007_users_authentication` (planned) | `users`, `refresh_tokens`, `system_settings` (including `system_initialized = false` seed) |
+| 8 | `0008_ownership_columns` (planned) | `created_by_user_id`, `updated_by_user_id` on `brands`, `locations`, `product_models`, `inventory_items` |
+| 9 | `0009_integrations` (planned) | `sales`, `sync_jobs`, `tally_integration_events`, `tally_company_syncs`, `notifications`; additional `system_settings` keys as needed |
+
+**Dependency rationale:** Operational ownership columns require the `users` table — applied in `0008` after `0007_users_authentication`.
+
+**Setup wizard dependency:** `POST /api/v1/setup/initialize` requires both `users` and `system_settings`. The `system_settings` table and `system_initialized = false` seed **must** be created in `0007_users_authentication`. Migration numbers are fixed; scope assignment is documented here.
+
+**Cross-migration FK notes:**
+
+- `audit_logs.actor_user_id` is created nullable in `0005`; FK to `users` is enforced in `0007_users_authentication` once authentication entities exist.
+- Seed data: reference brands/locations in `0002`; `system_initialized = false` in `0007` — Main Admin created by First-Time Setup Wizard via API, not seed.
+
+**Sprint 1E scope:** Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`, `AuditLogRepository`, and audit APIs per this design.
 
 ---
 

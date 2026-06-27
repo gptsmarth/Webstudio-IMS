@@ -28,7 +28,7 @@ from webstudio_backend.infrastructure.repositories import (
 async def clean_inventory_tables(db_session: AsyncSession) -> None:
     await db_session.execute(
         text(
-            "TRUNCATE TABLE webstudio.inventory_movements, webstudio.inventory_items, "
+            "TRUNCATE TABLE webstudio.audit_logs, webstudio.inventory_items, "
             "webstudio.product_models, webstudio.locations, webstudio.brands "
             "RESTART IDENTITY CASCADE",
         ),

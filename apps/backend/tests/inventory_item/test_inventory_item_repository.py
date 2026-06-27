@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from inventory_item.conftest import sample_inventory_payload
@@ -57,8 +58,11 @@ async def test_inventory_item_crud(
     updated = await repository.update(loaded, color="Silver")
     assert updated.color == "Silver"
 
-    await repository.delete(updated)
-    assert await repository.get_by_id(created.id) is None
+    result = await db_session.execute(
+        text("SELECT COUNT(*) FROM webstudio.audit_logs WHERE inventory_item_id = :id"),
+        {"id": created.id},
+    )
+    assert int(result.scalar_one()) >= 1
 
 
 @pytest.mark.asyncio
@@ -240,7 +244,7 @@ async def test_delete_guard_blocks_references(
     )
 
     with (
-        patch.object(repository, "_has_movement_references", AsyncMock(return_value=True)),
+        patch.object(repository, "_has_audit_references", AsyncMock(return_value=True)),
         pytest.raises(InventoryItemDeleteNotAllowedError),
     ):
         await repository.delete(item)

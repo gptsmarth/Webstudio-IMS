@@ -33,6 +33,8 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def init_db(settings: Settings | None = None) -> None:
     global _engine, _session_factory
+    if _engine is not None:
+        return
     settings = settings or get_settings()
     _engine = create_async_engine(
         settings.database_url,

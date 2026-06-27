@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Product Requirements Document
-Version: 1.2
+Version: 1.7
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -13,8 +13,8 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/business/README.md, docs/integrat
 |-----------|-------|
 | **Document ID** | PRD-001 |
 | **Product Name** | WEBSTUDIO IMS (WEBSTUDIO Inventory Management System) |
-| **Version** | 1.2 |
-| **Status** | Active — business model refinements applied |
+| **Version** | 1.7 |
+| **Status** | Active — audit log as sole inventory history |
 | **Product Type** | Internal Commercial Inventory Management Software |
 | **Deployment** | On-Premise Server |
 | **Target Release** | Version 1.0 — Laptops Only |
@@ -30,6 +30,11 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/business/README.md, docs/integrat
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | Removed InventoryMovement module and `inventory_movements` table. Location changes update `current_location_id` only; audit log is the sole source of truth for location, status, and lifecycle history. |
+| 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Finalized Tally ERP 9 synchronization: read-only invoices; multi-company sync state; invoice line matching workflow; Tally Sync Dashboard; Notification Center; manual mark-as-sold (Admin/Main Admin only); duplicate sale protection. |
+| 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: `system_initialized` setting; first-time setup wizard; client server discovery and manual configuration; login gated on setup status; Main Admin-only user management; clients never create users or store business data. |
+| 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Authentication & audit strategy: Salesperson may move inventory; operational ownership fields (`created_by_user_id`, `updated_by_user_id`) on business entities; enriched audit log requirements; excluded action-specific user fields (`sold_by`, `reserved_by`, `approved_by`). |
+| 1.3 | 2026-06-27 | WEBSTUDIO IMS Team | Synchronized with Sprint 1D implementation: `current_location_id`; `Reserved` inventory status; structured ProductModel specs; serial number editable by authorized users; conditional inventory delete; excluded configuration/row_version fields. |
 | 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Product Model lifecycle (Active/Archived). Mandatory Color on inventory items. Expanded search (Color, combined filters). Explicit exclusion of Purchase Date, Purchase Cost, and Remarks from V1. |
 | 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Final review. Added inventory lifecycle, entity definition, presentation rules, data relationships, dashboard requirements, barcode scanner behavior, and expanded search requirements. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial official PRD. Defines Version 1 scope, workflows, functional and non-functional requirements, roles, business rules, and success criteria. |
@@ -46,6 +51,12 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/business/README.md, docs/integrat
 6. [User Personas](#6-user-personas)
 7. [Existing Workflow](#7-existing-workflow)
 8. [Proposed Workflow](#8-proposed-workflow)
+    - [8.6 Tally Synchronization](#86-tally-synchronization)
+    - [8.6.1 Invoice Line Processing](#861-invoice-line-processing)
+    - [8.6.2 Manual Mark as Sold](#862-manual-mark-as-sold)
+    - [8.7 Server Installation & First-Time Setup](#87-server-installation--first-time-setup)
+    - [8.8 Client Installation & Server Connection](#88-client-installation--server-connection)
+    - [8.9 Post-Connection Login Flow](#89-post-connection-login-flow)
 9. [Inventory Lifecycle](#9-inventory-lifecycle)
 10. [Inventory Entity Definition](#10-inventory-entity-definition)
 11. [Inventory Presentation Rules](#11-inventory-presentation-rules)
@@ -76,7 +87,7 @@ Today, laptop inventory is maintained manually in Excel. After each sale billed 
 
 WEBSTUDIO IMS eliminates manual inventory tracking by providing a centralized, searchable, auditable inventory system backed by PostgreSQL (accessed exclusively through the Backend API), while preserving Tally ERP 9 as the billing system and maintaining Excel as a synchronized representation for business continuity.
 
-**Version 1 scope:** Individual laptop tracking by serial number across three locations, with model-grouped inventory presentation, per-unit Color tracking, operational dashboard, configuration- and color-aware search, Excel synchronization, Tally billing integration, barcode scanner support for serial entry, user management, movement history, reports, and audit logging — delivered on Windows Desktop, macOS Desktop, Android, and a Dedicated Server PC.
+**Version 1 scope:** Individual laptop tracking by serial number across three locations, with model-grouped inventory presentation, per-unit Color tracking, operational dashboard, product-specification- and color-aware search, Excel synchronization, Tally billing integration, barcode scanner support for serial entry, user management, movement history, reports, and audit logging — delivered on Windows Desktop, macOS Desktop, Android, and a Dedicated Server PC.
 
 **Core philosophy:** WEBSTUDIO IMS is **inventory-first**, **serial-number-first**, and **search-first**. Every design and requirement decision must serve accurate individual laptop tracking, instant lookup, and minimal employee training — not feature breadth. Simplicity takes precedence over feature overload.
 
@@ -88,7 +99,7 @@ WEBSTUDIO IMS eliminates manual inventory tracking by providing a centralized, s
 
 ### 2.1 Current State
 
-The business tracks every laptop as a row in an Excel spreadsheet. Each row contains Brand, Model Number, Serial Number, Configuration, and Current Location. When a laptop is sold:
+The business tracks every laptop as a row in an Excel spreadsheet. Each row contains Brand, Model Number, Serial Number, product specifications, Color, and Current Location. When a laptop is sold:
 
 1. Billing is completed in **Tally ERP 9**.
 2. An employee **manually finds the row** in Excel.
@@ -152,7 +163,7 @@ WEBSTUDIO IMS Version 1 must:
 | PG-12 | Enforce **PostgreSQL as the single source of truth**, accessed only via Backend API |
 | PG-13 | Present inventory **grouped by Model Number** with individual serial units expandable beneath | See [Section 11](#11-inventory-presentation-rules) |
 | PG-14 | Provide an **operational dashboard** for immediate stock visibility — not analytics | See [Section 13](#13-dashboard-requirements) |
-| PG-15 | Support **configuration-aware search** across processor, GPU, RAM, storage, and screen size | See [Section 15.7](#157-search) |
+| PG-15 | Support **product-specification-aware search** across processor, GPU, RAM, and storage (via Product Model fields) | See [Section 15.7](#157-search) |
 
 ### 4.1 Core Product Principles
 
@@ -235,7 +246,7 @@ These principles govern every Version 1 requirement. They align with [PROJECT_BI
 | Step | Actor | Action | Tool |
 |------|-------|--------|------|
 | 1 | Warehouse/Admin staff | Receive laptops from supplier | Physical |
-| 2 | Admin | Add new row to Excel with Brand, Model Number, Serial Number, Configuration, Current Location | Excel |
+| 2 | Admin | Add new row to Excel with Brand, Model Number, Serial Number, Color, specifications, Current Location | Excel |
 | 3 | Admin | Assign location (Store or Godown) | Excel |
 
 **Pain points:** Manual data entry; typo risk on serial numbers; no validation of duplicate serials.
@@ -309,7 +320,7 @@ The following workflows describe the target state for Version 1. Integration tim
 | Step | Actor | System Action |
 |------|-------|---------------|
 | 1 | Admin/Warehouse staff | Opens Add Inventory in WEBSTUDIO IMS (Desktop or Android) |
-| 2 | Staff | Enters Brand, Model Number, Serial Number, **Color**, Configuration, Current Location |
+| 2 | Staff | Enters Brand, Model Number, Serial Number, **Color**, Current Location (Product Model carries specifications) |
 | 3 | System | Validates serial number uniqueness via Backend API |
 | 4 | System | Persists record in PostgreSQL via Backend API with lifecycle state **Received** or **Available** (**TBD** — default on add) |
 | 5 | Staff | May scan serial number via barcode scanner — field auto-focused on open | See [Section 14](#14-barcode-scanner-business-behaviour) |
@@ -323,11 +334,10 @@ The following workflows describe the target state for Version 1. Integration tim
 | Step | Actor | System Action |
 |------|-------|---------------|
 | 1 | Admin/Staff | Initiates movement: select laptop (by serial search), select destination location |
-| 2 | System | Validates laptop exists, is in **Available** status, and is movable (see [Section 9.3](#93-allowed-transitions--version-1)) |
-| 3 | System | Records movement with actor, timestamp, source location, destination location, reason (**TBD**) |
-| 4 | System | Updates current location in PostgreSQL via Backend API |
-| 5 | System | Creates audit log entry |
-| 6 | System | Queues Excel synchronization |
+| 2 | System | Validates laptop exists, is movable, and destination is valid (see [Section 9.3](#93-allowed-transitions--version-1)) |
+| 3 | System | Creates audit log entry with actor, timestamp, source location, destination location, and optional reason |
+| 4 | System | Updates `current_location_id` in PostgreSQL via Backend API |
+| 5 | System | Queues Excel synchronization |
 
 **Business rule:** Every laptop has exactly one current location at any time.
 
@@ -335,8 +345,8 @@ The following workflows describe the target state for Version 1. Integration tim
 
 | Step | Actor | System Action |
 |------|-------|---------------|
-| 1 | Any authorized user | Enters serial number, model number, brand, color, configuration term (processor, GPU, RAM, storage), location, or status — alone or in combination |
-| 2 | System | Returns matching laptops with current location, configuration, color, status, and serial number |
+| 1 | Any authorized user | Enters serial number, model number, brand, color, product-specification terms (processor, GPU, RAM, storage via Product Model), location, or status — alone or in combination |
+| 2 | System | Returns matching laptops with current location, product specifications (from Product Model), color, status, and serial number |
 | 3 | User | Views detail, expands model group, or initiates action (movement, sale reflection) |
 
 **Design priority:** Search is accessible from every primary screen. Search must feel instant — see [Performance Goals in PROJECT_BIBLE](../PROJECT_BIBLE.md#15-performance-goals).
@@ -347,15 +357,14 @@ The following workflows describe the target state for Version 1. Integration tim
 |------|-------|---------------|
 | 1 | Salesperson | Customer selects laptop; salesperson verifies availability via search |
 | 2 | Salesperson | Completes billing in **Tally ERP 9** (unchanged) |
-| 3 | System | Tally integration detects sale event (**mechanism TBD**) |
-| 4 | System | Matches sale to inventory record by serial number or mapped identifier (**mapping TBD**) |
-| 5 | System | Updates inventory lifecycle status to **Sold**; records customer and invoice reference fields (**field list TBD**) |
-| 6 | System | Creates audit log and sales history entry |
-| 7 | System | Queues Excel synchronization |
+| 3 | System | Tally Sync reads invoices from Tally — **IMS never creates invoices in Tally** |
+| 4 | System | Processes each invoice line per [§8.6.1](#861-invoice-line-processing) |
+| 5 | System | On exact serial **and** product model match — marks inventory **Sold**, creates sale record, writes audit log |
+| 6 | System | Queues Excel synchronization |
 
-**Fallback (TBD):** Manual sale reflection by Admin/Salesperson if Tally sync fails or serial mapping is ambiguous.
+> **Critical:** Tally remains the **billing system**. WEBSTUDIO IMS is the **inventory system**. IMS **reads** invoices from Tally only. IMS **never** creates invoices, credit notes, or billing entries inside Tally.
 
-> **Critical:** WEBSTUDIO IMS does not perform billing. Tally remains the billing system. IMS reflects billing outcomes in inventory.
+Manual mark-as-sold when Tally sync is delayed or unavailable: [§8.6.2](#862-manual-mark-as-sold) — **Admin and Main Admin only**.
 
 ### 8.5 Excel Synchronization
 
@@ -369,24 +378,140 @@ The following workflows describe the target state for Version 1. Integration tim
 
 ### 8.6 Tally Synchronization
 
-| Step | Actor | System Action |
-|------|-------|---------------|
-| 1 | System | Polls or receives Tally billing events (**mechanism TBD**) |
-| 2 | System | Parses sale data relevant to laptop inventory (**data mapping TBD**) |
-| 3 | System | Calls Backend API to update inventory status |
-| 4 | System | Logs integration event; surfaces failures to Admin |
-
-**Direction:** Tally → WEBSTUDIO IMS (billing event to inventory update). WEBSTUDIO IMS does not write billing data to Tally.
-
-### 8.7 User Management
+**Direction:** Tally → WEBSTUDIO IMS (read invoices; reflect sales in inventory). WEBSTUDIO IMS **does not write** billing data to Tally.
 
 | Step | Actor | System Action |
 |------|-------|---------------|
-| 1 | Main Admin | Creates, edits, deactivates user accounts |
-| 2 | Main Admin | Assigns role: Main Admin, Admin, or Salesperson |
-| 3 | System | Enforces role permissions on all operations via Backend API |
+| 1 | System | On configurable interval (default **30 minutes**), Tally Sync reads new/changed invoices from Tally ERP 9 |
+| 2 | System | Processes each configured **Tally company** independently — failure in one company does not stop others |
+| 3 | System | For each invoice line, applies [§8.6.1](#861-invoice-line-processing) matching rules |
+| 4 | System | Updates per-company sync state: `last_successful_sync_time`, `last_processed_voucher_identifier` |
+| 5 | System | Logs every poll and line outcome; creates [notifications](#861-invoice-line-processing) where required |
+| 6 | Admin / Main Admin | May trigger **Sync Now** from Tally Synchronization Dashboard |
+| 7 | Admin / Main Admin | Reviews dashboard: connection status, companies, last sync, next scheduled sync, pending notifications, last error |
 
-### 8.8 Exports and Reports
+#### Multi-Company Support
+
+| Tally Company (initial) | Notes |
+|-------------------------|-------|
+| **WEBSTUDIO** | Multi-brand store billing company |
+| **ASUS Exclusive Store** | ASUS exclusive store billing company |
+
+Each company maintains **independent** synchronization state. A failure synchronizing one company must **never** block synchronization of another.
+
+#### Tally Synchronization Dashboard
+
+| Element | Description |
+|---------|-------------|
+| **Connection Status** | Reachability of Tally ERP 9 from server |
+| **Configured Companies** | List of Tally companies under sync |
+| **Last Successful Sync** | Per company and aggregate |
+| **Next Scheduled Sync** | Based on configured interval |
+| **Pending Notifications** | Count of unresolved Tally-related notifications |
+| **Last Error** | Most recent integration error (if any) |
+| **Sync Now** | Manual trigger — Admin and Main Admin |
+
+#### Notification Center (Tally)
+
+Tally-related notifications appear in the **Notification Center**. Examples:
+
+| Notification Type | Trigger |
+|-------------------|---------|
+| **Serial Not Found** | Model exists in IMS; serial from invoice line not found |
+| **Model Mismatch** | Serial exists; product model on invoice line does not match IMS |
+| **Duplicate Sale** | Tally line matches a sale already recorded (manual or prior sync) |
+| **Synchronization Failure** | Company-level or connection-level sync failure |
+
+**Do not** generate notifications for ignored accessory/non-laptop invoice lines (see §8.6.1).
+
+#### Version 1 Exclusions (Tally)
+
+The following are **out of scope** for Version 1 Tally integration:
+
+- Returns, refunds, credit notes, invoice cancellation
+- Automatic inventory creation from Tally
+- Fuzzy or partial serial matching — **exact serial match only**
+
+### 8.6.1 Invoice Line Processing
+
+Every invoice line from Tally follows this decision workflow. Matching uses **exact** serial number and **exact** product model identity (brand + model number as mapped from Tally line to IMS `product_model`).
+
+| Condition | System Action |
+|-----------|---------------|
+| **Serial matches IMS** AND **Product Model matches IMS** | Mark inventory **Sold**; create `sale` record (`sale_source = tally`); write audit log |
+| **Product Model exists in IMS** BUT **Serial not found** | Create **Serial Not Found** notification; no inventory mutation |
+| **Serial exists in IMS** BUT **Product Model does not match** | Create **Model Mismatch** notification; no inventory mutation |
+| **Neither Serial nor Product Model exist in IMS** | **Ignore** line — assume accessory or non-laptop product not managed by IMS; **no notification** |
+
+**Duplicate protection:** If Tally later imports an invoice already recorded via manual mark-as-sold (same invoice/voucher identifier and serial), **do not** create a duplicate sale. Treat as the same transaction — idempotent no-op; optional **Duplicate Sale** notification for operator awareness.
+
+### 8.6.2 Manual Mark as Sold
+
+When Tally synchronization is unavailable or delayed, **Admin** and **Main Admin** may manually mark inventory as **Sold**. **Salesperson cannot** manually mark as sold.
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| **Invoice Number** | Yes | Links manual sale to Tally billing reference |
+| **Customer Name** | No | Reference copy only — Tally remains billing authority |
+| **Payment Mode** | No | e.g., Cash, UPI, Card — reference only |
+| **Sale Date** | No | Defaults to current date/time if omitted |
+
+System creates sale record (`sale_source = manual`), updates inventory to **Sold**, and writes audit log. If Tally sync later imports the same invoice for the same serial, duplicate protection applies (§8.6.1).
+
+### 8.7 Server Installation & First-Time Setup
+
+Applies to the **Dedicated Server PC** only. The server is installed once per business deployment.
+
+| Step | Actor | System Action |
+|------|-------|---------------|
+| 1 | Installer / Main Admin (future) | Installs PostgreSQL, Backend API, and sync workers per deployment runbook |
+| 2 | System | Runs database migrations; seeds reference data (brands, locations) and `system_initialized = false` |
+| 3 | System | Backend checks `system_initialized` — **not** whether a Main Admin user exists |
+| 4 | First connected client | If `system_initialized = false`, launches **First-Time Setup Wizard** |
+| 5 | Operator | Enters Company Name, Main Admin Name, Username, Password, Confirm Password |
+| 6 | System | Validates input; stores password only as **bcrypt** hash |
+| 7 | System | Creates Main Admin user; sets `system_initialized = true` and persists `company_name` |
+| 8 | System | Setup wizard does not appear again unless database is intentionally reinitialized |
+
+### 8.8 Client Installation & Server Connection
+
+Applies to **Desktop and Android clients**. Client installations **never create users**.
+
+| Step | Actor | System Action |
+|------|-------|---------------|
+| 1 | Staff | Installs client application (.msi, .dmg, or .apk) |
+| 2 | Client | On first launch, attempts **automatic server discovery** on the LAN |
+| 3a | Client | If **one** server is found — displays server information; asks for confirmation |
+| 3b | Client | If **multiple** servers are found — presents selection list |
+| 3c | Client | If discovery **fails** — automatically switches to **Manual Server Configuration** |
+| 4 | Staff (manual path) | Enters Server HTTPS URL; uses **Test Connection**; **Save Configuration** |
+| 5 | Client | Persists server URL locally only — no business data stored on device |
+
+**Future:** Discovery may use mDNS / Bonjour or equivalent LAN protocol — **TBD**.
+
+### 8.9 Post-Connection Login Flow
+
+| Step | Actor | System Action |
+|------|-------|---------------|
+| 1 | Client | Calls Backend `GET /api/v1/setup/status` |
+| 2a | System | If `system_initialized = true` — client shows **Login** screen |
+| 2b | System | If `system_initialized = false` — client launches **First-Time Setup Wizard** (see §8.7) |
+| 3 | User | Authenticates with username and password against Backend only |
+| 4 | System | Issues tokens; user proceeds to authorized inventory operations |
+
+### 8.10 User Management
+
+| Step | Actor | System Action |
+|------|-------|---------------|
+| 1 | Main Admin | Creates user accounts |
+| 2 | Main Admin | Disables user accounts |
+| 3 | Main Admin | Resets user passwords |
+| 4 | Main Admin | Assigns role: Main Admin, Admin, or Salesperson |
+| 5 | System | Enforces role permissions on all operations via Backend API |
+
+**Rule:** Only **Main Admin** may perform user management. Clients never create or store user accounts locally.
+
+### 8.11 Exports and Reports
 
 | Step | Actor | System Action |
 |------|-------|---------------|
@@ -406,7 +531,8 @@ Every laptop in WEBSTUDIO IMS exists in exactly one lifecycle state at any time.
 |-------|---------|-----------------|-------------|
 | **Received** | Laptop registered in the system but not yet available for sale — e.g., pending verification, labeling, or godown intake processing | New stock entered via Add Inventory; initial receipt at godown | Admin, Main Admin |
 | **Available** | Laptop is in active inventory and may be sold or moved | Receipt confirmed; returned to sellable stock (**Future**) | Admin, Main Admin |
-| **Sold** | Laptop has been billed and is no longer available inventory | Tally sale reflected; manual sale fallback | System (Tally sync), Admin, Salesperson (manual fallback) |
+| **Reserved** | Laptop held for a customer but not yet billed | Customer hold placed on available stock | Admin, Main Admin |
+| **Sold** | Laptop has been billed and is no longer available inventory | Tally sync (System); manual mark-as-sold (Admin, Main Admin) | System (Tally sync), Admin, Main Admin |
 
 **Default flow for new stock:** Received → Available (when Admin confirms unit is ready for sale).
 
@@ -416,7 +542,6 @@ Every laptop in WEBSTUDIO IMS exists in exactly one lifecycle state at any time.
 
 | State | Meaning | Planned Version |
 |-------|---------|-----------------|
-| **Reserved** | Laptop held for a customer but not yet billed | **Future** — TBD |
 | **Returned** | Laptop returned after sale; re-entry to inventory workflow | **Future** — TBD |
 | **Under Service** | Laptop with service center for repair or warranty work | **Future** — Version 2+ |
 | **Disposed** | Laptop written off, damaged beyond sale, or removed from active inventory permanently | **Future** — TBD |
@@ -427,8 +552,11 @@ Every laptop in WEBSTUDIO IMS exists in exactly one lifecycle state at any time.
 |------|-----|---------|-------|-----------|
 | — | Received | ✓ | Admin, Main Admin | New inventory addition |
 | Received | Available | ✓ | Admin, Main Admin | Unit verified ready for sale |
+| Available | Reserved | ✓ | Admin, Main Admin | Customer hold |
+| Reserved | Available | ✓ | Admin, Main Admin | Hold released |
 | Received | Sold | — | — | **Not allowed** — must pass through Available |
-| Available | Sold | ✓ | System, Admin, Salesperson | Tally sale or manual fallback |
+| Available | Sold | ✓ | System (Tally sync), Admin, Main Admin | Tally invoice match or manual mark-as-sold |
+| Reserved | Sold | ✓ | System (Tally sync), Admin, Main Admin | Tally invoice match or manual mark-as-sold |
 | Available | Received | — | — | **Not allowed** — use movement, not state reversal |
 | Sold | Available | — | — | **Future** — Returns (Version 2+) |
 | Sold | Any | — | — | Sold is terminal in Version 1 |
@@ -459,14 +587,14 @@ Each laptop inventory record must maintain:
 
 | Attribute | Cardinality | Business Rule |
 |-----------|-------------|---------------|
-| **Serial Number** | Exactly one; globally unique | Primary identity — see BR-01 |
-| **Model Number** | Exactly one; may repeat across records | Product SKU — groups units for presentation |
-| **Brand** | Exactly one | Required; links to brand reference |
-| **Configuration** | Exactly one | Describes processor, GPU, RAM, storage, screen size, and other specs — free text or structured **TBD** |
+| **Serial Number** | Exactly one; globally unique | Primary identity — see BR-01; editable by authorized users with uniqueness enforced |
+| **Model Number** | Exactly one; may repeat across records | Product SKU — groups units for presentation; links to Product Model |
+| **Brand** | Exactly one | Required; links to brand reference via Product Model |
+| **Product Specifications** | Via Product Model | CPU, GPU, RAM, storage — structured on Product Model, not duplicated per unit |
 | **Color** | Exactly one | Per-unit chassis/finish color — **not** a Product Model attribute; see [§10.4](#104-color-attribute) |
-| **Current Location** | Exactly one | ASUS Exclusive Store, WEBSTUDIO Multi-brand Store, or Warehouse/Godown |
+| **Current Location** | Exactly one | Stored as `current_location_id`; updated on transfer — no separate movement table |
 | **Current Status** | Exactly one | Lifecycle state — see [Section 9](#9-inventory-lifecycle) |
-| **Audit History** | Complete; append-only | Every create, update, movement, and status change |
+| **Audit History** | Complete; append-only | Sole source of truth for every create, update, location change, and status change |
 
 Optional attributes (customer details, invoice reference on sold units) are defined in FR-INV-09 and FR-SLS-02.
 
@@ -508,6 +636,29 @@ The following fields are **intentionally excluded from Version 1** to keep the p
 
 Do not design database columns, API fields, or UI inputs for these attributes in Version 1.
 
+### 10.6 Operational Ownership Fields
+
+Version 1 business entities store **operational ownership** only — who created and last updated each record. The backend sets these automatically from the authenticated user; clients do not supply them.
+
+| Field | Purpose |
+|-------|---------|
+| `created_by_user_id` | User who created the record |
+| `updated_by_user_id` | User who last modified the record |
+
+**Applies to:** Brand, Location, Product Model, Inventory Item, and other mutable business tables as defined in DATABASE_DESIGN.
+
+**Implementation order:** Ownership columns are added in migration `0008_ownership_columns` after `0007_users_authentication` — see [DATABASE_DESIGN §16.5](../database/DATABASE_DESIGN.md#165-implementation-order-recommended).
+
+**Excluded Version 1 action-specific fields** (use Audit Log instead):
+
+| Field | Status |
+|-------|--------|
+| `sold_by_user_id` | **Excluded** — sale actor captured in `sale.recorded_by_user_id` (manual) or audit; not on inventory item |
+| `reserved_by_user_id` | **Excluded** |
+| `approved_by_user_id` | **Excluded** |
+
+**Design principle:** Business entities hold current state (`current_location_id`, lifecycle status) and operational ownership (`created_by`, `updated_by`). The Audit Log is the sole persistent history for every significant action — location transfers, lifecycle transitions, and field-level changes — with no separate movement table.
+
 ---
 
 ## 11. Inventory Presentation Rules
@@ -524,9 +675,9 @@ The inventory list must be **primarily grouped by Model Number** (within Brand).
 ASUS Vivobook XYZ
   Available Units: 5
   [Expand]
-    Serial Number: SN-001  |  Color: Black  |  Configuration: i7 / 16GB / 512GB / RTX 4060  |  Location: ASUS Exclusive Store
-    Serial Number: SN-002  |  Color: Silver |  Configuration: i7 / 16GB / 1TB / RTX 4060   |  Location: Warehouse / Godown
-    Serial Number: SN-003  |  Color: Blue   |  Configuration: i5 / 8GB / 512GB              |  Location: WEBSTUDIO Multi-brand Store
+    Serial Number: SN-001  |  Color: Black  |  Specs: i7 / 16GB / 512GB SSD / RTX 4060  |  Location: ASUS Exclusive Store
+    Serial Number: SN-002  |  Color: Silver |  Specs: i7 / 16GB / 1TB SSD / RTX 4060   |  Location: Warehouse / Godown
+    Serial Number: SN-003  |  Color: Blue   |  Specs: i5 / 8GB / 512GB SSD              |  Location: WEBSTUDIO Multi-brand Store
     ...
 ```
 
@@ -537,8 +688,8 @@ ASUS Vivobook XYZ
 | PR-01 | Inventory list is grouped by **Brand**, then **Model Number** |
 | PR-02 | Each model group displays **count of available units** prominently |
 | PR-03 | Individual serial numbers are visible on **expand** — not hidden, but not default clutter |
-| PR-04 | Each expanded serial row shows **Color**, **Configuration**, and **Current Location** at minimum |
-| PR-05 | Each expanded serial row shows **Current Status** (Received, Available, Sold) |
+| PR-04 | Each expanded serial row shows **Color**, **Product Specifications** (from Product Model), and **Current Location** at minimum |
+| PR-05 | Each expanded serial row shows **Current Status** (Received, Available, Reserved, Sold) |
 | PR-06 | Sold units may appear in model group with distinct status indicator or in separate sold view — **TBD** with business owner |
 | PR-07 | Group counts reflect **Available** status units unless user explicitly filters otherwise |
 | PR-08 | Search results may bypass grouping and show flat serial list when search specificity warrants it |
@@ -560,18 +711,16 @@ Brand
   └── has many → Product Models (model number within brand)
         └── has many → Inventory Units (one physical laptop each)
               └── may have one → Sales Record (when Sold)
-              └── has many → Inventory Movements (location changes)
-              └── has many → Audit Log Entries (all changes)
+              └── has many → Audit Log Entries (all changes — location, status, lifecycle, field updates)
 ```
 
 | Relationship | Description |
 |--------------|-------------|
 | **Brand → Product Model** | Every product model belongs to one brand. A brand has many product models. |
-| **Product Model → Inventory Unit** | Many laptops share a product model. Units differ by serial number, color, and configuration. |
+| **Product Model → Inventory Unit** | Many laptops share a product model. Units differ by serial number and color; specifications live on the Product Model. |
 | **Brand → Inventory Unit** | Every laptop belongs to one brand (via product model). |
 | **Inventory Unit → Sales Record** | When sold, a laptop has one associated sales record with customer and invoice reference. |
-| **Inventory Unit → Inventory Movement** | Each location change produces a movement record linked to the serial number. |
-| **Inventory Unit → Audit Log** | Every mutation on the unit produces an audit entry. |
+| **Inventory Unit → Audit Log** | Every mutation on the unit — including location transfers — produces an audit entry; audit log is the sole history store. |
 
 ### 12.2 Product Model Lifecycle
 
@@ -600,17 +749,17 @@ Product Models have a lifecycle distinct from inventory unit lifecycle.
 
 ```
 User
-  └── performs → Inventory Movement
   └── performs → Inventory Addition
+  └── performs → Location Transfer (updates current_location_id; history in Audit Log)
   └── performs → Status Change
   └── triggers (via action) → Audit Log Entry
 ```
 
 | Relationship | Description |
 |--------------|-------------|
-| **User → Inventory Movement** | Every movement records the acting user. |
+| **User → Location Transfer** | Every location change records the acting user in audit log. |
 | **User → Audit Log** | Every auditable action records the acting user. |
-| **Inventory Movement → Audit Log** | Movement creation produces an audit entry. |
+| **Location Transfer → Audit Log** | Location change produces an audit entry with from/to locations — no separate movement record. |
 | **Status Change → Audit Log** | Lifecycle transition produces an audit entry. |
 | **Status Change → Sales Record** | Transition to Sold creates or links a sales record. |
 
@@ -694,7 +843,7 @@ This section defines business expectations for barcode scanner use. It is **not*
 | 1 | When Add Inventory is opened, cursor **automatically focuses** the Serial Number field |
 | 2 | User scans barcode → serial number **immediately populates** the field |
 | 3 | If configured by Main Admin, scanner **Enter key automatically submits** the serial field and advances to next field (**TBD** — configurable) |
-| 4 | User completes remaining fields: Brand, Model Number, **Color**, Configuration, Location |
+| 4 | User completes remaining fields: Brand, Model Number, **Color**, Location (Product Model selected or created with specifications) |
 | 5 | System validates serial uniqueness and saves |
 
 ### 14.3 Search Workflow
@@ -720,12 +869,31 @@ This section defines business expectations for barcode scanner use. It is **not*
 
 Requirements use the prefix **FR-** for traceability. **Mandatory** requirements must be delivered in Version 1. **Future** requirements are noted explicitly.
 
+### 15.0 Server Setup & Client Onboarding
+
+| ID | Requirement | Priority | Notes |
+|----|-------------|----------|-------|
+| FR-INIT-01 | Backend shall determine initialization from `system_initialized` in `system_settings` — **not** from Main Admin user existence | Mandatory | See BR-28 |
+| FR-INIT-02 | Fresh deployment shall seed `system_initialized = false` and shall **not** seed a Main Admin user | Mandatory | Reference data only in migrations |
+| FR-INIT-03 | When `system_initialized = false`, system shall expose First-Time Setup Wizard collecting Company Name, Main Admin Name, Username, Password, Confirm Password | Mandatory | Any connected client after server install |
+| FR-INIT-04 | Setup shall store passwords only as bcrypt hashes on the server | Mandatory | See BR-30 |
+| FR-INIT-05 | Successful setup shall create Main Admin, set `system_initialized = true`, and persist `company_name` | Mandatory | Wizard must not reappear unless DB reinitialized |
+| FR-INIT-06 | Backend shall expose `GET /api/v1/setup/status` returning initialization state | Mandatory | Callable without authentication when not initialized |
+| FR-INIT-07 | Backend shall expose `POST /api/v1/setup/initialize` accepting setup wizard payload when `system_initialized = false` | Mandatory | Rejected with conflict when already initialized |
+| FR-CLIENT-01 | Client installations shall **never** create users | Mandatory | See BR-29 |
+| FR-CLIENT-02 | Client first launch shall attempt automatic server discovery on LAN | Mandatory | |
+| FR-CLIENT-03 | Client shall confirm single discovered server or let user select among multiple | Mandatory | |
+| FR-CLIENT-04 | Client shall fall back to Manual Server Configuration (HTTPS URL, Test Connection, Save) when discovery fails | Mandatory | |
+| FR-CLIENT-05 | After server connection, client shall call setup status before showing Login or Setup Wizard | Mandatory | See §8.9 |
+| FR-CLIENT-06 | Clients shall not persist business data locally in Version 1 | Mandatory | Server URL, tokens, theme, layout only — see BR-31 |
+| FR-CLIENT-07 | Automatic server discovery may use mDNS / Bonjour or equivalent | Future | Workflow defined V1; protocol **TBD** |
+
 ### 15.1 Authentication
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
 | FR-AUTH-01 | System shall require authentication before any inventory operation | Mandatory | Via Backend API |
-| FR-AUTH-02 | System shall support secure login for all platforms (Windows, macOS, Android) | Mandatory | Method **TBD** (username/password minimum) |
+| FR-AUTH-02 | System shall support secure login for all platforms (Windows, macOS, Android) | Mandatory | Username/password; login blocked until `system_initialized = true` |
 | FR-AUTH-03 | System shall terminate inactive sessions after configurable timeout | Mandatory | Default **TBD** |
 | FR-AUTH-04 | System shall lock account after configurable failed login attempts | Mandatory | Threshold **TBD** |
 | FR-AUTH-05 | System shall support password change by user and reset by Main Admin | Mandatory | |
@@ -735,7 +903,7 @@ Requirements use the prefix **FR-** for traceability. **Mandatory** requirements
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| FR-USER-01 | Main Admin shall create, edit, deactivate, and reactivate user accounts | Mandatory | |
+| FR-USER-01 | Main Admin shall create, disable, reset passwords for, and assign roles to user accounts | Mandatory | Only Main Admin — see §8.10 |
 | FR-USER-02 | Main Admin shall assign one role per user: Main Admin, Admin, or Salesperson | Mandatory | |
 | FR-USER-03 | System shall prevent deactivation of the last Main Admin account | Mandatory | |
 | FR-USER-04 | System shall record user management actions in audit log | Mandatory | |
@@ -746,13 +914,13 @@ Requirements use the prefix **FR-** for traceability. **Mandatory** requirements
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| FR-INV-01 | System shall register laptops with Brand, Model Number, Serial Number, **Color**, Configuration, and Current Location | Mandatory | One record = one physical laptop — see [Section 10](#10-inventory-entity-definition) |
-| FR-INV-02 | System shall treat Serial Number as the globally unique identifier for each laptop | Mandatory | See BR-01 |
+| FR-INV-01 | System shall register laptops with Brand, Model Number, Serial Number, **Color**, and Current Location — specifications via linked Product Model | Mandatory | One record = one physical laptop — see [Section 10](#10-inventory-entity-definition) |
+| FR-INV-02 | System shall treat Serial Number as the globally unique identifier for each laptop; authorized users may edit serial numbers with uniqueness always enforced | Mandatory | See BR-01 |
 | FR-INV-03 | System shall allow Model Number to repeat across multiple laptops | Mandatory | See BR-02 |
-| FR-INV-04 | System shall enforce exactly one current location per laptop | Mandatory | See BR-03 |
-| FR-INV-05 | System shall support lifecycle states: **Received**, **Available**, **Sold** in Version 1 | Mandatory | See [Section 9](#9-inventory-lifecycle) |
-| FR-INV-06 | System shall allow editing of laptop attributes by authorized roles | Mandatory | Permission matrix in [Section 17](#17-user-roles-and-permissions) |
-| FR-INV-07 | System shall prevent deletion of inventory records — deactivation or status change only | Mandatory | Audit integrity |
+| FR-INV-04 | System shall enforce exactly one current location per laptop (`current_location_id`) | Mandatory | See BR-03; location change history in audit log |
+| FR-INV-05 | System shall support lifecycle states: **Received**, **Available**, **Reserved**, **Sold** in Version 1 | Mandatory | See [Section 9](#9-inventory-lifecycle) |
+| FR-INV-06 | System shall allow editing of laptop attributes (including serial number) by authorized roles | Mandatory | Permission matrix in [Section 17](#17-user-roles-and-permissions) |
+| FR-INV-07 | System shall allow permanent deletion of an inventory record only when status is not **Sold** and no sale or audit references exist | Mandatory | See DATABASE_DESIGN §4.6 |
 | FR-INV-08 | System shall restrict Version 1 inventory to **laptops only** | Mandatory | See BR-10 |
 | FR-INV-09 | System shall store sale-related fields: customer details and invoice reference (**field list TBD**) | Mandatory | Currently manual in Excel |
 | FR-INV-10 | System shall display inventory grouped by Brand and Model Number with expandable serial units | Mandatory | See [Section 11](#11-inventory-presentation-rules), PR-01–PR-08 |
@@ -773,7 +941,7 @@ Requirements use the prefix **FR-** for traceability. **Mandatory** requirements
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| FR-PM-01 | System shall maintain Product Models as distinct entities within a Brand (model number + brand) | Mandatory | See [§12.2](#122-product-model-lifecycle) |
+| FR-PM-01 | System shall maintain Product Models as distinct entities within a Brand (model number + brand) with structured specification fields: model name, CPU, GPU (optional), RAM, and storage | Mandatory | See [§12.2](#122-product-model-lifecycle) |
 | FR-PM-02 | Product Models shall have lifecycle states: **Active** and **Archived** | Mandatory | PM-01–PM-07 |
 | FR-PM-03 | Main Admin shall Archive and Restore Product Models | Mandatory | |
 | FR-PM-04 | System shall prevent selection of Archived Product Models during inventory creation | Mandatory | PM-04 |
@@ -795,9 +963,9 @@ Requirements use the prefix **FR-** for traceability. **Mandatory** requirements
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
 | FR-MOV-01 | Authorized users shall initiate transfer of a laptop from one location to another | Mandatory | Targets individual serial number |
-| FR-MOV-02 | System shall record source location, destination location, actor, timestamp, and optional reason | Mandatory | Audit requirement |
-| FR-MOV-03 | System shall update current location upon successful movement | Mandatory | Does not change lifecycle state — see LC-03 |
-| FR-MOV-04 | System shall display movement history per laptop | Mandatory | |
+| FR-MOV-02 | System shall record source location, destination location, actor, timestamp, and optional reason in audit log | Mandatory | Single source of truth for location change history — see FR-AUD-08 |
+| FR-MOV-03 | System shall update `current_location_id` upon successful movement | Mandatory | Does not change lifecycle state — see LC-03 |
+| FR-MOV-04 | System shall display inventory history per laptop (location changes and lifecycle events) via audit log or serial lifecycle API | Mandatory | No separate movement table |
 | FR-MOV-05 | System shall support movement approval workflow | Future | **TBD** — may be required for godown transfers |
 | FR-MOV-06 | System shall prevent movement of sold laptops | Mandatory | See LC-04 |
 
@@ -811,25 +979,26 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 | FR-SRH-02 | System shall search by Serial Number with exact and partial match | Mandatory | Highest priority search field |
 | FR-SRH-03 | System shall search by Model Number and Brand | Mandatory | Supports model-first browsing |
 | FR-SRH-04 | System shall search by Current Location and lifecycle Status | Mandatory | |
-| FR-SRH-05 | System shall search within Configuration text for: Processor, Graphics Card (GPU), RAM, Storage, Screen Size | Mandatory | Configuration-aware search |
-| FR-SRH-06 | Search for partial configuration terms shall return all matching laptops — e.g., `4060` returns all units with RTX 4060; `i7` returns all Intel Core i7 units; `16GB` returns all 16GB RAM units | Mandatory | Case-insensitive **TBD** |
-| FR-SRH-07 | System shall support **combined search criteria** — Brand, Model Number, Serial Number, configuration terms (CPU/GPU/RAM/Storage), Color, Location, and Status may be applied together | Mandatory | Multi-filter search |
+| FR-SRH-05 | System shall search Product Model specification fields: Processor (CPU), Graphics Card (GPU), RAM, and Storage | Mandatory | Product-specification-aware search via Product Model join |
+| FR-SRH-06 | Search for partial specification terms shall return all matching laptops — e.g., `4060` returns all units whose Product Model GPU matches; `i7` returns all Intel Core i7 units; `16GB` returns all 16GB RAM units | Mandatory | Case-insensitive **TBD** |
+| FR-SRH-07 | System shall support **combined search criteria** — Brand, Model Number, Serial Number, specification terms (CPU/GPU/RAM/Storage via Product Model), Color, Location, and Status may be applied together | Mandatory | Multi-filter search |
 | FR-SRH-08 | System shall return results within perceived instant response time | Mandatory | Numeric target **TBD** |
 | FR-SRH-09 | System shall support barcode scanner input for serial number search | Mandatory | See [Section 14](#14-barcode-scanner-business-behaviour) |
 | FR-SRH-10 | Search shall be keyboard-accessible on desktop platforms | Mandatory | See Design Principles in Project Bible |
 | FR-SRH-11 | Search results for specific serial number shall show unit detail directly | Mandatory | |
-| FR-SRH-12 | Search results for model or configuration terms may show grouped or flat list — **TBD** in UI spec | Mandatory | See PR-08 |
+| FR-SRH-12 | Search results for model or specification terms may show grouped or flat list — **TBD** in UI spec | Mandatory | See PR-08 |
 | FR-SRH-13 | System shall search and filter by **Color** with exact and partial match | Mandatory | See [§10.4](#104-color-attribute) |
 
 ### 15.8 Sales History
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| FR-SLS-01 | System shall record sales history when inventory status changes to Sold | Mandatory | |
-| FR-SLS-02 | Sales history shall include serial number, sale date/time, actor, customer details, invoice reference | Mandatory | Invoice reference links to Tally |
+| FR-SLS-01 | System shall record sales history when inventory status changes to Sold | Mandatory | Tally sync or manual mark-as-sold |
+| FR-SLS-02 | Sales history shall include serial number, sale date/time, actor (manual only), invoice number, customer name (optional), payment mode (optional), sale source (`tally` or `manual`) | Mandatory | Invoice number required for manual sales |
 | FR-SLS-03 | Authorized users shall view sales history with filter by date range, location, brand | Mandatory | |
-| FR-SLS-04 | System shall support manual sale reflection when Tally sync unavailable | Mandatory | Fallback workflow **TBD** |
-| FR-SLS-05 | System shall not generate invoices or billing documents | Mandatory | Tally owns billing |
+| FR-SLS-04 | Admin and Main Admin shall manually mark inventory as Sold when Tally sync is unavailable or delayed | Mandatory | See §8.6.2 — Salesperson **excluded** |
+| FR-SLS-05 | System shall not generate invoices or billing documents | Mandatory | Tally owns billing — IMS read-only |
+| FR-SLS-06 | Manual and Tally sales for the same invoice and serial shall not create duplicate sale records | Mandatory | See §8.6.1 duplicate protection |
 
 ### 15.9 Excel Synchronization
 
@@ -837,7 +1006,7 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 |----|-------------|----------|-------|
 | FR-XLS-01 | System shall synchronize inventory from PostgreSQL to Excel on a defined schedule | Mandatory | Schedule **TBD** |
 | FR-XLS-02 | System shall support manual trigger of Excel sync by Main Admin | Mandatory | |
-| FR-XLS-03 | Excel output shall include columns: Brand, Model Number, Serial Number, **Color**, Configuration, Current Location, Status | Mandatory | Per [§10.4](#104-color-attribute) |
+| FR-XLS-03 | Excel output shall include columns: Brand, Model Number, Serial Number, **Color**, Product Specifications (CPU, GPU, RAM, Storage from Product Model), Current Location, Status | Mandatory | Per [§10.4](#104-color-attribute) |
 | FR-XLS-04 | System shall log every sync attempt with timestamp, outcome, and record count | Mandatory | |
 | FR-XLS-05 | System shall surface sync failures to Main Admin | Mandatory | |
 | FR-XLS-06 | Excel sync shall never write inventory changes back to PostgreSQL | Mandatory | See BR-08 |
@@ -847,14 +1016,32 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| FR-TLY-01 | System shall detect or receive billing events from Tally ERP 9 | Mandatory | Mechanism **TBD** |
-| FR-TLY-02 | System shall map Tally sale data to inventory records by serial number or mapped identifier | Mandatory | Mapping spec **TBD** |
-| FR-TLY-03 | System shall update inventory lifecycle status to Sold upon confirmed Tally sale | Mandatory | Available → Sold |
-| FR-TLY-04 | System shall log every Tally integration event | Mandatory | |
-| FR-TLY-05 | System shall surface integration failures to Main Admin | Mandatory | |
-| FR-TLY-06 | System shall not replace or replicate Tally billing functionality | Mandatory | See BR-07 |
-| FR-TLY-07 | Tally integration shall operate through Backend API — never direct database access | Mandatory | Project Bible N2 |
-| FR-TLY-08 | System shall support manual reconciliation when Tally sync fails | Mandatory | Workflow **TBD** |
+| FR-TLY-01 | System shall read invoices from Tally ERP 9 on a configurable automatic interval (default **30 minutes**) | Mandatory | IMS never writes to Tally |
+| FR-TLY-02 | System shall support multiple Tally companies with independent sync state per company | Mandatory | Initial: WEBSTUDIO, ASUS Exclusive Store |
+| FR-TLY-03 | Each company shall store `last_successful_sync_time` and `last_processed_voucher_identifier` | Mandatory | See DATABASE_DESIGN §4.14 |
+| FR-TLY-04 | Failure synchronizing one Tally company shall not stop synchronization of other companies | Mandatory | Per-company isolation |
+| FR-TLY-05 | System shall process each invoice line per exact serial and product model matching rules in §8.6.1 | Mandatory | No fuzzy matching |
+| FR-TLY-06 | On serial and model match, system shall mark inventory Sold, create sale record, and write audit log | Mandatory | `sale_source = tally` |
+| FR-TLY-07 | System shall ignore invoice lines where neither serial nor product model exist in IMS | Mandatory | No notification for accessories |
+| FR-TLY-08 | System shall create notifications for Serial Not Found, Model Mismatch, Duplicate Sale, and Synchronization Failure | Mandatory | See §8.6 Notification Center |
+| FR-TLY-09 | System shall log every Tally poll and invoice line processing outcome | Mandatory | |
+| FR-TLY-10 | Admin and Main Admin shall trigger **Sync Now** for Tally synchronization | Mandatory | |
+| FR-TLY-11 | System shall provide Tally Synchronization Dashboard with connection status, configured companies, last successful sync, next scheduled sync, pending notifications, last error, and Sync Now | Mandatory | See §8.6 |
+| FR-TLY-12 | System shall not replace or replicate Tally billing functionality | Mandatory | See BR-05 |
+| FR-TLY-13 | Tally integration shall operate through Backend API — never direct database access | Mandatory | Project Bible N2 |
+| FR-TLY-14 | System shall treat Tally-imported invoice matching an existing manual sale as the same transaction — no duplicate sale | Mandatory | See FR-SLS-06 |
+| FR-TLY-15 | Version 1 shall exclude returns, refunds, credit notes, invoice cancellation, and automatic inventory creation from Tally | Mandatory | See §8.6 exclusions |
+
+### 15.10.1 Notifications (Tally)
+
+| ID | Requirement | Priority | Notes |
+|----|-------------|----------|-------|
+| FR-NOT-01 | Notification Center shall include Tally integration notifications | Mandatory | |
+| FR-NOT-02 | System shall create Serial Not Found notification when model exists but serial not found on invoice line | Mandatory | |
+| FR-NOT-03 | System shall create Model Mismatch notification when serial exists but model does not match | Mandatory | |
+| FR-NOT-04 | System shall create Duplicate Sale notification when appropriate for operator awareness | Mandatory | No duplicate sale record |
+| FR-NOT-05 | System shall create Synchronization Failure notification on company or connection failures | Mandatory | |
+| FR-NOT-06 | System shall not create notifications for ignored non-laptop/accessory invoice lines | Mandatory | See FR-TLY-07 |
 
 ### 15.11 Reports and Export
 
@@ -862,7 +1049,7 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 |----|-------------|----------|-------|
 | FR-RPT-01 | System shall provide inventory summary report by location | Mandatory | |
 | FR-RPT-02 | System shall provide sold inventory report by date range | Mandatory | |
-| FR-RPT-03 | System shall provide movement history report | Mandatory | |
+| FR-RPT-03 | System shall provide movement history report sourced from audit log | Mandatory | Location changes and related audit entries |
 | FR-RPT-04 | System shall export reports to Excel and PDF (**TBD**) | Mandatory | Minimum: Excel |
 | FR-RPT-05 | System shall provide stock count report (available units by brand/model/location) | Mandatory | |
 | FR-RPT-06 | Custom report builder | Future | Version 2+ |
@@ -885,11 +1072,11 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
 | FR-SET-01 | Main Admin shall configure Excel sync schedule | Mandatory | |
-| FR-SET-02 | Main Admin shall configure Tally integration connection parameters | Mandatory | Parameters **TBD** |
+| FR-SET-02 | Main Admin shall configure Tally integration connection parameters and sync interval | Mandatory | Default interval 30 minutes |
 | FR-SET-03 | Main Admin shall configure session timeout and lockout thresholds | Mandatory | |
 | FR-SET-04 | Main Admin shall configure application display name and business details | Mandatory | Fields **TBD** |
 | FR-SET-05 | System shall support Light and Dark theme default per user or global | Mandatory | |
-| FR-SET-06 | Main Admin shall view system health and integration status | Mandatory | Detail level **TBD** |
+| FR-SET-06 | Main Admin and Admin shall view system health, integration status, and Tally Synchronization Dashboard | Mandatory | See FR-TLY-11 |
 | FR-SET-07 | Main Admin shall configure barcode scanner auto-submit behaviour on Enter | Mandatory | See BC-03 — default **TBD** |
 
 ### 15.14 Audit Logs
@@ -899,10 +1086,12 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 | FR-AUD-01 | System shall record audit entry for every inventory create, update, status change, and movement | Mandatory | |
 | FR-AUD-02 | System shall record audit entry for user management actions | Mandatory | |
 | FR-AUD-03 | System shall record audit entry for settings changes | Mandatory | |
-| FR-AUD-04 | Audit entry shall include actor, timestamp, action type, entity identifier, before/after state (**detail level TBD**) | Mandatory | |
+| FR-AUD-04 | Audit entry shall include: user ID, user name (optional snapshot), user role, action performed, entity type, entity ID, timestamp, previous values (where applicable), new values (where applicable), device/platform (optional), IP address (optional), reason (optional) | Mandatory | See [§10.6](#106-operational-ownership-fields) |
 | FR-AUD-05 | Main Admin shall search and filter audit logs | Mandatory | |
 | FR-AUD-06 | Audit logs shall be immutable — no edit or delete | Mandatory | |
 | FR-AUD-07 | Audit log retention period | Mandatory | Duration **TBD** |
+| FR-AUD-08 | Location-change audit entries shall record from location, to location, actor (authenticated user), and timestamp; optional reason — audit log is the sole persistent history for movements | Mandatory | Replaces separate `inventory_movements` table |
+| FR-AUD-09 | Business entities shall store `created_by_user_id` and `updated_by_user_id`, set automatically by the backend from the authenticated user | Mandatory | See [§10.6](#106-operational-ownership-fields) |
 
 ### 15.15 Barcode Scanner
 
@@ -924,7 +1113,7 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
-| NFR-PERF-01 | Serial number and configuration-term search shall feel instant to the user on desktop | Mandatory | Numeric target **TBD** |
+| NFR-PERF-01 | Serial number and product-specification search shall feel instant to the user on desktop | Mandatory | Numeric target **TBD** |
 | NFR-PERF-02 | UI interactions shall not block during network requests — loading states required | Mandatory | |
 | NFR-PERF-03 | Application startup shall reach usable state quickly | Mandatory | Target **TBD** |
 | NFR-PERF-04 | Excel and Tally sync shall complete within acceptable window | Mandatory | Window **TBD** |
@@ -1030,11 +1219,26 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 |------|-------------|
 | **Main Admin** | Full system access. Typically one or two accounts for business owner and IT lead. |
 | **Admin** | Inventory and operational management. Store managers and warehouse supervisors. |
-| **Salesperson** | Front-line search, sale verification, and limited inventory actions. |
+| **Salesperson** | Front-line search, sale verification, and inventory movement. |
 
 Future roles: **TBD**.
 
 ### 17.2 Permission Matrix
+
+| Action | Salesperson | Admin | Main Admin |
+|--------|:-----------:|:-----:|:----------:|
+| Search inventory | ✓ | ✓ | ✓ |
+| Add inventory | — | ✓ | ✓ |
+| Edit inventory | — | ✓ | ✓ |
+| Move inventory | ✓ | ✓ | ✓ |
+| Delete product model | — | — | ✓ |
+| Excel synchronization | — | ✓ | ✓ |
+| Tally synchronization | — | ✓ | ✓ |
+| Tally Sync Now | — | ✓ | ✓ |
+| Manual mark as Sold | — | ✓ | ✓ |
+| System settings | — | — | ✓ |
+
+### 17.3 Detailed Capability Matrix
 
 | Capability | Main Admin | Admin | Salesperson |
 |------------|:----------:|:-----:|:-----------:|
@@ -1042,17 +1246,17 @@ Future roles: **TBD**.
 | Login / logout | ✓ | ✓ | ✓ |
 | Change own password | ✓ | ✓ | ✓ |
 | **User Management** | | | |
-| Create / edit / deactivate users | ✓ | — | — |
+| Create / disable users; reset passwords | ✓ | — | — |
 | Assign roles | ✓ | — | — |
 | View all users | ✓ | — | — |
 | **Inventory** | | | |
 | Add inventory | ✓ | ✓ | — |
 | Edit inventory attributes | ✓ | ✓ | — |
 | View inventory | ✓ | ✓ | ✓ |
-| Change inventory status (sold) — manual fallback | ✓ | ✓ | ✓ |
+| Change inventory status (sold) — manual | — | ✓ | — |
 | **Movement** | | | |
-| Initiate movement | ✓ | ✓ | Request **TBD** |
-| View movement history | ✓ | ✓ | ✓ |
+| Initiate movement | ✓ | ✓ | ✓ |
+| View inventory history (audit) | ✓ | ✓ | ✓ |
 | **Search** | | | |
 | Global search | ✓ | ✓ | ✓ |
 | **Dashboard** | | | |
@@ -1066,9 +1270,11 @@ Future roles: **TBD**.
 | **Reports & Export** | | | |
 | View and export reports | ✓ | ✓ | — |
 | **Integrations** | | | |
-| Configure Excel sync | ✓ | — | — |
+| Configure Excel sync schedule | ✓ | — | — |
 | Configure Tally integration | ✓ | — | — |
-| Trigger manual sync | ✓ | ✓ | — |
+| Trigger manual Excel sync | ✓ | ✓ | — |
+| Trigger Tally Sync Now | ✓ | ✓ | — |
+| View Tally Synchronization Dashboard | ✓ | ✓ | — |
 | View sync status | ✓ | ✓ | — |
 | **System Settings** | | | |
 | Configure all settings | ✓ | — | — |
@@ -1077,7 +1283,7 @@ Future roles: **TBD**.
 | **Backup** | | | |
 | Trigger backup / restore | ✓ | — | — |
 
-**Legend:** ✓ = permitted, — = not permitted. Refinements **TBD** during specification phase.
+**Legend:** ✓ = permitted, — = not permitted.
 
 ---
 
@@ -1087,10 +1293,10 @@ Business rules are authoritative for Version 1. Implementation belongs exclusive
 
 | ID | Rule | Rationale |
 |----|------|-----------|
-| BR-01 | **Serial Numbers are globally unique.** No two inventory records may share the same serial number. | Prevents duplicate stock; enables reliable search and audit |
+| BR-01 | **Serial Numbers are globally unique.** No two inventory records may share the same serial number. Authorized users may edit a serial number; uniqueness is always enforced. | Prevents duplicate stock; enables reliable search and audit |
 | BR-02 | **Model Numbers may repeat.** One model number may identify many laptops. | Same product SKU appears in multiple physical units |
 | BR-03 | **Every laptop has exactly one current location.** A laptop cannot be in two locations simultaneously. | Physical reality; enables location-based stock counts |
-| BR-04 | **Inventory movements are logged.** Every location change records actor, timestamp, source, destination. | Audit and dispute resolution |
+| BR-04 | **Inventory movements are logged.** Every location change records actor, timestamp, source, and destination in audit log. | Audit and dispute resolution |
 | BR-05 | **Tally ERP 9 is the billing system.** WEBSTUDIO IMS never generates invoices, receipts, or accounting entries. | Business constraint; Tally is entrenched and sufficient |
 | BR-06 | **PostgreSQL is the single source of truth** for inventory data, accessed exclusively via Backend API. | Eliminates conflicting records |
 | BR-07 | **Excel is a synchronized representation** of inventory — not authoritative. Changes in Excel do not drive inventory state. | Business continuity during transition |
@@ -1105,13 +1311,25 @@ Business rules are authoritative for Version 1. Implementation belongs exclusive
 | BR-16 | **One inventory record equals one physical laptop.** Quantity-based inventory is not used in Version 1. | Serial-number-first tracking |
 | BR-17 | **Inventory list is grouped by Model Number** within Brand, with serial units expandable beneath. | Matches retail mental model — see PR-01 |
 | BR-18 | **Lifecycle states are enforced.** Only allowed transitions in [Section 9.3](#93-allowed-transitions--version-1) are permitted. | Prevents invalid state changes |
-| BR-19 | **Configuration is searchable.** Processor, GPU, RAM, storage, and screen size terms in Configuration field must be findable via search. | Search-first for spec-based customer queries |
+| BR-19 | **Product specifications are searchable** via Product Model fields (CPU, GPU, RAM, storage). | Search-first for spec-based customer queries |
 | BR-20 | **Movement does not change lifecycle state.** Location changes are separate from status changes. | LC-03 |
 | BR-21 | **Barcode scanner input is equivalent to keyboard input** for serial number fields. | No separate scanner workflow — see Section 14 |
 | BR-22 | **Color is a per-unit inventory attribute** — not a Product Model attribute. Same model number may exist in multiple colors. | See [§10.4](#104-color-attribute) |
-| BR-23 | **Color is searchable and filterable** alongside brand, model, serial, configuration, location, and status. | FR-SRH-07, FR-SRH-13 |
+| BR-23 | **Color is searchable and filterable** alongside brand, model, serial, product specifications, location, and status. | FR-SRH-07, FR-SRH-13 |
 | BR-24 | **Product Models use Active/Archived lifecycle** — not unrestricted deletion. Permanent delete only when no inventory, sales, or audit references exist. | See [§12.2](#122-product-model-lifecycle) |
 | BR-25 | **Purchase Date, Purchase Cost, and Remarks are excluded from Version 1.** | See [§10.5](#105-version-1-excluded-inventory-fields) |
+| BR-26 | **Business entities store operational ownership only** — `created_by_user_id` and `updated_by_user_id`, set by the backend. Action-specific fields (`sold_by_user_id`, `reserved_by_user_id`, `approved_by_user_id`) are excluded. | See [§10.6](#106-operational-ownership-fields) |
+| BR-27 | **Salesperson may move inventory** within the permission matrix. | See [§17.2](#172-permission-matrix) |
+| BR-28 | **System initialization** is determined by `system_initialized` in `system_settings` — not by Main Admin user existence. | Setup wizard visibility; see §8.7 |
+| BR-29 | **Client installations never create users.** User accounts exist only on the server. | See §8.8, §8.10 |
+| BR-30 | **Passwords are stored only as bcrypt hashes** on the Backend. Clients never store password material. | Authentication authority on server |
+| BR-31 | **Clients never store business data** locally in Version 1. | Online-first; server URL and tokens only |
+| BR-32 | **Tally is read-only from IMS perspective.** IMS reads invoices from Tally; IMS never creates invoices or billing entries in Tally. | Billing boundary |
+| BR-33 | **Tally invoice line matching requires exact serial and exact product model match** to mark Sold. No fuzzy serial matching. | See §8.6.1 |
+| BR-34 | **Non-laptop Tally lines** (no matching serial or model in IMS) are ignored without notification. | Accessory/non-IMS products |
+| BR-35 | **Manual mark-as-sold is Admin and Main Admin only.** Salesperson cannot manually mark inventory Sold. | See §8.6.2 |
+| BR-36 | **Duplicate sale protection:** same invoice/voucher and serial recorded manually and via Tally sync is one transaction. | FR-SLS-06, FR-TLY-14 |
+| BR-37 | **Multi-company Tally sync failures are isolated** — one company's failure must not stop another company's synchronization. | See §8.6 |
 
 Additional business rules: **TBD** in [inventory rules](../business/inventory-rules.md).
 
@@ -1127,9 +1345,10 @@ Additional business rules: **TBD** in [inventory rules](../business/inventory-ru
 | BC-02 | All three locations operate in one building on shared Wi-Fi |
 | BC-03 | Software must be usable by retail staff with minimal training |
 | BC-04 | Deployment must not disrupt store operations during business hours |
-| BC-05 | Excel remains in use as synchronized export during and after transition |
-| BC-06 | Version 1 inventory category limited to laptops |
-| BC-07 | Business operates as a real commercial retail environment — not a pilot or demo |
+| BC-05 | Dedicated Server PC is installed once; clients are installed per workstation without creating users |
+| BC-06 | Excel remains in use as synchronized export during and after transition |
+| BC-07 | Version 1 inventory category limited to laptops |
+| BC-08 | Business operates as a real commercial retail environment — not a pilot or demo |
 
 ### 19.2 Technical Constraints
 
@@ -1170,7 +1389,7 @@ Version 1 succeeds when the following measurable outcomes are achieved. Quantita
 |----|-----------|-------------|
 | SC-01 | **Reduced manual work** | Manual Excel inventory editing reduced to sync verification only |
 | SC-02 | **Inventory accuracy** | Physical stock matches WEBSTUDIO IMS across all three locations |
-| SC-03 | **Search speed** | Staff find any laptop by serial number or configuration term (e.g., RTX 4060) in seconds — target **TBD** |
+| SC-03 | **Search speed** | Staff find any laptop by serial number or product-specification term (e.g., RTX 4060) in seconds — target **TBD** |
 | SC-04 | **Synchronization reliability** | Excel and Tally sync succeed without manual intervention — target **TBD** |
 | SC-05 | **Employee adoption** | Staff prefer WEBSTUDIO IMS over manual Excel process — survey **TBD** |
 | SC-06 | **Sale reflection latency** | Time from Tally billing to inventory update — target **TBD** |
@@ -1202,6 +1421,9 @@ The following are **explicitly excluded** from Version 1. Items marked **Future*
 | Multi-city / multi-branch | **Future** | Version 2+ |
 | E-commerce / online storefront | **Excluded** | Not a business need |
 | General ERP functionality | **Excluded** | IMS only |
+| Tally returns, refunds, credit notes, invoice cancellation | **Excluded** | Version 1 — see FR-TLY-15 |
+| Automatic inventory creation from Tally | **Excluded** | Version 1 |
+| Fuzzy / partial Tally serial matching | **Excluded** | Exact match only — BR-33 |
 | Replacing Tally ERP 9 | **Excluded** | Permanent business constraint |
 | Replacing Excel entirely | **Future** | Excel remains synchronized in V1 |
 | Multi-factor authentication | **Future** | Version 2+ **TBD** |
@@ -1264,7 +1486,7 @@ The following are **explicitly excluded** from Version 1. Items marked **Future*
 | AS-06 | One building / three locations remains the operating model for Version 1 | Yes — per business context |
 | AS-07 | Laptop-only inventory is sufficient for Version 1 business needs | Yes — per scope decision |
 | AS-08 | Staff have access to Windows, macOS, or Android devices on shop floor | **TBD** |
-| AS-09 | Main Admin account will be maintained by business owner or designated lead | **TBD** |
+| AS-09 | Main Admin account is created during First-Time Setup Wizard — not seeded in migrations | **TBD** — validate on first deployment |
 | AS-10 | Business operating hours and maintenance windows can be agreed before deployment | **TBD** |
 | AS-11 | Barcode scanners used by the business support keyboard-wedge (HID) mode | **TBD** — validate with hardware |
 
@@ -1276,8 +1498,8 @@ The following expansions are anticipated but **not committed** for Version 1. Ea
 
 | Version | Theme | Likely Capabilities |
 |---------|-------|-------------------|
-| **1.0** | Laptop inventory core | This PRD — serial tracking, lifecycle, model-grouped presentation, dashboard, configuration search, movement, Tally/Excel sync, barcode serial entry, roles, audit |
-| **1.1** | Operational hardening | Bulk import, movement approval, enhanced reporting, structured configuration fields (**TBD**) |
+| **1.0** | Laptop inventory core | This PRD — serial tracking, lifecycle, model-grouped presentation, dashboard, product-specification search, movement, Tally/Excel sync, barcode serial entry, roles, audit |
+| **1.1** | Operational hardening | Bulk import, movement approval, enhanced reporting |
 | **2.0** | Service & warranty | Warranty registration, service center, repair tracking attached to serial numbers |
 | **2.x** | Category expansion | Accessories, printers, additional inventory categories |
 | **3.0** | Multi-branch | Location hierarchy beyond single building; branch-level administration |
@@ -1310,7 +1532,7 @@ All downstream artifacts must reference PRD requirement IDs.
 
 | Document | Path | Relationship |
 |----------|------|--------------|
-| **This document** | `docs/product/PRODUCT_REQUIREMENTS.md` | PRD-001 — v1.1 |
+| **This document** | `docs/product/PRODUCT_REQUIREMENTS.md` | PRD-001 — v1.7 |
 | **Project Bible** | [docs/PROJECT_BIBLE.md](../PROJECT_BIBLE.md) | Governing constitution |
 | Inventory Lifecycle | [Section 9](#9-inventory-lifecycle) | Downstream database and API design |
 | Inventory Entity | [Section 10](#10-inventory-entity-definition) | Downstream data model |

@@ -33,13 +33,14 @@ class InventoryStatus(StrEnum):
     SOLD = "sold"
 
 
-class MovementReason(StrEnum):
-    NEW_STOCK = "new_stock"
-    STORE_TRANSFER = "store_transfer"
-    DISPLAY = "display"
-    SALE_PREPARATION = "sale_preparation"
-    CORRECTION = "correction"
-    OTHER = "other"
+class AuditAction(StrEnum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    ARCHIVE = "ARCHIVE"
+    RESTORE = "RESTORE"
+    STATUS_CHANGE = "STATUS_CHANGE"
+    LOCATION_CHANGE = "LOCATION_CHANGE"
+    SYSTEM_ACTION = "SYSTEM_ACTION"
 
 
 LOCATION_TYPE_ENUM_NAME = "location_type"
@@ -47,13 +48,13 @@ PRODUCT_MODEL_STATUS_ENUM_NAME = "product_model_status"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
-MOVEMENT_REASON_ENUM_NAME = "movement_reason"
+AUDIT_ACTION_ENUM_NAME = "audit_action"
 
 __all__ = [
+    "AUDIT_ACTION_ENUM_NAME",
+    "AuditAction",
     "INVENTORY_STATUS_ENUM_NAME",
     "LOCATION_TYPE_ENUM_NAME",
-    "MOVEMENT_REASON_ENUM_NAME",
-    "MovementReason",
     "PRODUCT_MODEL_STATUS_ENUM_NAME",
     "STORAGE_TYPE_ENUM_NAME",
     "STORAGE_UNIT_ENUM_NAME",

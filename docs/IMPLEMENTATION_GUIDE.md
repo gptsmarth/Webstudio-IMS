@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Implementation Guide
-Version: 1.0
+Version: 1.2
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | IMPL-001 |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Active — engineering handbook for Version 1 development |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md), [DATABASE_DESIGN.md](database/DATABASE_DESIGN.md) |
 | **Purpose** | Define **how** WEBSTUDIO IMS is built — workflow, order, standards, and quality gates |
@@ -28,6 +28,8 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.2 | 2026-06-27 | WEBSTUDIO IMS Team | Audit-only history architecture; Sprint 1E = `0005_audit_logs` + `0006_audit_log_description`; `AuditRecorder` / `AuditLogRepository`; removed Inventory Movement module from build order. |
+| 1.1 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap aligned with DATABASE_DESIGN §16.5: ownership columns deferred to `0008`. |
 | 1.0 | 2026-06-27 | WEBSTUDIO IMS Team | Initial implementation handbook. Development philosophy, module build order, monorepo rules, coding standards, git workflow, testing strategy, dev environment, definition of done, AI rules, and sprint plan. |
 
 ---
@@ -96,21 +98,20 @@ Version 1 is built in dependency order. **Do not start a module until its prereq
 
 | # | Module | Primary Deliverables | Depends On |
 |---|--------|---------------------|------------|
-| 1 | **Core Backend Setup** | FastAPI app skeleton, layered structure, config loading, health endpoint, structured logging, `X-Request-ID`, exception handling, dependency injection wiring | Approved ADRs (minimum ADR-0002) |
-| 2 | **PostgreSQL & Alembic** | Migrations `0001`–`0005` per [DATABASE_DESIGN.md §16.5](database/DATABASE_DESIGN.md#165-implementation-order-recommended); ORM models; repositories; `pg_trgm` extension; seed script (locations, Main Admin, default settings) | Core Backend Setup |
+| 1 | **Core Backend Setup** | FastAPI app skeleton, layered structure, config loading, health endpoint, structured logging, `X-Request-ID`, exception handling, dependency injection wiring | Approved ADRs ([ADR-0010](../adr/ADR-0010-authentication-and-initialization.md) minimum) |
+| 2 | **PostgreSQL & Alembic** | Migrations per [DATABASE_DESIGN.md §16.5](database/DATABASE_DESIGN.md#165-implementation-order-recommended): `0001`–`0004` (core inventory schema); `0005` audit logs (**Sprint 1E**); `0006` users + `system_settings`; `0007` ownership columns; ORM models; repositories; `pg_trgm` extension; seed script (brands, locations — `0002`; `system_initialized = false` — `0006`; **no** Main Admin seed) | Core Backend Setup |
 | 3 | **Authentication** | JWT access + refresh; bcrypt passwords; login/logout/refresh; lockout; `AuthenticationService`; `packages/auth` permission constants | PostgreSQL & Alembic |
 | 4 | **User Management** | `UserService`; CRUD; role assignment; RBAC enforcement on all subsequent endpoints | Authentication |
 | 5 | **Brand Management** | `BrandService`; brand CRUD; deactivation rules (FR-BRD) | User Management |
 | 6 | **Product Model Management** | `ProductModelService`; Active/Archived lifecycle; archive/restore; conditional permanent delete (PM-01–PM-07) | Brand Management |
-| 7 | **Inventory Management** | `InventoryService`; create/update; mandatory **Color** per unit; lifecycle transitions (Received ↔ Available); serial uniqueness; active product model validation | Product Model Management, Locations (parallel with #5 or immediately after) |
-| 8 | **Inventory Movement** | `MovementService`; location transfers; movement history; LC-03/LC-04 enforcement | Inventory Management |
-| 9 | **Search** | `SearchService`; combined filters (Brand, Model, Serial, CPU/GPU/RAM/Storage via configuration, Color, Location, Status); pagination; `docs/specs/search-query-spec.md` completed first | Inventory Management, Product Models, Brands, Locations |
-| 10 | **Audit** | `AuditService`; immutable append-only writes; enrichment fields; audit query API | All mutation modules above |
-| 11 | **Excel Sync** | `SyncJobService`; Excel worker in `apps/server`; job queue; paginated export API; openpyxl assembly; atomic file write | Inventory, Audit, Authentication (service account) |
-| 12 | **Tally Integration** | Tally worker; voucher parsing; idempotent sale API; `tally_integration_event` logging | Inventory, Sale reflection, Audit — **blocked until POC passes** (SYSTEM_ARCHITECTURE §14.3.1) |
-| 13 | **Desktop UI** | Electron shell; React renderer; IPC to main process; screens for all operational flows; Light/Dark themes | Backend modules through Search (minimum); Audit and Sync as APIs stabilize |
-| 14 | **Android App** | React Native; operational subset (search, lookup, movement where permitted) | Stable OpenAPI + `packages/api-client`; Auth |
-| 15 | **Packaging & Deployment** | Windows Services (API, Excel, Tally); installers (.msi, .dmg, .apk); internal CA; backup scripts; deployment runbook verification | All server and client modules |
+| 7 | **Inventory Management** | `InventoryService`; create/update; location transfer (updates `current_location_id` + audit); mandatory **Color** per unit; lifecycle transitions (Received ↔ Available); serial uniqueness; active product model validation | Product Model Management, Locations (parallel with #5 or immediately after) |
+| 8 | **Search** | `SearchService`; combined filters (Brand, Model, Serial, CPU/GPU/RAM/Storage via product model fields, Color, Location, Status); pagination; `docs/specs/search-query-spec.md` completed first | Inventory Management, Product Models, Brands, Locations |
+| 9 | **Audit** | `AuditService`; immutable append-only writes; enrichment fields; audit query API; serial lifecycle endpoint (**Sprint 1E**) | Inventory Management (mutations emit audit entries) |
+| 10 | **Excel Sync** | `SyncJobService`; Excel worker in `apps/server`; job queue; paginated export API; openpyxl assembly; atomic file write | Inventory, Audit, Authentication (service account) |
+| 11 | **Tally Integration** | Tally worker; voucher parsing; idempotent sale API; `tally_integration_event` logging | Inventory, Sale reflection, Audit — **blocked until POC passes** (SYSTEM_ARCHITECTURE §14.3.1) |
+| 12 | **Desktop UI** | Electron shell; React renderer; IPC to main process; screens for all operational flows; Light/Dark themes | Backend modules through Search (minimum); Audit and Sync as APIs stabilize |
+| 13 | **Android App** | React Native; operational subset (search, lookup, location transfer where permitted) | Stable OpenAPI + `packages/api-client`; Auth |
+| 14 | **Packaging & Deployment** | Windows Services (API, Excel, Tally); installers (.msi, .dmg, .apk); internal CA; backup scripts; deployment runbook verification | All server and client modules |
 
 ### 2.2 Parallel Work Streams
 
@@ -559,11 +560,12 @@ Optional: Docker Compose in `infra/docker/` for PostgreSQL when created.
 3. Copy `config/env/.env.example` to `config/env/.env.local` (or project-root `.env` per backend convention — **never commit**).
 4. Create local PostgreSQL database and role matching `DATABASE_URL`.
 5. Python: create venv in `apps/backend/`; install dependencies from requirements/poetry/uv lockfile when created.
-6. Run `alembic upgrade head` from `database/migrations/`.
-7. Run seed script for locations and Main Admin.
+6. Run `alembic upgrade head` from `database/migrations/` (through `0007` minimum for auth and setup).
+7. Verify reference seed data (brands, locations) and `GET /api/v1/setup/status` returns `system_initialized: false`.
 8. Start backend: Uvicorn with reload on `localhost` (HTTP acceptable for local dev per SYSTEM_ARCHITECTURE).
 9. JavaScript: `pnpm install` at monorepo root; start desktop Vite dev server and Electron.
-10. Verify: `GET /health` returns 200; login succeeds with seed admin.
+10. Complete the **First-Time Setup Wizard** to create the Main Admin (or call `POST /api/v1/setup/initialize`).
+11. Verify: `GET /health` returns 200; `GET /api/v1/setup/status` returns `system_initialized: true`; login succeeds with the wizard credentials.
 
 ### 7.4 Windows Deployment Target
 
@@ -751,19 +753,20 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | Sprint | Focus | Working Outcome | Depends On |
 |--------|-------|-----------------|------------|
 | **S0** | Foundation | Repo scaffold, CI skeleton, health endpoint, dev setup documented | — |
-| **S1** | Database | Migrations `0001`–`0005` applied; seed data; repository layer | S0 |
-| **S2** | Auth & Users | Login, JWT refresh, RBAC, user CRUD, lockout | S1 |
-| **S3** | Reference Data | Brands, Locations, Product Models with Active/Archived lifecycle | S2 |
-| **S4** | Inventory Core | Create/list/update inventory with Color; lifecycle transitions; serial uniqueness | S3 |
-| **S5** | Movement & Sales | Location transfers; movement history; manual sale reflection | S4 |
-| **S6** | Search | Combined filters; serial exact/prefix; configuration trigram; color filter | S4 |
-| **S7** | Audit & Reports | Audit query API; dashboard aggregates; settings API | S5, S6 |
-| **S8** | Excel Sync | Sync jobs; worker export; manual trigger; atomic file write | S7 |
-| **S9** | Tally POC + Integration | POC checklist; Tally worker; idempotent sale API — **gated** | S5, S8 |
-| **S10** | Desktop MVP | Auth, dashboard, search, inventory list/detail, add inventory, movement | S6, S7 |
-| **S11** | Desktop Complete | Admin screens, product model management, audit viewer, sync status, themes | S8, S10 |
-| **S12** | Android MVP | Auth, search, serial lookup, permitted movements | S6, S2 |
-| **S13** | Packaging & Go-Live | Windows Services, installers, HTTPS CA, backup/restore verified, acceptance tests | S9–S12 |
+| **S1** | Database (core) | Migrations `0001`–`0004` applied; reference seed; repository layer | S0 |
+| **S2** | Audit log foundation (**Sprint 1E**) | Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`; `AuditLogRepository`; serial lifecycle query API | S1 |
+| **S3** | Auth & Users | Migration `0006_users_authentication`; migration `0007_ownership_columns`; login, JWT refresh, RBAC, user CRUD, lockout | S2 |
+| **S4** | Reference Data APIs | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
+| **S5** | Inventory Core | Create/list/update inventory with Color; lifecycle transitions; serial uniqueness | S4 |
+| **S6** | Sales | Manual sale reflection (`0008` sales when required); location transfer in `InventoryService` (audit-only history) | S5, S2 |
+| **S7** | Search | Combined filters; serial exact/prefix; product-spec search; color filter | S5 |
+| **S8** | Audit UI & Reports | Audit viewer; dashboard aggregates; settings API | S2, S7 |
+| **S9** | Excel Sync | Sync jobs; worker export; manual trigger; atomic file write | S8 |
+| **S10** | Tally POC + Integration | POC checklist; Tally worker; idempotent sale API — **gated** | S6, S9 |
+| **S11** | Desktop MVP | Auth, dashboard, search, inventory list/detail, add inventory, location transfer | S7, S8 |
+| **S12** | Desktop Complete | Admin screens, product model management, audit viewer, sync status, themes | S9, S11 |
+| **S13** | Android MVP | Auth, search, serial lookup, serial lifecycle, permitted location transfers | S7, S3 |
+| **S14** | Packaging & Go-Live | Windows Services, installers, HTTPS CA, backup/restore verified, acceptance tests | S10–S13 |
 
 ### 10.2 Sprint Ceremonies (Lightweight)
 
@@ -788,16 +791,16 @@ Each sprint is complete when:
 The longest dependency chain for go-live:
 
 ```
-S0 → S1 → S2 → S3 → S4 → S5 → S8 → S13 (server operational with Excel)
-S4 → S6 → S10 → S11 → S13 (desktop operational)
-S9 (Tally) can slip if manual sale fallback (S5) is verified — but S4 billing accuracy requires Tally before full go-live
+S0 → S1 → S2 → S3 → S4 → S5 → S9 → S14 (server operational with Excel)
+S5 → S7 → S11 → S12 → S14 (desktop operational)
+S9 (Tally) can slip if manual sale fallback (S6) is verified — but S5 billing accuracy requires Tally before full go-live
 ```
 
 **Tally risk mitigation:** Complete POC during S4–S5 parallel window. Manual sale path (FR-SLS-04) allows partial operation if Tally slips.
 
 ### 10.5 Post-V1
 
-After Sprint 13 production deployment, enter **Maintenance** lifecycle stage per Project Bible. Enhancements require new PRD items, specs, and ADRs — not ad hoc implementation.
+After Sprint 14 production deployment, enter **Maintenance** lifecycle stage per Project Bible. Enhancements require new PRD items, specs, and ADRs — not ad hoc implementation.
 
 ---
 
