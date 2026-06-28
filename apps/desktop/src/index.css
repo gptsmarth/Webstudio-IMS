@@ -125,10 +125,13 @@
     --color-primary-muted:  rgba(43, 76, 126, 0.12);
     --color-success:        #1B7A3D;
     --color-success-bg:     #EDF9F1;
+    --color-success-border: #A7D7A9;
     --color-warning:        #C45B00;
     --color-warning-bg:     #FFF8EE;
+    --color-warning-border: #F5C28A;
     --color-danger:         #C62828;
     --color-danger-bg:      #FFF0F0;
+    --color-danger-border:  #F5A0A0;
   }
 
   /* ── Dark mode ────────────────────────────────────────────────── */
@@ -425,13 +428,14 @@
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     padding: 3px 10px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
     border-radius: 999px;
     line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   .badge-success {
     background-color: var(--color-success-bg);
@@ -466,6 +470,9 @@
     font-size: 13px;
   }
   .table-root th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     background-color: var(--color-bg-muted);
     color: var(--color-text-tertiary);
     font-size: 10px;
@@ -473,7 +480,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 0 16px;
-    height: 40px;
+    height: 38px;
     text-align: left;
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
@@ -481,7 +488,7 @@
   }
   .table-root td {
     padding: 0 16px;
-    height: 44px;
+    height: 40px;
     border-bottom: 1px solid var(--color-border);
     color: var(--color-text-primary);
     vertical-align: middle;
@@ -543,9 +550,9 @@
     left: 0;
     top: 6px;
     bottom: 6px;
-    width: 2px;
+    width: 3px;
     background-color: var(--color-primary-500);
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 3px 3px 0;
   }
 
   /* ── Divider ─────────────────────────────────────────────────── */
@@ -1800,7 +1807,7 @@
     max-width: 420px;
     height: 34px;
     padding: 0 12px;
-    border-radius: var(--radius-md);
+    border-radius: 8px;
     border: 1px solid var(--color-border);
     background-color: var(--color-bg-raised);
     color: var(--color-text-secondary);
@@ -1828,12 +1835,14 @@
 
   .app-kbd {
     font-size: 10px;
+    font-weight: 600;
     font-family: var(--font-mono);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
-    padding: 1px 6px;
+    padding: 2px 6px;
     background-color: var(--color-bg-surface);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
   }
 
   .app-toolbar-icon-btn {
@@ -5954,6 +5963,10 @@
     flex-shrink: 0;
   }
 
+  .inv-brand-cell[data-brand="lenovo"] .inv-brand-logo {
+    filter: grayscale(100%) contrast(120%);
+  }
+
   .inv-brand-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -7520,7 +7533,6 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    min-height: 460px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-bg-surface);
@@ -7552,7 +7564,7 @@
   }
 
   .stock-model-card--skeleton {
-    min-height: 460px;
+    min-height: 320px;
   }
 
   .stock-model-card__media {
@@ -7642,6 +7654,7 @@
     gap: 12px;
     margin-top: auto;
     padding-top: 14px;
+    border-top: 1px solid var(--color-border);
   }
 
   .stock-model-card__availability {
@@ -7975,7 +7988,7 @@
 
   .brand-availability-panel__hero {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
     min-width: 200px;
   }
@@ -7986,6 +7999,7 @@
     justify-content: center;
     width: 44px;
     height: 44px;
+    margin-top: 2px;
     border-radius: var(--radius-sm);
     background: var(--color-bg-raised);
     color: var(--color-text-secondary);
@@ -8587,6 +8601,9 @@
   }
 
   .admin-serial-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     background: var(--color-bg-muted);
     color: var(--color-text-secondary);
     font-size: 12px;
@@ -9001,6 +9018,13 @@
   .admin-model-table td {
     border-left: none;
     border-right: none;
+  }
+
+  .admin-model-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-bg-muted);
   }
 
   .admin-model-table th,

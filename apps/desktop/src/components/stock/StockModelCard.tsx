@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Laptop, Pencil } from 'lucide-react';
+import { ArrowRight, Laptop } from 'lucide-react';
 import type { ModelInventoryRow } from '../../lib/inventoryHierarchy';
 import { formatInventoryPrice } from '../../lib/inventoryPrice';
 import {
@@ -19,9 +19,7 @@ interface StockModelCardProps {
 export function StockModelCard({
   row,
   showPrice = false,
-  canEditPrice = false,
   onSelect,
-  onEditPrice,
 }: StockModelCardProps): JSX.Element {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -56,20 +54,6 @@ export function StockModelCard({
           <span className="stock-model-card__status-dot" aria-hidden />
           {inStock ? 'In stock' : 'Out of stock'}
         </span>
-        {canEditPrice && onEditPrice && (
-          <button
-            type="button"
-            className="stock-model-card__edit-price"
-            aria-label={`Edit selling price for ${row.model.model_number}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onEditPrice();
-            }}
-          >
-            <Pencil size={14} aria-hidden />
-            Edit price
-          </button>
-        )}
       </div>
 
       <button type="button" className="stock-model-card__main" onClick={onSelect}>
@@ -89,7 +73,7 @@ export function StockModelCard({
             />
           ) : (
             <div className="stock-model-card__image stock-model-card__image--placeholder" aria-hidden>
-              <Laptop size={48} strokeWidth={1.15} />
+              <Laptop size={42} strokeWidth={1.25} />
             </div>
           )}
         </div>
@@ -113,16 +97,14 @@ export function StockModelCard({
           )}
 
           {specLines.length > 0 && (
-            <ul className="stock-model-card__spec-list">
+            <dl className="stock-model-card__spec-grid">
               {specLines.map((line) => (
-                <li key={line.label} className="stock-model-card__spec-item">
-                  <span className="stock-model-card__spec-bullet" aria-hidden />
-                  <span>
-                    <strong>{line.label}:</strong> {line.value}
-                  </span>
-                </li>
+                <div key={line.label} className="stock-model-card__spec-row">
+                  <dt>{line.label}</dt>
+                  <dd>{line.value}</dd>
+                </div>
               ))}
-            </ul>
+            </dl>
           )}
 
           <div className="stock-model-card__footer">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, MoreHorizontal } from 'lucide-react';
+import { MapPin, MoreHorizontal, Pencil } from 'lucide-react';
 import type { InventoryItemDetail } from '../../services/api/InventoryService';
 import type { Location } from '../../services/api/LocationService';
 import type { ProductModel } from '../../services/api/ProductModelService';
@@ -17,6 +17,7 @@ interface StockModelDetailProps {
   loading?: boolean;
   onTransfer: (itemId: string, locationId: number) => Promise<void>;
   actionLoading?: boolean;
+  onEditModel?: () => void;
 }
 
 export function StockModelDetail({
@@ -27,6 +28,7 @@ export function StockModelDetail({
   loading,
   onTransfer,
   actionLoading,
+  onEditModel,
 }: StockModelDetailProps): JSX.Element {
   const canTransfer = canTransferStockLocation(role);
   const available = units.filter((item) => item.status !== 'sold' && !item.is_archived);
@@ -48,10 +50,20 @@ export function StockModelDetail({
           readOnly
         />
         <div className="stock-detail__info">
-          {model.brand_name && (
-            <p className="stock-detail__brand">{model.brand_name}</p>
-          )}
-          <h2 className="stock-detail__title">{model.model_name}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div>
+              {model.brand_name && (
+                <p className="stock-detail__brand">{model.brand_name}</p>
+              )}
+              <h2 className="stock-detail__title">{model.model_name}</h2>
+            </div>
+            {onEditModel && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={onEditModel}>
+                <Pencil size={14} aria-hidden />
+                Edit model & price
+              </button>
+            )}
+          </div>
           <p className="stock-detail__model-number col-mono">{model.model_number}</p>
           <dl className="stock-detail__spec-grid">
             {specLines.map((line) => (

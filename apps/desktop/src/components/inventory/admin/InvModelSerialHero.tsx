@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Laptop } from 'lucide-react';
 import type { ProductModel } from '../../../services/api/ProductModelService';
 import { buildStockModelSpecLines } from '../../../lib/stockModelCard';
 import { formatInventoryPrice } from '../../../lib/inventoryPrice';
@@ -48,7 +49,9 @@ export function InvModelSerialHero({
             }}
           />
         ) : (
-          <div className="inv-model-hero__image inv-model-hero__image--placeholder skeleton" />
+          <div className="inv-model-hero__image inv-model-hero__image--placeholder" aria-hidden>
+            <Laptop size={42} strokeWidth={1.25} />
+          </div>
         )}
       </div>
       <div className="inv-model-hero__content">

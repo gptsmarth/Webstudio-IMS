@@ -52,9 +52,6 @@ export function ProductImagePanel({
         ) : (
           <div className="skeleton inv-product-image__skeleton" />
         )}
-        <span className={`inv-product-image__badge inv-product-image__badge--${image?.source ?? 'none'}`}>
-          {image?.source === 'cached' ? 'Cached' : image?.source === 'placeholder' ? 'Placeholder' : 'Loading'}
-        </span>
       </div>
       {readOnly ? (
         <p className="inv-product-image__hint">

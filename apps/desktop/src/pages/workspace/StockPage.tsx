@@ -8,6 +8,7 @@ import {
   StockModelDetail,
 } from '../../components/stock';
 import { EditSellingPriceDialog } from '../../components/inventory/EditSellingPriceDialog';
+import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
 import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../hooks/useInventoryHierarchyData';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
@@ -24,6 +25,7 @@ export function StockPage(): JSX.Element {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [priceModelId, setPriceModelId] = useState<string | null>(null);
+  const [editModelId, setEditModelId] = useState<string | null>(null);
 
   const selectedModel = useMemo(
     () => hierarchy.models.find((model) => model.id === nav.modelId) ?? null,
@@ -33,6 +35,11 @@ export function StockPage(): JSX.Element {
   const priceModel = useMemo(
     () => hierarchy.models.find((model) => model.id === priceModelId) ?? null,
     [hierarchy.models, priceModelId],
+  );
+
+  const editModel = useMemo(
+    () => hierarchy.models.find((model) => model.id === editModelId) ?? null,
+    [hierarchy.models, editModelId],
   );
 
   const modelRows = useMemo(() => {
@@ -75,6 +82,24 @@ export function StockPage(): JSX.Element {
       setActionLoading(false);
     }
   }, [hierarchy, priceModelId]);
+
+  const handleUpdateModel = useCallback(async (
+    patch: Parameters<typeof ProductModelService.updateModel>[1],
+  ) => {
+    if (!editModelId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await ProductModelService.updateModel(editModelId, patch);
+      await hierarchy.refresh();
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setActionError(message.message ?? 'Could not update model.');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [editModelId, hierarchy]);
 
   if (!session) {
     return (
@@ -164,9 +189,7 @@ export function StockPage(): JSX.Element {
           loading={hierarchy.loading}
           availableOnly
           showPrice={nav.showSellingPrice}
-          canEditPrice={canEditPrice}
           onSelect={(modelId, label) => nav.openModel(modelId, label)}
-          onEditPrice={canEditPrice ? setPriceModelId : undefined}
         />
       )}
 
@@ -179,6 +202,7 @@ export function StockPage(): JSX.Element {
           loading={hierarchy.loading}
           onTransfer={handleTransfer}
           actionLoading={actionLoading}
+          onEditModel={canEditPrice ? () => setEditModelId(selectedModel.id) : undefined}
         />
       )}
 
@@ -189,6 +213,14 @@ export function StockPage(): JSX.Element {
         loading={actionLoading}
         onClose={() => setPriceModelId(null)}
         onConfirm={handleUpdateModelSellingPrice}
+      />
+
+      <InventoryModelEditDialog
+        open={editModel !== null}
+        model={editModel}
+        loading={actionLoading}
+        onClose={() => setEditModelId(null)}
+        onConfirm={handleUpdateModel}
       />
     </div>
   );

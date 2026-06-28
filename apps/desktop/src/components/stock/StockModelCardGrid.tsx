@@ -6,9 +6,7 @@ interface StockModelCardGridProps {
   rows: ModelInventoryRow[];
   loading?: boolean;
   showPrice?: boolean;
-  canEditPrice?: boolean;
   onSelect: (modelId: string, label: string) => void;
-  onEditPrice?: (modelId: string) => void;
   /** When true, only models with available units are shown (Stock tab). */
   availableOnly?: boolean;
 }
@@ -17,9 +15,7 @@ export function StockModelCardGrid({
   rows,
   loading,
   showPrice = false,
-  canEditPrice = false,
   onSelect,
-  onEditPrice,
   availableOnly = false,
 }: StockModelCardGridProps): JSX.Element {
   const visibleRows = useMemo(
@@ -56,9 +52,7 @@ export function StockModelCardGrid({
           key={row.model.id}
           row={row}
           showPrice={showPrice}
-          canEditPrice={canEditPrice}
           onSelect={() => onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)}
-          onEditPrice={onEditPrice ? () => onEditPrice(row.model.id) : undefined}
         />
       ))}
     </div>
