@@ -89,16 +89,6 @@ class RecentSoldRow:
     sold_at: datetime
 
 
-@dataclass(frozen=True, slots=True)
-class WarrantyExpiringRow:
-    id: uuid.UUID
-    serial_number: str
-    brand_name: str
-    model_name: str
-    warranty_expiry: date
-    days_remaining: int
-
-
 class DashboardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -329,51 +319,6 @@ class DashboardRepository:
             )
             for item_id, serial, brand_name, model_name, invoice_number, sold_at in result.all()
         ]
-
-    async def get_warranty_expiring_soon(
-        self,
-        *,
-        threshold_days: int,
-        limit: int,
-        reference_date: date | None = None,
-    ) -> list[WarrantyExpiringRow]:
-        today = reference_date or datetime.now(UTC).date()
-        cutoff = today + timedelta(days=threshold_days)
-        statement = (
-            select(
-                InventoryItem.id,
-                InventoryItem.serial_number,
-                Brand.name,
-                ProductModel.model_name,
-                InventoryItem.warranty_expiry,
-            )
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .where(
-                InventoryItem.warranty_expiry.is_not(None),
-                InventoryItem.warranty_expiry <= cutoff,
-                InventoryItem.warranty_expiry >= today,
-                InventoryItem.is_archived.is_(False),
-                InventoryItem.status != InventoryStatus.SOLD,
-            )
-            .order_by(InventoryItem.warranty_expiry.asc())
-            .limit(limit)
-        )
-        result = await self._session.execute(statement)
-        rows: list[WarrantyExpiringRow] = []
-        for item_id, serial, brand_name, model_name, warranty_expiry in result.all():
-            assert warranty_expiry is not None
-            rows.append(
-                WarrantyExpiringRow(
-                    id=item_id,
-                    serial_number=serial,
-                    brand_name=brand_name,
-                    model_name=model_name,
-                    warranty_expiry=warranty_expiry,
-                    days_remaining=(warranty_expiry - today).days,
-                ),
-            )
-        return rows
 
     async def verify_aggregate_queries_use_sql(self) -> bool:
         """Smoke check that inventory summary uses a single aggregate query."""

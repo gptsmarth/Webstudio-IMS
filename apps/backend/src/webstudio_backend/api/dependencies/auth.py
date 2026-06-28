@@ -74,3 +74,10 @@ def require_main_admin(current: CurrentUserDep) -> AuthenticatedUser:
 
 
 MainAdminDep = Annotated[AuthenticatedUser, Depends(require_main_admin)]
+
+AuditReadDep = Annotated[AuthenticatedUser, Depends(require_permission("audit:read"))]
+
+SettingsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("settings:read"))]
+SettingsWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("settings:write"))]
+TallyDashboardDep = Annotated[AuthenticatedUser, Depends(require_permission("tally:dashboard"))]
+TallySyncDep = Annotated[AuthenticatedUser, Depends(require_permission("tally:sync"))]

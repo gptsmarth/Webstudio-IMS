@@ -114,7 +114,7 @@ Version 1 is built in dependency order. **Do not start a module until its prereq
 | 8 | **Search** | `SearchService`; combined filters (Brand, Model, Serial, CPU/GPU/RAM/Storage via product model fields, Color, Location, Status); pagination; `docs/specs/search-query-spec.md` completed first | Inventory Management, Product Models, Brands, Locations |
 | 9 | **Audit** | `AuditService`; immutable append-only writes; enrichment fields; audit query API; serial lifecycle endpoint (**Sprint 1E**) | Inventory Management (mutations emit audit entries) |
 | 10 | **Excel Sync** | `SyncJobService`; Excel worker in `apps/server`; job queue; paginated export API; openpyxl assembly; atomic file write | Inventory, Audit, Authentication (service account) |
-| 11 | **Tally Integration** | Tally worker; invoice processing status lifecycle; partial retry; crash recovery; line-level transactions per [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.1.0 — **architecture fully frozen**; **blocked until POC passes** | Inventory, Sale reflection, Audit (business events only) |
+| 11 | **Tally Integration** | Tally worker; serial-authoritative matching; post-sale product model verification; invoice processing status lifecycle per [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.2.0 — **architecture fully frozen**; **blocked until POC passes** | Inventory, Sale reflection, Audit (business events only) |
 | 12 | **Desktop UI** | Electron shell; React renderer; IPC to main process; screens for all operational flows; Light/Dark themes | Backend modules through Search (minimum); Audit and Sync as APIs stabilize |
 | 13 | **Android App** | React Native; operational subset (search, lookup, location transfer where permitted) | Stable OpenAPI + `packages/api-client`; Auth |
 | 14 | **Packaging & Deployment** | Windows Services (API, Excel, Tally); installers (.msi, .dmg, .apk); internal CA; backup scripts; deployment runbook verification | All server and client modules |
@@ -762,7 +762,7 @@ Version 1 is delivered in **working increments** — each sprint ends with a dem
 | **S1** | Database (core) | Migrations `0001`–`0004` applied; reference seed; repository layer | S0 |
 | **S2** | Audit log foundation (**Sprint 1E**) | Migrations `0005_audit_logs`, `0006_audit_log_description`; `AuditRecorder`; `AuditLogRepository`; serial lifecycle query API | S1 |
 | **S3** | Auth & Users (**Sprint 1F**) | Migration `0008_users_authentication`; Argon2id + JWT; setup, login, refresh, logout; RBAC; user CRUD | S2 |
-| **S4** | Reference Data APIs | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
+| **S4** | Reference Data APIs (**complete**) | Brands, Locations, Product Models with Active/Archived lifecycle (tables from S1) | S3 |
 | **S5** | Inventory Core (**Sprint 2A** — complete) | Migration `0010_inventory_sprint_2a`; `/api/v1/inventory` CRUD, archive/restore, search, filters, pagination, serial lookup | S4 |
 | **S5B** | Inventory Operations (**Sprint 2B** — complete) | Migration `0011_sales`; `SaleService`; location transfer; manual mark-as-sold | S5 |
 | **S5C** | Inventory API Hardening (**Sprint 2C** — complete) | Standardized errors; migration `0012_inventory_performance`; production-ready | S5B |
@@ -806,7 +806,7 @@ S5 → S7 → S11 → S12 → S14 (desktop operational)
 S9 (Tally) can slip if manual sale fallback (S6) is verified — but S5 billing accuracy requires Tally before full go-live
 ```
 
-**Tally risk mitigation:** Complete POC during S4–S5 parallel window. Manual sale path (FR-SLS-04) allows partial operation if Tally slips. **Synchronization architecture is fully frozen** in [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.1.0 — **no further architectural changes required before Sprint 2**.
+**Tally risk mitigation:** Complete POC during S4–S5 parallel window. Manual sale path (FR-SLS-04) allows partial operation if Tally slips. **Synchronization architecture is fully frozen** in [sync-strategy.md](integrations/tally-erp9/sync-strategy.md) v1.2.0 — inventory matching strategy is authoritative; no further architectural changes required before Tally Synchronization Engine implementation.
 
 ### 10.5 Post-V1
 

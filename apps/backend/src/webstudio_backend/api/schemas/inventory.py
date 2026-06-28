@@ -19,7 +19,8 @@ class CreateInventoryItemRequest(BaseModel):
     current_location_id: int = Field(gt=0)
     status: InventoryStatus = InventoryStatus.AVAILABLE
     purchase_date: date | None = None
-    warranty_expiry: date | None = None
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class UpdateInventoryItemRequest(BaseModel):
@@ -28,7 +29,12 @@ class UpdateInventoryItemRequest(BaseModel):
     color: str | None = Field(default=None, min_length=1, max_length=64)
     status: InventoryStatus | None = None
     purchase_date: date | None = None
-    warranty_expiry: date | None = None
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    selling_price: Decimal | None = Field(default=None, ge=0)
+
+
+class UpdateSellingPriceRequest(BaseModel):
+    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class TransferLocationRequest(BaseModel):
@@ -40,6 +46,7 @@ class MarkSoldRequest(BaseModel):
     customer_name: str = Field(min_length=1, max_length=256)
     payment_mode: str = Field(min_length=1, max_length=64)
     sale_date: date
+    sale_amount: Decimal | None = Field(default=None, ge=0)
     remarks: str | None = Field(default=None, max_length=2000)
 
 
@@ -52,6 +59,7 @@ class SaleDetail(BaseModel):
     invoice_number: str
     customer_name: str | None
     payment_mode: str | None
+    sale_amount: float | None = None
     notes: str | None
     recorded_by_user_id: int | None
     created_at: datetime
@@ -67,6 +75,7 @@ class SaleDetail(BaseModel):
             invoice_number=sale.invoice_number,
             customer_name=sale.customer_name,
             payment_mode=sale.payment_mode,
+            sale_amount=float(sale.sale_amount) if sale.sale_amount is not None else None,
             notes=sale.notes,
             recorded_by_user_id=sale.recorded_by_user_id,
             created_at=sale.created_at,
@@ -93,12 +102,13 @@ class InventoryItemDetail(BaseModel):
     status: InventoryStatus
     is_archived: bool
     purchase_date: date | None
-    warranty_expiry: date | None
+    purchase_price: float | None = None
+    selling_price: float | None = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_row(cls, row: InventoryItemDetailRow) -> InventoryItemDetail:
+    def from_row(cls, row: InventoryItemDetailRow, *, include_purchase_price: bool = True) -> InventoryItemDetail:
         item = row.item
         pm = row.product_model
         return cls(
@@ -121,7 +131,8 @@ class InventoryItemDetail(BaseModel):
             status=item.status,
             is_archived=item.is_archived,
             purchase_date=item.purchase_date,
-            warranty_expiry=item.warranty_expiry,
+            purchase_price=float(item.purchase_price) if include_purchase_price and item.purchase_price is not None else None,
+            selling_price=float(item.selling_price) if item.selling_price is not None else None,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )

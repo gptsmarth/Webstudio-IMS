@@ -72,6 +72,11 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         storage_type: StorageType,
         gpu: str | None = None,
         status: ProductModelStatus = ProductModelStatus.ACTIVE,
+        display: str | None = None,
+        color_options: str | None = None,
+        product_image_url: str | None = None,
+        search_aliases: str | None = None,
+        notes: str | None = None,
         actor: AuditActor | None = None,
     ) -> ProductModel:
         payload = self._validated_payload(
@@ -86,6 +91,13 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             storage_type=storage_type,
             status=status,
         )
+        payload.update({
+            "display": display.strip() if display else None,
+            "color_options": color_options.strip() if color_options else None,
+            "product_image_url": product_image_url.strip() if product_image_url else None,
+            "search_aliases": search_aliases.strip() if search_aliases else None,
+            "notes": notes.strip() if notes else None,
+        })
         if await self.exists(payload["brand_id"], payload["model_number"]):
             raise DuplicateModelNumberError(payload["brand_id"], payload["model_number"])
         product_model = await self.add(ProductModel(**payload))
@@ -107,6 +119,11 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         storage_value: Decimal | None = None,
         storage_unit: StorageUnit | None = None,
         storage_type: StorageType | None = None,
+        display: str | None = None,
+        color_options: str | None = None,
+        product_image_url: str | None = None,
+        search_aliases: str | None = None,
+        notes: str | None = None,
         actor: AuditActor | None = None,
     ) -> ProductModel:
         audit_actor = actor or AuditActor.system()
@@ -153,6 +170,27 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             product_model.storage_unit = validate_storage_unit(storage_unit)
         if storage_type is not None:
             product_model.storage_type = validate_storage_type(storage_type)
+
+        # Handle additional fields
+        for field, new_val in [
+            ("display", display),
+            ("color_options", color_options),
+            ("product_image_url", product_image_url),
+            ("search_aliases", search_aliases),
+            ("notes", notes),
+        ]:
+            if new_val is not None:
+                old_val = getattr(product_model, field)
+                normalized = new_val.strip() if new_val.strip() else None
+                if normalized != old_val:
+                    setattr(product_model, field, normalized)
+                    await recorder.record_product_model_field_update(
+                        product_model,
+                        field_name=field,
+                        old_value={field: old_val},
+                        new_value={field: normalized},
+                        actor=audit_actor,
+                    )
 
         await self._session.flush()
         await self._session.refresh(product_model)

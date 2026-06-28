@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — API Specification (Version 1)
-Version: 1.13
+Version: 1.14
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | API-001 |
-| Version | 1.13 |
+| Version | 1.14 |
 | **Status** | Active — Version 1 REST contract frozen for implementation |
 | **Base URL (production)** | `https://{server-host}:8443/api/v1` |
 | **Base URL (development)** | `http://localhost:8000/api/v1` |
@@ -28,6 +28,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.14 | 2026-06-27 | WEBSTUDIO IMS Team | **Tally matching strategy frozen:** Serial Number authoritative; `product_model_mismatch` notification; product model verification informational only. |
 | 1.13 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.3 implemented:** Reports & Export APIs — inventory, sales, audit, notifications JSON reports; Excel/PDF export for all report types including location, brand, product model aggregates. |
 | 1.12 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.2 implemented:** Notification Center — `GET /api/v1/notifications`, `GET /{id}`, `PATCH /{id}/read`, `PATCH /{id}/resolve`; migration `0013_notifications`; `NotificationService` for Tally reuse. |
 | 1.11 | 2026-06-27 | WEBSTUDIO IMS Team | **Sprint 3.1 implemented:** Dashboard APIs — `GET /api/v1/dashboard`, `/recent-activity`, `/distribution`; `DashboardService` + `DashboardRepository`. |
@@ -794,13 +795,11 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 |---|---|
 | **Endpoint** | `GET /api/v1/brands` |
 | **Method** | `GET` |
-| **Purpose** | List all brands |
+| **Purpose** | List all brands, sorted by `display_order` then by name |
 | **Authentication Required** | Yes |
 | **Required Role** | Any authenticated user |
 
-**Query Parameters:** `page`, `page_size`, `is_active` (boolean), `search` (name prefix)
-
-**Response Body:** `Brand[]`
+**Response Body:** `BrandResponse[]`
 
 **Success Codes:** `200`
 
@@ -820,13 +819,17 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| `name` | string | Yes | Unique; 1–128 chars; trimmed |
+| `name` | string | Yes | Unique case-insensitive; 1–128 chars; trimmed |
+| `short_name` | string | No | 1–64 chars; trimmed |
+| `logo_filename` | string | No | 1–256 chars; trimmed |
+| `display_order` | integer | No | Default `0`, minimum `0` |
+| `is_active` | boolean | No | Default `true` |
 
 **Success Codes:** `201`
 
-**Error Codes:** `409` `BRAND_NAME_DUPLICATE`
+**Error Codes:** `409` `VALIDATION_ERROR` (Duplicate brand name)
 
-**Audit Behaviour:** `brand.create` (via settings/reference audit pattern)
+**Audit Behaviour:** `brand.create`
 
 ---
 
@@ -852,38 +855,41 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
-**Request Body:** `name` (optional)
+**Request Body:** `name`, `short_name`, `logo_filename`, `display_order`, `is_active` (all optional fields)
 
 **Success Codes:** `200`, `409`
 
 ---
 
-### 5.5 Deactivate Brand
+### 5.5 Archive Brand
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/brands/{brand_id}/deactivate` |
+| **Endpoint** | `POST /api/v1/brands/{brand_id}/archive` |
 | **Method** | `POST` |
 | **Purpose** | Set `is_active=false` |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
-**Validation Rules:** Rejected if active inventory references brand (FR-BRD-03) — `409` `BRAND_HAS_ACTIVE_INVENTORY`
-
 **Success Codes:** `200`
+
+**Audit Behaviour:** `AuditAction.ARCHIVE` recorded
 
 ---
 
-### 5.6 Activate Brand
+### 5.6 Restore Brand
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/brands/{brand_id}/activate` |
+| **Endpoint** | `POST /api/v1/brands/{brand_id}/restore` |
 | **Method** | `POST` |
+| **Purpose** | Set `is_active=true` |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
 **Success Codes:** `200`
+
+**Audit Behaviour:** `AuditAction.RESTORE` recorded
 
 ---
 
@@ -893,7 +899,7 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `GET /api/v1/product_models` |
+| **Endpoint** | `GET /api/v1/product-models` |
 | **Method** | `GET` |
 | **Purpose** | List product models with optional filters |
 | **Authentication Required** | Yes |
@@ -903,13 +909,11 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | Parameter | Type | Notes |
 |-----------|------|-------|
-| `brand_id` | integer | Filter by brand |
-| `status` | enum | `active`, `archived` — Salesperson default: `active` only unless `include_archived=true` |
-| `include_archived` | boolean | Default `false` for Salesperson; Admin/Main Admin may set `true` |
-| `search` | string | Model number prefix |
-| `page`, `page_size`, `sort` | | Standard |
+| `brand_id` | integer | Filter by brand ID |
+| `active` | boolean | Filter active models only |
+| `archived` | boolean | Filter archived models only |
 
-**Response Body:** `ProductModel[]` with `available_count` aggregate optional
+**Response Body:** `ProductModelResponse[]`
 
 **Success Codes:** `200`
 
@@ -919,7 +923,7 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/product_models` |
+| **Endpoint** | `POST /api/v1/product-models` |
 | **Method** | `POST` |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
@@ -937,12 +941,19 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 | `storage_value` | number | Yes | Positive |
 | `storage_unit` | enum | Yes | `GB`, `TB` |
 | `storage_type` | enum | Yes | `SSD`, `HDD` |
+| `status` | enum | No | `active`, `archived` |
+| `display` | string | No | Max 128 |
+| `color_options` | string | No | Max 256 |
+| `warranty` | string | No | Max 128 |
+| `product_image_url` | string | No | Max 512 |
+| `search_aliases` | string | No | Max 1024 |
+| `notes` | string | No | Max 2000 |
 
-**Response:** `ProductModel` with `status: active`
+**Response:** `ProductModelResponse`
 
 **Success Codes:** `201`
 
-**Error Codes:** `409` `MODEL_NUMBER_DUPLICATE`
+**Error Codes:** `409` `VALIDATION_ERROR` (Duplicate model number for brand)
 
 **Audit Behaviour:** `product_model.create`
 
@@ -952,12 +963,12 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `GET /api/v1/product_models/{product_model_id}` |
+| **Endpoint** | `GET /api/v1/product-models/{product_model_id}` |
 | **Method** | `GET` |
 | **Authentication Required** | Yes |
 | **Required Role** | Any authenticated user |
 
-**Response includes:** `id` (UUID), `brand_id`, `brand_name`, `model_number`, `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type`, `status`, `inventory_count`, `created_at`, `updated_at`
+**Response Body:** `ProductModelResponse`
 
 **Success Codes:** `200`, `404`
 
@@ -967,16 +978,14 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `PATCH /api/v1/product_models/{product_model_id}` |
+| **Endpoint** | `PATCH /api/v1/product-models/{product_model_id}` |
 | **Method** | `PATCH` |
 | **Authentication Required** | Yes |
 | **Required Role** | `main_admin`, `admin` |
 
-**Request Body:** `model_number`, `model_name`, `cpu`, `gpu`, `ram_gb`, `storage_value`, `storage_unit`, `storage_type` (optional fields)
+**Request Body:** Optional updates for all model fields
 
-**Validation Rules:** `brand_id` immutable after inventory linked
-
-**Audit Behaviour:** `product_model.update` (if exposed) or `inventory`-level N/A
+**Success Codes:** `200`, `400`, `409`
 
 ---
 
@@ -984,17 +993,13 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/product_models/{product_model_id}/archive` |
+| **Endpoint** | `POST /api/v1/product-models/{product_model_id}/archive` |
 | **Method** | `POST` |
-| **Purpose** | Set status to `archived` (PM-01) |
+| **Purpose** | Set status to `archived` |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
 **Success Codes:** `200`
-
-**Validation Rules:** Already archived → `200` idempotent
-
-**Audit Behaviour:** `product_model.archive`
 
 ---
 
@@ -1002,11 +1007,11 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 | | |
 |---|---|
-| **Endpoint** | `POST /api/v1/product_models/{product_model_id}/restore` |
+| **Endpoint** | `POST /api/v1/product-models/{product_model_id}/restore` |
 | **Method** | `POST` |
-| **Purpose** | Set status to `active` (PM-02) |
+| **Purpose** | Set status to `active` |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
 **Success Codes:** `200`
 
@@ -1088,7 +1093,7 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 | **Authentication Required** | Yes |
 | **Required Role** | Any authenticated user |
 
-**Query Parameters:** `is_active`, `page`, `page_size`
+**Response Body:** `LocationResponse[]`
 
 **Success Codes:** `200`
 
@@ -1101,9 +1106,17 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 | **Endpoint** | `POST /api/v1/locations` |
 | **Method** | `POST` |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `main_admin`, `admin` |
 
-**Request Body:** `{ "name": string }` — unique, 1–128 chars
+**Request Body:**
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `name` | string | Yes | Unique case-insensitive; 1–128 chars; trimmed |
+| `location_type` | enum | Yes | `retail_floor`, `warehouse`, `other` |
+| `is_active` | boolean | No | Default `true` |
+| `sort_order` | integer | No | Default `None` |
+| `branch_id` | integer | No | Default `None` |
 
 **Success Codes:** `201`
 
@@ -1114,19 +1127,19 @@ Reference data required by inventory. Pre-seeded with three locations (FR-LOC-01
 | | |
 |---|---|
 | **GET** | `GET /api/v1/locations/{location_id}` |
-| **PATCH** | `PATCH /api/v1/locations/{location_id}` — `main_admin` |
+| **PATCH** | `PATCH /api/v1/locations/{location_id}` — `main_admin`, `admin` |
 
 ---
 
-### 7.4 Deactivate / Activate Location
+### 7.4 Archive / Restore Location
 
 | | |
 |---|---|
-| **Deactivate** | `POST /api/v1/locations/{location_id}/deactivate` |
-| **Activate** | `POST /api/v1/locations/{location_id}/activate` |
-| **Required Role** | `main_admin` |
+| **Archive** | `POST /api/v1/locations/{location_id}/archive` |
+| **Restore** | `POST /api/v1/locations/{location_id}/restore` |
+| **Required Role** | `main_admin`, `admin` |
 
-**Validation:** Deactivate rejected if location holds inventory (FR-LOC-03) — `409` `LOCATION_HAS_INVENTORY`
+**Success Codes:** `200`
 
 ---
 
@@ -1808,7 +1821,7 @@ Location changes update `inventory_item.current_location_id` only. **No separate
 6. Derive final `processing_status` — SUCCESS only when all inventory-related lines complete.
 7. Append `tally_sync_log` for this run.
 
-**Line result `outcome` values:** `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `ignored`, `error`
+**Line result `outcome` values:** `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `product_model_mismatch`, `ignored`, `error`
 
 ---
 
@@ -2008,7 +2021,7 @@ Returns business audit events only — inventory created, manual sale, location 
 
 **Lifecycle:** `unread` → `read` → `resolved` (resolved records retained permanently; no delete V1).
 
-**Notification types (extensible enum):** `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `tally_sync_completed`, `sync_failure`, `inventory_alert`, `system_notification`
+**Notification types (extensible enum):** `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `product_model_mismatch`, `tally_sync_completed`, `sync_failure`, `inventory_alert`, `system_notification`
 
 | Endpoint | Method | Permission | Purpose |
 |----------|--------|------------|---------|

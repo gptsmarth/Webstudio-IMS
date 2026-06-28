@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 from httpx import AsyncClient
@@ -55,7 +55,6 @@ async def _seed_inventory(db_session: AsyncSession) -> tuple[Brand, ProductModel
         color="Black",
         current_location_id=location.id,
         status=InventoryStatus.AVAILABLE,
-        warranty_expiry=date.today() + timedelta(days=15),
     )
     await repo.create(
         serial_number="SN-DASH-002",
@@ -84,7 +83,7 @@ async def _seed_inventory(db_session: AsyncSession) -> tuple[Brand, ProductModel
 
 
 @pytest.mark.asyncio
-async def test_dashboard_summary_aggregation(
+async def test_operations_dashboard_snapshot(
     api_client: AsyncClient,
     main_admin_headers: dict[str, str],
     db_session: AsyncSession,
@@ -93,48 +92,10 @@ async def test_dashboard_summary_aggregation(
     response = await api_client.get("/api/v1/dashboard", headers=main_admin_headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    summary = data["summary"]
-    assert summary["total_inventory"] == 4
-    assert summary["available_inventory"] == 2
-    assert summary["sold_inventory"] == 1
-    assert summary["archived_inventory"] == 1
-    assert summary["total_brands"] == 1
-    assert summary["total_product_models"] == 1
-    assert summary["total_locations"] == 2
-    assert summary["active_users"] >= 1
+    assert data["total_available_inventory"] == 2
     assert "as_of" in data
-
-
-@pytest.mark.asyncio
-async def test_sales_summary_counts(
-    api_client: AsyncClient,
-    main_admin_headers: dict[str, str],
-    db_session: AsyncSession,
-) -> None:
-    brand, product_model, location = await _seed_inventory(db_session)
-    item = await InventoryItemRepository(db_session).create(
-        serial_number="SN-SALE-TODAY",
-        product_model_id=product_model.id,
-        color="Black",
-        current_location_id=location.id,
-        status=InventoryStatus.AVAILABLE,
-    )
-    await api_client.patch(
-        f"/api/v1/inventory/{item.id}/mark-sold",
-        headers=main_admin_headers,
-        json={
-            "invoice_number": "INV-DASH-1",
-            "customer_name": "Customer",
-            "payment_mode": "Cash",
-            "sale_date": date.today().isoformat(),
-        },
-    )
-    response = await api_client.get("/api/v1/dashboard", headers=main_admin_headers)
-    sales = response.json()["data"]["sales_summary"]
-    assert sales["sales_today"] >= 1
-    assert sales["sales_this_week"] >= 1
-    assert sales["sales_this_month"] >= 1
-    del brand
+    assert "sales_summary" not in data
+    assert "insights" not in data
 
 
 @pytest.mark.asyncio
@@ -147,6 +108,7 @@ async def test_distribution_grouped_summaries(
     response = await api_client.get("/api/v1/dashboard/distribution", headers=main_admin_headers)
     assert response.status_code == 200
     data = response.json()["data"]
+    assert data["total_available_inventory"] == 2
     assert len(data["by_brand"]) == 1
     brand_row = data["by_brand"][0]
     assert brand_row["name"] == "ASUS"
@@ -178,30 +140,11 @@ async def test_recent_activity_excludes_sync_and_includes_business_events(
 
 
 @pytest.mark.asyncio
-async def test_dashboard_insights_warranty_threshold(
-    api_client: AsyncClient,
-    main_admin_headers: dict[str, str],
-    db_session: AsyncSession,
-) -> None:
-    await _seed_inventory(db_session)
-    response = await api_client.get(
-        "/api/v1/dashboard",
-        headers=main_admin_headers,
-        params={"warranty_threshold_days": 30, "insights_limit": 5},
-    )
-    insights = response.json()["data"]["insights"]
-    assert insights["warranty_threshold_days"] == 30
-    assert len(insights["warranty_expiring_soon"]) >= 1
-    assert insights["recently_added_inventory"]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("headers_fixture", ["main_admin_headers", "admin_headers", "salesperson_headers"])
-async def test_dashboard_rbac_all_roles(
+@pytest.mark.parametrize("headers_fixture", ["main_admin_headers", "admin_headers"])
+async def test_dashboard_rbac_admin_roles(
     api_client: AsyncClient,
     main_admin_headers: dict[str, str],
     admin_headers: dict[str, str],
-    salesperson_headers: dict[str, str],
     db_session: AsyncSession,
     headers_fixture: str,
 ) -> None:
@@ -209,11 +152,22 @@ async def test_dashboard_rbac_all_roles(
     headers_map = {
         "main_admin_headers": main_admin_headers,
         "admin_headers": admin_headers,
-        "salesperson_headers": salesperson_headers,
     }
     headers = headers_map[headers_fixture]
     for path in ("/api/v1/dashboard", "/api/v1/dashboard/distribution", "/api/v1/dashboard/recent-activity"):
         assert (await api_client.get(path, headers=headers)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_salesperson_can_read_distribution_only(
+    api_client: AsyncClient,
+    salesperson_headers: dict[str, str],
+    db_session: AsyncSession,
+) -> None:
+    await _seed_inventory(db_session)
+    assert (await api_client.get("/api/v1/dashboard/distribution", headers=salesperson_headers)).status_code == 200
+    assert (await api_client.get("/api/v1/dashboard", headers=salesperson_headers)).status_code == 403
+    assert (await api_client.get("/api/v1/dashboard/recent-activity", headers=salesperson_headers)).status_code == 403
 
 
 @pytest.mark.asyncio
@@ -233,9 +187,7 @@ async def test_dashboard_repository_uses_aggregate_queries(db_session: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_dashboard_service_overview(db_session: AsyncSession) -> None:
+async def test_dashboard_service_total_available(db_session: AsyncSession) -> None:
     await _seed_inventory(db_session)
-    overview = await DashboardService(db_session).get_overview(insights_limit=5, warranty_threshold_days=30)
-    assert overview.summary.total_inventory == 4
-    assert overview.sales_summary.sales_today == 0
-    assert len(overview.insights.recently_added_inventory) <= 5
+    total = await DashboardService(db_session).get_total_available()
+    assert total == 2

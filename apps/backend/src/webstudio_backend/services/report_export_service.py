@@ -66,7 +66,6 @@ class ReportExportService:
             "Status",
             "Archived",
             "Purchase Date",
-            "Warranty Expiry",
             "Created At",
         ]
 
@@ -81,7 +80,6 @@ class ReportExportService:
             row.status,
             row.is_archived,
             row.purchase_date.isoformat() if row.purchase_date else "",
-            row.warranty_expiry.isoformat() if row.warranty_expiry else "",
             row.created_at.isoformat(),
         ]
 

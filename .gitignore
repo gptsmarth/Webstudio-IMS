@@ -18,6 +18,9 @@ dist-electron/
 .env.*
 !config/env/.env.example
 
+# Local database dumps (tools/scripts/backup-db.sh)
+backups/
+
 # IDE
 .idea/
 .vscode/

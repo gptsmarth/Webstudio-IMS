@@ -19,8 +19,9 @@ class LocationRepository(SqlAlchemyRepository[Location]):
         super().__init__(session, Location)
 
     async def get_by_name(self, name: str) -> Location | None:
-        normalized = name.strip()
-        statement = select(Location).where(Location.name == normalized)
+        from sqlalchemy import func
+        normalized = name.strip().lower()
+        statement = select(Location).where(func.lower(Location.name) == normalized)
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
@@ -52,6 +53,93 @@ class LocationRepository(SqlAlchemyRepository[Location]):
         )
         return location
 
+    async def update(
+        self,
+        location: Location,
+        *,
+        name: str | None = None,
+        location_type: LocationType | None = None,
+        is_active: bool | None = None,
+        sort_order: int | None = None,
+        branch_id: int | None = None,
+        actor: AuditActor | None = None,
+    ) -> Location:
+        audit_actor = actor or AuditActor.system()
+        recorder = AuditRecorder(self._session)
+
+        if name is not None:
+            normalized = normalize_required_name(name)
+            existing = await self.get_by_name(normalized)
+            if existing is not None and existing.id != location.id:
+                raise DuplicateNameError("Location", normalized)
+            old_name = location.name
+            if normalized != old_name:
+                location.name = normalized
+                await recorder.record_location_update(
+                    location,
+                    field_name="name",
+                    old_value={"name": old_name},
+                    new_value={"name": normalized},
+                    actor=audit_actor,
+                )
+
+        if location_type is not None:
+            old_val = location.location_type
+            if location_type != old_val:
+                location.location_type = location_type
+                await recorder.record_location_update(
+                    location,
+                    field_name="location_type",
+                    old_value={"location_type": old_val.value},
+                    new_value={"location_type": location_type.value},
+                    actor=audit_actor,
+                )
+
+        if sort_order is not None:
+            old_val = location.sort_order
+            if sort_order != old_val:
+                location.sort_order = sort_order
+                await recorder.record_location_update(
+                    location,
+                    field_name="sort_order",
+                    old_value={"sort_order": old_val},
+                    new_value={"sort_order": sort_order},
+                    actor=audit_actor,
+                )
+
+        if branch_id is not None:
+            old_val = location.branch_id
+            if branch_id != old_val:
+                location.branch_id = branch_id
+                await recorder.record_location_update(
+                    location,
+                    field_name="branch_id",
+                    old_value={"branch_id": old_val},
+                    new_value={"branch_id": branch_id},
+                    actor=audit_actor,
+                )
+
+        if is_active is not None:
+            old_val = location.is_active
+            if is_active != old_val:
+                location.is_active = is_active
+                from webstudio_backend.infrastructure.database.enums import AuditAction
+                action = AuditAction.ARCHIVE if not is_active else AuditAction.RESTORE
+                await recorder.record(
+                    entity_type="location",
+                    entity_id=str(location.id),
+                    action=action,
+                    actor=audit_actor,
+                    field_name="is_active",
+                    old_value={"is_active": old_val},
+                    new_value={"is_active": is_active},
+                    description=f"Location '{location.name}' {'archived' if not is_active else 'restored'}",
+                )
+
+        await self._session.flush()
+        await self._session.refresh(location)
+        return location
+
     async def update_name(
         self,
         location: Location,
@@ -59,19 +147,4 @@ class LocationRepository(SqlAlchemyRepository[Location]):
         *,
         actor: AuditActor | None = None,
     ) -> Location:
-        normalized = normalize_required_name(name)
-        existing = await self.get_by_name(normalized)
-        if existing is not None and existing.id != location.id:
-            raise DuplicateNameError("Location", normalized)
-        old_name = location.name
-        location.name = normalized
-        await self._session.flush()
-        await self._session.refresh(location)
-        await AuditRecorder(self._session).record_location_update(
-            location,
-            field_name="name",
-            old_value={"name": old_name},
-            new_value={"name": normalized},
-            actor=actor or AuditActor.system(),
-        )
-        return location
+        return await self.update(location, name=name, actor=actor)

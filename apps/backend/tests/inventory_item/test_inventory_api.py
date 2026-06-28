@@ -26,7 +26,6 @@ def _create_payload(product_model: ProductModel, location: Location, serial: str
         "current_location_id": location.id,
         "status": "available",
         "purchase_date": "2026-01-15",
-        "warranty_expiry": "2028-01-15",
     }
 
 

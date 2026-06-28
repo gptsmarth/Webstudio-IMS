@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time
 from uuid import UUID
 
 from webstudio_backend.infrastructure.database.enums import InventoryStatus
@@ -25,5 +25,5 @@ class InventorySearchFilters:
     search: str | None = None
     purchase_date_from: date | None = None
     purchase_date_to: date | None = None
-    warranty_expiry_from: date | None = None
-    warranty_expiry_to: date | None = None
+    created_at_from: date | None = None
+    created_at_to: date | None = None

@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Database Design (Logical Model)
-Version: 1.7
+Version: 1.9
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,7 +12,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | DB-001 |
-| **Version** | 1.7 |
+| **Version** | 1.9 |
 | **Status** | Active — logical model frozen for Version 1 implementation |
 | **Governing Documents** | [PROJECT_BIBLE.md](../PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](../product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](../TECH_STACK.md), [SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md) |
 | **Purpose** | Authoritative logical data model for PostgreSQL implementation |
@@ -29,6 +29,9 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Audit-only history:** removed `InventoryMovement` entity and `inventory_movements` table; location changes update `current_location_id` only; complete traceability via `audit_log`. Migration `0005` is `audit_logs`. |
+| 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Tally matching strategy:** `product_model_mismatch` notification type; serial-authoritative sale reflection documented. |
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Final freeze:** invoice processing status lifecycle; partial retry; crash recovery; line-level transactions; `tally_processed_invoice_lines`. |
+| 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | **Frozen** Tally sync: `tally_sync_log`, `tally_processed_invoice`; notification types; invoice idempotency. |
 | 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Tally synchronization: multi-company sync state; notifications; sale invoice/payment fields; invoice line matching persistence. |
 | 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization: `system_initialized` and `company_name` system settings; Main Admin created by setup wizard — not migration seed. |
 | 1.4 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap: `0005` inventory movement; `0006` audit logs; `0007` users & authentication; `0008` ownership columns (deferred until `users` exists). |
@@ -285,7 +288,10 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 |-----------|----------|---------|-------|
 | `id` | Yes (surrogate) | Immutable | Internal primary key |
 | `username` | Yes | Immutable after create | Unique; login identifier |
-| `password_hash` | Yes (human users) | Yes | bcrypt; null for service accounts |
+| `password_hash` | Yes (human users) | Yes | Argon2id; null for service accounts |
+| `recovery_key_hash` | Optional (Main Admin only) | Yes | Argon2id hash of Recovery Key; never plain text |
+| `recovery_key_created_at` | Optional | Yes | When current Recovery Key was issued |
+| `recovery_key_last_used_at` | Optional | Yes | Set when Recovery Key consumed; nullable until first use |
 | `role` | Yes | Yes (Main Admin only) | Enum: `main_admin`, `admin`, `salesperson`, `service_account` |
 | `status` | Yes | Yes | `active`, `disabled` |
 | `display_name` | Optional | Yes | Friendly name for UI |
@@ -301,6 +307,7 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 
 - Username: unique; length 3–64; alphanumeric + underscore
 - Password: minimum 10 characters (policy TBD); hashed never stored plain
+- Main Admin Recovery Key: cryptographically random; stored as Argon2id hash only; single-use; regenerated after password recovery
 - Disabled users cannot authenticate
 - Service accounts cannot use password login from UI
 
@@ -338,6 +345,9 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 |-----------|----------|---------|-------|
 | `id` | Yes | Immutable | |
 | `name` | Yes | Yes | Unique; e.g., "ASUS", "Lenovo" |
+| `short_name` | No | Yes | Short code / abbreviation (max 64 chars) |
+| `logo_filename` | No | Yes | Filename of brand logo asset (max 256 chars) |
+| `display_order` | Yes | Yes | Order in lists (default 0) |
 | `is_active` | Yes | Yes | Cannot deactivate if active inventory references exist (FR-BRD-03) |
 | `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create (FR-AUD-09) |
 | `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
@@ -366,6 +376,12 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | `storage_unit` | Yes | Yes | Enum: `GB`, `TB` |
 | `storage_type` | Yes | Yes | Enum: `SSD`, `HDD` |
 | `status` | Yes | Yes | Enum: `active`, `archived` — see §6.10 |
+| `display` | No | Yes | Screen size/specs (max 128 chars) |
+| `color_options` | No | Yes | Available color variants (max 256 chars) |
+| `warranty` | No | Yes | Warranty term information (max 128 chars) |
+| `product_image_url` | No | Yes | URL path to product image (max 512 chars) |
+| `search_aliases` | No | Yes | Search matches for Tally integration (max 1024 chars) |
+| `notes` | No | Yes | Additional notes/details (max 2000 chars) |
 | `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create |
 | `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
@@ -516,7 +532,103 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.10 TallyIntegrationEvent
+### 4.10 TallySyncLog
+
+| Aspect | Definition |
+|--------|------------|
+| **Purpose** | Synchronization **execution history** — diagnostics and reconciliation only |
+| **Business description** | One row per invoice processing **attempt**. Does **not** drive idempotency — see `tally_processed_invoice`. Never replaces Audit Log. |
+
+| Attribute | Required | Notes |
+|-----------|----------|-------|
+| `id` | Yes | Surrogate PK |
+| `sync_run_id` | Yes | UUID — unique per execution attempt |
+| `tally_processed_invoice_id` | Optional | FK → tally_processed_invoice |
+| `tally_company_sync_id` | Yes | FK → tally_company_sync |
+| `tally_voucher_guid` | Yes | Stable Tally identifier |
+| `tally_voucher_number` | Yes | Display invoice/voucher number |
+| `voucher_type` | Optional | Tally voucher type |
+| `sync_started_at` | Yes | Start time |
+| `sync_completed_at` | Optional | End time |
+| `processing_duration_ms` | Optional | Elapsed milliseconds |
+| `processing_status` | Yes | Enum: `success`, `partial_success`, `failed`, `skipped` — **this run's outcome** |
+| `inventory_item_count` | Yes | Inventory-related lines evaluated |
+| `successfully_updated` | Yes | Items marked sold |
+| `already_sold` | Yes | Duplicate-sale lines |
+| `missing_serial` | Yes | Serial Number Missing lines |
+| `missing_model` | Yes | Product Model Missing lines |
+| `ignored_items` | Yes | Non-inventory lines skipped |
+| `retry_count` | Yes | Attempt number — default 0 |
+| `error_details` | Optional | When run `failed` |
+| `customer_name` | Optional | From invoice |
+| `correlation_id` | Yes | Trace ID |
+| `created_at` | Yes | Immutable |
+
+**Append-only** — sync logs are never updated or deleted V1.
+
+---
+
+### 4.10.1 TallyProcessedInvoice
+
+| Aspect | Definition |
+|--------|------------|
+| **Purpose** | Invoice-level **processing state** and **idempotency** |
+| **Business description** | Authoritative record of whether a Tally invoice is fully processed, partially processed, failed, or eligible for skip. Updated as processing progresses; promoted to `success` only when all inventory-related lines complete. |
+
+| Attribute | Required | Notes |
+|-----------|----------|-------|
+| `id` | Yes | Surrogate PK |
+| `tally_company_sync_id` | Yes | FK → tally_company_sync |
+| `tally_voucher_guid` | Yes | Stable Tally identifier |
+| `tally_voucher_number` | Yes | Display reference |
+| `processing_status` | Yes | Enum: `success`, `partial_success`, `failed` — **never `skipped`** (skipped is log-only) |
+| `first_attempt_at` | Yes | First processing attempt |
+| `last_attempt_at` | Yes | Most recent attempt |
+| `completed_at` | Optional | Set when `processing_status = success` |
+| `created_at` | Yes | |
+| `updated_at` | Yes | |
+
+**Unique constraint:** `UNIQUE (tally_company_sync_id, tally_voucher_guid)`
+
+**Status semantics:**
+
+| `processing_status` | Meaning |
+|---------------------|---------|
+| `success` | Fully processed — future syncs skip (log records `skipped`) |
+| `partial_success` | Some lines completed; failed lines eligible for retry |
+| `failed` | Zero inventory updates — full invoice retry |
+
+---
+
+### 4.10.2 TallyProcessedInvoiceLine
+
+| Aspect | Definition |
+|--------|------------|
+| **Purpose** | Per-line processing state for partial retry and crash recovery |
+| **Business description** | Tracks each inventory-related invoice line. Completed lines are never reprocessed. Failed lines retried on subsequent sync when invoice is `partial_success`. |
+
+| Attribute | Required | Notes |
+|-----------|----------|-------|
+| `id` | Yes | Surrogate PK |
+| `tally_processed_invoice_id` | Yes | FK → tally_processed_invoice |
+| `line_index` | Yes | Stable line position within invoice |
+| `serial_number` | Optional | From Tally line |
+| `product_model_number` | Optional | From Tally line |
+| `line_status` | Yes | Enum: `pending`, `completed`, `failed` |
+| `line_outcome` | Optional | Enum: `sale_applied`, `duplicate_sale`, `serial_number_missing`, `product_model_missing`, `product_model_mismatch`, `ignored`, `error` |
+| `inventory_item_id` | Optional | FK when sold |
+| `error_message` | Optional | When `line_status = failed` |
+| `completed_at` | Optional | When line marked completed |
+| `created_at` | Yes | |
+| `updated_at` | Yes | |
+
+**Unique constraint:** `UNIQUE (tally_processed_invoice_id, line_index)`
+
+**Partial retry rule:** On `partial_success`, only rows with `line_status = failed` are reprocessed. `completed` rows are immutable.
+
+---
+
+### 4.11 TallyIntegrationEvent
 
 | Aspect | Definition |
 |--------|------------|
@@ -533,7 +645,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 | `product_model_number` | Optional | As extracted from invoice line |
 | `inventory_item_id` | Optional | FK if matched |
 | `outcome` | Yes | Enum: `success`, `skipped`, `ignored`, `failed` |
-| `skip_reason` | Optional | e.g., `serial_not_found`, `model_mismatch`, `already_sold`, `accessory_ignored` |
+| `skip_reason` | Optional | e.g., `serial_number_missing`, `product_model_missing`, `product_model_mismatch`, `already_sold`, `accessory_ignored`, `invoice_skipped` |
 | `error_code` | Optional | |
 | `error_message` | Optional | |
 | `correlation_id` | Yes | |
@@ -542,7 +654,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.11 TallyCompanySync
+### 4.12 TallyCompanySync
 
 | Aspect | Definition |
 |--------|------------|
@@ -566,7 +678,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.12 Notification
+### 4.13 Notification
 
 | Aspect | Definition |
 |--------|------------|
@@ -579,15 +691,17 @@ See [Section 9](#9-audit-model) for complete attribute list.
 | `notification_type` | Yes | Enum: see §6.11 |
 | `severity` | Yes | Enum: `info`, `warning`, `error` |
 | `title` | Yes | Short display title |
-| `message` | Yes | Detail text |
+| `message` | Yes | Detail text — e.g., Duplicate Sale description |
 | `tally_company_sync_id` | Optional | FK when company-specific |
 | `tally_voucher_number` | Optional | Related invoice |
+| `voucher_type` | Optional | Tally voucher type |
+| `customer_name` | Optional | From Tally invoice |
 | `serial_number` | Optional | |
 | `product_model_number` | Optional | |
 | `inventory_item_id` | Optional | FK when applicable |
-| `is_read` | Yes | Default `false` |
-| `is_resolved` | Yes | Default `false` |
-| `created_at` | Yes | Immutable |
+| `is_read` | Yes | Default `false` — Unread/Read lifecycle |
+| `is_resolved` | Yes | Default `false` — Resolved lifecycle |
+| `created_at` | Yes | Immutable — detection time |
 | `resolved_at` | Optional | |
 | `resolved_by_user_id` | Optional | FK → user |
 
@@ -595,7 +709,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.13 SystemSetting
+### 4.14 SystemSetting
 
 | Aspect | Definition |
 |--------|------------|
@@ -633,7 +747,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 ---
 
-### 4.14 Permission (Conceptual — Not Persisted V1)
+### 4.15 Permission (Conceptual — Not Persisted V1)
 
 | Aspect | Definition |
 |--------|------------|
@@ -664,7 +778,10 @@ See [Section 9](#9-audit-model) for complete attribute list.
 | **FR-AUD-06** Audit immutable | Append-only | INSERT only on audit_log |
 | **BR-28** Initialization flag | SetupService | `system_initialized` in `system_settings` — not user table probe |
 | **BR-36** Duplicate sale protection | SaleService | `(invoice_number, inventory_item_id)` across manual and Tally |
-| **BR-37** Multi-company Tally isolation | TallySyncService | Per `tally_company_sync` row |
+| **BR-38** Invoice processing state | TallySyncService | `tally_processed_invoice.processing_status`; SUCCESS only when all lines complete |
+| **BR-39** Tally sync stats not in audit | TallySyncService | Statistics in `tally_sync_log` only |
+| **BR-40** Partial retry | TallySyncService | Retry failed lines only via `tally_processed_invoice_lines` |
+| **BR-41** Line-level transactions | TallySyncService | Each line commits independently — no invoice-wide rollback |
 
 ### 5.2 Business-Only Constraints (Not DB-Enforced)
 
@@ -793,7 +910,7 @@ Filterable via `GET /api/v1/audit_logs?source=TALLY_SYNC`.
 | Value | Meaning |
 |-------|---------|
 | `success` | Expected completion |
-| `skipped` | Line skipped — notification created (serial not found, model mismatch) |
+| `skipped` | Line skipped — notification created (serial/model missing, already sold) or invoice skipped (idempotency) |
 | `ignored` | Accessory/non-IMS line — no notification |
 | `failed` | Error — Synchronization Failure notification |
 
@@ -801,35 +918,68 @@ Filterable via `GET /api/v1/audit_logs?source=TALLY_SYNC`.
 
 | Value | Meaning |
 |-------|---------|
-| `serial_not_found` | Model exists; serial not in IMS |
-| `model_mismatch` | Serial exists; model does not match |
-| `duplicate_sale` | Invoice+serial already recorded |
+| `duplicate_sale` | Serial already sold — Duplicate Sale Detected |
+| `serial_number_missing` | Product model exists; serial not in IMS (available path) |
+| `product_model_missing` | Serial exists in IMS (non-available path); invoice product model not in catalog |
+| `product_model_mismatch` | Serial matched available inventory and sold; normalized invoice model genuinely differs from IMS — informational |
+| `tally_sync_completed` | Invoice or sync cycle completed successfully |
 | `sync_failure` | Company or connection-level failure |
 
-See §4.11 — legacy `voucher_received`, `sale_skipped` mapped to above in application layer if needed.
+Lifecycle: `is_read` (Unread/Read), `is_resolved` (Resolved — retained permanently).
 
-### 6.12 ProductModelStatus
+### 6.12 TallyProcessingStatus
+
+Invoice-level state on `tally_processed_invoice`:
+
+| Value | Meaning |
+|-------|---------|
+| `success` | All inventory-related lines complete — skip on future sync |
+| `partial_success` | Mixed completion — retry failed lines only |
+| `failed` | Zero inventory updates — retry entire invoice |
+
+Log-only outcome on `tally_sync_log` (includes `skipped` when invoice already `success`).
+
+### 6.13 TallySyncRunStatus
+
+Per-execution outcome on `tally_sync_log.processing_status`:
+
+| Value | Meaning |
+|-------|---------|
+| `success` | This run completed all remaining lines |
+| `partial_success` | This run completed some lines; failures remain |
+| `failed` | This run produced zero inventory updates |
+| `skipped` | Invoice already `success` — no processing |
+
+### 6.14 TallyInvoiceLineStatus
+
+| Value | Meaning |
+|-------|---------|
+| `pending` | Not yet processed |
+| `completed` | Terminal outcome reached — never reprocessed |
+| `failed` | Eligible for retry on partial sync |
+
+### 6.15 ProductModelStatus
 
 | Value | Meaning |
 |-------|---------|
 | `active` | Available for new inventory; visible in default views |
 | `archived` | Hidden from inventory creation and Salesperson default views; historical data retained |
 
-### 6.13 StorageUnit
+### 6.16 StorageUnit
 
 | Value | Meaning |
 |-------|---------|
 | `GB` | Gigabytes |
 | `TB` | Terabytes |
 
-### 6.14 StorageType
+### 6.17 StorageType
 
 | Value | Meaning |
 |-------|---------|
 | `SSD` | Solid-state storage |
 | `HDD` | Hard-disk storage |
 
-### 6.15 ClientPlatform
+### 6.18 ClientPlatform
 
 | Value | Used In |
 |-------|---------|
@@ -867,7 +1017,10 @@ See §4.11 — legacy `voucher_received`, `sale_skipped` mapped to above in appl
 | `audit_log` | `(created_at DESC)` | Audit search |
 | `audit_log` | `(entity_type, entity_id)` | Entity history |
 | `sync_job` | `(status, scheduled_at)` | Worker job pickup |
-| `tally_integration_event` | `(created_at DESC)` | Reconciliation UI |
+| `tally_sync_log` | `(tally_processed_invoice_id, sync_started_at DESC)` | Invoice attempt history |
+| `tally_processed_invoice` | UNIQUE `(tally_company_sync_id, tally_voucher_guid)` | Invoice state |
+| `tally_processed_invoice_line` | `(tally_processed_invoice_id, line_status)` | Partial retry lookup |
+| `tally_integration_event` | `(created_at DESC)` | Line-level reconciliation |
 
 ### 7.2 Product Model Specification and Color Search
 
@@ -1066,6 +1219,8 @@ stateDiagram-v2
 
 ### 10.2 Tally Integration
 
+> **Frozen** — see [sync-strategy.md](../integrations/tally-erp9/sync-strategy.md).
+
 Tally Sync reads invoices from Tally ERP 9 — **write operations to Tally are prohibited**.
 
 | Concern | Design |
@@ -1073,21 +1228,27 @@ Tally Sync reads invoices from Tally ERP 9 — **write operations to Tally are p
 | **Multi-company** | One `tally_company_sync` row per company; isolated failure handling |
 | **Cursor** | `last_successful_sync_time`, `last_processed_voucher_identifier` updated per company on success |
 | **Interval** | `tally_sync_interval_seconds` — default **1800** (30 minutes) |
-| **Logging** | Every poll and invoice line → `tally_integration_event` |
-| **Match success** | `sale_applied` event + `sale` row + inventory `status=sold` + `audit_log` in one API transaction |
-| **Serial not found** | `notification` (`serial_not_found`); `outcome=skipped` event |
-| **Model mismatch** | `notification` (`model_mismatch`); `outcome=skipped` event |
-| **Accessory / ignored line** | `outcome=ignored`; **no** notification |
-| **Duplicate sale** | Idempotent no-op; optional `duplicate_sale` notification |
+| **Invoice state** | `tally_processed_invoice` — skip when `success`; partial retry when `partial_success` |
+| **Execution history** | `tally_sync_log` — append-only per attempt; references processed invoice |
+| **Line retry tracking** | `tally_processed_invoice_lines` — completed lines immutable |
+| **Line transactions** | Each line independent commit — no invoice-wide rollback |
+| **Crash recovery** | SUCCESS skip; PARTIAL_SUCCESS resume failed lines; FAILED full retry |
+| **Available match** | Serial in **`available`** → sold + sale + audit — **serial authoritative**; product model never blocks sale |
+| **Model verification** | After sale — normalized comparison; minor differences ignored |
+| **Model mismatch** | Serial sold; normalized models genuinely differ → `product_model_mismatch` notification; sale **not** reversed |
+| **Duplicate sold** | Serial in **`sold`** → `duplicate_sale` notification; no inventory/audit |
+| **Serial missing** | `serial_number_missing` notification; `outcome=skipped` |
+| **Model missing** | `product_model_missing` notification; `outcome=skipped` |
+| **Accessory / ignored** | `outcome=ignored`; **no** notification |
 | **Company failure** | `sync_failure` notification; other companies continue |
-| **Idempotency** | `(tally_company_name, tally_voucher_number, inventory_item_id)`; cross-source with manual via `invoice_number` |
+| **Line independence** | One line failure never stops other lines on same invoice |
 
 ### 10.3 Status Tracking
 
 | Integration | Primary Status Store |
 |-------------|---------------------|
 | Excel | `sync_job.status` + latest completed job timestamp |
-| Tally | `tally_company_sync` per company + `tally_integration_event` + unresolved `notification` count |
+| Tally | `tally_company_sync` + `tally_processed_invoice` + `tally_sync_log` + `tally_processed_invoice_lines` + unresolved `notification` count |
 
 Tally Synchronization Dashboard (FR-TLY-11) reads from `tally_company_sync`, settings, and notifications via API.
 
@@ -1421,8 +1582,9 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 | 6 | `0006_audit_log_description` | `audit_logs.description` column |
 | 7 | `0007_audit_log_source` | `audit_logs.source` enum + index |
 | 8 | `0008_users_authentication` | `users`, `refresh_tokens`, `system_settings`; `system_initialized=false` seed; FK `audit_logs.actor_user_id` |
+| 9 | `0009_main_admin_recovery_key` | `users.recovery_key_hash`, `recovery_key_created_at`, `recovery_key_last_used_at` |
 | 9 | `0009_ownership_columns` (planned) | `created_by_user_id`, `updated_by_user_id` on `brands`, `locations`, `product_models`, `inventory_items` |
-| 9 | `0009_integrations` (planned) | `sales`, `sync_jobs`, `tally_integration_events`, `tally_company_syncs`, `notifications`; additional `system_settings` keys as needed |
+| 9 | `0009_integrations` (planned) | `sales`, `sync_jobs`, `tally_sync_logs`, `tally_processed_invoices`, `tally_processed_invoice_lines`, `tally_integration_events`, `tally_company_syncs`, `notifications`; additional `system_settings` keys as needed |
 
 **Dependency rationale:** Operational ownership columns require the `users` table — applied in `0008` after `0007_users_authentication`.
 
@@ -1433,7 +1595,7 @@ See [Section 15](#15-open-decisions). **None block schema creation.** BD-01 affe
 - `audit_logs.actor_user_id` is created nullable in `0005`; FK to `users` is enforced in `0007_users_authentication` once authentication entities exist.
 - Seed data: reference brands/locations in `0002`; `system_initialized = false` in `0007` — Main Admin created by First-Time Setup Wizard via API, not seed.
 
-**Sprint 1F scope:** Migration `0008_users_authentication`; `SetupService`, `AuthenticationService`, `UserService`; JWT + Argon2id; setup/auth/users APIs per API spec §2–4.
+**Sprint 1F scope:** Migrations `0008_users_authentication`, `0009_main_admin_recovery_key`; `SetupService`, `AuthenticationService`, `UserService`, `MainAdminRecoveryService`; JWT + Argon2id; setup/auth/users APIs; Main Admin Recovery Key (one-time display, single-use, auto-regeneration) per API spec §2–4.
 
 ---
 

@@ -29,7 +29,7 @@ async def _seed_notifications(db_session: AsyncSession) -> list[int]:
         notification_type=NotificationType.INVENTORY_ALERT,
         severity=NotificationSeverity.WARNING,
         title="Inventory alert",
-        message="Item nearing warranty expiry",
+        message="Item status updated",
         category=NotificationCategory.INVENTORY,
     )
     ids.append(inventory.id)
@@ -138,26 +138,14 @@ async def test_resolve_notification_lifecycle(
 
 
 @pytest.mark.asyncio
-async def test_salesperson_can_read_but_not_resolve(
+async def test_salesperson_cannot_read_notifications(
     api_client: AsyncClient,
     db_session: AsyncSession,
     salesperson_headers: dict[str, str],
 ) -> None:
-    notification_id = (await _seed_notifications(db_session))[0]
+    await _seed_notifications(db_session)
     list_response = await api_client.get("/api/v1/notifications", headers=salesperson_headers)
-    assert list_response.status_code == 200
-
-    read_response = await api_client.patch(
-        f"/api/v1/notifications/{notification_id}/read",
-        headers=salesperson_headers,
-    )
-    assert read_response.status_code == 200
-
-    resolve_response = await api_client.patch(
-        f"/api/v1/notifications/{notification_id}/resolve",
-        headers=salesperson_headers,
-    )
-    assert resolve_response.status_code == 403
+    assert list_response.status_code == 403
 
 
 @pytest.mark.asyncio

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 100
 
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> list[str]:

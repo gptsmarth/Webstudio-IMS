@@ -99,6 +99,11 @@ class LastMainAdminError(RepositoryError):
         super().__init__("Cannot modify the last active Main Admin account")
 
 
+class SelfMainAdminDisableError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Cannot disable your own Main Administrator account")
+
+
 class SystemAlreadyInitializedError(RepositoryError):
     def __init__(self) -> None:
         super().__init__("System is already initialized")

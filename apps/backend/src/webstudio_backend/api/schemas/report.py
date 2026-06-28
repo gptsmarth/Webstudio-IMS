@@ -9,7 +9,16 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, NotificationStatus
+from webstudio_backend.infrastructure.database.enums import (
+    AuditAction,
+    AuditSource,
+    InventoryStatus,
+    LocationType,
+    NotificationCategory,
+    NotificationStatus,
+    NotificationType,
+    SaleSource,
+)
 from webstudio_backend.infrastructure.database.repositories.pagination import PageResult
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters, ReportType
 from webstudio_backend.infrastructure.repositories.report_repository import (
@@ -25,24 +34,60 @@ from webstudio_backend.infrastructure.repositories.report_repository import (
 class ReportFiltersApplied(BaseModel):
     date_from: datetime | None = None
     date_to: datetime | None = None
+    purchase_date_from: date | None = None
+    purchase_date_to: date | None = None
     brand_id: int | None = None
     location_id: int | None = None
+    location_type: LocationType | None = None
     product_model_id: uuid.UUID | None = None
     user_id: int | None = None
     inventory_status: InventoryStatus | None = None
+    is_archived: bool | None = None
+    serial_number: str | None = None
+    color: str | None = None
     notification_status: NotificationStatus | None = None
+    notification_type: NotificationType | None = None
+    notification_category: NotificationCategory | None = None
+    invoice_number: str | None = None
+    customer_name: str | None = None
+    payment_mode: str | None = None
+    sale_source: SaleSource | None = None
+    audit_action: AuditAction | None = None
+    audit_source: AuditSource | None = None
+    actor_role: str | None = None
+    search: str | None = None
+    sort_field: str | None = None
+    sort_direction: str | None = None
 
     @classmethod
     def from_filters(cls, filters: ReportFilters) -> ReportFiltersApplied:
         return cls(
             date_from=filters.date_from,
             date_to=filters.date_to,
+            purchase_date_from=filters.purchase_date_from,
+            purchase_date_to=filters.purchase_date_to,
             brand_id=filters.brand_id,
             location_id=filters.location_id,
+            location_type=filters.location_type,
             product_model_id=filters.product_model_id,
             user_id=filters.user_id,
             inventory_status=filters.inventory_status,
+            is_archived=filters.is_archived,
+            serial_number=filters.serial_number,
+            color=filters.color,
             notification_status=filters.notification_status,
+            notification_type=filters.notification_type,
+            notification_category=filters.notification_category,
+            invoice_number=filters.invoice_number,
+            customer_name=filters.customer_name,
+            payment_mode=filters.payment_mode,
+            sale_source=filters.sale_source,
+            audit_action=filters.audit_action,
+            audit_source=filters.audit_source,
+            actor_role=filters.actor_role,
+            search=filters.search,
+            sort_field=filters.sort_field,
+            sort_direction=filters.sort_direction,
         )
 
 
@@ -61,7 +106,6 @@ class InventoryReportRowResponse(BaseModel):
     status: str
     is_archived: bool
     purchase_date: date | None
-    warranty_expiry: date | None
     created_at: datetime
 
     @classmethod
@@ -72,6 +116,7 @@ class InventoryReportRowResponse(BaseModel):
 class SalesReportRowResponse(BaseModel):
     serial_number: str
     brand_name: str
+    model_number: str
     model_name: str
     location_name: str
     invoice_number: str
@@ -80,6 +125,7 @@ class SalesReportRowResponse(BaseModel):
     sale_source: str
     sold_at: datetime
     recorded_by_user_id: int | None
+    recorded_by_display_name: str | None = None
 
     @classmethod
     def from_row(cls, row: SalesReportRow) -> SalesReportRowResponse:

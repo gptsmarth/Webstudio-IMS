@@ -42,7 +42,11 @@ class NotificationType(StrEnum):
     DUPLICATE_SALE = "duplicate_sale"
     SERIAL_NUMBER_MISSING = "serial_number_missing"
     PRODUCT_MODEL_MISSING = "product_model_missing"
+    PRODUCT_MODEL_MISMATCH = "product_model_mismatch"
     TALLY_SYNC_COMPLETED = "tally_sync_completed"
+    TALLY_SYNC_STARTED = "tally_sync_started"
+    CONNECTION_LOST = "connection_lost"
+    CONNECTION_RESTORED = "connection_restored"
     SYNC_FAILURE = "sync_failure"
     INVENTORY_ALERT = "inventory_alert"
     SYSTEM_NOTIFICATION = "system_notification"
@@ -114,6 +118,35 @@ class SettingValueType(StrEnum):
     CRON = "cron"
 
 
+class TallyProcessingStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+
+
+class TallySyncRunStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class TallyLineStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TallyLineOutcome(StrEnum):
+    SALE_APPLIED = "sale_applied"
+    DUPLICATE_SALE = "duplicate_sale"
+    SERIAL_NUMBER_MISSING = "serial_number_missing"
+    PRODUCT_MODEL_MISSING = "product_model_missing"
+    PRODUCT_MODEL_MISMATCH = "product_model_mismatch"
+    IGNORED = "ignored"
+    ERROR = "error"
+
+
 HUMAN_USER_ROLES = frozenset({UserRole.MAIN_ADMIN, UserRole.ADMIN, UserRole.SALESPERSON})
 
 LOCATION_TYPE_ENUM_NAME = "location_type"
@@ -132,6 +165,10 @@ USER_ROLE_ENUM_NAME = "user_role"
 USER_STATUS_ENUM_NAME = "user_status"
 THEME_PREFERENCE_ENUM_NAME = "theme_preference"
 SETTING_VALUE_TYPE_ENUM_NAME = "setting_value_type"
+TALLY_PROCESSING_STATUS_ENUM_NAME = "tally_processing_status"
+TALLY_SYNC_RUN_STATUS_ENUM_NAME = "tally_sync_run_status"
+TALLY_LINE_STATUS_ENUM_NAME = "tally_line_status"
+TALLY_LINE_OUTCOME_ENUM_NAME = "tally_line_outcome"
 
 __all__ = [
     "AUDIT_ACTION_ENUM_NAME",
@@ -160,6 +197,14 @@ __all__ = [
     "NOTIFICATION_SEVERITY_ENUM_NAME",
     "NOTIFICATION_TYPE_ENUM_NAME",
     "SaleSource",
+    "TallyLineOutcome",
+    "TallyLineStatus",
+    "TallyProcessingStatus",
+    "TallySyncRunStatus",
+    "TALLY_LINE_OUTCOME_ENUM_NAME",
+    "TALLY_LINE_STATUS_ENUM_NAME",
+    "TALLY_PROCESSING_STATUS_ENUM_NAME",
+    "TALLY_SYNC_RUN_STATUS_ENUM_NAME",
     "LocationType",
     "ProductModelStatus",
     "SettingValueType",

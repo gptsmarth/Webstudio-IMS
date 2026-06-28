@@ -1,0 +1,62 @@
+import { ApiClientProvider } from './ApiClientProvider';
+import { LoggingService } from '../LoggingService';
+
+export interface Brand {
+  id: number;
+  name: string;
+  short_name: string | null;
+  logo_filename: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateBrandRequest {
+  name: string;
+  short_name?: string | null;
+  logo_filename?: string | null;
+  display_order?: number;
+  is_active?: boolean;
+}
+
+export interface UpdateBrandRequest {
+  name?: string;
+  short_name?: string | null;
+  logo_filename?: string | null;
+  display_order?: number;
+  is_active?: boolean;
+}
+
+export class BrandService {
+  static async listBrands(): Promise<Brand[]> {
+    LoggingService.debug('API', 'Fetching brands list');
+    const client = await ApiClientProvider.getClient();
+    return client.get<Brand[]>('/api/v1/brands');
+  }
+
+  static async getBrand(id: number): Promise<Brand> {
+    const client = await ApiClientProvider.getClient();
+    return client.get<Brand>(`/api/v1/brands/${id}`);
+  }
+
+  static async createBrand(data: CreateBrandRequest): Promise<Brand> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<Brand>('/api/v1/brands', data);
+  }
+
+  static async updateBrand(id: number, data: UpdateBrandRequest): Promise<Brand> {
+    const client = await ApiClientProvider.getClient();
+    return client.patch<Brand>(`/api/v1/brands/${id}`, data);
+  }
+
+  static async archiveBrand(id: number): Promise<Brand> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<Brand>(`/api/v1/brands/${id}/archive`, {});
+  }
+
+  static async restoreBrand(id: number): Promise<Brand> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<Brand>(`/api/v1/brands/${id}/restore`, {});
+  }
+}

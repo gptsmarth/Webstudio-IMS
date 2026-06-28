@@ -18,7 +18,13 @@ class AuditLogSearchFilters:
     product_model_id: uuid.UUID | None = None
     brand_id: int | None = None
     actor_user_id: int | None = None
+    actor_role: str | None = None
     action: AuditAction | None = None
     source: AuditSource | None = None
+    location_id: int | None = None
+    invoice_number: str | None = None
+    model_number: str | None = None
+    search: str | None = None
+    result: str | None = None
     created_at_from: datetime | None = None
     created_at_to: datetime | None = None

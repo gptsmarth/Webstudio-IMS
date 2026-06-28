@@ -6,7 +6,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -42,6 +42,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    # Alembic stores its version table in webstudio; bootstrap the schema on fresh databases
+    # before migrations run (0001_initial also creates it for explicit migration history).
+    connection.execute(text("CREATE SCHEMA IF NOT EXISTS webstudio"))
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -63,7 +66,7 @@ async def run_async_migrations() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()

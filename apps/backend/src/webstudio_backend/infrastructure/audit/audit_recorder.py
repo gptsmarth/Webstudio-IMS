@@ -364,6 +364,7 @@ class AuditRecorder:
         sale: Sale,
         *,
         actor: AuditActor,
+        source: AuditSource | None = None,
     ) -> None:
         await self.record(
             entity_type="sale",
@@ -375,12 +376,15 @@ class AuditRecorder:
                 "sale_id": sale.id,
                 "sale_source": sale.sale_source.value,
                 "invoice_number": sale.invoice_number,
+                "printed_invoice_number": sale.printed_invoice_number or sale.invoice_number,
+                "tally_voucher_number": sale.tally_voucher_number,
                 "customer_name": sale.customer_name,
                 "payment_mode": sale.payment_mode,
                 "sold_at": sale.sold_at.isoformat(),
                 "notes": sale.notes,
             },
-            description=f"Sale recorded (Invoice: {sale.invoice_number})",
+            description=f"Sale recorded (Invoice: {sale.printed_invoice_number or sale.invoice_number})",
+            source=source,
         )
 
     async def record_system_action(

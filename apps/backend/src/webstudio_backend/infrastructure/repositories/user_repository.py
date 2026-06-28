@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,16 @@ from webstudio_backend.infrastructure.database.repositories.pagination import (
 )
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateUsernameError
 from webstudio_backend.infrastructure.repositories.user_validation import normalize_username
+
+
+_USER_SORT_COLUMNS = {
+    "username": User.username,
+    "display_name": User.display_name,
+    "role": User.role,
+    "status": User.status,
+    "last_login_at": User.last_login_at,
+    "created_at": User.created_at,
+}
 
 
 class UserRepository(SqlAlchemyRepository[User]):
@@ -72,6 +82,10 @@ class UserRepository(SqlAlchemyRepository[User]):
         status: UserStatus | None = None,
         role: UserRole | None = None,
         search: str | None = None,
+        created_from: date | None = None,
+        created_to: date | None = None,
+        sort_field: str = "username",
+        sort_direction: str = "asc",
     ) -> PageResult[User]:
         statement: Select[tuple[User]] = select(User)
         if status is not None:
@@ -86,7 +100,18 @@ class UserRepository(SqlAlchemyRepository[User]):
                     User.display_name.ilike(prefix),
                 ),
             )
-        statement = statement.order_by(User.username.asc())
+        if created_from is not None:
+            statement = statement.where(
+                User.created_at >= datetime.combine(created_from, time.min, tzinfo=UTC),
+            )
+        if created_to is not None:
+            statement = statement.where(
+                User.created_at
+                < datetime.combine(created_to + timedelta(days=1), time.min, tzinfo=UTC),
+            )
+        column = _USER_SORT_COLUMNS.get(sort_field, User.username)
+        order = column.asc() if sort_direction.lower() != "desc" else column.desc()
+        statement = statement.order_by(order)
         return await paginate(self._session, statement, page_params)
 
     async def update_display_name(self, user: User, display_name: str, *, actor_id: int) -> User:

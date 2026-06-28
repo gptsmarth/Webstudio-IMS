@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
+from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 from webstudio_backend.infrastructure.database.repositories.pagination import (
     PageParams,
@@ -21,6 +24,15 @@ from webstudio_backend.infrastructure.database.repositories.pagination import (
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam, apply_sorting
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.exceptions import InventoryItemNotFoundError
+
+
+@dataclass(frozen=True, slots=True)
+class AuditLogEnrichedRow:
+    audit_log: AuditLog
+    serial_number: str | None
+    location_name: str | None
+    model_number: str | None
+    invoice_number: str | None
 
 
 class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
@@ -79,6 +91,62 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
         statement = select(AuditLog)
         statement = await self._apply_filters(statement, filters)
         return await self._paginate(statement, page_params, sort_params)
+
+    async def search_enriched(
+        self,
+        filters: AuditLogSearchFilters,
+        page_params: PageParams,
+        sort_params: list[SortParam] | None = None,
+    ) -> PageResult[AuditLogEnrichedRow]:
+        statement = self._enriched_select()
+        statement = await self._apply_enriched_filters(statement, filters)
+        if sort_params:
+            column_map = {
+                **{column.key: column for column in self._model.__table__.columns},
+                "serial_number": InventoryItem.serial_number,
+                "location_name": Location.name,
+                "model_number": ProductModel.model_number,
+            }
+            statement = apply_sorting(statement, sort_params, column_map)
+        else:
+            statement = statement.order_by(AuditLog.created_at.desc())
+
+        count_statement = select(func.count()).select_from(
+            statement.with_only_columns(AuditLog.id).order_by(None).subquery(),
+        )
+        total_items = int((await self._session.execute(count_statement)).scalar_one())
+        paginated = statement.limit(page_params.page_size).offset(page_params.offset)
+        result = await self._session.execute(paginated)
+        rows = [
+            AuditLogEnrichedRow(
+                audit_log=row[0],
+                serial_number=row[1],
+                location_name=row[2],
+                model_number=row[3],
+                invoice_number=row[4],
+            )
+            for row in result.all()
+        ]
+        return PageResult(
+            items=rows,
+            total_items=total_items,
+            page=page_params.page,
+            page_size=page_params.page_size,
+        )
+
+    async def get_enriched_by_id(self, audit_log_id: uuid.UUID) -> AuditLogEnrichedRow | None:
+        statement = self._enriched_select().where(AuditLog.id == audit_log_id)
+        result = await self._session.execute(statement)
+        row = result.first()
+        if row is None:
+            return None
+        return AuditLogEnrichedRow(
+            audit_log=row[0],
+            serial_number=row[1],
+            location_name=row[2],
+            model_number=row[3],
+            invoice_number=row[4],
+        )
 
     async def get_by_entity(
         self,
@@ -150,6 +218,117 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             statement = statement.where(AuditLog.created_at >= filters.created_at_from)
         if filters.created_at_to is not None:
             statement = statement.where(AuditLog.created_at <= filters.created_at_to)
+
+        if filters.product_model_id is not None or filters.brand_id is not None:
+            inventory_ids = select(InventoryItem.id)
+            if filters.product_model_id is not None:
+                inventory_ids = inventory_ids.where(
+                    InventoryItem.product_model_id == filters.product_model_id,
+                )
+            if filters.brand_id is not None:
+                inventory_ids = inventory_ids.join(ProductModel).where(
+                    ProductModel.brand_id == filters.brand_id,
+                )
+            entity_clauses = [AuditLog.inventory_item_id.in_(inventory_ids)]
+            if filters.brand_id is not None:
+                entity_clauses.append(
+                    (AuditLog.entity_type == "brand") & (AuditLog.entity_id == str(filters.brand_id)),
+                )
+            if filters.product_model_id is not None:
+                entity_clauses.append(
+                    (AuditLog.entity_type == "product_model")
+                    & (AuditLog.entity_id == str(filters.product_model_id)),
+                )
+            statement = statement.where(or_(*entity_clauses))
+
+        return statement
+
+    def _enriched_select(self):
+        return select(
+            AuditLog,
+            InventoryItem.serial_number,
+            Location.name.label("location_name"),
+            ProductModel.model_number,
+            Sale.invoice_number,
+        ).select_from(
+            AuditLog.__table__.outerjoin(
+                InventoryItem,
+                AuditLog.inventory_item_id == InventoryItem.id,
+            ).outerjoin(
+                Location,
+                InventoryItem.current_location_id == Location.id,
+            ).outerjoin(
+                ProductModel,
+                InventoryItem.product_model_id == ProductModel.id,
+            ).outerjoin(
+                Sale,
+                (AuditLog.entity_type == "sale")
+                & (AuditLog.entity_id == cast(Sale.id, String)),
+            ),
+        )
+
+    async def _apply_enriched_filters(self, statement, filters: AuditLogSearchFilters):
+        if filters.entity_type is not None:
+            statement = statement.where(AuditLog.entity_type == filters.entity_type)
+        if filters.entity_id is not None:
+            statement = statement.where(AuditLog.entity_id == filters.entity_id)
+        if filters.inventory_item_id is not None:
+            statement = statement.where(AuditLog.inventory_item_id == filters.inventory_item_id)
+        if filters.serial_number is not None:
+            normalized = filters.serial_number.strip()
+            statement = statement.where(InventoryItem.serial_number.ilike(f"{normalized}%"))
+        if filters.actor_user_id is not None:
+            statement = statement.where(AuditLog.actor_user_id == filters.actor_user_id)
+        if filters.actor_role is not None and filters.actor_role.strip():
+            statement = statement.where(AuditLog.actor_role == filters.actor_role.strip())
+        if filters.action is not None:
+            statement = statement.where(AuditLog.action == filters.action)
+        if filters.source is not None:
+            statement = statement.where(AuditLog.source == filters.source)
+        if filters.location_id is not None:
+            statement = statement.where(InventoryItem.current_location_id == filters.location_id)
+        if filters.invoice_number is not None and filters.invoice_number.strip():
+            term = filters.invoice_number.strip()
+            statement = statement.where(
+                or_(
+                    Sale.invoice_number.ilike(f"%{term}%"),
+                    AuditLog.description.ilike(f"%{term}%"),
+                ),
+            )
+        if filters.model_number is not None and filters.model_number.strip():
+            term = filters.model_number.strip()
+            statement = statement.where(ProductModel.model_number.ilike(f"%{term}%"))
+        if filters.created_at_from is not None:
+            statement = statement.where(AuditLog.created_at >= filters.created_at_from)
+        if filters.created_at_to is not None:
+            statement = statement.where(AuditLog.created_at <= filters.created_at_to)
+        if filters.result == "failure":
+            statement = statement.where(
+                or_(
+                    AuditLog.description.ilike("Failed%"),
+                    AuditLog.description.ilike("%failure%"),
+                ),
+            )
+        elif filters.result == "success":
+            statement = statement.where(
+                ~or_(
+                    AuditLog.description.ilike("Failed%"),
+                    AuditLog.description.ilike("%failure%"),
+                ),
+            )
+        if filters.search is not None and filters.search.strip():
+            term = filters.search.strip()
+            statement = statement.where(
+                or_(
+                    AuditLog.actor_display_name.ilike(f"%{term}%"),
+                    AuditLog.entity_id.ilike(f"%{term}%"),
+                    AuditLog.entity_type.ilike(f"%{term}%"),
+                    AuditLog.description.ilike(f"%{term}%"),
+                    InventoryItem.serial_number.ilike(f"%{term}%"),
+                    Sale.invoice_number.ilike(f"%{term}%"),
+                    ProductModel.model_number.ilike(f"%{term}%"),
+                ),
+            )
 
         if filters.product_model_id is not None or filters.brand_id is not None:
             inventory_ids = select(InventoryItem.id)

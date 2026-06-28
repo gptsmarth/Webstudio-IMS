@@ -1,53 +1,246 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { defaultRouteForRole } from './config/navigation';
+import { useThemeStore, useAuthStore, useNavigationStore, type AuthSession } from './store';
+import { VersionService, LoggingService, ConfigService, SetupService, AuthenticationService } from './services';
+import { AuthTokenStore } from './services/AuthTokenStore';
+import { SplashScreen, type StartupStage } from './components';
+import { ConnectionPage, SetupWizardPage, LoginPage } from './pages';
+import { AppShell } from './layouts/AppShell';
+import type { ConnectionStatus } from './components/shell';
+import {
+  detectDatabaseReset,
+  isSetupRequired,
+  markLocalInitializedFlag,
+  SETUP_REQUIRED_EVENT,
+} from './lib/setupGuard';
+import { initAppearancePreferences } from './lib/settingsUi';
 
-import './App.css';
-
-interface HealthState {
-  status: string;
-  message: string;
+interface AppVersionMeta {
+  appVersion: string;
+  buildVersion: string;
+  gitCommit: string;
+  buildDate: string;
+  envMode: string;
+  electronVersion: string;
+  chromiumVersion: string;
+  nodeVersion: string;
 }
 
-declare global {
-  interface Window {
-    webstudio?: {
-      checkHealth: () => Promise<{ data?: { status?: string } }>;
-    };
-  }
-}
+type AppView = 'connection' | 'setup' | 'login' | 'workspace';
 
 export function App(): JSX.Element {
-  const [health, setHealth] = useState<HealthState>({
-    status: 'checking',
-    message: 'Connecting to API...',
+  const { initTheme } = useThemeStore();
+  const { setSession, clearSession } = useAuthStore();
+  const [bootStage, setBootStage] = useState<StartupStage>('initializing');
+  const [activeView, setActiveView] = useState<AppView>('connection');
+  const [companyName, setCompanyName] = useState<string>('WEBSTUDIO IMS');
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+
+  const [meta, setMeta] = useState<AppVersionMeta>({
+    appVersion: '0.1.0',
+    buildVersion: 'loading...',
+    gitCommit: '...',
+    buildDate: '...',
+    envMode: 'development',
+    electronVersion: '...',
+    chromiumVersion: '...',
+    nodeVersion: '...',
   });
 
-  useEffect(() => {
-    async function bootstrap(): Promise<void> {
-      try {
-        if (!window.webstudio?.checkHealth) {
-          setHealth({ status: 'error', message: 'IPC bridge unavailable' });
-          return;
+  const evaluateServerState = useCallback(async () => {
+    try {
+      const status = await SetupService.getStatus();
+      if (status.company_name) {
+        setCompanyName(status.company_name);
+      }
+      setConnectionStatus('online');
+
+      if (detectDatabaseReset(status)) {
+        LoggingService.warn(
+          'Renderer',
+          'Database appears reset — local setup flag was set but server reports uninitialized',
+        );
+        await AuthTokenStore.clear();
+        clearSession();
+      }
+
+      if (isSetupRequired(status)) {
+        markLocalInitializedFlag(false);
+        await AuthTokenStore.clear();
+        clearSession();
+        setActiveView('setup');
+        return;
+      }
+
+      markLocalInitializedFlag(true);
+      setActiveView((current) => {
+        if (current === 'connection' || current === 'setup') {
+          return 'login';
         }
-        const response = await window.webstudio.checkHealth();
-        setHealth({
-          status: response.data?.status ?? 'unknown',
-          message: 'Backend health check complete',
+        return current;
+      });
+    } catch {
+      setConnectionStatus('offline');
+      setActiveView('connection');
+    }
+  }, [clearSession]);
+
+  useEffect(() => {
+    const onSetupRequired = () => {
+      void (async () => {
+        clearSession();
+        await AuthTokenStore.clear();
+        setActiveView('setup');
+      })();
+    };
+
+    window.addEventListener(SETUP_REQUIRED_EVENT, onSetupRequired);
+    return () => window.removeEventListener(SETUP_REQUIRED_EVENT, onSetupRequired);
+  }, [clearSession]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (activeView === 'login' || activeView === 'workspace') {
+        void evaluateServerState();
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [activeView, evaluateServerState]);
+
+  useEffect(() => {
+    if (activeView !== 'login' && activeView !== 'setup') return;
+
+    void evaluateServerState();
+    const intervalMs = activeView === 'setup' ? 5_000 : 30_000;
+    const interval = setInterval(() => void evaluateServerState(), intervalMs);
+    return () => clearInterval(interval);
+  }, [activeView, evaluateServerState]);
+
+  useEffect(() => {
+    void initTheme();
+    initAppearancePreferences();
+    LoggingService.info('Renderer', 'Application root mounted');
+
+    async function bootstrap(): Promise<void> {
+      const startedAt = Date.now();
+      const MIN_SPLASH_MS = 1600;
+
+      setBootStage('initializing');
+      await new Promise((r) => setTimeout(r, 280));
+
+      setBootStage('config');
+      try {
+        const vInfo = await VersionService.getVersionInfo();
+        const envInfo = await ConfigService.getEnvironment();
+        setMeta({
+          appVersion: vInfo.appVersion,
+          buildVersion: vInfo.buildVersion,
+          gitCommit: vInfo.gitCommit,
+          buildDate: vInfo.buildDate,
+          envMode: envInfo.mode,
+          electronVersion: vInfo.electronVersion,
+          chromiumVersion: vInfo.chromiumVersion,
+          nodeVersion: vInfo.nodeVersion,
         });
       } catch {
-        setHealth({ status: 'error', message: 'Backend unreachable' });
+        LoggingService.warn('Renderer', 'Failed to retrieve version metadata');
       }
+      await new Promise((r) => setTimeout(r, 320));
+
+      setBootStage('preparing');
+      try {
+        if (window.api?.checkHealth) {
+          const response = await window.api.checkHealth();
+          setConnectionStatus(response.data?.status === 'online' || response.data?.status === 'ok' ? 'online' : 'offline');
+        } else {
+          setConnectionStatus('offline');
+        }
+      } catch {
+        setConnectionStatus('offline');
+      }
+
+      await evaluateServerState();
+      await new Promise((r) => setTimeout(r, 280));
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_SPLASH_MS) {
+        await new Promise((r) => setTimeout(r, MIN_SPLASH_MS - elapsed));
+      }
+
+      setBootStage('ready');
     }
 
     void bootstrap();
-  }, []);
+  }, [initTheme]);
+
+  const handleLoginSuccess = (session: AuthSession) => {
+    markLocalInitializedFlag(true);
+    setSession(session);
+    useNavigationStore.getState().setRoute(defaultRouteForRole(session.role));
+    setActiveView('workspace');
+  };
+
+  const handleSetupComplete = () => {
+    markLocalInitializedFlag(true);
+    void evaluateServerState();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AuthenticationService.logout();
+    } catch {
+      // Ignore network errors on logout
+    }
+    clearSession();
+    void evaluateServerState();
+  };
+
+  if (bootStage !== 'ready') {
+    return <SplashScreen stage={bootStage} appVersion={meta.appVersion} />;
+  }
+
+  if (activeView === 'connection') {
+    return (
+      <ConnectionPage
+        onConnected={(demo?: boolean) => {
+          if (demo) {
+            setIsDemoMode(true);
+            setConnectionStatus('offline');
+            setActiveView('setup');
+          } else {
+            setIsDemoMode(false);
+            void evaluateServerState();
+          }
+        }}
+      />
+    );
+  }
+
+  if (activeView === 'setup') {
+    return <SetupWizardPage isDemoMode={isDemoMode} appVersion={meta.appVersion} onSetupComplete={handleSetupComplete} />;
+  }
+
+  if (activeView === 'login') {
+    return (
+      <LoginPage
+        companyName={companyName}
+        apiUrl=""
+        appVersion={meta.appVersion}
+        onLoginSuccess={handleLoginSuccess}
+        onSetupRequired={() => setActiveView('setup')}
+      />
+    );
+  }
 
   return (
-    <main className="app">
-      <h1>WEBSTUDIO IMS</h1>
-      <p>Sprint 0 foundation</p>
-      <p>
-        API health: <strong>{health.status}</strong> — {health.message}
-      </p>
-    </main>
+    <AppShell
+      companyName={companyName}
+      appVersion={meta.appVersion}
+      connectionStatus={connectionStatus}
+      onLogout={() => void handleLogout()}
+    />
   );
 }

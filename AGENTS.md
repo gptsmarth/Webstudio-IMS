@@ -40,3 +40,4 @@ Instructions for AI assistants (Cursor, ChatGPT, Antigravity, and others) workin
 - Match naming conventions in [docs/meta/style-guide.md](docs/meta/style-guide.md)
 - Update documentation in the same change as code
 - Reference spec and ADR IDs in commits and PRs
+- **Never run `fresh-dev.sh` or `docker compose down -v`** unless the user explicitly asks to wipe local data. Code edits, backend `--reload`, and `pnpm desktop:dev` do **not** require a database reset.

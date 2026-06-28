@@ -47,10 +47,74 @@ Stop PostgreSQL:
 docker compose down
 ```
 
+**Data is preserved** when you stop without `-v`. Your setup, users, and inventory remain in the Docker volume `webstudio_pg_data`.
+
+### Database safety (read this)
+
+| Action | Data preserved? |
+|--------|-----------------|
+| `docker compose up` / `down` | Yes |
+| Restart Docker Desktop | Yes |
+| `docker compose down -v` | **No — volume deleted** |
+| `I_UNDERSTAND_DATA_WILL_BE_DELETED=1 bash tools/scripts/fresh-dev.sh` | **No — intentional reset** |
+
+If login suddenly fails with “system not initialized”, the database was reset or never completed setup — **not** a wrong password. The desktop app will redirect you to the Setup Wizard automatically.
+
+### Code changes do NOT erase your data
+
+| Safe (data kept) | Destructive (data lost) |
+|------------------|-------------------------|
+| Editing TypeScript / Python / CSS | `docker compose down -v` |
+| Backend auto-reload (`dev-backend.sh`) | `fresh-dev.sh` |
+| Desktop hot reload (`pnpm desktop:dev`) | Dropping the Docker volume manually |
+| Restarting Docker Desktop | `pytest` against `webstudio_dev` (tests use `webstudio_test`) |
+| `docker compose down` then `up` | Restoring an empty backup over live data |
+
+Your inventory lives in the PostgreSQL Docker volume `webstudio_pg_data`. It survives restarts until you explicitly delete that volume.
+
+### Backend tests use a separate database
+
+`pytest` **must not** touch your dev data. Tests run against **`webstudio_test`**, not `webstudio_dev`.
+
+Create the test database once (PostgreSQL must be running):
+
+```bash
+bash tools/scripts/ensure-test-db.sh
+```
+
+Run backend tests:
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+**Never** point `DATABASE_URL` at `webstudio_dev` and run `pytest` — test fixtures `TRUNCATE` tables and will wipe users, setup, and inventory.
+
+**Before risky operations**, back up:
+
+```bash
+bash tools/scripts/backup-db.sh
+```
+
+Backups are written to `backups/` at the repository root.
+
+**Restore a backup** (PostgreSQL must be running):
+
+```bash
+docker compose exec -T postgres psql -U webstudio webstudio_ims < backups/your-backup.sql
+```
+
 Stop and remove the data volume (destructive):
 
 ```bash
 docker compose down -v
+```
+
+Prefer the guarded reset script (backs up first, requires explicit confirmation):
+
+```bash
+I_UNDERSTAND_DATA_WILL_BE_DELETED=1 bash tools/scripts/fresh-dev.sh
 ```
 
 ## 3. Backend
@@ -88,3 +152,14 @@ pnpm --filter @webstudio/mobile start
 ```
 
 Android emulator API base URL: `http://10.0.2.2:8000` (host machine).
+
+## 6. Gemini auto-fetch (optional)
+
+Add Laptop can auto-fill specifications using Google Gemini. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey), then add to `.env` or `config/env/.env.local`:
+
+```bash
+GEMINI_API_KEY=your-key-here
+GEMINI_MODEL=gemini-flash-lite-latest
+```
+
+Restart the backend after changing environment variables. Without a key, specs are entered manually in the wizard.

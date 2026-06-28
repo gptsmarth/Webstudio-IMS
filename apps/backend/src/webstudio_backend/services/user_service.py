@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
@@ -9,7 +11,11 @@ from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import UserRole, UserStatus
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
-from webstudio_backend.infrastructure.repositories.exceptions import LastMainAdminError, UserNotFoundError
+from webstudio_backend.infrastructure.repositories.exceptions import (
+    LastMainAdminError,
+    SelfMainAdminDisableError,
+    UserNotFoundError,
+)
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.repositories.user_validation import validate_human_role
@@ -30,12 +36,20 @@ class UserService:
         status: UserStatus | None = None,
         role: UserRole | None = None,
         search: str | None = None,
+        created_from: date | None = None,
+        created_to: date | None = None,
+        sort_field: str = "username",
+        sort_direction: str = "asc",
     ) -> PageResult[User]:
         return await self._users.list_users(
             page_params,
             status=status,
             role=role,
             search=search,
+            created_from=created_from,
+            created_to=created_to,
+            sort_field=sort_field,
+            sort_direction=sort_direction,
         )
 
     async def get_user(self, user_id: int) -> User:
@@ -131,6 +145,8 @@ class UserService:
 
     async def disable_user(self, user_id: int, *, actor: AuditActor) -> User:
         user = await self.get_user(user_id)
+        if actor.user_id == user_id and user.role == UserRole.MAIN_ADMIN:
+            raise SelfMainAdminDisableError()
         if user.role == UserRole.MAIN_ADMIN:
             await self._ensure_not_last_main_admin(user)
         updated = await self._users.set_status(user, UserStatus.DISABLED, actor_id=actor.user_id or 0)

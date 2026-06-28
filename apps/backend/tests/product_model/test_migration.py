@@ -25,6 +25,7 @@ async def test_migration_0003_product_models_exist(database_engine: None) -> Non
             "0010_inventory_sprint_2a",
             "0011_sales",
             "0013_notifications",
+            "0014_reference_apis_expansion",
         }
 
         def inspect_schema(sync_connection) -> tuple[list[str], set[str], set[str]]:

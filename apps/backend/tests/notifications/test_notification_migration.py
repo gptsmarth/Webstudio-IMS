@@ -16,7 +16,7 @@ async def test_migration_0013_notifications(db_session) -> None:
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision == "0013_notifications"
+        assert current_revision in {"0013_notifications", "0014_reference_apis_expansion"}
 
         def inspect_schema(sync_connection) -> tuple[list[str], set[str]]:
             inspector = inspect(sync_connection)

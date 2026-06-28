@@ -210,26 +210,6 @@ async def test_export_sales_pdf(
 
 
 @pytest.mark.asyncio
-async def test_export_location_brand_product_model(
-    api_client: AsyncClient,
-    db_session: AsyncSession,
-    main_admin_headers: dict[str, str],
-) -> None:
-    await _seed_report_data(db_session)
-    for report_type in ("location", "brand", "product_model"):
-        response = await api_client.get(
-            "/api/v1/reports/export",
-            params={"report_type": report_type, "format": "xlsx"},
-            headers=main_admin_headers,
-        )
-        assert response.status_code == 200
-        workbook = load_workbook(BytesIO(response.content), read_only=True)
-        rows = list(workbook.active.iter_rows(values_only=True))
-        assert rows[0][1] == "Group Name"
-        assert len(rows) >= 2
-
-
-@pytest.mark.asyncio
 async def test_export_audit_and_notification(
     api_client: AsyncClient,
     db_session: AsyncSession,
@@ -244,6 +224,24 @@ async def test_export_audit_and_notification(
         )
         assert response.status_code == 200
         assert len(response.content) > 100
+
+
+@pytest.mark.asyncio
+async def test_inventory_report_serial_filter(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    main_admin_headers: dict[str, str],
+) -> None:
+    await _seed_report_data(db_session)
+    response = await api_client.get(
+        "/api/v1/reports/inventory",
+        params={"serial_number": "SN-RPT-001"},
+        headers=main_admin_headers,
+    )
+    assert response.status_code == 200
+    rows = response.json()["data"]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["serial_number"] == "SN-RPT-001"
 
 
 @pytest.mark.asyncio

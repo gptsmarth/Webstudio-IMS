@@ -20,6 +20,7 @@ class UserSummary(BaseModel):
     must_change_password: bool = False
     theme_preference: ThemePreference | None = None
     last_login_at: datetime | None = None
+    created_at: datetime | None = None
 
     @classmethod
     def from_model(cls, user: User) -> UserSummary:
@@ -32,21 +33,32 @@ class UserSummary(BaseModel):
             must_change_password=user.must_change_password,
             theme_preference=user.theme_preference,
             last_login_at=user.last_login_at,
+            created_at=user.created_at,
         )
 
 
 class UserDetail(UserSummary):
     created_at: datetime
     updated_at: datetime
+    permissions: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_model(cls, user: User) -> UserDetail:
         base = UserSummary.from_model(user)
         return cls(
             **base.model_dump(),
-            created_at=user.created_at,
             updated_at=user.updated_at,
+            permissions=permissions_for_role(user.role),
         )
+
+
+class RolePermissionsEntry(BaseModel):
+    role: UserRole
+    permissions: list[str]
+
+
+class RolePermissionsResponse(BaseModel):
+    roles: list[RolePermissionsEntry]
 
 
 class CurrentUserResponse(UserSummary):

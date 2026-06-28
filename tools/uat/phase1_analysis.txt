@@ -1,0 +1,34 @@
+====================================================================================================
+WEBSTUDIO IMS — PHASE 1 XML ANALYSIS REPORT
+====================================================================================================
+
+Company Name: WEBSTUDIO - (from 1-Apr-2022) - (from 1-Apr-25) - (from 1-Apr-26)
+Total Vouchers: 7
+Voucher Types: {'Sales': 4, 'NEW SALE': 3}
+
+# | V.Type | Printed Inv. | Int. Voucher | Date | Customer | Brand | Product Model | Serial | Qty | GUID | MASTERID | Laptop?
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+1 | Sales | 325 | 325 | 2026-06-27 | INDISHINE | Acer | ACER ASPIRE A325-45-V2 UN.36FSI.00B | UN36FSI00B613004C20700 | 1 NOS. | 93e8416c-3f92-4d33-a… | 68580 | Yes
+2 | Sales | 326 | 326 | 2026-06-27 | SHIVA SALES CORPORAT | G&G | G & G TONNER CARTRIDGE FOR CRG737 | — | 1 NOS. | 93e8416c-3f92-4d33-a… | 68581 | No
+3 | NEW SALE | AES/0214/26-27 | AES/0214/26-27 | 2026-06-27 | VARSHA | Asus | ASUS ADAPTER 45W | T7BCXB003887STA | 1 NOS. | 93e8416c-3f92-4d33-a… | 68582 | No
+4 | Sales | 327 | 327 | 2026-06-27 | SOHAN LAL | Lenovo | LENOVO L27-4C 27 IPS 144 HTZ | UT10082A | 1 NOS. | 93e8416c-3f92-4d33-a… | 68583 | Yes
+5 | Sales | 328 | 328 | 2026-06-27 | GAURAV KUMAR4 | Epson | Epson L3350 | XFAL007602 | 1 NOS. | 93e8416c-3f92-4d33-a… | 68584 | No
+6 | NEW SALE | AES/0215/26-27 | AES/0215/26-27 | 2026-06-27 | KULDEEP SINGH | Asus | ASUS E1504FA-BQ2113WS | W3N0CV09678412A | 1 NOS. | 93e8416c-3f92-4d33-a… | 68585 | Yes
+7 | NEW SALE | AES/0215/26-27 | AES/0215/26-27 | 2026-06-27 | KULDEEP SINGH | Asus | CARRY CASE ASUS BACKPACK | — | 1 NOS. | 93e8416c-3f92-4d33-a… | 68585 | No
+8 | NEW SALE | AES/0216/26-27 | AES/0216/26-27 | 2026-06-27 | KULDEEP SINGH | Asus | ASUS MD102 MOUSE | SCBMCP0036075P5 | 1 NOS. | 93e8416c-3f92-4d33-a… | 68586 | No
+
+====================================================================================================
+DETECTION SUMMARY
+====================================================================================================
+Laptop lines: 3
+Non-laptop lines: 5
+Lines with serial: 6
+Missing serial (laptop lines): 0
+Duplicate serials: None
+Duplicate laptop models (expected): 0 unique models reused
+Missing product model: 0
+
+Unique laptop product models:
+  - ACER ASPIRE A325-45-V2 UN.36FSI.00B (1 line(s))
+  - ASUS E1504FA-BQ2113WS (1 line(s))
+  - LENOVO L27-4C 27 IPS 144 HTZ (1 line(s))

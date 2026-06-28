@@ -22,8 +22,41 @@ export class ApiClient {
     });
   }
 
+  setAccessToken(token: string | null): void {
+    if (token) {
+      this.http.defaults.headers.common.Authorization = `Bearer ${token}`;
+    } else {
+      delete this.http.defaults.headers.common.Authorization;
+    }
+  }
+
   async getHealthLive(): Promise<ApiEnvelope<HealthLiveData>> {
     const response = await this.http.get<ApiEnvelope<HealthLiveData>>('/health/live');
+    return response.data;
+  }
+
+  async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+    const response = await this.http.get<T>(path, { params });
+    return response.data;
+  }
+
+  async post<T>(path: string, data?: unknown): Promise<T> {
+    const response = await this.http.post<T>(path, data);
+    return response.data;
+  }
+
+  async put<T>(path: string, data?: unknown): Promise<T> {
+    const response = await this.http.put<T>(path, data);
+    return response.data;
+  }
+
+  async delete<T>(path: string): Promise<T> {
+    const response = await this.http.delete<T>(path);
+    return response.data;
+  }
+
+  async patch<T>(path: string, data?: unknown): Promise<T> {
+    const response = await this.http.patch<T>(path, data);
     return response.data;
   }
 }

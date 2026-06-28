@@ -18,8 +18,9 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         super().__init__(session, Brand)
 
     async def get_by_name(self, name: str) -> Brand | None:
-        normalized = name.strip()
-        statement = select(Brand).where(Brand.name == normalized)
+        from sqlalchemy import func
+        normalized = name.strip().lower()
+        statement = select(Brand).where(func.lower(Brand.name) == normalized)
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
@@ -27,17 +28,117 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         self,
         name: str,
         *,
+        short_name: str | None = None,
+        logo_filename: str | None = None,
+        display_order: int = 0,
         is_active: bool = True,
         actor: AuditActor | None = None,
     ) -> Brand:
         normalized = normalize_required_name(name)
         if await self.get_by_name(normalized) is not None:
             raise DuplicateNameError("Brand", normalized)
-        brand = await self.add(Brand(name=normalized, is_active=is_active))
+        brand = await self.add(
+            Brand(
+                name=normalized,
+                short_name=short_name.strip() if short_name else None,
+                logo_filename=logo_filename.strip() if logo_filename else None,
+                display_order=display_order,
+                is_active=is_active,
+            )
+        )
         await AuditRecorder(self._session).record_brand_create(
             brand,
             actor=actor or AuditActor.system(),
         )
+        return brand
+
+    async def update(
+        self,
+        brand: Brand,
+        *,
+        name: str | None = None,
+        short_name: str | None = None,
+        logo_filename: str | None = None,
+        display_order: int | None = None,
+        is_active: bool | None = None,
+        actor: AuditActor | None = None,
+    ) -> Brand:
+        audit_actor = actor or AuditActor.system()
+        recorder = AuditRecorder(self._session)
+
+        if name is not None:
+            normalized = normalize_required_name(name)
+            existing = await self.get_by_name(normalized)
+            if existing is not None and existing.id != brand.id:
+                raise DuplicateNameError("Brand", normalized)
+            old_name = brand.name
+            if normalized != old_name:
+                brand.name = normalized
+                await recorder.record_brand_update(
+                    brand,
+                    field_name="name",
+                    old_value={"name": old_name},
+                    new_value={"name": normalized},
+                    actor=audit_actor,
+                )
+
+        if short_name is not None:
+            old_val = brand.short_name
+            normalized = short_name.strip() if short_name.strip() else None
+            if normalized != old_val:
+                brand.short_name = normalized
+                await recorder.record_brand_update(
+                    brand,
+                    field_name="short_name",
+                    old_value={"short_name": old_val},
+                    new_value={"short_name": normalized},
+                    actor=audit_actor,
+                )
+
+        if logo_filename is not None:
+            old_val = brand.logo_filename
+            normalized = logo_filename.strip() if logo_filename.strip() else None
+            if normalized != old_val:
+                brand.logo_filename = normalized
+                await recorder.record_brand_update(
+                    brand,
+                    field_name="logo_filename",
+                    old_value={"logo_filename": old_val},
+                    new_value={"logo_filename": normalized},
+                    actor=audit_actor,
+                )
+
+        if display_order is not None:
+            old_val = brand.display_order
+            if display_order != old_val:
+                brand.display_order = display_order
+                await recorder.record_brand_update(
+                    brand,
+                    field_name="display_order",
+                    old_value={"display_order": old_val},
+                    new_value={"display_order": display_order},
+                    actor=audit_actor,
+                )
+
+        if is_active is not None:
+            old_val = brand.is_active
+            if is_active != old_val:
+                brand.is_active = is_active
+                from webstudio_backend.infrastructure.database.enums import AuditAction
+                action = AuditAction.ARCHIVE if not is_active else AuditAction.RESTORE
+                await recorder.record(
+                    entity_type="brand",
+                    entity_id=str(brand.id),
+                    action=action,
+                    actor=audit_actor,
+                    field_name="is_active",
+                    old_value={"is_active": old_val},
+                    new_value={"is_active": is_active},
+                    description=f"Brand '{brand.name}' {'archived' if not is_active else 'restored'}",
+                )
+
+        await self._session.flush()
+        await self._session.refresh(brand)
         return brand
 
     async def update_name(
@@ -47,19 +148,4 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         *,
         actor: AuditActor | None = None,
     ) -> Brand:
-        normalized = normalize_required_name(name)
-        existing = await self.get_by_name(normalized)
-        if existing is not None and existing.id != brand.id:
-            raise DuplicateNameError("Brand", normalized)
-        old_name = brand.name
-        brand.name = normalized
-        await self._session.flush()
-        await self._session.refresh(brand)
-        await AuditRecorder(self._session).record_brand_update(
-            brand,
-            field_name="name",
-            old_value={"name": old_name},
-            new_value={"name": normalized},
-            actor=actor or AuditActor.system(),
-        )
-        return brand
+        return await self.update(brand, name=name, actor=actor)

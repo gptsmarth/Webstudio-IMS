@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,12 +12,15 @@ from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_
 from webstudio_backend.api.schemas.user import (
     CreateUserRequest,
     ResetPasswordRequest,
+    RolePermissionsEntry,
+    RolePermissionsResponse,
     UpdateUserRequest,
     UpdateUserRoleRequest,
     UserDetail,
     UserSummary,
 )
 from webstudio_backend.core.dependencies import DbSessionDep
+from webstudio_backend.core.permissions import permissions_for_role
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import UserRole, UserStatus
@@ -23,6 +28,7 @@ from webstudio_backend.infrastructure.database.repositories.pagination import Pa
 from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateUsernameError,
     LastMainAdminError,
+    SelfMainAdminDisableError,
     UserNotFoundError,
 )
 from webstudio_backend.services.user_service import UserService
@@ -66,6 +72,10 @@ async def list_users(
     status_filter: UserStatus | None = Query(default=None, alias="status"),
     role: UserRole | None = None,
     search: str | None = None,
+    created_from: date | None = None,
+    created_to: date | None = None,
+    sort_field: str = Query(default="username"),
+    sort_direction: str = Query(default="asc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
@@ -74,12 +84,31 @@ async def list_users(
         status=status_filter,
         role=role,
         search=search,
+        created_from=created_from,
+        created_to=created_to,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     return _envelope(
         request,
         [UserSummary.from_model(user).model_dump() for user in result.items],
         _page_meta(result.page, result.page_size, result.total_items, result.total_pages),
     )
+
+
+@router.get("/role-permissions")
+async def list_role_permissions(
+    request: Request,
+    current: MainAdminDep,
+) -> dict:
+    human_roles = (UserRole.MAIN_ADMIN, UserRole.ADMIN, UserRole.SALESPERSON)
+    payload = RolePermissionsResponse(
+        roles=[
+            RolePermissionsEntry(role=role, permissions=permissions_for_role(role))
+            for role in human_roles
+        ],
+    )
+    return _envelope(request, payload.model_dump())
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -196,6 +225,8 @@ async def disable_user(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except LastMainAdminError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SelfMainAdminDisableError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _envelope(request, UserDetail.from_model(user).model_dump())
 

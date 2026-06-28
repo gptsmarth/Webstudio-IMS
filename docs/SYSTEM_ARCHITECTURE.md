@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — System Architecture
-Version: 1.8
+Version: 1.10
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -12,8 +12,8 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | ARCH-001 |
-| **Version** | 1.8 |
-| **Status** | Active — frozen for Version 1 development |
+| **Version** | 1.10 |
+| **Status** | Active — **Tally synchronization architecture fully frozen** including inventory matching strategy |
 | **Governing Documents** | [PROJECT_BIBLE.md](PROJECT_BIBLE.md), [PRODUCT_REQUIREMENTS.md](product/PRODUCT_REQUIREMENTS.md), [TECH_STACK.md](TECH_STACK.md) |
 | **Purpose** | Definitive engineering blueprint for building and maintaining WEBSTUDIO IMS |
 
@@ -25,7 +25,10 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/product/PRODUCT_REQUIREMENTS.md, 
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.10 | 2026-06-27 | WEBSTUDIO IMS Team | **Inventory matching strategy frozen:** Serial Number authoritative; product model verification informational only; model normalization; `product_model_mismatch` warning notification. |
+| 1.9 | 2026-06-27 | WEBSTUDIO IMS Team | **Final Tally sync freeze:** processing status lifecycle; partial retry; crash recovery; line-level transactions; table responsibilities. |
 | 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Audit-only history:** removed `InventoryMovement` module; location transfers update `current_location_id` + `audit_logs` only; `AuditRecorder` is single source of truth; Sprint 1E = `0005_audit_logs`, `0006_audit_log_description`. |
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Frozen** Tally synchronization rules: invoice-level idempotency; AVAILABLE-only matching; Tally Sync Log; notification categories; line-independent processing. |
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | Finalized Tally ERP 9 synchronization: read-only invoices; multi-company sync; invoice line matching; Tally Sync Dashboard; notifications; manual mark-as-sold (Admin/Main Admin only). |
 | 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: `system_initialized` setting; first-time setup wizard; client discovery and manual configuration; login gated on setup status; Main Admin-only user management. |
 | 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Migration roadmap: `0005` movement → `0006` audit → `0007` users → `0008` ownership columns (deferred until `users` exists). |
@@ -488,7 +491,7 @@ These principles govern all design and implementation decisions. They map direct
 | Aspect | Detail |
 |--------|--------|
 | **Purpose** | Read invoices from Tally ERP 9 and reflect laptop sales in inventory via API — **never write to Tally** |
-| **Responsibilities** | Poll Tally per company on configurable interval (default 30 minutes); parse invoice lines; exact serial + product model match; call API to mark sold or create notifications; update per-company sync cursor; log all events |
+| **Responsibilities** | Poll Tally per company on configurable interval (default 30 minutes); parse invoice lines; **serial-authoritative** match in **`available`** inventory; post-sale product model verification with normalization; call API to mark sold or create notifications; update per-company sync cursor; log all events |
 | **Dependencies** | Backend API, `packages/integrations/tally`, Tally ERP 9 HTTP/XML interface |
 | **Interfaces** | Inbound: Tally XML over HTTP (**mechanism Requires POC**); Outbound: REST to API |
 | **Failure modes** | Tally offline → log, continue next interval; per-company failure isolated; serial/model mismatch → notification, no mutation |
@@ -657,7 +660,7 @@ Core domain services and their boundaries:
 |---------|----------------|----------|
 | **InventoryService** | Create inventory; update attributes (including **Color**); lifecycle transitions (Received ↔ Available); **location transfers** (updates `current_location_id` + audit); enforce LC rules; validate Product Model is **Active** for new units | Process sales; execute search queries |
 | **ProductModelService** | Create product models; Archive/Restore lifecycle; enforce permanent-delete preconditions | Inventory mutations; sales |
-| **SaleService** | Reflect Tally invoice lines; manual mark-as-sold (Admin/Main Admin); idempotent sale by invoice/voucher + serial; sales history; duplicate protection manual↔Tally | Create inventory; change location |
+| **SaleService** | Reflect Tally invoice lines (AVAILABLE match); manual mark-as-sold (Admin/Main Admin); invoice-level idempotency; duplicate sold detection; sales history | Create inventory; change location |
 | **SearchService** | Query parsing; search execution; pagination; result grouping | Mutate inventory |
 | **AuthenticationService** | Login; token issue/refresh/revoke; lockout; session invalidation; password verify | User profile CRUD (delegates to UserService) |
 
@@ -765,7 +768,9 @@ The following operations **must be idempotent** — repeated execution never dup
 
 | Operation | Idempotency Key | Behaviour on Repeat |
 |-----------|-----------------|---------------------|
-| **Tally sale reflection** | `tally_company` + `tally_voucher_number` + `serial_number` | No-op; optional Duplicate Sale notification |
+| **Tally invoice (fully processed)** | `tally_voucher_guid` + company where `processing_status = success` | Skip — sync log `skipped` |
+| **Tally invoice (partial)** | Failed lines in `tally_processed_invoice_lines` | Retry failed lines only |
+| **Tally line (duplicate sold)** | Serial in **sold** inventory | Duplicate Sale notification; line marked completed |
 | **Manual sale reflection** | `invoice_number` + `serial_number` (or `Idempotency-Key`) | No-op if already Sold; Tally sync treats as same transaction |
 | **Excel sync job** | `sync_job_id` | Overwrite export file; update job status |
 | **Sync job creation** | Optional client `Idempotency-Key` | Return existing job if duplicate trigger |
@@ -1437,7 +1442,9 @@ sequenceDiagram
 
 ### 14.3 Tally Integration
 
-**Billing boundary:** Tally ERP 9 remains the billing system. WEBSTUDIO IMS reads invoices only. IMS **never** creates invoices, credit notes, or billing entries in Tally.
+> **Architecture status:** **Frozen** — official synchronization behaviour is defined in [docs/integrations/tally-erp9/sync-strategy.md](integrations/tally-erp9/sync-strategy.md). Implementation must follow that document exactly.
+
+**Billing boundary:** Tally ERP 9 is the **primary source of truth for sales**. WEBSTUDIO IMS reads invoices only. IMS **never** creates invoices, credit notes, or billing entries in Tally. Manual **Mark as Sold** (Admin/Main Admin only) remains for exceptional cases and generates normal audit entries.
 
 ```mermaid
 sequenceDiagram
@@ -1446,23 +1453,26 @@ sequenceDiagram
     participant A as Backend API
 
     loop Every sync interval (default 30 min)
-        loop Each configured company (WEBSTUDIO, ASUS Exclusive Store, ...)
-            S->>T: Read invoices since last_processed_voucher
+        loop Each configured company
+            S->>T: Read invoices since cursor
             T-->>S: Invoice XML
             S->>S: parse with defusedxml
-            loop Each invoice line
-                S->>A: POST /integrations/tally/sales/process-line
-                alt serial + model match
-                    A->>A: mark sold + sale + audit (idempotent)
-                else model exists, serial missing
-                    A->>A: create Serial Not Found notification
-                else serial exists, model mismatch
-                    A->>A: create Model Mismatch notification
-                else neither in IMS
-                    A->>A: ignore line (accessory)
-                end
+            S->>A: POST /integrations/tally/invoices/process
+            alt processing_status = success
+                A->>A: tally_sync_log (skipped)
+            else partial_success
+                A->>A: retry failed lines only
+            else failed or new
+                A->>A: process all inventory-related lines
             end
-            S->>A: PATCH company sync state (last_successful_sync_time, last_voucher)
+            loop Each line (independent transaction)
+                A->>A: evaluate line (§14.3.1)
+                A->>A: update tally_processed_invoice_lines
+            end
+            A->>A: derive processing_status (success | partial_success | failed)
+            A->>A: tally_sync_log (this run)
+            A->>A: update tally_processed_invoice
+            S->>A: PATCH company sync state
         end
     end
 ```
@@ -1475,15 +1485,94 @@ sequenceDiagram
 | **Per-company state** | `last_successful_sync_time`, `last_processed_voucher_identifier` |
 | **Interval** | Configurable via `system_settings` — default **1800 seconds (30 minutes)** |
 | **Manual trigger** | `POST /integrations/tally/sync/trigger` — Admin and Main Admin (**Sync Now**) |
-| **Matching** | **Exact** serial number AND **exact** product model (brand + model number) — no fuzzy matching |
-| **Line outcomes** | Match → Sold + sale + audit; model-only → notification; serial-only → notification; neither → ignore (no notification) |
-| **Idempotency** | `(tally_company, tally_voucher_number, serial_number)` — manual sale with same invoice + serial is same transaction |
+| **Invoice model** | Each line processed **independently**; one line failure never stops others |
+| **Matching** | Serial Number authoritative — search **`available`** inventory only; product model verification **after** sale (informational); global serial uniqueness (BR-01) |
+| **Duplicate sale** | Serial in **sold** inventory → notification only; no inventory or audit mutation |
+| **Model mismatch** | Serial matched and sold; normalized models genuinely differ → **`product_model_mismatch`** notification (informational) |
+| **Missing data** | Model exists / serial missing → `serial_number_missing`; serial exists (non-available) / model not in catalog → `product_model_missing`; neither → ignore |
+| **Invoice state** | `tally_processed_invoice.processing_status` — SUCCESS only when all lines complete |
+| **Partial retry** | `partial_success` → retry failed lines only via `tally_processed_invoice_lines` |
+| **Crash recovery** | SUCCESS skip; PARTIAL_SUCCESS resume; FAILED full retry |
+| **Transactions** | Line-level — one failed line never rolls back siblings |
+| **Invoice idempotency** | Skip when `processing_status = success`; not before |
 | **Validation** | All XML untrusted — `defusedxml`; schema validation |
 | **Partial failure** | One line or company failure does not roll back other lines or companies |
 | **Manual mark-as-sold** | Admin/Main Admin only via `POST /sales/reflect` — invoice number required |
-| **Dashboard** | Tally Synchronization Dashboard — connection, companies, last sync, next sync, pending notifications, last error, Sync Now |
-| **Notifications** | Serial Not Found, Model Mismatch, Duplicate Sale, Synchronization Failure — Notification Center |
+| **Tally Sync Log** | Per-invoice sync statistics — separate from Audit Log (§14.3.3) |
+| **Audit Log** | Business events only — sold, manual sale, location change, inventory created |
+| **Dashboard** | Tally Synchronization Dashboard — connection, companies, last sync, next sync, pending notifications, sync log, Sync Now |
+| **Notifications** | Duplicate Sale, Serial Number Missing, Product Model Missing, **Product Model Mismatch**, Tally Sync Completed, Synchronization Failure |
 | **V1 exclusions** | Returns, refunds, credit notes, cancellation, auto inventory creation from Tally |
+
+#### 14.3.1 Invoice Line Decision Workflow
+
+For each line on a **new** (not yet processed) invoice:
+
+| Step | Condition | Action |
+|------|-----------|--------|
+| 1 | Serial found in **`available`** inventory | Mark **sold**; create `sale`; audit (`TALLY_SYNC`) — **serial is authoritative** |
+| 1a | After step 1 — normalized invoice model genuinely differs from IMS | **`product_model_mismatch`** notification (informational); **does not** reverse sale |
+| 2 | Serial found in **`sold`** inventory | **Duplicate Sale** notification; no inventory/audit change |
+| 3 | Product model exists in IMS; serial not found | **Serial Number Missing** notification |
+| 4 | Serial exists in IMS (non-available); invoice product model not in catalog | **Product Model Missing** notification |
+| 5 | Neither serial nor model in IMS | **Ignore** — accessory/service; no notification |
+
+**Matching priority:** (1) Serial Number — authoritative; (2) Product Model — verification only. Product model names **must never** prevent a successful serial match from marking inventory sold.
+
+Multiple laptops on one invoice share invoice number, sale date, and customer name; each line is evaluated independently.
+
+#### 14.3.2 Invoice Processing Status and Completion
+
+| `processing_status` | Definition |
+|-----------------------|------------|
+| **SUCCESS** | All inventory-related lines completed. Fully processed — future syncs skip (log: `skipped`). |
+| **PARTIAL_SUCCESS** | Some lines completed; some failed. Successful lines committed; failed lines retried. **Not** fully processed. |
+| **FAILED** | Zero inventory updates. Entire invoice eligible for full retry. |
+| **SKIPPED** | Log-only outcome when invoice already **SUCCESS**. |
+
+**Completion rule:** Never set `processing_status = success` before all inventory-related lines finish. Promote to SUCCESS only when every such line reaches a terminal completed state.
+
+#### 14.3.3 Partial Retry and Crash Recovery
+
+| Prior state | After restart |
+|-------------|---------------|
+| SUCCESS | Skip — sync log `skipped` |
+| PARTIAL_SUCCESS | Retry **failed lines only** — completed lines never reprocessed |
+| FAILED | Retry entire invoice |
+
+Tolerates application crash, database restart, server shutdown, and network interruption without duplicate inventory updates.
+
+#### 14.3.4 Table Responsibilities
+
+| Table | Role |
+|-------|------|
+| `tally_processed_invoices` | Invoice-level state and idempotency |
+| `tally_processed_invoice_lines` | Per-line status for partial retry |
+| `tally_sync_logs` | Execution history per attempt (diagnostics) |
+
+Every sync run writes a `tally_sync_log` referencing the processed invoice where applicable.
+
+#### 14.3.5 Tally Sync Log vs Audit Log
+
+| Store | Purpose | Examples |
+|-------|---------|----------|
+| **Tally Sync Log** | Execution history per attempt — sync run ID, duration, retry count, statistics |
+| **Audit Log** | Business state changes | Inventory sold, manual sale, location changed, inventory created |
+| **Tally Integration Event** | Optional line-level diagnostic detail | Per-line outcome for reconciliation UI |
+
+Synchronization statistics **must not** be written to the Audit Log.
+
+#### 14.3.6 Notification Center
+
+| Type | Trigger |
+|------|---------|
+| **Duplicate Sale Detected** | Serial already sold when Tally invoice line processed |
+| **Serial Number Missing** | Model in IMS; serial from line not found |
+| **Product Model Missing** | Serial in IMS; model not in catalog |
+| **Tally Sync Completed** | Invoice or sync cycle completed (informational) |
+| **Synchronization Failure** | Connection or company-level failure |
+
+Lifecycle: **Unread** → **Read** → **Resolved** (resolved records retained permanently).
 
 ### 14.3.1 Tally POC Acceptance Checklist
 
@@ -1517,8 +1606,10 @@ sequenceDiagram
 | API unreachable (sync worker) | Exponential backoff: 1m, 2m, 5m, 15m — max 5 attempts per cycle |
 | Tally unreachable | Continue next poll interval; log warning |
 | Excel locked | Skip cycle; retry next schedule |
-| Sale mapping 404 (serial not found) | Create notification; no retry |
-| Model mismatch on line | Create notification; no retry |
+| Sale mapping — serial not in available | Serial Number Missing notification; no retry |
+| Product model missing on line | Product Model Missing notification; no retry |
+| Duplicate sale (serial already sold) | Duplicate Sale notification; no retry |
+| Invoice already SUCCESS | Skip — sync log `skipped`; no retry |
 | Company sync failure | Log; create Synchronization Failure notification; continue other companies |
 
 ### 14.6 Failure Isolation
@@ -1532,12 +1623,16 @@ sequenceDiagram
 | Conflict | Resolution |
 |----------|------------|
 | Excel vs PostgreSQL | PostgreSQL wins always — Excel is overwritten on next sync |
-| Tally sale vs already sold (manual or prior sync) | Idempotent no-op; optional Duplicate Sale notification |
-| Tally sale vs unknown serial | Serial Not Found notification; no inventory mutation |
-| Tally sale vs model mismatch | Model Mismatch notification; no inventory mutation |
+| Tally invoice already SUCCESS | Skip — sync log `skipped` |
+| Tally invoice PARTIAL_SUCCESS | Retry failed lines only |
+| Tally invoice FAILED | Full invoice retry |
+| Tally line — serial already **sold** | Duplicate Sale notification; no inventory or audit change |
+| Tally line — model exists, serial missing | Serial Number Missing notification |
+| Tally line — serial exists, model missing | Product Model Missing notification |
 | Tally line — neither serial nor model in IMS | Ignore; no notification (accessory/non-laptop) |
+| Tally line — serial in **available** | Mark sold; sale + audit |
 | Manual sale vs later Tally import (same invoice + serial) | Same transaction — no duplicate sale (FR-TLY-14) |
-| Manual sale vs pending Tally sync | First successful write wins; second is idempotent |
+| Manual sale vs pending Tally sync | First successful write wins; duplicate path creates notification only |
 
 ---
 

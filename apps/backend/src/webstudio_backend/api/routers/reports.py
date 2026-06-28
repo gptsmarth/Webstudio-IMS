@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -28,7 +28,16 @@ from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, NotificationStatus
+from webstudio_backend.infrastructure.database.enums import (
+    AuditAction,
+    AuditSource,
+    InventoryStatus,
+    LocationType,
+    NotificationCategory,
+    NotificationStatus,
+    NotificationType,
+    SaleSource,
+)
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.report_filters import ExportFormat, ReportFilters, ReportType
 from webstudio_backend.services.report_service import ReportService
@@ -41,9 +50,6 @@ _EXPORT_REPORT_TYPES = frozenset(
     {
         ReportType.INVENTORY,
         ReportType.SALES,
-        ReportType.LOCATION,
-        ReportType.BRAND,
-        ReportType.PRODUCT_MODEL,
         ReportType.AUDIT,
         ReportType.NOTIFICATION,
     },
@@ -69,26 +75,62 @@ def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) ->
     )
 
 
-def _filters(
+def _common_report_params(
     *,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    purchase_date_from: date | None = None,
+    purchase_date_to: date | None = None,
     brand_id: int | None = None,
     location_id: int | None = None,
+    location_type: LocationType | None = None,
     product_model_id: uuid.UUID | None = None,
     user_id: int | None = None,
     status: InventoryStatus | None = None,
+    is_archived: bool | None = None,
+    serial_number: str | None = None,
+    color: str | None = None,
     notification_status: NotificationStatus | None = None,
+    notification_type: NotificationType | None = None,
+    notification_category: NotificationCategory | None = None,
+    invoice_number: str | None = None,
+    customer_name: str | None = None,
+    payment_mode: str | None = None,
+    sale_source: SaleSource | None = None,
+    audit_action: AuditAction | None = None,
+    audit_source: AuditSource | None = None,
+    actor_role: str | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
 ) -> ReportFilters:
     return ReportFilters(
         date_from=date_from,
         date_to=date_to,
+        purchase_date_from=purchase_date_from,
+        purchase_date_to=purchase_date_to,
         brand_id=brand_id,
         location_id=location_id,
+        location_type=location_type,
         product_model_id=product_model_id,
         user_id=user_id,
         inventory_status=status,
+        is_archived=is_archived,
+        serial_number=serial_number,
+        color=color,
         notification_status=notification_status,
+        notification_type=notification_type,
+        notification_category=notification_category,
+        invoice_number=invoice_number,
+        customer_name=customer_name,
+        payment_mode=payment_mode,
+        sale_source=sale_source,
+        audit_action=audit_action,
+        audit_source=audit_source,
+        actor_role=actor_role,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
 
 
@@ -99,21 +141,39 @@ async def inventory_report(
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    purchase_date_from: date | None = None,
+    purchase_date_to: date | None = None,
     brand_id: int | None = None,
     location_id: int | None = None,
+    location_type: LocationType | None = None,
     product_model_id: uuid.UUID | None = None,
     status: InventoryStatus | None = None,
+    is_archived: bool | None = None,
+    serial_number: str | None = None,
+    color: str | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
     del current
-    filters = _filters(
+    filters = _common_report_params(
         date_from=date_from,
         date_to=date_to,
+        purchase_date_from=purchase_date_from,
+        purchase_date_to=purchase_date_to,
         brand_id=brand_id,
         location_id=location_id,
+        location_type=location_type,
         product_model_id=product_model_id,
         status=status,
+        is_archived=is_archived,
+        serial_number=serial_number,
+        color=color,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     rows, summary = await ReportService(db_session).inventory_report(
         filters,
@@ -138,19 +198,37 @@ async def sales_report(
     date_to: datetime | None = None,
     brand_id: int | None = None,
     location_id: int | None = None,
+    location_type: LocationType | None = None,
     product_model_id: uuid.UUID | None = None,
     user_id: int | None = None,
+    invoice_number: str | None = None,
+    customer_name: str | None = None,
+    payment_mode: str | None = None,
+    sale_source: SaleSource | None = None,
+    serial_number: str | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
     del current
-    filters = _filters(
+    filters = _common_report_params(
         date_from=date_from,
         date_to=date_to,
         brand_id=brand_id,
         location_id=location_id,
+        location_type=location_type,
         product_model_id=product_model_id,
         user_id=user_id,
+        invoice_number=invoice_number,
+        customer_name=customer_name,
+        payment_mode=payment_mode,
+        sale_source=sale_source,
+        serial_number=serial_number,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     rows = await ReportService(db_session).sales_report(filters, PageParams(page=page, page_size=page_size))
     response = SalesReportResponse(
@@ -173,17 +251,31 @@ async def audit_report(
     location_id: int | None = None,
     product_model_id: uuid.UUID | None = None,
     user_id: int | None = None,
+    audit_action: AuditAction | None = None,
+    audit_source: AuditSource | None = None,
+    actor_role: str | None = None,
+    serial_number: str | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
     del current
-    filters = _filters(
+    filters = _common_report_params(
         date_from=date_from,
         date_to=date_to,
         brand_id=brand_id,
         location_id=location_id,
         product_model_id=product_model_id,
         user_id=user_id,
+        audit_action=audit_action,
+        audit_source=audit_source,
+        actor_role=actor_role,
+        serial_number=serial_number,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     rows = await ReportService(db_session).audit_report(filters, PageParams(page=page, page_size=page_size))
     response = AuditReportResponse(
@@ -204,15 +296,25 @@ async def notifications_report(
     date_to: datetime | None = None,
     user_id: int | None = None,
     notification_status: NotificationStatus | None = Query(default=None, alias="status"),
+    notification_type: NotificationType | None = None,
+    notification_category: NotificationCategory | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
 ) -> dict:
     del current
-    filters = _filters(
+    filters = _common_report_params(
         date_from=date_from,
         date_to=date_to,
         user_id=user_id,
         notification_status=notification_status,
+        notification_type=notification_type,
+        notification_category=notification_category,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     rows = await ReportService(db_session).notifications_report(
         filters,
@@ -235,12 +337,30 @@ async def export_report(
     format: ExportFormat = Query(default=ExportFormat.XLSX, alias="format"),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    purchase_date_from: date | None = None,
+    purchase_date_to: date | None = None,
     brand_id: int | None = None,
     location_id: int | None = None,
+    location_type: LocationType | None = None,
     product_model_id: uuid.UUID | None = None,
     user_id: int | None = None,
     status: InventoryStatus | None = None,
+    is_archived: bool | None = None,
+    serial_number: str | None = None,
+    color: str | None = None,
     notification_status: NotificationStatus | None = None,
+    notification_type: NotificationType | None = None,
+    notification_category: NotificationCategory | None = None,
+    invoice_number: str | None = None,
+    customer_name: str | None = None,
+    payment_mode: str | None = None,
+    sale_source: SaleSource | None = None,
+    audit_action: AuditAction | None = None,
+    audit_source: AuditSource | None = None,
+    actor_role: str | None = None,
+    search: str | None = None,
+    sort_field: str | None = None,
+    sort_direction: str | None = None,
 ) -> Response:
     del current
     if report_type not in _EXPORT_REPORT_TYPES:
@@ -250,15 +370,33 @@ async def export_report(
             status_code=422,
         )
 
-    filters = _filters(
+    filters = _common_report_params(
         date_from=date_from,
         date_to=date_to,
+        purchase_date_from=purchase_date_from,
+        purchase_date_to=purchase_date_to,
         brand_id=brand_id,
         location_id=location_id,
+        location_type=location_type,
         product_model_id=product_model_id,
         user_id=user_id,
         status=status,
+        is_archived=is_archived,
+        serial_number=serial_number,
+        color=color,
         notification_status=notification_status,
+        notification_type=notification_type,
+        notification_category=notification_category,
+        invoice_number=invoice_number,
+        customer_name=customer_name,
+        payment_mode=payment_mode,
+        sale_source=sale_source,
+        audit_action=audit_action,
+        audit_source=audit_source,
+        actor_role=actor_role,
+        search=search,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
     content, media_type, filename = await ReportService(db_session).export_report(
         report_type=report_type,

@@ -46,6 +46,7 @@ class SaleService:
         payment_mode: str,
         sale_date: date,
         remarks: str | None,
+        sale_amount: float | None = None,
         actor: AuditActor,
     ) -> ManualSaleResult:
         if actor.user_id is None:
@@ -72,6 +73,7 @@ class SaleService:
             payment_mode=payment_mode,
             recorded_by_user_id=actor.user_id,
             notes=remarks,
+            sale_amount=sale_amount,
             actor=actor,
         )
 

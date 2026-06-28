@@ -88,3 +88,32 @@ async def test_reset_password_and_disable_user(
     await service.reset_password(user.id, temporary_password="NewSecurePass9!", actor=actor)
     updated = await service.disable_user(user.id, actor=actor)
     assert updated.status.value == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_role_permissions_endpoint(
+    api_client: AsyncClient,
+    initialized_system,
+) -> None:
+    main_headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    response = await api_client.get("/api/v1/users/role-permissions", headers=main_headers)
+    assert response.status_code == 200
+    roles = response.json()["data"]["roles"]
+    role_names = {entry["role"] for entry in roles}
+    assert role_names == {"main_admin", "admin", "salesperson"}
+    main_admin = next(entry for entry in roles if entry["role"] == "main_admin")
+    assert "users:manage" in main_admin["permissions"]
+
+
+@pytest.mark.asyncio
+async def test_main_admin_cannot_disable_self(
+    api_client: AsyncClient,
+    initialized_system,
+) -> None:
+    main_admin, _ = initialized_system
+    main_headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    response = await api_client.post(
+        f"/api/v1/users/{main_admin.id}/disable",
+        headers=main_headers,
+    )
+    assert response.status_code == 409

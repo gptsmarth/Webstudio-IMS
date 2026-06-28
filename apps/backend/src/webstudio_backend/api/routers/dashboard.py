@@ -1,7 +1,8 @@
-"""Dashboard API endpoints."""
+"""Dashboard API endpoints — operations center."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
 from webstudio_backend.api.schemas.dashboard import (
     DashboardDistributionResponse,
-    DashboardResponse,
+    OperationsDashboardResponse,
     RecentActivityEntry,
 )
 from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
@@ -21,6 +22,7 @@ from webstudio_backend.services.dashboard_service import DashboardService
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
 DashboardReadDep = Annotated[AuthenticatedUser, Depends(require_permission("dashboard:read"))]
+InventoryReadDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:read"))]
 
 
 def _envelope(request: Request, data: object) -> dict:
@@ -38,17 +40,13 @@ async def get_dashboard(
     request: Request,
     current: DashboardReadDep,
     db_session: AsyncSession = DbSessionDep,
-    insights_limit: int = Query(default=10, ge=1, le=50),
-    warranty_threshold_days: int = Query(default=30, ge=1, le=365),
 ) -> dict:
     del current
-    overview = await DashboardService(db_session).get_overview(
-        insights_limit=insights_limit,
-        warranty_threshold_days=warranty_threshold_days,
-    )
-    response = DashboardResponse.from_overview(
-        overview,
-        warranty_threshold_days=warranty_threshold_days,
+    service = DashboardService(db_session)
+    total_available = await service.get_total_available()
+    response = OperationsDashboardResponse(
+        total_available_inventory=total_available,
+        as_of=datetime.now(UTC),
     )
     return _envelope(request, response.model_dump())
 
@@ -71,7 +69,7 @@ async def get_recent_activity(
 @router.get("/distribution")
 async def get_distribution(
     request: Request,
-    current: DashboardReadDep,
+    current: InventoryReadDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current

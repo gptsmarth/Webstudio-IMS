@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Numeric, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -44,8 +44,14 @@ class Sale(Base, PrimaryKeyMixin):
     recorded_by_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     customer_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     payment_mode: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sale_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     tally_company_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     tally_voucher_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    printed_invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tally_voucher_guid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tally_master_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tally_voucher_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mapped_location_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

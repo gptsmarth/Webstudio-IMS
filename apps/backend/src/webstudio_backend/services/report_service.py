@@ -16,6 +16,7 @@ from webstudio_backend.infrastructure.repositories.report_repository import (
     NotificationReportRow,
     ReportRepository,
     ReportSummary,
+    SaleDetailRow,
     SalesReportRow,
 )
 from webstudio_backend.services.report_export_service import ReportExportService, map_row_batches
@@ -41,6 +42,9 @@ class ReportService:
         page_params: PageParams,
     ) -> PageResult[SalesReportRow]:
         return await self._repo.search_sales(filters, page_params)
+
+    async def get_sale_detail(self, sale_id: int) -> SaleDetailRow | None:
+        return await self._repo.get_sale_detail_by_id(sale_id)
 
     async def audit_report(
         self,

@@ -1,6 +1,6 @@
 ---
 Title: WEBSTUDIO IMS — Product Requirements Document
-Version: 1.7
+Version: 1.8
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-06-27
@@ -13,7 +13,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/business/README.md, docs/integrat
 |-----------|-------|
 | **Document ID** | PRD-001 |
 | **Product Name** | WEBSTUDIO IMS (WEBSTUDIO Inventory Management System) |
-| **Version** | 1.7 |
+| **Version** | 1.8 |
 | **Status** | Active — audit log as sole inventory history |
 | **Product Type** | Internal Commercial Inventory Management Software |
 | **Deployment** | On-Premise Server |
@@ -30,6 +30,7 @@ Related Documents: docs/PROJECT_BIBLE.md, docs/business/README.md, docs/integrat
 
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
+| 1.8 | 2026-06-27 | WEBSTUDIO IMS Team | **Tally matching strategy frozen:** Serial Number authoritative for sale reflection; product model verification informational only; model normalization; Product Model Mismatch notification. |
 | 1.7 | 2026-06-27 | WEBSTUDIO IMS Team | Removed InventoryMovement module and `inventory_movements` table. Location changes update `current_location_id` only; audit log is the sole source of truth for location, status, and lifecycle history. |
 | 1.6 | 2026-06-27 | WEBSTUDIO IMS Team | Finalized Tally ERP 9 synchronization: read-only invoices; multi-company sync state; invoice line matching workflow; Tally Sync Dashboard; Notification Center; manual mark-as-sold (Admin/Main Admin only); duplicate sale protection. |
 | 1.5 | 2026-06-27 | WEBSTUDIO IMS Team | Server initialization and client onboarding: `system_initialized` setting; first-time setup wizard; client server discovery and manual configuration; login gated on setup status; Main Admin-only user management; clients never create users or store business data. |
@@ -359,7 +360,7 @@ The following workflows describe the target state for Version 1. Integration tim
 | 2 | Salesperson | Completes billing in **Tally ERP 9** (unchanged) |
 | 3 | System | Tally Sync reads invoices from Tally — **IMS never creates invoices in Tally** |
 | 4 | System | Processes each invoice line per [§8.6.1](#861-invoice-line-processing) |
-| 5 | System | On exact serial **and** product model match — marks inventory **Sold**, creates sale record, writes audit log |
+| 5 | System | On exact **serial number** match in **`available`** inventory — marks inventory **Sold**, creates sale record, writes audit log; then verifies product model (informational — see §8.6.1) |
 | 6 | System | Queues Excel synchronization |
 
 > **Critical:** Tally remains the **billing system**. WEBSTUDIO IMS is the **inventory system**. IMS **reads** invoices from Tally only. IMS **never** creates invoices, credit notes, or billing entries inside Tally.
@@ -378,17 +379,21 @@ Manual mark-as-sold when Tally sync is delayed or unavailable: [§8.6.2](#862-ma
 
 ### 8.6 Tally Synchronization
 
-**Direction:** Tally → WEBSTUDIO IMS (read invoices; reflect sales in inventory). WEBSTUDIO IMS **does not write** billing data to Tally.
+> **Architecture status:** **Frozen** — see [docs/integrations/tally-erp9/sync-strategy.md](../integrations/tally-erp9/sync-strategy.md).
+
+**Direction:** Tally → WEBSTUDIO IMS (read invoices; reflect sales in inventory). Tally is the **primary source of truth for sales**. WEBSTUDIO IMS **does not write** billing data to Tally.
 
 | Step | Actor | System Action |
 |------|-------|---------------|
 | 1 | System | On configurable interval (default **30 minutes**), Tally Sync reads new/changed invoices from Tally ERP 9 |
 | 2 | System | Processes each configured **Tally company** independently — failure in one company does not stop others |
-| 3 | System | For each invoice line, applies [§8.6.1](#861-invoice-line-processing) matching rules |
-| 4 | System | Updates per-company sync state: `last_successful_sync_time`, `last_processed_voucher_identifier` |
-| 5 | System | Logs every poll and line outcome; creates [notifications](#861-invoice-line-processing) where required |
-| 6 | Admin / Main Admin | May trigger **Sync Now** from Tally Synchronization Dashboard |
-| 7 | Admin / Main Admin | Reviews dashboard: connection status, companies, last sync, next scheduled sync, pending notifications, last error |
+| 3 | System | For each invoice, checks **invoice-level idempotency** (Tally voucher GUID) — skips already-processed invoices entirely |
+| 4 | System | For each **new** invoice, processes every line **independently** per [§8.6.1](#861-invoice-line-processing) |
+| 5 | System | Writes **Tally Sync Log** per invoice (statistics and overall result) — not Audit Log |
+| 6 | System | Updates per-company sync state: `last_successful_sync_time`, `last_processed_voucher_identifier` |
+| 7 | System | Creates [notifications](#notification-center-tally) where required |
+| 8 | Admin / Main Admin | May trigger **Sync Now** from Tally Synchronization Dashboard |
+| 9 | Admin / Main Admin | Reviews dashboard: connection status, companies, last sync, sync log, pending notifications, last error |
 
 #### Multi-Company Support
 
@@ -413,16 +418,26 @@ Each company maintains **independent** synchronization state. A failure synchron
 
 #### Notification Center (Tally)
 
-Tally-related notifications appear in the **Notification Center**. Examples:
+Tally-related notifications appear in the **Notification Center** with lifecycle states: **Unread**, **Read**, **Resolved** (resolved records retained permanently).
 
-| Notification Type | Trigger |
-|-------------------|---------|
-| **Serial Not Found** | Model exists in IMS; serial from invoice line not found |
-| **Model Mismatch** | Serial exists; product model on invoice line does not match IMS |
-| **Duplicate Sale** | Tally line matches a sale already recorded (manual or prior sync) |
-| **Synchronization Failure** | Company-level or connection-level sync failure |
+| Notification Type | Enum | Trigger |
+|-------------------|------|---------|
+| **Duplicate Sale Detected** | `duplicate_sale` | Serial already **sold** in IMS when Tally line processed |
+| **Serial Number Missing** | `serial_number_missing` | Product model exists in IMS; serial from line not found |
+| **Product Model Missing** | `product_model_missing` | Serial exists in IMS (non-available path); invoice product model not in catalog |
+| **Product Model Mismatch** | `product_model_mismatch` | Serial matched available inventory and sold; normalized invoice model genuinely differs from IMS |
+| **Tally Sync Completed** | `tally_sync_completed` | Invoice or sync cycle completed successfully |
+| **Synchronization Failure** | `sync_failure` | Company-level or connection-level sync failure |
+
+**Duplicate Sale notification** includes at minimum: invoice number, voucher type, customer name, serial number, product model (if available), detection time, and descriptive message.
 
 **Do not** generate notifications for ignored accessory/non-laptop invoice lines (see §8.6.1).
+
+#### Tally Sync Log
+
+Synchronization execution history is recorded in **`tally_sync_logs`** (one row per attempt): sync run ID, invoice number, voucher GUID, start/end time, processing duration, processing status, item counts, retry count, error details. References `tally_processed_invoice` where applicable. **Not** stored in the Audit Log.
+
+Invoice state is tracked separately in **`tally_processed_invoices`** with processing status SUCCESS / PARTIAL_SUCCESS / FAILED.
 
 #### Version 1 Exclusions (Tally)
 
@@ -434,18 +449,47 @@ The following are **out of scope** for Version 1 Tally integration:
 
 ### 8.6.1 Invoice Line Processing
 
-Every invoice line from Tally follows this decision workflow. Matching uses **exact** serial number and **exact** product model identity (brand + model number as mapped from Tally line to IMS `product_model`).
+Every invoice line from a **new** (not yet processed) Tally invoice is evaluated **independently**. A failure on one line must **never** stop processing of remaining lines.
 
-| Condition | System Action |
-|-----------|---------------|
-| **Serial matches IMS** AND **Product Model matches IMS** | Mark inventory **Sold**; create `sale` record (`sale_source = tally`); write audit log |
-| **Product Model exists in IMS** BUT **Serial not found** | Create **Serial Not Found** notification; no inventory mutation |
-| **Serial exists in IMS** BUT **Product Model does not match** | Create **Model Mismatch** notification; no inventory mutation |
-| **Neither Serial nor Product Model exist in IMS** | **Ignore** line — assume accessory or non-laptop product not managed by IMS; **no notification** |
+**Matching priority:** (1) **Serial Number** — authoritative; (2) **Product Model** — verification only after sale. Product model names **must never** prevent marking inventory sold when serial matches **`available`** inventory.
 
-**Duplicate protection:** If Tally later imports an invoice already recorded via manual mark-as-sold (same invoice/voucher identifier and serial), **do not** create a duplicate sale. Treat as the same transaction — idempotent no-op; optional **Duplicate Sale** notification for operator awareness.
+For every serial number extracted from the line:
 
-### 8.6.2 Manual Mark as Sold
+| Step | Condition | System Action |
+|------|-----------|---------------|
+| 1 | Serial found in **`available`** inventory | Mark **Sold**; create `sale` (`sale_source = tally`); write **Audit Log** — **regardless of product model text** |
+| 1a | After step 1 — normalized invoice model **genuinely differs** from IMS | **`product_model_mismatch`** notification (informational); sale **not** reversed |
+| 2 | Serial found in **`sold`** inventory | **Duplicate Sale Detected** notification; **no** inventory change; **no** audit entry |
+| 3 | Product model **exists** in IMS; serial **not found** | **Serial Number Missing** notification |
+| 4 | Serial **exists** in IMS (non-available); invoice product model **not in catalog** | **Product Model Missing** notification |
+| 5 | **Neither** serial nor product model in IMS | **Ignore** — accessory, software, service; **no notification** |
+
+**Model normalization:** Minor naming differences between Tally and IMS (e.g., `ASUS Vivobook X1502ZA-EJ745WS` vs `X1502ZA-EJ745WS`) are normal and **must not** generate notifications. See [sync-strategy.md §3.3](../integrations/tally-erp9/sync-strategy.md).
+
+Multiple inventory items on one invoice share invoice number, sale date, and customer information; each line is processed independently.
+
+### 8.6.2 Invoice Processing Status and Retry
+
+Each invoice is tracked in `tally_processed_invoices` with `processing_status`:
+
+| Status | Behaviour |
+|--------|-----------|
+| **SUCCESS** | All inventory-related lines complete — future syncs skip (log: SKIPPED) |
+| **PARTIAL_SUCCESS** | Some lines completed; failed lines retried — invoice **not** fully processed |
+| **FAILED** | No inventory updates — full invoice retry |
+| **SKIPPED** | Log-only — invoice already SUCCESS |
+
+**Completion rule:** Never mark SUCCESS until all inventory-related lines finish.
+
+**Partial retry:** On PARTIAL_SUCCESS, only failed lines are reprocessed. Completed lines are never processed again.
+
+**Crash recovery:** After interruption, SUCCESS invoices skip; PARTIAL_SUCCESS resumes failed lines; FAILED retries entire invoice.
+
+### 8.6.3 Line-Level Transactions
+
+Each inventory item is processed in an **independent transaction**. One failed line never rolls back successfully processed lines from the same invoice.
+
+### 8.6.4 Manual Mark as Sold
 
 When Tally synchronization is unavailable or delayed, **Admin** and **Main Admin** may manually mark inventory as **Sold**. **Salesperson cannot** manually mark as sold.
 
@@ -456,7 +500,7 @@ When Tally synchronization is unavailable or delayed, **Admin** and **Main Admin
 | **Payment Mode** | No | e.g., Cash, UPI, Card — reference only |
 | **Sale Date** | No | Defaults to current date/time if omitted |
 
-System creates sale record (`sale_source = manual`), updates inventory to **Sold**, and writes audit log. If Tally sync later imports the same invoice for the same serial, duplicate protection applies (§8.6.1).
+System creates sale record (`sale_source = manual`), updates inventory to **Sold**, and writes audit log. If Tally sync later processes an invoice containing the same serial already sold, duplicate detection applies (§8.6.1 step 2).
 
 ### 8.7 Server Installation & First-Time Setup
 
@@ -1020,11 +1064,19 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 | FR-TLY-02 | System shall support multiple Tally companies with independent sync state per company | Mandatory | Initial: WEBSTUDIO, ASUS Exclusive Store |
 | FR-TLY-03 | Each company shall store `last_successful_sync_time` and `last_processed_voucher_identifier` | Mandatory | See DATABASE_DESIGN §4.14 |
 | FR-TLY-04 | Failure synchronizing one Tally company shall not stop synchronization of other companies | Mandatory | Per-company isolation |
-| FR-TLY-05 | System shall process each invoice line per exact serial and product model matching rules in §8.6.1 | Mandatory | No fuzzy matching |
-| FR-TLY-06 | On serial and model match, system shall mark inventory Sold, create sale record, and write audit log | Mandatory | `sale_source = tally` |
+| FR-TLY-05 | System shall process each invoice line independently per §8.6.1 — one line failure never stops others | Mandatory | Serial-authoritative matching in **`available`** inventory only |
+| FR-TLY-06 | On serial found in **available** inventory, system shall mark Sold, create sale record, and write audit log — **regardless of product model text on invoice** | Mandatory | `sale_source = tally`; serial is authoritative |
+| FR-TLY-06a | After successful serial match, system shall compare normalized invoice product model with IMS product model for verification only | Mandatory | Must **never** block sale reflection |
+| FR-TLY-06b | When normalized models genuinely differ after sale, system shall create **Product Model Mismatch** notification without reversing sale | Mandatory | `product_model_mismatch`; informational only |
 | FR-TLY-07 | System shall ignore invoice lines where neither serial nor product model exist in IMS | Mandatory | No notification for accessories |
-| FR-TLY-08 | System shall create notifications for Serial Not Found, Model Mismatch, Duplicate Sale, and Synchronization Failure | Mandatory | See §8.6 Notification Center |
-| FR-TLY-09 | System shall log every Tally poll and invoice line processing outcome | Mandatory | |
+| FR-TLY-08 | System shall create notifications per §8.6 Notification Center | Mandatory | Duplicate Sale, Serial Number Missing, Product Model Missing, **Product Model Mismatch**, Tally Sync Completed, Sync Failure |
+| FR-TLY-09 | System shall maintain Tally Sync Log per execution attempt — separate from Audit Log and invoice state | Mandatory | See §8.6 |
+| FR-TLY-16 | System shall track invoice processing status SUCCESS / PARTIAL_SUCCESS / FAILED on `tally_processed_invoices` | Mandatory | SKIPPED is log-only |
+| FR-TLY-17 | Duplicate sold serial shall create notification without inventory or audit mutation; line marked completed | Mandatory | Line-level |
+| FR-TLY-18 | SUCCESS only when all inventory-related lines complete — never before processing finishes | Mandatory | See §8.6.2 |
+| FR-TLY-19 | PARTIAL_SUCCESS shall retry failed lines only; completed lines never reprocessed | Mandatory | See §8.6.2 |
+| FR-TLY-20 | Engine shall recover after crash/restart without duplicate inventory updates | Mandatory | See §8.6.2 |
+| FR-TLY-21 | Each inventory line processed in independent transaction — no invoice-wide rollback | Mandatory | See §8.6.3 |
 | FR-TLY-10 | Admin and Main Admin shall trigger **Sync Now** for Tally synchronization | Mandatory | |
 | FR-TLY-11 | System shall provide Tally Synchronization Dashboard with connection status, configured companies, last successful sync, next scheduled sync, pending notifications, last error, and Sync Now | Mandatory | See §8.6 |
 | FR-TLY-12 | System shall not replace or replicate Tally billing functionality | Mandatory | See BR-05 |
@@ -1037,11 +1089,14 @@ Search is a **primary feature** of WEBSTUDIO IMS. Search must remain accessible 
 | ID | Requirement | Priority | Notes |
 |----|-------------|----------|-------|
 | FR-NOT-01 | Notification Center shall include Tally integration notifications | Mandatory | |
-| FR-NOT-02 | System shall create Serial Not Found notification when model exists but serial not found on invoice line | Mandatory | |
-| FR-NOT-03 | System shall create Model Mismatch notification when serial exists but model does not match | Mandatory | |
-| FR-NOT-04 | System shall create Duplicate Sale notification when appropriate for operator awareness | Mandatory | No duplicate sale record |
+| FR-NOT-02 | System shall create Serial Number Missing notification when model exists but serial not found | Mandatory | `serial_number_missing` |
+| FR-NOT-03 | System shall create Product Model Missing notification when serial exists (non-available path) but invoice model not in catalog | Mandatory | `product_model_missing` |
+| FR-NOT-03a | System shall create Product Model Mismatch notification when serial matched and sold but normalized models genuinely differ | Mandatory | `product_model_mismatch`; informational; sale not reversed |
+| FR-NOT-04 | System shall create Duplicate Sale Detected notification when serial already sold — no duplicate sale or audit | Mandatory | Includes invoice, voucher type, customer, serial |
 | FR-NOT-05 | System shall create Synchronization Failure notification on company or connection failures | Mandatory | |
 | FR-NOT-06 | System shall not create notifications for ignored non-laptop/accessory invoice lines | Mandatory | See FR-TLY-07 |
+| FR-NOT-07 | Notifications shall support Unread, Read, and Resolved lifecycle states | Mandatory | Resolved retained permanently |
+| FR-NOT-08 | System shall create Tally Sync Completed notification when appropriate | Mandatory | Informational |
 
 ### 15.11 Reports and Export
 
@@ -1325,11 +1380,16 @@ Business rules are authoritative for Version 1. Implementation belongs exclusive
 | BR-30 | **Passwords are stored only as bcrypt hashes** on the Backend. Clients never store password material. | Authentication authority on server |
 | BR-31 | **Clients never store business data** locally in Version 1. | Online-first; server URL and tokens only |
 | BR-32 | **Tally is read-only from IMS perspective.** IMS reads invoices from Tally; IMS never creates invoices or billing entries in Tally. | Billing boundary |
-| BR-33 | **Tally invoice line matching requires exact serial and exact product model match** to mark Sold. No fuzzy serial matching. | See §8.6.1 |
-| BR-34 | **Non-laptop Tally lines** (no matching serial or model in IMS) are ignored without notification. | Accessory/non-IMS products |
-| BR-35 | **Manual mark-as-sold is Admin and Main Admin only.** Salesperson cannot manually mark inventory Sold. | See §8.6.2 |
-| BR-36 | **Duplicate sale protection:** same invoice/voucher and serial recorded manually and via Tally sync is one transaction. | FR-SLS-06, FR-TLY-14 |
+| BR-33 | **Tally sale reflection** matches serial numbers in **available** inventory only. Serial globally unique (BR-01). | See §8.6.1 |
+| BR-34 | **Non-laptop Tally lines** (neither serial nor model in IMS) are ignored without notification. | Accessory/non-IMS products |
+| BR-35 | **Manual mark-as-sold is Admin and Main Admin only.** Salesperson cannot manually mark inventory Sold. | See §8.6.3 |
+| BR-36 | **Duplicate sale protection:** serial already **sold** when Tally line processed → notification only; no duplicate sale or audit. | FR-TLY-17 |
 | BR-37 | **Multi-company Tally sync failures are isolated** — one company's failure must not stop another company's synchronization. | See §8.6 |
+| BR-38 | **Invoice processing state** on `tally_processed_invoices` — SUCCESS only when all inventory-related lines complete. | See §8.6.2 |
+| BR-39 | **Tally synchronization statistics** belong in `tally_sync_logs` — not Audit Log. | Audit = business events only |
+| BR-40 | **Partial retry:** PARTIAL_SUCCESS retries failed lines only; completed lines immutable. | See §8.6.2 |
+| BR-41 | **Line-level transactions:** one failed line never rolls back sibling lines on same invoice. | See §8.6.3 |
+| BR-42 | **Crash recovery:** SUCCESS skip; PARTIAL_SUCCESS resume; FAILED full retry — no duplicate updates. | See §8.6.2 |
 
 Additional business rules: **TBD** in [inventory rules](../business/inventory-rules.md).
 

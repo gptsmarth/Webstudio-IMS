@@ -1,0 +1,72 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { ProductModel } from '../../../services/api/ProductModelService';
+import { buildStockModelSpecLines } from '../../../lib/stockModelCard';
+import { ProductImageService } from '../../../services/images/ProductImageService';
+import { InventoryBrandCell } from '../InventoryBrandCell';
+
+interface InvModelSerialHeroProps {
+  model: ProductModel;
+  unitCount: number;
+  availableCount: number;
+}
+
+export function InvModelSerialHero({ model, unitCount, availableCount }: InvModelSerialHeroProps): JSX.Element {
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const specLines = useMemo(() => buildStockModelSpecLines(model), [model]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void ProductImageService.resolve(model.id, {
+      remoteUrl: model.product_image_url,
+      brandName: model.brand_name,
+      modelName: model.model_name,
+    }).then((result) => {
+      if (!cancelled) setImageSrc(result.src);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [model.id, model.product_image_url]);
+
+  return (
+    <section className="inv-model-hero" aria-label="Model overview">
+      <div className="inv-model-hero__media">
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={model.model_name}
+            className="inv-model-hero__image"
+            onError={(event) => {
+              event.currentTarget.src = ProductImageService.getPlaceholderSrc();
+            }}
+          />
+        ) : (
+          <div className="inv-model-hero__image inv-model-hero__image--placeholder skeleton" />
+        )}
+      </div>
+      <div className="inv-model-hero__content">
+        <p className="inv-model-hero__eyebrow">
+          <InventoryBrandCell brandName={model.brand_name ?? ''} />
+          {model.display && <span className="inv-model-hero__display">{model.display}</span>}
+        </p>
+        <h2 className="inv-model-hero__title">{model.model_name}</h2>
+        <p className="inv-model-hero__model-number col-mono">{model.model_number}</p>
+        <p className="inv-model-hero__stats">
+          <span>{availableCount} available</span>
+          <span aria-hidden>·</span>
+          <span>{unitCount} total units</span>
+        </p>
+        <ul className="inv-model-hero__spec-list">
+          {specLines.map((line) => (
+            <li key={line.label} className="inv-model-hero__spec-item">
+              <span className="inv-model-hero__spec-bullet" aria-hidden />
+              <span>
+                <strong>{line.label}:</strong> {line.value}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}

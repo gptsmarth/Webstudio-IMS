@@ -65,3 +65,8 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         server_default=ProductModelStatus.ACTIVE.value,
     )
+    display: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    color_options: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    product_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    search_aliases: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
