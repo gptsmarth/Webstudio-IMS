@@ -224,16 +224,18 @@ export function InventoryDetailDrawer({
                   <dt>Unit color</dt>
                   <dd>{editing ? <input className="input" value={color} onChange={(event) => setColor(event.target.value)} /> : item.color}</dd>
                 </div>
-                {canViewPurchasePrice(role) && (
+                {canViewPurchasePrice(role) && workspace.productModel && (
                   <div>
-                    <dt>Purchase price</dt>
-                    <dd>{formatInventoryPrice(item.purchase_price)}</dd>
+                    <dt>Purchase price (model)</dt>
+                    <dd>{formatInventoryPrice(workspace.productModel.purchase_price)}</dd>
                   </div>
                 )}
-                <div>
-                  <dt>Selling price</dt>
-                  <dd>{formatInventoryPrice(item.selling_price)}</dd>
-                </div>
+                {workspace.productModel && (
+                  <div>
+                    <dt>Selling price (model)</dt>
+                    <dd>{formatInventoryPrice(workspace.productModel.selling_price)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Sale status</dt>
                   <dd>

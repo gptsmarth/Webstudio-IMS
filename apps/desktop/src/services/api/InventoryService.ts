@@ -25,8 +25,6 @@ export interface InventoryItemDetail {
   status: InventoryStatus;
   is_archived: boolean;
   purchase_date: string | null;
-  purchase_price?: number | null;
-  selling_price?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -75,8 +73,6 @@ export interface CreateInventoryItemRequest {
   current_location_id: number;
   status?: InventoryStatus;
   purchase_date?: string | null;
-  purchase_price?: number | null;
-  selling_price?: number | null;
 }
 
 export interface UpdateInventoryItemRequest {
@@ -85,12 +81,6 @@ export interface UpdateInventoryItemRequest {
   color?: string;
   status?: InventoryStatus;
   purchase_date?: string | null;
-  purchase_price?: number | null;
-  selling_price?: number | null;
-}
-
-export interface UpdateSellingPriceRequest {
-  selling_price?: number | null;
 }
 
 export interface MarkSoldRequest {
@@ -162,12 +152,6 @@ export class InventoryService {
     LoggingService.info('API', `Updating inventory item ${id}`, data as unknown as Record<string, unknown>);
     const client = await ApiClientProvider.getClient();
     return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}`, data as unknown as Record<string, unknown>);
-  }
-
-  static async updateSellingPrice(id: string, data: UpdateSellingPriceRequest): Promise<InventoryItemDetail> {
-    LoggingService.info('API', `Updating selling price for ${id}`, data as unknown as Record<string, unknown>);
-    const client = await ApiClientProvider.getClient();
-    return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}/selling-price`, data as unknown as Record<string, unknown>);
   }
 
   static async archiveItem(id: string): Promise<InventoryItemDetail> {

@@ -19,8 +19,6 @@ class CreateInventoryItemRequest(BaseModel):
     current_location_id: int = Field(gt=0)
     status: InventoryStatus = InventoryStatus.AVAILABLE
     purchase_date: date | None = None
-    purchase_price: Decimal | None = Field(default=None, ge=0)
-    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class UpdateInventoryItemRequest(BaseModel):
@@ -29,12 +27,6 @@ class UpdateInventoryItemRequest(BaseModel):
     color: str | None = Field(default=None, min_length=1, max_length=64)
     status: InventoryStatus | None = None
     purchase_date: date | None = None
-    purchase_price: Decimal | None = Field(default=None, ge=0)
-    selling_price: Decimal | None = Field(default=None, ge=0)
-
-
-class UpdateSellingPriceRequest(BaseModel):
-    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class TransferLocationRequest(BaseModel):
@@ -102,13 +94,11 @@ class InventoryItemDetail(BaseModel):
     status: InventoryStatus
     is_archived: bool
     purchase_date: date | None
-    purchase_price: float | None = None
-    selling_price: float | None = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_row(cls, row: InventoryItemDetailRow, *, include_purchase_price: bool = True) -> InventoryItemDetail:
+    def from_row(cls, row: InventoryItemDetailRow) -> InventoryItemDetail:
         item = row.item
         pm = row.product_model
         return cls(
@@ -131,8 +121,6 @@ class InventoryItemDetail(BaseModel):
             status=item.status,
             is_archived=item.is_archived,
             purchase_date=item.purchase_date,
-            purchase_price=float(item.purchase_price) if include_purchase_price and item.purchase_price is not None else None,
-            selling_price=float(item.selling_price) if item.selling_price is not None else None,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )

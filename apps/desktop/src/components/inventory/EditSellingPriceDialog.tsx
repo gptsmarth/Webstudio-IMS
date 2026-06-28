@@ -4,7 +4,7 @@ import { formatInventoryPrice, parsePriceInput } from '../../lib/inventoryPrice'
 
 interface EditSellingPriceDialogProps {
   open: boolean;
-  serialNumber: string;
+  label: string;
   currentPrice: number | null | undefined;
   loading: boolean;
   onClose: () => void;
@@ -13,7 +13,7 @@ interface EditSellingPriceDialogProps {
 
 export function EditSellingPriceDialog({
   open,
-  serialNumber,
+  label,
   currentPrice,
   loading,
   onClose,
@@ -62,7 +62,7 @@ export function EditSellingPriceDialog({
           </button>
         </header>
         <div className="inv-dialog__body">
-          <p className="inv-dialog__hint col-mono">{serialNumber}</p>
+          <p className="inv-dialog__hint col-mono">{label}</p>
           <label className="inv-filters__field">
             <span className="inv-filters__label">Selling price (INR)</span>
             <input

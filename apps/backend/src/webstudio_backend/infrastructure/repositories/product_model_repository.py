@@ -77,6 +77,8 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         product_image_url: str | None = None,
         search_aliases: str | None = None,
         notes: str | None = None,
+        purchase_price: Decimal | None = None,
+        selling_price: Decimal | None = None,
         actor: AuditActor | None = None,
     ) -> ProductModel:
         payload = self._validated_payload(
@@ -97,6 +99,8 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             "product_image_url": product_image_url.strip() if product_image_url else None,
             "search_aliases": search_aliases.strip() if search_aliases else None,
             "notes": notes.strip() if notes else None,
+            "purchase_price": purchase_price,
+            "selling_price": selling_price,
         })
         if await self.exists(payload["brand_id"], payload["model_number"]):
             raise DuplicateModelNumberError(payload["brand_id"], payload["model_number"])
@@ -124,6 +128,10 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         product_image_url: str | None = None,
         search_aliases: str | None = None,
         notes: str | None = None,
+        purchase_price: Decimal | None = None,
+        set_purchase_price: bool = False,
+        selling_price: Decimal | None = None,
+        set_selling_price: bool = False,
         actor: AuditActor | None = None,
     ) -> ProductModel:
         audit_actor = actor or AuditActor.system()
@@ -191,6 +199,37 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
                         new_value={field: normalized},
                         actor=audit_actor,
                     )
+
+        if set_purchase_price:
+            old_val = product_model.purchase_price
+            if purchase_price != old_val:
+                product_model.purchase_price = purchase_price
+                await recorder.record_product_model_field_update(
+                    product_model,
+                    field_name="purchase_price",
+                    old_value={"purchase_price": float(old_val) if old_val is not None else None},
+                    new_value={
+                        "purchase_price": float(product_model.purchase_price)
+                        if product_model.purchase_price is not None
+                        else None
+                    },
+                    actor=audit_actor,
+                )
+        if set_selling_price:
+            old_val = product_model.selling_price
+            if selling_price != old_val:
+                product_model.selling_price = selling_price
+                await recorder.record_product_model_field_update(
+                    product_model,
+                    field_name="selling_price",
+                    old_value={"selling_price": float(old_val) if old_val is not None else None},
+                    new_value={
+                        "selling_price": float(product_model.selling_price)
+                        if product_model.selling_price is not None
+                        else None
+                    },
+                    actor=audit_actor,
+                )
 
         await self._session.flush()
         await self._session.refresh(product_model)

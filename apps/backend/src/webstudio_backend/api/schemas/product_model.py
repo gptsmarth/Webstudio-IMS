@@ -30,6 +30,8 @@ class CreateProductModelRequest(BaseModel):
     product_image_url: str | None = Field(default=None, min_length=1, max_length=512)
     search_aliases: str | None = Field(default=None, min_length=1, max_length=1024)
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class UpdateProductModelRequest(BaseModel):
@@ -48,6 +50,12 @@ class UpdateProductModelRequest(BaseModel):
     product_image_url: str | None = Field(default=None, min_length=1, max_length=512)
     search_aliases: str | None = Field(default=None, min_length=1, max_length=1024)
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    selling_price: Decimal | None = Field(default=None, ge=0)
+
+
+class UpdateSellingPriceRequest(BaseModel):
+    selling_price: Decimal | None = Field(default=None, ge=0)
 
 
 class ProductModelSpecLookupRequest(BaseModel):
@@ -89,11 +97,19 @@ class ProductModelResponse(BaseModel):
     product_image_url: str | None
     search_aliases: str | None
     notes: str | None
+    purchase_price: float | None = None
+    selling_price: float | None = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, pm, *, brand_name: str | None = None) -> ProductModelResponse:
+    def from_model(
+        cls,
+        pm,
+        *,
+        brand_name: str | None = None,
+        include_purchase_price: bool = True,
+    ) -> ProductModelResponse:
         return cls(
             id=pm.id,
             brand_id=pm.brand_id,
@@ -112,6 +128,8 @@ class ProductModelResponse(BaseModel):
             product_image_url=pm.product_image_url,
             search_aliases=pm.search_aliases,
             notes=pm.notes,
+            purchase_price=float(pm.purchase_price) if include_purchase_price and pm.purchase_price is not None else None,
+            selling_price=float(pm.selling_price) if pm.selling_price is not None else None,
             created_at=pm.created_at,
             updated_at=pm.updated_at,
         )

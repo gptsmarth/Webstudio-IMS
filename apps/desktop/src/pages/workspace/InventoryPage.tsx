@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { AdminBrandSummary, AdminModelTable, AdminSerialTable, InvModelSerialHero } from '../../components/inventory/admin';
+import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
 import { AddLaptopWizard } from '../../components/inventory/AddLaptopWizard';
 import { InventoryDetailDrawer } from '../../components/inventory/InventoryDetailDrawer';
 import { MarkSoldDialog } from '../../components/inventory/MarkSoldDialog';
@@ -13,6 +14,7 @@ import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../ho
 import { useInventoryWorkspace } from '../../hooks/useInventoryWorkspace';
 import { canWriteInventory } from '../../lib/inventory';
 import { InventoryService } from '../../services/api/InventoryService';
+import { ProductModelService } from '../../services/api/ProductModelService';
 import { useInventoryNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore, useNavigationStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
@@ -27,6 +29,8 @@ export function InventoryPage(): JSX.Element {
   const [addOpen, setAddOpen] = useState(false);
   const [markSoldOpen, setMarkSoldOpen] = useState(false);
   const [markSoldItemId, setMarkSoldItemId] = useState<string | null>(null);
+  const [editModelId, setEditModelId] = useState<string | null>(null);
+  const [modelActionLoading, setModelActionLoading] = useState(false);
 
   const canWrite = session ? canWriteInventory(session.role) : false;
 
@@ -64,6 +68,11 @@ export function InventoryPage(): JSX.Element {
     [hierarchy.models, nav.modelId],
   );
 
+  const editModel = useMemo(
+    () => (editModelId ? hierarchy.models.find((model) => model.id === editModelId) ?? null : null),
+    [editModelId, hierarchy.models],
+  );
+
   const markSoldItem = useMemo(
     () => serialUnits.find((item) => item.id === markSoldItemId) ?? workspace.selectedItem,
     [markSoldItemId, serialUnits, workspace.selectedItem],
@@ -84,17 +93,22 @@ export function InventoryPage(): JSX.Element {
     setMarkSoldOpen(true);
   }, [workspace]);
 
-  const handleUpdatePrices = useCallback(async (
-    itemId: string,
-    patch: { purchase_price?: number | null; selling_price?: number | null },
+  const handleUpdateModel = useCallback(async (
+    patch: Parameters<typeof ProductModelService.updateModel>[1],
   ) => {
-    await InventoryService.updateItem(itemId, patch);
-    if (workspace.selectedId === itemId) {
-      await workspace.refreshSelected();
+    if (!editModel) return;
+    setModelActionLoading(true);
+    try {
+      await ProductModelService.updateModel(editModel.id, patch);
+      await hierarchy.refresh();
+      await workspace.refresh();
+      if (workspace.selectedItem?.product_model_id === editModel.id) {
+        await workspace.refreshSelected();
+      }
+    } finally {
+      setModelActionLoading(false);
     }
-    await hierarchy.refresh();
-    await workspace.refresh();
-  }, [hierarchy, workspace]);
+  }, [editModel, hierarchy, workspace]);
 
   const handleAddComplete = useCallback(async (payload: Parameters<typeof workspace.addLaptopWizard>[0]) => {
     await workspace.addLaptopWizard(payload);
@@ -181,6 +195,7 @@ export function InventoryPage(): JSX.Element {
             nav.openModel(modelId, label);
           }}
           onAddLaptop={() => setAddOpen(true)}
+          onEditModel={setEditModelId}
         />
       )}
 
@@ -189,6 +204,7 @@ export function InventoryPage(): JSX.Element {
           model={selectedModel}
           unitCount={serialUnits.length}
           availableCount={serialUnits.filter((unit) => unit.status === 'available' && !unit.is_archived).length}
+          onEditModel={() => setEditModelId(selectedModel.id)}
         />
       )}
 
@@ -199,11 +215,9 @@ export function InventoryPage(): JSX.Element {
             locations={hierarchy.locations}
             loading={hierarchy.loading}
             selectedId={workspace.selectedId}
-            showPurchasePrice
             onSelect={(id) => void workspace.selectItem(id)}
             onTransfer={handleTransfer}
             onMarkSold={handleMarkSold}
-            onUpdatePrices={handleUpdatePrices}
             actionLoading={workspace.actionLoading}
           />
           {workspace.selectedItem && (
@@ -245,6 +259,14 @@ export function InventoryPage(): JSX.Element {
           }}
         />
       )}
+
+      <InventoryModelEditDialog
+        open={editModel !== null}
+        model={editModel}
+        loading={modelActionLoading}
+        onClose={() => setEditModelId(null)}
+        onConfirm={handleUpdateModel}
+      />
     </div>
   );
 }

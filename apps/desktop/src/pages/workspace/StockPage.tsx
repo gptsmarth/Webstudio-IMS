@@ -7,11 +7,14 @@ import {
   StockModelCardGrid,
   StockModelDetail,
 } from '../../components/stock';
+import { EditSellingPriceDialog } from '../../components/inventory/EditSellingPriceDialog';
 import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../hooks/useInventoryHierarchyData';
 import { InventoryService } from '../../services/api/InventoryService';
+import { ProductModelService } from '../../services/api/ProductModelService';
 import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
+import { canEditSellingPrice } from '../../lib/inventory';
 
 export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
@@ -20,10 +23,16 @@ export function StockPage(): JSX.Element {
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [priceModelId, setPriceModelId] = useState<string | null>(null);
 
   const selectedModel = useMemo(
     () => hierarchy.models.find((model) => model.id === nav.modelId) ?? null,
     [hierarchy.models, nav.modelId],
+  );
+
+  const priceModel = useMemo(
+    () => hierarchy.models.find((model) => model.id === priceModelId) ?? null,
+    [hierarchy.models, priceModelId],
   );
 
   const modelRows = useMemo(() => {
@@ -34,6 +43,8 @@ export function StockPage(): JSX.Element {
   const modelUnits = useMemo(() => (
     nav.modelId ? hierarchy.unitsForModel(nav.modelId, true) : []
   ), [hierarchy, nav.modelId]);
+
+  const canEditPrice = session ? canEditSellingPrice(session.role) : false;
 
   const handleTransfer = useCallback(async (itemId: string, locationId: number) => {
     setActionLoading(true);
@@ -49,11 +60,12 @@ export function StockPage(): JSX.Element {
     }
   }, [hierarchy]);
 
-  const handleUpdateSellingPrice = useCallback(async (itemId: string, sellingPrice: number | null) => {
+  const handleUpdateModelSellingPrice = useCallback(async (sellingPrice: number | null) => {
+    if (!priceModelId) return;
     setActionLoading(true);
     setActionError(null);
     try {
-      await InventoryService.updateSellingPrice(itemId, { selling_price: sellingPrice });
+      await ProductModelService.updateSellingPrice(priceModelId, { selling_price: sellingPrice });
       await hierarchy.refresh();
     } catch (err: unknown) {
       const message = err as { message?: string };
@@ -62,7 +74,7 @@ export function StockPage(): JSX.Element {
     } finally {
       setActionLoading(false);
     }
-  }, [hierarchy]);
+  }, [hierarchy, priceModelId]);
 
   if (!session) {
     return (
@@ -110,6 +122,19 @@ export function StockPage(): JSX.Element {
         />
       )}
 
+      {nav.level === 'models' && (
+        <div className="stock-page__models-toolbar">
+          <label className="stock-page__price-toggle">
+            <input
+              type="checkbox"
+              checked={nav.showSellingPrice}
+              onChange={(event) => nav.setShowSellingPrice(event.target.checked)}
+            />
+            <span>Show selling prices on cards</span>
+          </label>
+        </div>
+      )}
+
       {hierarchy.error && (
         <div className="alert alert-danger stock-page__alert">
           <AlertCircle size={14} aria-hidden />
@@ -138,21 +163,11 @@ export function StockPage(): JSX.Element {
           rows={modelRows}
           loading={hierarchy.loading}
           availableOnly
+          showPrice={nav.showSellingPrice}
+          canEditPrice={canEditPrice}
           onSelect={(modelId, label) => nav.openModel(modelId, label)}
+          onEditPrice={canEditPrice ? setPriceModelId : undefined}
         />
-      )}
-
-      {nav.level === 'serials' && selectedModel && (
-        <div className="stock-page__serials-toolbar">
-          <label className="stock-page__price-toggle">
-            <input
-              type="checkbox"
-              checked={nav.showSellingPrice}
-              onChange={(event) => nav.setShowSellingPrice(event.target.checked)}
-            />
-            <span>Show selling prices</span>
-          </label>
-        </div>
       )}
 
       {nav.level === 'serials' && selectedModel && (
@@ -162,12 +177,19 @@ export function StockPage(): JSX.Element {
           locations={hierarchy.locations}
           role={session.role}
           loading={hierarchy.loading}
-          showSellingPrice={nav.showSellingPrice}
           onTransfer={handleTransfer}
-          onUpdateSellingPrice={handleUpdateSellingPrice}
           actionLoading={actionLoading}
         />
       )}
+
+      <EditSellingPriceDialog
+        open={priceModel !== null}
+        label={priceModel ? `${priceModel.model_number} · ${priceModel.model_name}` : ''}
+        currentPrice={priceModel?.selling_price}
+        loading={actionLoading}
+        onClose={() => setPriceModelId(null)}
+        onConfirm={handleUpdateModelSellingPrice}
+      />
     </div>
   );
 }

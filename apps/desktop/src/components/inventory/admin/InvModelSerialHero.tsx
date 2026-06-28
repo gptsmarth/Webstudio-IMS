@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ProductModel } from '../../../services/api/ProductModelService';
 import { buildStockModelSpecLines } from '../../../lib/stockModelCard';
+import { formatInventoryPrice } from '../../../lib/inventoryPrice';
 import { ProductImageService } from '../../../services/images/ProductImageService';
 import { InventoryBrandCell } from '../InventoryBrandCell';
 
@@ -8,9 +9,15 @@ interface InvModelSerialHeroProps {
   model: ProductModel;
   unitCount: number;
   availableCount: number;
+  onEditModel?: () => void;
 }
 
-export function InvModelSerialHero({ model, unitCount, availableCount }: InvModelSerialHeroProps): JSX.Element {
+export function InvModelSerialHero({
+  model,
+  unitCount,
+  availableCount,
+  onEditModel,
+}: InvModelSerialHeroProps): JSX.Element {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const specLines = useMemo(() => buildStockModelSpecLines(model), [model]);
 
@@ -45,12 +52,29 @@ export function InvModelSerialHero({ model, unitCount, availableCount }: InvMode
         )}
       </div>
       <div className="inv-model-hero__content">
-        <p className="inv-model-hero__eyebrow">
-          <InventoryBrandCell brandName={model.brand_name ?? ''} />
-          {model.display && <span className="inv-model-hero__display">{model.display}</span>}
-        </p>
+        <div className="inv-model-hero__top-row">
+          <p className="inv-model-hero__eyebrow">
+            <InventoryBrandCell brandName={model.brand_name ?? ''} />
+            {model.display && <span className="inv-model-hero__display">{model.display}</span>}
+          </p>
+          {onEditModel && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onEditModel}>
+              Edit model
+            </button>
+          )}
+        </div>
         <h2 className="inv-model-hero__title">{model.model_name}</h2>
         <p className="inv-model-hero__model-number col-mono">{model.model_number}</p>
+        <div className="inv-model-hero__prices">
+          <div>
+            <span className="inv-model-hero__price-label">Selling price</span>
+            <strong>{formatInventoryPrice(model.selling_price)}</strong>
+          </div>
+          <div>
+            <span className="inv-model-hero__price-label">Purchase price</span>
+            <strong>{formatInventoryPrice(model.purchase_price)}</strong>
+          </div>
+        </div>
         <p className="inv-model-hero__stats">
           <span>{availableCount} available</span>
           <span aria-hidden>·</span>

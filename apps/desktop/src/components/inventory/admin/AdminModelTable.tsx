@@ -1,11 +1,13 @@
 import type { ModelInventoryRow } from '../../../lib/inventoryHierarchy';
 import { formatInventorySpecsTable } from '../../../lib/inventory';
+import { formatInventoryPrice } from '../../../lib/inventoryPrice';
 
 interface AdminModelTableProps {
   rows: ModelInventoryRow[];
   loading?: boolean;
   onSelect: (modelId: string, label: string) => void;
   onAddLaptop: () => void;
+  onEditModel: (modelId: string) => void;
 }
 
 export function AdminModelTable({
@@ -13,6 +15,7 @@ export function AdminModelTable({
   loading,
   onSelect,
   onAddLaptop,
+  onEditModel,
 }: AdminModelTableProps): JSX.Element {
   if (loading) {
     return (
@@ -41,15 +44,18 @@ export function AdminModelTable({
               <th>Model number</th>
               <th>Name</th>
               <th>Configuration</th>
+              <th className="admin-model-table__num">Selling price</th>
+              <th className="admin-model-table__num">Purchase price</th>
               <th className="admin-model-table__num">Available</th>
               <th className="admin-model-table__num">Sold</th>
               <th>Status</th>
+              <th className="admin-model-table__actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="admin-model-table__empty">
+                <td colSpan={9} className="admin-model-table__empty">
                   No models for this brand yet. Use Add laptop to register the first model.
                 </td>
               </tr>
@@ -63,12 +69,23 @@ export function AdminModelTable({
                 <td className="col-mono admin-model-table__model-number">{row.model.model_number}</td>
                 <td className="admin-model-table__name">{row.model.model_name}</td>
                 <td className="admin-model-table__config">{formatInventorySpecsTable(row.model)}</td>
+                <td className="admin-model-table__num">{formatInventoryPrice(row.model.selling_price)}</td>
+                <td className="admin-model-table__num">{formatInventoryPrice(row.model.purchase_price)}</td>
                 <td className="admin-model-table__num">{row.availableUnits}</td>
                 <td className="admin-model-table__num">{row.soldUnits}</td>
                 <td>
                   <span className={`badge ${row.availableUnits === 0 ? 'badge-warning' : 'badge-success'}`}>
                     {row.availableUnits === 0 ? 'Zero availability' : 'In stock'}
                   </span>
+                </td>
+                <td className="admin-model-table__actions" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onEditModel(row.model.id)}
+                  >
+                    Edit model
+                  </button>
                 </td>
               </tr>
             ))}

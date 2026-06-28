@@ -10,15 +10,12 @@ import {
 import type { Location } from '../../services/api/LocationService';
 import type { CreateProductModelRequest, ProductModel } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
-import { parsePriceInput } from '../../lib/inventoryPrice';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 
 export interface SerialUnitEntry {
   serial_number: string;
   current_location_id: number;
   color: string;
-  purchase_price?: string;
-  selling_price?: string;
 }
 
 export interface AddLaptopWizardRequest {
@@ -102,7 +99,7 @@ export function AddLaptopWizard({
     setChecking(false);
     setFetching(false);
     setUnitCount(1);
-    setUnits([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '', purchase_price: '', selling_price: '' }]);
+    setUnits([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '' }]);
     setStatus('available');
     setCpu('');
     setGpu('');
@@ -126,8 +123,6 @@ export function AddLaptopWizard({
           serial_number: '',
           current_location_id: locations[0]?.id ?? 0,
           color: next[0]?.color ?? '',
-          purchase_price: next[0]?.purchase_price ?? '',
-          selling_price: next[0]?.selling_price ?? '',
         });
       }
       return next.slice(0, count);
@@ -403,11 +398,9 @@ export function AddLaptopWizard({
                   <span>Serial</span>
                   <span>Color</span>
                   <span>Location</span>
-                  <span>Purchase price</span>
-                  <span>Selling price</span>
                 </div>
                 {units.map((unit, index) => (
-                  <div key={index} className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices">
+                  <div key={index} className="add-laptop-wizard__unit-row">
                     <input
                       className="input col-mono"
                       placeholder={`Serial ${index + 1}`}
@@ -435,26 +428,6 @@ export function AddLaptopWizard({
                         <option key={location.id} value={location.id}>{location.name}</option>
                       ))}
                     </select>
-                    <input
-                      className="input"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Purchase"
-                      value={unit.purchase_price ?? ''}
-                      onChange={(e) => setUnits((current) => current.map((row, i) => (
-                        i === index ? { ...row, purchase_price: e.target.value } : row
-                      )))}
-                    />
-                    <input
-                      className="input"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Selling"
-                      value={unit.selling_price ?? ''}
-                      onChange={(e) => setUnits((current) => current.map((row, i) => (
-                        i === index ? { ...row, selling_price: e.target.value } : row
-                      )))}
-                    />
                   </div>
                 ))}
               </div>

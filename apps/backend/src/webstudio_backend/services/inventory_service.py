@@ -48,8 +48,6 @@ class InventoryService:
         current_location_id: int,
         status: InventoryStatus,
         purchase_date: date | None = None,
-        purchase_price: Decimal | None = None,
-        selling_price: Decimal | None = None,
         actor: AuditActor,
     ) -> InventoryItemDetailRow:
         item = await self._repo.create(
@@ -59,8 +57,6 @@ class InventoryService:
             current_location_id=current_location_id,
             status=status,
             purchase_date=purchase_date,
-            purchase_price=purchase_price,
-            selling_price=selling_price,
             actor=actor,
         )
         detail = await self._repo.get_detail(item.id)
@@ -78,10 +74,6 @@ class InventoryService:
         status: InventoryStatus | None = None,
         purchase_date: date | None = None,
         set_purchase_date: bool = False,
-        purchase_price: Decimal | None = None,
-        set_purchase_price: bool = False,
-        selling_price: Decimal | None = None,
-        set_selling_price: bool = False,
     ) -> InventoryItemDetailRow:
         item = await self._repo.require_by_id(item_id)
         await self._repo.update(
@@ -92,28 +84,6 @@ class InventoryService:
             status=status,
             purchase_date=purchase_date,
             set_purchase_date=set_purchase_date,
-            purchase_price=purchase_price,
-            set_purchase_price=set_purchase_price,
-            selling_price=selling_price,
-            set_selling_price=set_selling_price,
-            actor=actor,
-        )
-        detail = await self._repo.get_detail(item_id)
-        assert detail is not None
-        return detail
-
-    async def update_selling_price(
-        self,
-        item_id: uuid.UUID,
-        *,
-        selling_price: Decimal | None,
-        actor: AuditActor,
-    ) -> InventoryItemDetailRow:
-        item = await self._repo.require_by_id(item_id)
-        await self._repo.update(
-            item,
-            selling_price=selling_price,
-            set_selling_price=True,
             actor=actor,
         )
         detail = await self._repo.get_detail(item_id)

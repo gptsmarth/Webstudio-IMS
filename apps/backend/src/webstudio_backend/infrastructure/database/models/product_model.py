@@ -70,3 +70,5 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
     product_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     search_aliases: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    selling_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

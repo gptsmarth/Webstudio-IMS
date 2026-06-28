@@ -22,6 +22,8 @@ export interface ProductModel {
   product_image_url: string | null;
   search_aliases: string | null;
   notes: string | null;
+  purchase_price?: number | null;
+  selling_price?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -42,9 +44,15 @@ export interface CreateProductModelRequest {
   product_image_url?: string | null;
   search_aliases?: string | null;
   notes?: string | null;
+  purchase_price?: number | null;
+  selling_price?: number | null;
 }
 
 export type UpdateProductModelRequest = Partial<CreateProductModelRequest>;
+
+export interface UpdateSellingPriceRequest {
+  selling_price?: number | null;
+}
 
 export interface ProductModelListParams {
   brand_id?: number;
@@ -75,6 +83,11 @@ export class ProductModelService {
   static async updateModel(id: string, data: UpdateProductModelRequest): Promise<ProductModel> {
     const client = await ApiClientProvider.getClient();
     return client.patch<ProductModel>(`/api/v1/product-models/${id}`, data);
+  }
+
+  static async updateSellingPrice(id: string, data: UpdateSellingPriceRequest): Promise<ProductModel> {
+    const client = await ApiClientProvider.getClient();
+    return client.patch<ProductModel>(`/api/v1/product-models/${id}/selling-price`, data);
   }
 
   static async archiveModel(id: string): Promise<ProductModel> {

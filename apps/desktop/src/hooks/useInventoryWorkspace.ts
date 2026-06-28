@@ -15,7 +15,6 @@ import type { AddInventoryBatchRequest } from '../components/inventory/AddInvent
 import type { AddLaptopWizardRequest } from '../components/inventory/AddLaptopWizard';
 import { ReportService } from '../services/api/ReportService';
 import { inventoryFiltersToExportParams } from '../lib/inventoryExport';
-import { parsePriceInput } from '../lib/inventoryPrice';
 import { AuditService, type AuditLogEntry } from '../services/api/AuditService';
 import { useInventoryStore } from '../store';
 
@@ -419,8 +418,6 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
           color: unit.color.trim(),
           current_location_id: unit.current_location_id,
           status: payload.status,
-          purchase_price: unit.purchase_price?.trim() ? parsePriceInput(unit.purchase_price) ?? undefined : undefined,
-          selling_price: unit.selling_price?.trim() ? parsePriceInput(unit.selling_price) ?? undefined : undefined,
         });
       }
 

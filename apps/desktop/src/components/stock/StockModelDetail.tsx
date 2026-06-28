@@ -3,11 +3,9 @@ import { MapPin, MoreHorizontal } from 'lucide-react';
 import type { InventoryItemDetail } from '../../services/api/InventoryService';
 import type { Location } from '../../services/api/LocationService';
 import type { ProductModel } from '../../services/api/ProductModelService';
-import { EditSellingPriceDialog } from '../inventory/EditSellingPriceDialog';
 import { TransferLocationDialog } from '../inventory/TransferLocationDialog';
 import { ProductImagePanel } from '../inventory/ProductImagePanel';
-import { canEditSellingPrice, canTransferStockLocation } from '../../lib/inventory';
-import { formatInventoryPrice } from '../../lib/inventoryPrice';
+import { canTransferStockLocation } from '../../lib/inventory';
 import { buildStockModelSpecLines } from '../../lib/stockModelCard';
 import { StockSerialRowActionsMenu } from './StockSerialRowActionsMenu';
 
@@ -17,9 +15,7 @@ interface StockModelDetailProps {
   locations: Location[];
   role: string;
   loading?: boolean;
-  showSellingPrice?: boolean;
   onTransfer: (itemId: string, locationId: number) => Promise<void>;
-  onUpdateSellingPrice: (itemId: string, sellingPrice: number | null) => Promise<void>;
   actionLoading?: boolean;
 }
 
@@ -29,24 +25,18 @@ export function StockModelDetail({
   locations,
   role,
   loading,
-  showSellingPrice = true,
   onTransfer,
-  onUpdateSellingPrice,
   actionLoading,
 }: StockModelDetailProps): JSX.Element {
   const canTransfer = canTransferStockLocation(role);
-  const canEditPrice = canEditSellingPrice(role);
   const available = units.filter((item) => item.status !== 'sold' && !item.is_archived);
   const specLines = buildStockModelSpecLines(model);
   const [menu, setMenu] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
   const [transferItem, setTransferItem] = useState<InventoryItemDetail | null>(null);
-  const [priceItem, setPriceItem] = useState<InventoryItemDetail | null>(null);
 
   if (loading) {
     return <div className="skeleton stock-detail__skeleton" />;
   }
-
-  const showActions = canTransfer || canEditPrice;
 
   return (
     <div className="stock-detail">
@@ -97,8 +87,7 @@ export function StockModelDetail({
                   <th scope="col">Serial number</th>
                   <th scope="col">Color</th>
                   <th scope="col">Location</th>
-                  {showSellingPrice && <th scope="col">Selling price</th>}
-                  {showActions && <th scope="col" className="stock-detail__actions-col" aria-label="Actions" />}
+                  {canTransfer && <th scope="col" className="stock-detail__actions-col" aria-label="Actions" />}
                 </tr>
               </thead>
               <tbody>
@@ -112,12 +101,7 @@ export function StockModelDetail({
                         {item.current_location_name}
                       </span>
                     </td>
-                    {showSellingPrice && (
-                      <td className="stock-detail__selling-price">
-                        {formatInventoryPrice(item.selling_price)}
-                      </td>
-                    )}
-                    {showActions && (
+                    {canTransfer && (
                       <td className="stock-detail__actions-col">
                         <button
                           type="button"
@@ -146,11 +130,9 @@ export function StockModelDetail({
         <StockSerialRowActionsMenu
           item={menu.item}
           canTransfer={canTransfer}
-          canEditSellingPrice={canEditPrice}
           anchorRect={menu.rect}
           onClose={() => setMenu(null)}
           onChangeLocation={(item) => setTransferItem(item)}
-          onEditSellingPrice={(item) => setPriceItem(item)}
         />
       )}
 
@@ -164,19 +146,6 @@ export function StockModelDetail({
           if (!transferItem) return;
           await onTransfer(transferItem.id, locationId);
           setTransferItem(null);
-        }}
-      />
-
-      <EditSellingPriceDialog
-        open={priceItem !== null}
-        serialNumber={priceItem?.serial_number ?? ''}
-        currentPrice={priceItem?.selling_price}
-        loading={Boolean(actionLoading)}
-        onClose={() => setPriceItem(null)}
-        onConfirm={async (sellingPrice) => {
-          if (!priceItem) return;
-          await onUpdateSellingPrice(priceItem.id, sellingPrice);
-          setPriceItem(null);
         }}
       />
     </div>

@@ -1,15 +1,13 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { IndianRupee, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import type { InventoryItemDetail } from '../../services/api/InventoryService';
 import { rowMenuPosition, useRowActionsMenuDismiss } from '../../hooks/useRowActionsMenuDismiss';
 
 interface StockSerialRowActionsMenuProps {
   item: InventoryItemDetail;
   canTransfer: boolean;
-  canEditSellingPrice: boolean;
   onChangeLocation: (item: InventoryItemDetail) => void;
-  onEditSellingPrice: (item: InventoryItemDetail) => void;
   onClose: () => void;
   anchorRect: DOMRect;
 }
@@ -17,9 +15,7 @@ interface StockSerialRowActionsMenuProps {
 export function StockSerialRowActionsMenu({
   item,
   canTransfer,
-  canEditSellingPrice,
   onChangeLocation,
-  onEditSellingPrice,
   onClose,
   anchorRect,
 }: StockSerialRowActionsMenuProps): JSX.Element {
@@ -37,20 +33,6 @@ export function StockSerialRowActionsMenu({
       role="menu"
       aria-label={`Actions for ${item.serial_number}`}
     >
-      {canEditSellingPrice && (
-        <button
-          type="button"
-          className="inv-row-menu__item"
-          role="menuitem"
-          onClick={() => {
-            onEditSellingPrice(item);
-            onClose();
-          }}
-        >
-          <IndianRupee size={14} aria-hidden />
-          Edit selling price
-        </button>
-      )}
       {canTransfer && (
         <button
           type="button"

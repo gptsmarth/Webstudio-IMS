@@ -131,8 +131,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         current_location_id: int,
         status: InventoryStatus,
         purchase_date: date | None = None,
-        purchase_price: Decimal | None = None,
-        selling_price: Decimal | None = None,
         actor: AuditActor | None = None,
     ) -> InventoryItem:
         normalized_serial = validate_serial_number(serial_number)
@@ -153,8 +151,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 current_location_id=current_location_id,
                 status=validated_status,
                 purchase_date=purchase_date,
-                purchase_price=purchase_price,
-                selling_price=selling_price,
             ),
         )
         await AuditRecorder(self._session).record_inventory_create(
@@ -173,10 +169,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         status: InventoryStatus | None = None,
         purchase_date: date | None = None,
         set_purchase_date: bool = False,
-        purchase_price: Decimal | None = None,
-        set_purchase_price: bool = False,
-        selling_price: Decimal | None = None,
-        set_selling_price: bool = False,
         actor: AuditActor | None = None,
     ) -> InventoryItem:
         audit_actor = actor or AuditActor.system()
@@ -186,8 +178,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         old_color = inventory_item.color
         old_product_model_id = inventory_item.product_model_id
         old_purchase_date = inventory_item.purchase_date
-        old_purchase_price = inventory_item.purchase_price
-        old_selling_price = inventory_item.selling_price
 
         if serial_number is not None:
             normalized_serial = validate_serial_number(serial_number)
@@ -205,10 +195,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             inventory_item.status = validate_status(status)
         if set_purchase_date:
             inventory_item.purchase_date = purchase_date
-        if set_purchase_price:
-            inventory_item.purchase_price = purchase_price
-        if set_selling_price:
-            inventory_item.selling_price = selling_price
 
         await self._session.flush()
         await self._session.refresh(inventory_item)
@@ -251,30 +237,6 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 new_value={
                     "purchase_date": inventory_item.purchase_date.isoformat()
                     if inventory_item.purchase_date
-                    else None
-                },
-                actor=audit_actor,
-            )
-        if set_purchase_price and inventory_item.purchase_price != old_purchase_price:
-            await recorder.record_inventory_field_update(
-                inventory_item,
-                field_name="purchase_price",
-                old_value={"purchase_price": float(old_purchase_price) if old_purchase_price is not None else None},
-                new_value={
-                    "purchase_price": float(inventory_item.purchase_price)
-                    if inventory_item.purchase_price is not None
-                    else None
-                },
-                actor=audit_actor,
-            )
-        if set_selling_price and inventory_item.selling_price != old_selling_price:
-            await recorder.record_inventory_field_update(
-                inventory_item,
-                field_name="selling_price",
-                old_value={"selling_price": float(old_selling_price) if old_selling_price is not None else None},
-                new_value={
-                    "selling_price": float(inventory_item.selling_price)
-                    if inventory_item.selling_price is not None
                     else None
                 },
                 actor=audit_actor,

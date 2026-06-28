@@ -52,5 +52,3 @@ class InventoryItem(Base, UuidPrimaryKeyMixin, TimestampMixin):
     )
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    selling_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

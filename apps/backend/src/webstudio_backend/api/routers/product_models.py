@@ -16,6 +16,7 @@ from webstudio_backend.api.schemas.product_model import (
     ProductModelSpecLookupRequest,
     ProductModelSpecLookupResponse,
     UpdateProductModelRequest,
+    UpdateSellingPriceRequest,
 )
 from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
 from webstudio_backend.core.config import get_settings
@@ -23,7 +24,7 @@ from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import ProductModelStatus
+from webstudio_backend.infrastructure.database.enums import ProductModelStatus, UserRole
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
@@ -39,6 +40,10 @@ router = APIRouter(prefix="/api/v1/product-models", tags=["product-models"])
 ProductModelsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:read"))]
 ProductModelsWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:write"))]
 ProductModelsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:archive"))]
+ProductModelsSellingPriceDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_permission("product_models:selling_price:write")),
+]
 InventoryWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:write"))]
 
 
@@ -61,6 +66,21 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
     )
 
 
+def _can_view_purchase_price(current: AuthenticatedUser) -> bool:
+    return current.user.role in {UserRole.MAIN_ADMIN, UserRole.ADMIN}
+
+
+def _model_payload(pm, *, brand_name: str | None, current: AuthenticatedUser) -> dict:
+    include_purchase = _can_view_purchase_price(current)
+    response = ProductModelResponse.from_model(
+        pm,
+        brand_name=brand_name,
+        include_purchase_price=include_purchase,
+    )
+    exclude = set() if include_purchase else {"purchase_price"}
+    return response.model_dump(exclude=exclude)
+
+
 @router.get("")
 async def list_product_models(
     request: Request,
@@ -70,7 +90,6 @@ async def list_product_models(
     archived: bool | None = None,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    del current
     statement = select(ProductModel, Brand.name).outerjoin(Brand, ProductModel.brand_id == Brand.id)
 
     if brand_id is not None:
@@ -93,7 +112,7 @@ async def list_product_models(
     sorted_models = sorted(product_models, key=lambda row: (row[0].model_name.lower(), row[0].model_number.lower()))
 
     data = [
-        ProductModelResponse.from_model(row[0], brand_name=row[1]).model_dump()
+        _model_payload(row[0], brand_name=row[1], current=current)
         for row in sorted_models
     ]
     return _envelope(request, data)
@@ -140,10 +159,12 @@ async def create_product_model(
             product_image_url=body.product_image_url,
             search_aliases=body.search_aliases,
             notes=body.notes,
+            purchase_price=body.purchase_price,
+            selling_price=body.selling_price,
             actor=_actor(current),
         )
         await db_session.commit()
-        return _envelope(request, ProductModelResponse.from_model(pm, brand_name=brand.name).model_dump())
+        return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
 
@@ -155,7 +176,6 @@ async def get_product_model(
     current: ProductModelsReadDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    del current
     repo = ProductModelRepository(db_session)
     pm = await repo.get_by_id(model_id)
     if not pm:
@@ -167,7 +187,7 @@ async def get_product_model(
     brand_repo = BrandRepository(db_session)
     brand = await brand_repo.get_by_id(pm.brand_id)
     brand_name = brand.name if brand else None
-    return _envelope(request, ProductModelResponse.from_model(pm, brand_name=brand_name).model_dump())
+    return _envelope(request, _model_payload(pm, brand_name=brand_name, current=current))
 
 
 @router.patch("/{model_id}")
@@ -204,6 +224,7 @@ async def update_product_model(
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+    fields_set = body.model_fields_set
     try:
         updated = await repo.update(
             pm,
@@ -220,6 +241,10 @@ async def update_product_model(
             product_image_url=body.product_image_url,
             search_aliases=body.search_aliases,
             notes=body.notes,
+            purchase_price=body.purchase_price,
+            set_purchase_price="purchase_price" in fields_set,
+            selling_price=body.selling_price,
+            set_selling_price="selling_price" in fields_set,
             actor=_actor(current),
         )
         if body.brand_id is not None and body.brand_id != pm.brand_id:
@@ -240,9 +265,39 @@ async def update_product_model(
         brand_repo = BrandRepository(db_session)
         brand = await brand_repo.get_by_id(updated.brand_id)
         brand_name = brand.name if brand else None
-        return _envelope(request, ProductModelResponse.from_model(updated, brand_name=brand_name).model_dump())
+        return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
     except DuplicateModelNumberError as err:
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+
+
+@router.patch("/{model_id}/selling-price")
+async def update_product_model_selling_price(
+    request: Request,
+    model_id: uuid.UUID,
+    body: UpdateSellingPriceRequest,
+    current: ProductModelsSellingPriceDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    repo = ProductModelRepository(db_session)
+    pm = await repo.get_by_id(model_id)
+    if not pm:
+        raise AppError(
+            "NOT_FOUND",
+            f"Product model with ID {model_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    updated = await repo.update(
+        pm,
+        selling_price=body.selling_price,
+        set_selling_price=True,
+        actor=_actor(current),
+    )
+    await db_session.commit()
+    brand_repo = BrandRepository(db_session)
+    brand = await brand_repo.get_by_id(updated.brand_id)
+    brand_name = brand.name if brand else None
+    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
 @router.post("/{model_id}/archive")
@@ -266,7 +321,7 @@ async def archive_product_model(
     brand_repo = BrandRepository(db_session)
     brand = await brand_repo.get_by_id(updated.brand_id)
     brand_name = brand.name if brand else None
-    return _envelope(request, ProductModelResponse.from_model(updated, brand_name=brand_name).model_dump())
+    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
 @router.post("/{model_id}/restore")
@@ -290,7 +345,7 @@ async def restore_product_model(
     brand_repo = BrandRepository(db_session)
     brand = await brand_repo.get_by_id(updated.brand_id)
     brand_name = brand.name if brand else None
-    return _envelope(request, ProductModelResponse.from_model(updated, brand_name=brand_name).model_dump())
+    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
 @router.post("/spec-lookup")
