@@ -78,6 +78,9 @@ class ProductModelSpecLookupResponse(BaseModel):
     description: str | None = None
     notes: str | None = None
     source: str = "gemini"
+    provider: str | None = None
+    confidence_score: float | None = None
+    cached: bool = False
 
 
 class ProductModelImageResolveResponse(BaseModel):

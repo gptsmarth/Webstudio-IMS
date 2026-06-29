@@ -32,6 +32,8 @@ from webstudio_backend.api.schemas.settings import (
     ExcelSettings,
     GeneralSettings,
     IntegrationsSettingsUpdate,
+    AIProviderTestRequest,
+    AIProviderTestResponse,
     InventorySettings,
     NotificationSettings,
     RecoveryCenterDashboard,
@@ -57,6 +59,7 @@ from webstudio_backend.services.backup_admin_service import BackupAdminService
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.recovery_service import RecoveryService
 from webstudio_backend.services.restore_engine import RestoreEngine
+from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.settings_service import SettingsService
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
@@ -222,6 +225,28 @@ async def update_integrations_settings(
         actor_id=current.user.id,
     )
     return _envelope(request, updated.model_dump())
+
+
+@router.post("/integrations/ai/test")
+async def test_ai_provider_connection(
+    request: Request,
+    body: AIProviderTestRequest,
+    current: SettingsWriteDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    del current
+    provider = body.provider.strip().lower()
+    if provider not in {"gemini", "groq", "openrouter", "mock"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported AI provider.")
+    result = await ProductEnrichmentService(db_session, app_settings).test_provider(provider)  # type: ignore[arg-type]
+    response = AIProviderTestResponse(
+        provider=result.provider,
+        success=result.success,
+        message=result.message,
+        latency_ms=result.latency_ms,
+    )
+    return _envelope(request, response.model_dump())
 
 
 @router.patch("/excel")

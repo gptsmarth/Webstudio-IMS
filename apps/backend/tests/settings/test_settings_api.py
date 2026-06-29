@@ -110,6 +110,15 @@ async def test_settings_integrations_patch(
         "gemini_model": "gemini-2.5-flash",
         "gemini_api_key": "AIzaSyTestKey1234567890",
         "clear_gemini_api_key": False,
+        "ai_primary_provider": "gemini",
+        "ai_fallback_chain": ["gemini"],
+        "ai_enrichment_enabled": True,
+        "ai_timeout_seconds": 90,
+        "ai_retry_count": 2,
+        "groq_model": "llama-3.3-70b-versatile",
+        "clear_groq_api_key": False,
+        "openrouter_model": "meta-llama/llama-3.3-70b-instruct:free",
+        "clear_openrouter_api_key": False,
     }
     response = await api_client.patch("/api/v1/settings/integrations", headers=headers, json=body)
     assert response.status_code == 200
@@ -118,3 +127,6 @@ async def test_settings_integrations_patch(
     assert updated["gemini_model"] == "gemini-2.5-flash"
     assert updated["gemini_api_key_hint"] is not None
     assert "7890" in updated["gemini_api_key_hint"]
+    assert updated["ai_primary_provider"] == "gemini"
+    assert "gemini" in updated["ai_fallback_chain"]
+    assert len(updated["ai_provider_health"]) >= 4

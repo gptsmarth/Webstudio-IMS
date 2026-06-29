@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.schemas.settings import (
+    AIProviderHealthEntry,
     BackupHistoryEntry,
     BackupSettings,
     BackupSettingsUpdate,
@@ -36,12 +37,13 @@ from webstudio_backend.infrastructure.repositories.user_repository import UserRe
 from webstudio_backend.infrastructure.repositories.restore_run_repository import RestoreRunRepository
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.backup_schedule import backup_health_status, compute_next_scheduled_backup
-from webstudio_backend.services.gemini_config import mask_api_key, resolve_gemini_credentials
+from webstudio_backend.services.ai.config import mask_api_key, resolve_ai_config
+from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 from webstudio_backend.services.security_alert_service import SecurityAlertService
 from webstudio_backend.services.system_info_service import SystemInfoService
 
-_SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key"})
+_SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key", "groq_api_key", "openrouter_api_key"})
 
 
 def _setting_category(key: str) -> str:
@@ -269,6 +271,25 @@ class SettingsService:
             await self._set_str("gemini_api_key", "", actor_id=actor_id)
         elif payload.gemini_api_key is not None and payload.gemini_api_key.strip():
             await self._set_str("gemini_api_key", payload.gemini_api_key.strip(), actor_id=actor_id)
+
+        await self._set_str("ai_primary_provider", payload.ai_primary_provider.strip().lower(), actor_id=actor_id)
+        await self._set_json("ai_fallback_chain", payload.ai_fallback_chain, actor_id=actor_id)
+        await self._set_bool("ai_enrichment_enabled", payload.ai_enrichment_enabled, actor_id=actor_id)
+        await self._set_int("ai_timeout_seconds", payload.ai_timeout_seconds, actor_id=actor_id)
+        await self._set_int("ai_retry_count", payload.ai_retry_count, actor_id=actor_id)
+
+        await self._set_str("groq_model", payload.groq_model.strip(), actor_id=actor_id)
+        if payload.clear_groq_api_key:
+            await self._set_str("groq_api_key", "", actor_id=actor_id)
+        elif payload.groq_api_key is not None and payload.groq_api_key.strip():
+            await self._set_str("groq_api_key", payload.groq_api_key.strip(), actor_id=actor_id)
+
+        await self._set_str("openrouter_model", payload.openrouter_model.strip(), actor_id=actor_id)
+        if payload.clear_openrouter_api_key:
+            await self._set_str("openrouter_api_key", "", actor_id=actor_id)
+        elif payload.openrouter_api_key is not None and payload.openrouter_api_key.strip():
+            await self._set_str("openrouter_api_key", payload.openrouter_api_key.strip(), actor_id=actor_id)
+
         workspace = await self.get_workspace()
         return workspace.integrations
 
@@ -346,11 +367,41 @@ class SettingsService:
         )
 
     async def _integrations_group(self) -> IntegrationsSettings:
-        api_key, model = await resolve_gemini_credentials(self._session, self._app_settings)
+        config = await resolve_ai_config(self._session, self._app_settings)
+        fallback_raw = await self._get_str("ai_fallback_chain")
+        try:
+            fallback_chain = json.loads(fallback_raw) if fallback_raw else config.fallback_chain
+        except json.JSONDecodeError:
+            fallback_chain = config.fallback_chain
+        if not isinstance(fallback_chain, list):
+            fallback_chain = config.fallback_chain
+
+        configured_map = {
+            "gemini": bool(config.gemini.api_key),
+            "groq": bool(config.groq.api_key),
+            "openrouter": bool(config.openrouter.api_key),
+            "mock": True,
+        }
+        health = [
+            AIProviderHealthEntry(**AIProviderHealthTracker.snapshot(provider, configured=configured_map[provider]).to_dict())
+            for provider in ("gemini", "groq", "openrouter", "mock")
+        ]
         return IntegrationsSettings(
-            gemini_model=model,
-            gemini_configured=bool(api_key),
-            gemini_api_key_hint=mask_api_key(api_key),
+            gemini_model=config.gemini.model,
+            gemini_configured=bool(config.gemini.api_key),
+            gemini_api_key_hint=mask_api_key(config.gemini.api_key),
+            ai_primary_provider=config.primary_provider,
+            ai_fallback_chain=[str(item) for item in fallback_chain],
+            ai_enrichment_enabled=config.enrichment_enabled,
+            ai_timeout_seconds=config.timeout_seconds,
+            ai_retry_count=config.retry_count,
+            groq_model=config.groq.model,
+            groq_configured=bool(config.groq.api_key),
+            groq_api_key_hint=mask_api_key(config.groq.api_key),
+            openrouter_model=config.openrouter.model,
+            openrouter_configured=bool(config.openrouter.api_key),
+            openrouter_api_key_hint=mask_api_key(config.openrouter.api_key),
+            ai_provider_health=health,
         )
 
     async def _ensure_defaults(self) -> None:

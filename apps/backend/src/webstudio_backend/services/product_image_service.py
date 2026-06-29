@@ -247,7 +247,11 @@ async def search_public_web_for_pages(query: str, *, client: httpx.AsyncClient) 
                 if is_safe_public_https_url(url):
                     urls.append(url)
             if not urls:
-                for match in re.finditer(r'href="(https://[^"]+(?:asus|hp|lenovo|dell|acer|apple|samsung|amazon|flipkart)[^"]*)"', resp.text, flags=re.IGNORECASE):
+                for match in re.finditer(
+                    r'href="(https://[^"]+(?:asus|hp|lenovo|dell|acer|apple|samsung|amazon|flipkart|msi|croma|reliancedigital|vijaysales)[^"]*)"',
+                    resp.text,
+                    flags=re.IGNORECASE,
+                ):
                     url = match.group(1).strip()
                     if is_safe_public_https_url(url):
                         urls.append(url)
@@ -266,9 +270,10 @@ async def resolve_product_image(
     gemini_service: GeminiSpecService | None = None,
     model_id: str | None = None,
     persist_local: bool = False,
+    image_search_query: str | None = None,
 ) -> str | None:
     """Find a loadable product image using free web scraping (DuckDuckGo + page HTML)."""
-    del gemini_service  # Image discovery no longer uses Gemini (specs may still).
+    del gemini_service  # Image discovery no longer uses Gemini directly.
 
     candidates: list[str] = []
     if candidate_url:
@@ -288,6 +293,7 @@ async def resolve_product_image(
 
     from webstudio_backend.services.web_image_scraper import discover_product_image_url
 
+    image_search_queries = [image_search_query] if image_search_query else None
     return await discover_product_image_url(
         model_number=model_number,
         brand_name=brand_name,
@@ -295,4 +301,5 @@ async def resolve_product_image(
         candidate_urls=_dedupe_urls(candidates),
         model_id=model_id,
         persist_local=persist_local,
+        image_search_queries=image_search_queries,
     )

@@ -40,8 +40,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import DuplicateMo
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
-from webstudio_backend.services.gemini_config import resolve_gemini_credentials
-from webstudio_backend.services.gemini_spec_service import GeminiLookupError, GeminiSpecService
+from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
+from webstudio_backend.services.ai.types import AIProviderError
+from webstudio_backend.services.gemini_spec_service import GeminiLookupError
 from webstudio_backend.services.product_image_service import resolve_product_image
 
 router = APIRouter(prefix="/api/v1/product-models", tags=["product-models"])
@@ -400,28 +401,20 @@ async def lookup_product_model_spec(
     app_settings=AppSettingsDep,
 ) -> dict:
     del current
-    api_key, model = await resolve_gemini_credentials(db_session, app_settings)
-    service = GeminiSpecService(app_settings, api_key=api_key, model=model)
-    if not service.is_configured:
-        raise AppError(
-            "SERVICE_UNAVAILABLE",
-            "Gemini API is not configured. Add your API key in System Settings → Integrations.",
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
+    service = ProductEnrichmentService(db_session, app_settings)
     try:
         result = await service.lookup_laptop_spec(
             body.model_number,
             model_name=body.model_name,
             brand_name=body.brand_name,
         )
-    except GeminiLookupError as exc:
+    except AIProviderError as exc:
         status_code = status.HTTP_404_NOT_FOUND
         if exc.code == "RATE_LIMITED":
             status_code = status.HTTP_429_TOO_MANY_REQUESTS
-        elif exc.code == "SERVICE_UNAVAILABLE":
+        elif exc.code in {"SERVICE_UNAVAILABLE", "NOT_CONFIGURED"}:
             status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        elif exc.code == "API_ERROR":
+        elif exc.code in {"API_ERROR", "TIMEOUT", "QUOTA_EXCEEDED"}:
             status_code = status.HTTP_502_BAD_GATEWAY
         raise AppError(exc.code, exc.message, status_code=status_code) from exc
 
@@ -439,6 +432,9 @@ async def lookup_product_model_spec(
         description=result.get("description"),
         notes=result.get("notes"),
         source=result.get("source", "gemini"),
+        provider=result.get("provider"),
+        confidence_score=result.get("confidence_score"),
+        cached=bool(result.get("cached")),
     )
     return _envelope(request, response.model_dump())
 

@@ -73,16 +73,62 @@ class TallySettingsGroup(BaseModel):
     companies: list[str] = Field(default_factory=list)
 
 
+class AIProviderHealthEntry(BaseModel):
+    provider: str
+    configured: bool
+    status: str
+    requests: int = 0
+    failures: int = 0
+    rate_limits: int = 0
+    quota_exceeded: int = 0
+    last_error: str | None = None
+    last_success_at: str | None = None
+
+
 class IntegrationsSettings(BaseModel):
     gemini_model: str = "gemini-2.5-flash"
     gemini_configured: bool = False
     gemini_api_key_hint: str | None = None
+    ai_primary_provider: str = "gemini"
+    ai_fallback_chain: list[str] = Field(default_factory=lambda: ["gemini"])
+    ai_enrichment_enabled: bool = True
+    ai_timeout_seconds: int = 90
+    ai_retry_count: int = 2
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_configured: bool = False
+    groq_api_key_hint: str | None = None
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    openrouter_configured: bool = False
+    openrouter_api_key_hint: str | None = None
+    ai_provider_health: list[AIProviderHealthEntry] = Field(default_factory=list)
 
 
 class IntegrationsSettingsUpdate(BaseModel):
     gemini_model: str = Field(default="gemini-2.5-flash", min_length=1, max_length=64)
     gemini_api_key: str | None = Field(default=None, max_length=256)
     clear_gemini_api_key: bool = False
+    ai_primary_provider: str = Field(default="gemini", min_length=1, max_length=32)
+    ai_fallback_chain: list[str] = Field(default_factory=lambda: ["gemini"])
+    ai_enrichment_enabled: bool = True
+    ai_timeout_seconds: int = Field(default=90, ge=15, le=300)
+    ai_retry_count: int = Field(default=2, ge=0, le=5)
+    groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
+    groq_api_key: str | None = Field(default=None, max_length=256)
+    clear_groq_api_key: bool = False
+    openrouter_model: str = Field(default="meta-llama/llama-3.3-70b-instruct:free", min_length=1, max_length=128)
+    openrouter_api_key: str | None = Field(default=None, max_length=256)
+    clear_openrouter_api_key: bool = False
+
+
+class AIProviderTestRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+
+
+class AIProviderTestResponse(BaseModel):
+    provider: str
+    success: bool
+    message: str
+    latency_ms: int | None = None
 
 
 class ExcelSettings(BaseModel):

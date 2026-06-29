@@ -19,6 +19,8 @@ import {
   type IntegrationServiceType,
 } from '../../services/api/IntegrationKeyService';
 import { VersionService } from '../../services/VersionService';
+import type { SettingsWorkspace, BackupSettingsUpdate } from '../../services/api/SettingsService';
+import { SettingsService } from '../../services/api/SettingsService';
 import { useAuthStore } from '../../store';
 import { TallySettingsForm } from './TallySettingsForm';
 import { RestoreWizard } from './RestoreWizard';
@@ -26,8 +28,6 @@ import { BackupAdminCenter } from './BackupAdminCenter';
 import { RecoveryCenter } from './RecoveryCenter';
 import { RecoveryWizard } from './RecoveryWizard';
 import type { Location } from '../../services/api/LocationService';
-import type { SettingsWorkspace, BackupSettingsUpdate } from '../../services/api/SettingsService';
-import { SettingsService } from '../../services/api/SettingsService';
 import { useThemeStore, type ThemeMode } from '../../store';
 import { Field, Readonly, SaveButton, Section } from './settingsShared';
 
@@ -626,6 +626,39 @@ const GEMINI_MODELS = [
   'gemini-flash-lite-latest',
 ];
 
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'mixtral-8x7b-32768',
+];
+
+const OPENROUTER_MODELS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-2-9b-it:free',
+];
+
+const AI_PROVIDERS = [
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'groq', label: 'Groq' },
+  { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'mock', label: 'Mock (testing)' },
+] as const;
+
+function providerStatusLabel(status: string): string {
+  switch (status) {
+    case 'healthy':
+      return 'Healthy';
+    case 'degraded':
+      return 'Degraded';
+    case 'unavailable':
+      return 'Unavailable';
+    case 'not_configured':
+      return 'Not configured';
+    default:
+      return status;
+  }
+}
+
 function IntegrationApiKeysSection(): JSX.Element | null {
   const session = useAuthStore((state) => state.session);
   const isMainAdmin = session?.role === 'main_admin';
@@ -771,85 +804,233 @@ function IntegrationApiKeysSection(): JSX.Element | null {
 }
 
 export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element {
-  const [model, setModel] = useState(data.integrations.gemini_model);
-  const [apiKey, setApiKey] = useState('');
-  const [clearKey, setClearKey] = useState(false);
+  const integrations = data.integrations;
+  const [form, setForm] = useState({
+    gemini_model: integrations.gemini_model,
+    ai_primary_provider: integrations.ai_primary_provider,
+    ai_fallback_chain: integrations.ai_fallback_chain.join(', '),
+    ai_enrichment_enabled: integrations.ai_enrichment_enabled,
+    ai_timeout_seconds: integrations.ai_timeout_seconds,
+    ai_retry_count: integrations.ai_retry_count,
+    groq_model: integrations.groq_model,
+    openrouter_model: integrations.openrouter_model,
+  });
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [groqApiKey, setGroqApiKey] = useState('');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [clearGeminiKey, setClearGeminiKey] = useState(false);
+  const [clearGroqKey, setClearGroqKey] = useState(false);
+  const [clearOpenrouterKey, setClearOpenrouterKey] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
   useEffect(() => {
-    setModel(data.integrations.gemini_model);
-    setApiKey('');
-    setClearKey(false);
-  }, [data.integrations]);
+    setForm({
+      gemini_model: integrations.gemini_model,
+      ai_primary_provider: integrations.ai_primary_provider,
+      ai_fallback_chain: integrations.ai_fallback_chain.join(', '),
+      ai_enrichment_enabled: integrations.ai_enrichment_enabled,
+      ai_timeout_seconds: integrations.ai_timeout_seconds,
+      ai_retry_count: integrations.ai_retry_count,
+      groq_model: integrations.groq_model,
+      openrouter_model: integrations.openrouter_model,
+    });
+    setGeminiApiKey('');
+    setGroqApiKey('');
+    setOpenrouterApiKey('');
+    setClearGeminiKey(false);
+    setClearGroqKey(false);
+    setClearOpenrouterKey(false);
+  }, [integrations]);
+
+  const fallbackChain = form.ai_fallback_chain
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  const handleTestProvider = async (provider: string) => {
+    setTestingProvider(provider);
+    setTestMessage(null);
+    try {
+      const result = await SettingsService.testAiProvider(provider);
+      const latency = result.latency_ms != null ? ` (${result.latency_ms} ms)` : '';
+      setTestMessage(`${result.provider}: ${result.message}${latency}`);
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setTestMessage(message.message ?? `Could not test ${provider}.`);
+    } finally {
+      setTestingProvider(null);
+    }
+  };
 
   return (
     <>
       <IntegrationApiKeysSection />
-      <Section title="Gemini AI">
-      <p className="stg-section__lead">
-        Powers Add Laptop auto-fetch for specifications and product images. Get a free API key from{' '}
-        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
-          Google AI Studio
-        </a>
-        .
-      </p>
-      <div className="stg-readonly-grid">
-        <Readonly
-          label="API key status"
-          value={data.integrations.gemini_configured ? `Configured (${data.integrations.gemini_api_key_hint ?? '••••'})` : 'Not configured'}
-        />
-      </div>
-      <form
-        className="stg-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void workspace.saveIntegrations({
-            gemini_model: model,
-            gemini_api_key: apiKey.trim() || null,
-            clear_gemini_api_key: clearKey,
-          });
-        }}
-      >
-        <Field label="Gemini model">
-          <select className="input" value={model} onChange={(e) => setModel(e.target.value)} disabled={!workspace.canWrite}>
-            {GEMINI_MODELS.map((entry) => (
-              <option key={entry} value={entry}>{entry}</option>
-            ))}
-          </select>
-        </Field>
-        <Field
-          label="Gemini API key"
-          hint={
-            data.integrations.gemini_configured
-              ? 'Leave blank to keep the current key. Enter a new key to replace it.'
-              : 'Paste your API key here. It is stored securely on the server and never shown again.'
-          }
+      <Section title="AI product enrichment">
+        <p className="stg-section__lead">
+          Configure AI providers for Add Laptop auto-fetch. The server selects providers using your fallback chain.
+          Images are fetched separately — AI only generates optimized search queries.
+        </p>
+        <div className="stg-readonly-grid">
+          {integrations.ai_provider_health.map((entry) => (
+            <Readonly
+              key={entry.provider}
+              label={`${entry.provider} status`}
+              value={`${providerStatusLabel(entry.status)} · ${entry.requests} req · ${entry.failures} fail · ${entry.rate_limits} rate limits`}
+            />
+          ))}
+        </div>
+        <form
+          className="stg-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void workspace.saveIntegrations({
+              gemini_model: form.gemini_model,
+              gemini_api_key: geminiApiKey.trim() || null,
+              clear_gemini_api_key: clearGeminiKey,
+              ai_primary_provider: form.ai_primary_provider,
+              ai_fallback_chain: fallbackChain.length ? fallbackChain : ['gemini'],
+              ai_enrichment_enabled: form.ai_enrichment_enabled,
+              ai_timeout_seconds: form.ai_timeout_seconds,
+              ai_retry_count: form.ai_retry_count,
+              groq_model: form.groq_model,
+              groq_api_key: groqApiKey.trim() || null,
+              clear_groq_api_key: clearGroqKey,
+              openrouter_model: form.openrouter_model,
+              openrouter_api_key: openrouterApiKey.trim() || null,
+              clear_openrouter_api_key: clearOpenrouterKey,
+            });
+          }}
         >
-          <input
-            className="input"
-            type="password"
-            autoComplete="off"
-            placeholder={data.integrations.gemini_configured ? '••••••••••••' : 'AIza…'}
-            value={apiKey}
-            disabled={!workspace.canWrite || clearKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-        </Field>
-        {data.integrations.gemini_configured && workspace.canWrite && (
+          <Field label="Primary provider">
+            <select
+              className="input"
+              value={form.ai_primary_provider}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_primary_provider: e.target.value })}
+            >
+              {AI_PROVIDERS.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Fallback chain" hint="Comma-separated provider IDs, e.g. groq, gemini, openrouter">
+            <input
+              className="input"
+              value={form.ai_fallback_chain}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_fallback_chain: e.target.value })}
+            />
+          </Field>
           <label className="stg-check">
             <input
               type="checkbox"
-              checked={clearKey}
-              onChange={(e) => {
-                setClearKey(e.target.checked);
-                if (e.target.checked) setApiKey('');
-              }}
+              checked={form.ai_enrichment_enabled}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_enrichment_enabled: e.target.checked })}
             />
-            Remove stored API key
+            Enable AI enrichment
           </label>
-        )}
-        <SaveButton label="Save integration settings" saving={workspace.saving} canWrite={workspace.canWrite} />
-      </form>
-    </Section>
+          <Field label="Timeout (seconds)">
+            <input
+              className="input"
+              type="number"
+              min={15}
+              max={300}
+              value={form.ai_timeout_seconds}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_timeout_seconds: Number(e.target.value) || 90 })}
+            />
+          </Field>
+          <Field label="Retry count">
+            <input
+              className="input"
+              type="number"
+              min={0}
+              max={5}
+              value={form.ai_retry_count}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_retry_count: Number(e.target.value) || 0 })}
+            />
+          </Field>
+
+          <h3 className="stg-subheading">Google Gemini</h3>
+          <Readonly
+            label="Gemini API key status"
+            value={integrations.gemini_configured ? `Configured (${integrations.gemini_api_key_hint ?? '••••'})` : 'Not configured'}
+          />
+          <Field label="Gemini model">
+            <select className="input" value={form.gemini_model} onChange={(e) => setForm({ ...form, gemini_model: e.target.value })} disabled={!workspace.canWrite}>
+              {GEMINI_MODELS.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            </select>
+          </Field>
+          <Field label="Gemini API key" hint={integrations.gemini_configured ? 'Leave blank to keep the current key.' : 'Paste your API key here.'}>
+            <input className="input" type="password" autoComplete="off" placeholder={integrations.gemini_configured ? '••••••••••••' : 'AIza…'} value={geminiApiKey} disabled={!workspace.canWrite || clearGeminiKey} onChange={(e) => setGeminiApiKey(e.target.value)} />
+          </Field>
+          {integrations.gemini_configured && workspace.canWrite && (
+            <label className="stg-check">
+              <input type="checkbox" checked={clearGeminiKey} onChange={(e) => { setClearGeminiKey(e.target.checked); if (e.target.checked) setGeminiApiKey(''); }} />
+              Remove stored Gemini API key
+            </label>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!workspace.canWrite || testingProvider === 'gemini'} onClick={() => void handleTestProvider('gemini')}>
+            {testingProvider === 'gemini' ? 'Testing Gemini…' : 'Test Gemini connection'}
+          </button>
+
+          <h3 className="stg-subheading">Groq</h3>
+          <Readonly
+            label="Groq API key status"
+            value={integrations.groq_configured ? `Configured (${integrations.groq_api_key_hint ?? '••••'})` : 'Not configured'}
+          />
+          <Field label="Groq model">
+            <select className="input" value={form.groq_model} onChange={(e) => setForm({ ...form, groq_model: e.target.value })} disabled={!workspace.canWrite}>
+              {GROQ_MODELS.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            </select>
+          </Field>
+          <Field label="Groq API key" hint={integrations.groq_configured ? 'Leave blank to keep the current key.' : 'Get a free key from console.groq.com'}>
+            <input className="input" type="password" autoComplete="off" placeholder={integrations.groq_configured ? '••••••••••••' : 'gsk_…'} value={groqApiKey} disabled={!workspace.canWrite || clearGroqKey} onChange={(e) => setGroqApiKey(e.target.value)} />
+          </Field>
+          {integrations.groq_configured && workspace.canWrite && (
+            <label className="stg-check">
+              <input type="checkbox" checked={clearGroqKey} onChange={(e) => { setClearGroqKey(e.target.checked); if (e.target.checked) setGroqApiKey(''); }} />
+              Remove stored Groq API key
+            </label>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!workspace.canWrite || testingProvider === 'groq'} onClick={() => void handleTestProvider('groq')}>
+            {testingProvider === 'groq' ? 'Testing Groq…' : 'Test Groq connection'}
+          </button>
+
+          <h3 className="stg-subheading">OpenRouter</h3>
+          <Readonly
+            label="OpenRouter API key status"
+            value={integrations.openrouter_configured ? `Configured (${integrations.openrouter_api_key_hint ?? '••••'})` : 'Not configured'}
+          />
+          <Field label="OpenRouter model">
+            <select className="input" value={form.openrouter_model} onChange={(e) => setForm({ ...form, openrouter_model: e.target.value })} disabled={!workspace.canWrite}>
+              {OPENROUTER_MODELS.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            </select>
+          </Field>
+          <Field label="OpenRouter API key" hint={integrations.openrouter_configured ? 'Leave blank to keep the current key.' : 'Optional — supports free models when configured.'}>
+            <input className="input" type="password" autoComplete="off" placeholder={integrations.openrouter_configured ? '••••••••••••' : 'sk-or-…'} value={openrouterApiKey} disabled={!workspace.canWrite || clearOpenrouterKey} onChange={(e) => setOpenrouterApiKey(e.target.value)} />
+          </Field>
+          {integrations.openrouter_configured && workspace.canWrite && (
+            <label className="stg-check">
+              <input type="checkbox" checked={clearOpenrouterKey} onChange={(e) => { setClearOpenrouterKey(e.target.checked); if (e.target.checked) setOpenrouterApiKey(''); }} />
+              Remove stored OpenRouter API key
+            </label>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!workspace.canWrite || testingProvider === 'openrouter'} onClick={() => void handleTestProvider('openrouter')}>
+            {testingProvider === 'openrouter' ? 'Testing OpenRouter…' : 'Test OpenRouter connection'}
+          </button>
+
+          <button type="button" className="btn btn-secondary btn-sm" disabled={!workspace.canWrite || testingProvider === 'mock'} onClick={() => void handleTestProvider('mock')}>
+            {testingProvider === 'mock' ? 'Testing mock provider…' : 'Test mock provider'}
+          </button>
+
+          {testMessage && <p className="stg-muted">{testMessage}</p>}
+          <SaveButton label="Save AI integration settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        </form>
+      </Section>
     </>
   );
 }

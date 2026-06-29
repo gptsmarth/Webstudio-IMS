@@ -40,18 +40,25 @@ BROWSER_HEADERS = {
 
 _PREFERRED_HOST_FRAGMENTS = (
     "asus.com",
+    "in.store.asus.com",
+    "dlcdnwebimgs.asus.com",
     "dell.com",
+    "i.dell.com",
     "hp.com",
     "lenovo.com",
     "acer.com",
     "msi.com",
     "samsung.com",
+    "apple.com",
     "dlcdn",
     "amazon.",
     "flipkart.",
     "jiostore",
     "slatic.net",
     "cloudfront.net",
+    "reliancedigital",
+    "croma.com",
+    "vijaysales",
 )
 _BLOCKED_HOST_FRAGMENTS = (
     "scribd.com",
@@ -88,7 +95,54 @@ _UNWANTED_PATH_FRAGMENTS = (
     "meme",
     "hysteresis",
 )
-_MAX_VALIDATE = 18
+_MAX_VALIDATE = 30
+_MAX_QUERIES = 18
+
+# Official manufacturer / retailer domains used for site-targeted image search.
+_BRAND_IMAGE_SOURCES: dict[str, dict[str, tuple[str, ...]]] = {
+    "asus": {
+        "sites": ("site:asus.com", "site:in.store.asus.com", "site:dlcdnwebimgs.asus.com"),
+        "domains": ("asus.com", "in.store.asus.com", "dlcdnwebimgs.asus.com"),
+    },
+    "dell": {
+        "sites": ("site:dell.com", "site:i.dell.com"),
+        "domains": ("dell.com", "i.dell.com"),
+    },
+    "hp": {
+        "sites": ("site:hp.com", "site:ssl-product-images.www8-hp.com"),
+        "domains": ("hp.com", "www8-hp.com"),
+    },
+    "lenovo": {
+        "sites": ("site:lenovo.com", "site:psref.lenovo.com"),
+        "domains": ("lenovo.com", "static.lenovo.com"),
+    },
+    "acer": {
+        "sites": ("site:acer.com", "site:store.acer.com"),
+        "domains": ("acer.com", "store.acer.com"),
+    },
+    "msi": {
+        "sites": ("site:msi.com", "site:store.msi.com"),
+        "domains": ("msi.com", "store.msi.com"),
+    },
+    "apple": {
+        "sites": ("site:apple.com",),
+        "domains": ("apple.com", "store.storeimages.apple.com"),
+    },
+    "samsung": {
+        "sites": ("site:samsung.com",),
+        "domains": ("samsung.com", "image-us.samsung.com"),
+    },
+}
+
+_RETAILER_SITE_QUERIES = (
+    "site:amazon.in",
+    "site:amazon.com",
+    "site:flipkart.com",
+    "site:reliancedigital.in",
+    "site:croma.com",
+    "site:vijaysales.com",
+    "site:mdcomputers.in",
+)
 
 
 def build_product_image_search_queries(
@@ -101,14 +155,32 @@ def build_product_image_search_queries(
     brand = (brand_name or "").strip()
     name = (model_name or "").strip()
     queries: list[str] = []
+
     if brand:
+        queries.append(f'"{sku}" {brand} laptop official product image')
         queries.append(f'"{sku}" {brand} laptop')
-        queries.append(f"{brand} {sku} laptop product")
+        queries.append(f"{brand} {sku} laptop product photo")
+
+    brand_key = brand.lower().split()[0] if brand else ""
+    brand_sources = _BRAND_IMAGE_SOURCES.get(brand_key, {})
+    for site in brand_sources.get("sites", ()):
+        queries.append(f'{site} "{sku}"')
+        queries.append(f"{site} {sku} product")
+    for site in _RETAILER_SITE_QUERIES[:4]:
+        queries.append(f'{site} "{sku}" {brand}'.strip())
+
     if brand and name:
+        queries.append(f"{brand} {name} {sku} official")
         queries.append(f"{brand} {name} {sku}")
+    queries.append(f'"{sku}" laptop official product')
     queries.append(f'"{sku}" laptop')
+
+    for site in _RETAILER_SITE_QUERIES[4:]:
+        queries.append(f"{site} {sku} laptop")
+
     if brand:
         queries.append(f"{brand} {sku}")
+
     seen: set[str] = set()
     ordered: list[str] = []
     for query in queries:
@@ -116,7 +188,30 @@ def build_product_image_search_queries(
         if normalized and normalized not in seen:
             seen.add(normalized)
             ordered.append(normalized)
-    return ordered[:5]
+    return ordered[:_MAX_QUERIES]
+
+
+def build_brand_direct_image_candidates(
+    model_number: str,
+    *,
+    brand_name: str | None = None,
+) -> list[str]:
+    """Predictable manufacturer store CDN paths (no API key required)."""
+    sku = model_number.strip().lower()
+    if len(sku) < 4:
+        return []
+    brand_key = (brand_name or "").strip().lower().split()[0]
+    candidates: list[str] = []
+
+    if brand_key == "asus":
+        base = f"https://in.store.asus.com/media/catalog/product/{sku[0]}/{sku[1]}/{sku}_1_"
+        candidates.extend(f"{base}{ext}" for ext in (".jpg", ".png", ".webp"))
+        family = sku.split("-", 1)[0]
+        if family != sku:
+            family_base = f"https://in.store.asus.com/media/catalog/product/{family[0]}/{family[1]}/{family}_1_"
+            candidates.extend(f"{family_base}{ext}" for ext in (".jpg", ".png"))
+
+    return _dedupe_urls(candidates)
 
 
 def _normalize_sku(value: str) -> str:
@@ -184,6 +279,61 @@ def score_image_candidate_url(url: str, *, brand_name: str | None = None, model_
     if "thumb" in path or "thumbnail" in path:
         score -= 5
     return score
+
+
+async def _is_usable_product_image(url: str, *, client: httpx.AsyncClient) -> bool:
+    """Validate image URL and reject known manufacturer placeholder assets."""
+    normalized = _normalize_https_url(url)
+    if not normalized or not await validate_image_url(normalized, client=client):
+        return False
+
+    host = (urlparse(normalized).hostname or "").lower()
+    if "in.store.asus.com" not in host:
+        return True
+
+    try:
+        response = await client.get(
+            normalized,
+            headers={**BROWSER_HEADERS, "Range": "bytes=0-65535"},
+        )
+    except httpx.HTTPError:
+        return False
+    if response.status_code not in {200, 206}:
+        return False
+    content = response.content
+    # ASUS India store serves a generic 1200x1200 "coming soon" PNG (~21 KB) for missing SKUs.
+    if len(content) < 30_000 and content[:8] == b"\x89PNG\r\n\x1a\n":
+        return False
+    return True
+
+
+async def _rank_page_images_from_urls(
+    page_urls: list[str],
+    *,
+    model_number: str,
+    brand_name: str | None,
+    client: httpx.AsyncClient,
+    ranked: list[tuple[int, str]],
+) -> None:
+    for page_url in page_urls:
+        if page_url.endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):
+            if is_relevant_product_image(page_url, model_number, brand_name=brand_name):
+                ranked.append(
+                    (
+                        score_image_candidate_url(page_url, brand_name=brand_name, model_number=model_number),
+                        page_url,
+                    )
+                )
+            continue
+        html = await fetch_page_html(page_url, client=client)
+        if not html:
+            continue
+        for url in extract_image_urls_from_html(html, page_url):
+            if not is_relevant_product_image(url, model_number, brand_name=brand_name):
+                continue
+            ranked.append(
+                (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
+            )
 
 
 async def search_bing_image_urls(
@@ -320,19 +470,40 @@ async def discover_product_image_url(
     candidate_urls: list[str] | None = None,
     model_id: str | None = None,
     persist_local: bool = False,
+    image_search_queries: list[str] | None = None,
 ) -> str | None:
-    """Free web discovery via Bing Images + validated retailer/manufacturer URLs."""
+    """Discover product images across manufacturer CDNs, Bing, DuckDuckGo, and retailer pages."""
     queries = build_product_image_search_queries(
         model_number,
         brand_name=brand_name,
         model_name=model_name,
     )
+    if image_search_queries:
+        seen = set(queries)
+        for query in image_search_queries:
+            normalized = " ".join(query.split())
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                queries.insert(0, normalized)
+
+    logger.info(
+        "Image discovery for {} using {} search queries (brand={})",
+        model_number,
+        len(queries),
+        brand_name or "unknown",
+    )
+
     ranked: list[tuple[int, str]] = []
 
     for raw in candidate_urls or []:
         url = _normalize_https_url(raw)
         if url and is_relevant_product_image(url, model_number, brand_name=brand_name):
             ranked.append((score_image_candidate_url(url, brand_name=brand_name, model_number=model_number) + 8, url))
+
+    for raw in build_brand_direct_image_candidates(model_number, brand_name=brand_name):
+        url = _normalize_https_url(raw)
+        if url:
+            ranked.append((score_image_candidate_url(url, brand_name=brand_name, model_number=model_number) + 10, url))
 
     async with httpx.AsyncClient(
         timeout=20.0,
@@ -347,7 +518,7 @@ async def discover_product_image_url(
                     (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
                 )
 
-        for query in queries[:2]:
+        for query in queries:
             for url in await search_duckduckgo_image_urls(query, client=client):
                 if not is_relevant_product_image(url, model_number, brand_name=brand_name):
                     continue
@@ -355,24 +526,15 @@ async def discover_product_image_url(
                     (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
                 )
 
-        for query in queries[:2]:
+        for query in queries:
             pages = await search_public_web_for_pages(query, client=client)
-            for page_url in pages:
-                if page_url.endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):
-                    if is_relevant_product_image(page_url, model_number, brand_name=brand_name):
-                        ranked.append(
-                            (score_image_candidate_url(page_url, brand_name=brand_name, model_number=model_number), page_url)
-                        )
-                    continue
-                html = await fetch_page_html(page_url, client=client)
-                if not html:
-                    continue
-                for url in extract_image_urls_from_html(html, page_url):
-                    if not is_relevant_product_image(url, model_number, brand_name=brand_name):
-                        continue
-                    ranked.append(
-                        (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
-                    )
+            await _rank_page_images_from_urls(
+                pages,
+                model_number=model_number,
+                brand_name=brand_name,
+                client=client,
+                ranked=ranked,
+            )
 
         ranked.sort(key=lambda row: row[0], reverse=True)
         seen: set[str] = set()
@@ -389,7 +551,7 @@ async def discover_product_image_url(
             if not is_safe_public_https_url(url) or is_suspicious_placeholder_image_url(url):
                 continue
             checked += 1
-            if not await validate_image_url(url, client=client):
+            if not await _is_usable_product_image(url, client=client):
                 continue
             logger.info(
                 "Product image discovered for {} (score={}, host={})",

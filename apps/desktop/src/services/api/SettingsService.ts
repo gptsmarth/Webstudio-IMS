@@ -63,16 +63,58 @@ export interface TallySettingsGroup {
   companies: string[];
 }
 
+export interface AIProviderHealthEntry {
+  provider: string;
+  configured: boolean;
+  status: string;
+  requests: number;
+  failures: number;
+  rate_limits: number;
+  quota_exceeded: number;
+  last_error: string | null;
+  last_success_at: string | null;
+}
+
 export interface IntegrationsSettings {
   gemini_model: string;
   gemini_configured: boolean;
   gemini_api_key_hint: string | null;
+  ai_primary_provider: string;
+  ai_fallback_chain: string[];
+  ai_enrichment_enabled: boolean;
+  ai_timeout_seconds: number;
+  ai_retry_count: number;
+  groq_model: string;
+  groq_configured: boolean;
+  groq_api_key_hint: string | null;
+  openrouter_model: string;
+  openrouter_configured: boolean;
+  openrouter_api_key_hint: string | null;
+  ai_provider_health: AIProviderHealthEntry[];
 }
 
 export interface IntegrationsSettingsUpdate {
   gemini_model: string;
   gemini_api_key?: string | null;
   clear_gemini_api_key?: boolean;
+  ai_primary_provider: string;
+  ai_fallback_chain: string[];
+  ai_enrichment_enabled: boolean;
+  ai_timeout_seconds: number;
+  ai_retry_count: number;
+  groq_model: string;
+  groq_api_key?: string | null;
+  clear_groq_api_key?: boolean;
+  openrouter_model: string;
+  openrouter_api_key?: string | null;
+  clear_openrouter_api_key?: boolean;
+}
+
+export interface AIProviderTestResponse {
+  provider: string;
+  success: boolean;
+  message: string;
+  latency_ms: number | null;
 }
 
 export interface ExcelSettings {
@@ -423,6 +465,11 @@ export class SettingsService {
   static async updateIntegrations(payload: IntegrationsSettingsUpdate): Promise<IntegrationsSettings> {
     const client = await ApiClientProvider.getClient();
     return client.patch<IntegrationsSettings>('/api/v1/settings/integrations', payload);
+  }
+
+  static async testAiProvider(provider: string): Promise<AIProviderTestResponse> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<AIProviderTestResponse>('/api/v1/settings/integrations/ai/test', { provider });
   }
 
   static async updateExcel(payload: ExcelSettings): Promise<ExcelSettings> {
