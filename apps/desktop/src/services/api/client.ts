@@ -116,6 +116,11 @@ export class RetryingApiClient {
     return this.unwrap<T>(res);
   }
 
+  async postForm<T>(path: string, formData: FormData): Promise<T> {
+    const res = await this.executeWithRetry(`POST ${path}`, () => this.inner.postForm<unknown>(path, formData));
+    return this.unwrap<T>(res);
+  }
+
   async put<T>(path: string, data?: unknown): Promise<T> {
     const res = await this.executeWithRetry(`PUT ${path}`, () => this.inner.put<unknown>(path, data));
     return this.unwrap<T>(res);

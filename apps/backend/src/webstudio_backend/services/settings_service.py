@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.schemas.settings import (
+    BackupHistoryEntry,
     BackupSettings,
+    BackupSettingsUpdate,
+    RestoreHistoryEntry,
     ExcelSettings,
     GeneralSettings,
     IntegrationsSettings,
@@ -28,7 +33,9 @@ from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import NotificationSeverity, SettingValueType
 from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
-from webstudio_backend.services.backup_service import BackupService
+from webstudio_backend.infrastructure.repositories.restore_run_repository import RestoreRunRepository
+from webstudio_backend.services.backup_engine import BackupEngine
+from webstudio_backend.services.backup_schedule import backup_health_status, compute_next_scheduled_backup
 from webstudio_backend.services.gemini_config import mask_api_key, resolve_gemini_credentials
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 from webstudio_backend.services.security_alert_service import SecurityAlertService
@@ -64,7 +71,31 @@ class SettingsService:
     async def get_workspace(self, *, api_health: str = "ok", database_health: str = "ok") -> SettingsWorkspace:
         await self._ensure_defaults()
         system_info = await SystemInfoService(self._session, self._app_settings).build()
-        backups = BackupService().list_backups()
+        backup_engine = BackupEngine(
+            self._session,
+            self._app_settings,
+            backup_dir=self._resolve_backup_folder(await self._get_str("backup_folder") or "backups"),
+        )
+        history_rows = await backup_engine.list_dashboard_entries(limit=25)
+        restore_rows = await self._restore_history_entries()
+        schedule = await self._get_str("backup_schedule") or "manual"
+        retention_count = await self._get_int("backup_retention_count", 30)
+        retention_policy = await self._get_str("backup_retention_policy") or "last_30"
+        storage_backend = await self._get_str("backup_storage_backend") or "local"
+        last_backup_raw = await self._get_str("last_backup_at")
+        last_backup_dt = (
+            datetime.fromisoformat(last_backup_raw) if last_backup_raw else None
+        )
+        next_scheduled = compute_next_scheduled_backup(schedule, last_backup_at=last_backup_dt)
+        last_verification = history_rows[0]["verification_status"] if history_rows else None
+        health_status = backup_health_status(
+            database_health=database_health,
+            last_verification_status=last_verification,
+            storage_free_bytes=system_info["storage_free_bytes"],
+        )
+        resolved_folder = str(
+            self._resolve_backup_folder(await self._get_str("backup_folder") or "backups"),
+        )
         main_admin = await self._users.get_main_admin()
 
         return SettingsWorkspace(
@@ -133,19 +164,20 @@ class SettingsService:
                 tally_alerts_enabled=await self._get_bool("tally_alerts_enabled", True),
                 inventory_alerts_enabled=await self._get_bool("inventory_alerts_enabled", True),
                 audit_alerts_enabled=await self._get_bool("audit_alerts_enabled", True),
+                backup_alerts_enabled=await self._get_bool("backup_alerts_enabled", True),
             ),
             backup=BackupSettings(
-                backup_folder=system_info["backup_folder"],
+                backup_folder=resolved_folder,
+                storage_backend=storage_backend,
+                schedule=schedule,
+                retention_policy=retention_policy,
+                retention_count=retention_count,
                 database_size_bytes=system_info["database_size_bytes"],
-                last_backup_at=system_info["last_backup_at"],
-                history=[
-                    {
-                        "filename": item.filename,
-                        "size_bytes": item.size_bytes,
-                        "created_at": item.created_at,
-                    }
-                    for item in backups
-                ],
+                last_backup_at=last_backup_raw or system_info["last_backup_at"],
+                next_scheduled_backup_at=next_scheduled.isoformat() if next_scheduled else None,
+                health_status=health_status,
+                history=[BackupHistoryEntry(**row) for row in history_rows],
+                restore_history=restore_rows,
             ),
             system=SystemInfoSettings(
                 app_version=system_info["app_version"],
@@ -258,8 +290,44 @@ class SettingsService:
         await self._set_bool("tally_alerts_enabled", payload.tally_alerts_enabled, actor_id=actor_id)
         await self._set_bool("inventory_alerts_enabled", payload.inventory_alerts_enabled, actor_id=actor_id)
         await self._set_bool("audit_alerts_enabled", payload.audit_alerts_enabled, actor_id=actor_id)
+        await self._set_bool("backup_alerts_enabled", payload.backup_alerts_enabled, actor_id=actor_id)
         workspace = await self.get_workspace()
         return workspace.notifications
+
+    async def update_backup(self, payload: BackupSettingsUpdate, *, actor_id: int) -> BackupSettings:
+        await self._set_str("backup_folder", payload.backup_folder, actor_id=actor_id)
+        await self._set_str("backup_schedule", payload.schedule, actor_id=actor_id)
+        await self._set_str("backup_retention_policy", payload.retention_policy, actor_id=actor_id)
+        await self._set_int("backup_retention_count", payload.retention_count, actor_id=actor_id)
+        await self._set_str("backup_storage_backend", payload.storage_backend, actor_id=actor_id)
+        workspace = await self.get_workspace()
+        return workspace.backup
+
+    async def get_backup_folder_path(self) -> Path:
+        return self._resolve_backup_folder(await self._get_str("backup_folder") or "backups")
+
+    async def get_backup_storage_backend(self) -> str:
+        return await self._get_str("backup_storage_backend") or "local"
+
+    async def _restore_history_entries(self) -> list[RestoreHistoryEntry]:
+        runs = await RestoreRunRepository(self._session).list_recent(limit=15)
+        return [
+            RestoreHistoryEntry(
+                id=run.id,
+                filename=run.filename,
+                source=run.source,
+                restore_scope=run.restore_scope,
+                status=run.status,
+                verification_status=run.verification_status,
+                emergency_backup_filename=run.emergency_backup_filename,
+                duration_ms=run.duration_ms,
+                actor_display_name=run.actor_display_name,
+                warnings=json.loads(run.warnings_json or "[]"),
+                errors=json.loads(run.errors_json or "[]"),
+                created_at=run.created_at.isoformat(),
+            )
+            for run in runs
+        ]
 
     async def _tally_group(self) -> TallySettingsGroup:
         enabled = await self._get_bool("tally_enabled", False)
@@ -389,3 +457,17 @@ class SettingsService:
             return int(value)
         except ValueError:
             return None
+
+    @staticmethod
+    def _resolve_backup_folder(folder_setting: str) -> Path:
+        env_dir = os.environ.get("BACKUP_DIR", "").strip()
+        if env_dir:
+            return Path(env_dir).expanduser().resolve()
+        candidate = Path(folder_setting.strip() or "backups")
+        if candidate.is_absolute():
+            return candidate
+        cwd = Path.cwd()
+        for root in (cwd, cwd.parent, cwd.parent.parent):
+            if (root / "apps" / "backend").is_dir():
+                return (root / candidate).resolve()
+        return (cwd / candidate).resolve()

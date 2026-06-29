@@ -816,6 +816,98 @@ class AuditRecorder:
             source=AuditSource.SYSTEM,
         )
 
+    async def record_backup_operation(
+        self,
+        *,
+        filename: str,
+        backup_type: str,
+        trigger_type: str,
+        verification_status: str,
+        size_bytes: int,
+        actor: AuditActor,
+        success: bool,
+    ) -> None:
+        await self.record(
+            entity_type="system",
+            entity_id=filename,
+            action=AuditAction.SYSTEM_ACTION,
+            actor=actor,
+            field_name="backup",
+            new_value={
+                "backup_type": backup_type,
+                "trigger_type": trigger_type,
+                "verification_status": verification_status,
+                "size_bytes": size_bytes,
+                "success": success,
+                "security_event": "backup_operation",
+                "severity": "high" if not success else "medium",
+            },
+            description=(
+                f"Backup {'completed' if success else 'failed'}: {filename} "
+                f"({backup_type}, {trigger_type})"
+            ),
+            source=AuditSource.MANUAL if trigger_type == "manual" else AuditSource.BACKGROUND_JOB,
+        )
+
+    async def record_restore_operation(
+        self,
+        *,
+        filename: str,
+        restore_scope: str,
+        source: str,
+        emergency_backup_filename: str | None,
+        verification_status: str,
+        actor: AuditActor,
+        success: bool,
+        rollback: bool,
+    ) -> None:
+        action_label = "Rollback" if rollback else "Restore"
+        await self.record(
+            entity_type="system",
+            entity_id=filename,
+            action=AuditAction.SYSTEM_ACTION,
+            actor=actor,
+            field_name="restore",
+            new_value={
+                "restore_scope": restore_scope,
+                "source": source,
+                "emergency_backup_filename": emergency_backup_filename,
+                "verification_status": verification_status,
+                "success": success,
+                "rollback": rollback,
+                "security_event": "restore_operation",
+                "severity": "critical" if not success else "high",
+            },
+            description=(
+                f"{action_label} {'completed' if success else 'failed'}: {filename} "
+                f"({restore_scope}, {source})"
+            ),
+            source=AuditSource.MANUAL,
+        )
+
+    async def record_recovery_validation(
+        self,
+        *,
+        actor: AuditActor,
+        overall_status: str,
+        checks: list[dict[str, str]],
+    ) -> None:
+        await self.record(
+            entity_type="system",
+            entity_id="recovery-validation",
+            action=AuditAction.SYSTEM_ACTION,
+            actor=actor,
+            field_name="recovery",
+            new_value={
+                "overall_status": overall_status,
+                "checks": checks,
+                "security_event": "recovery_validation",
+                "severity": "high" if overall_status == "failed" else "medium",
+            },
+            description=f"Recovery validation {overall_status}",
+            source=AuditSource.MANUAL,
+        )
+
     @staticmethod
     def _user_snapshot(user: User) -> dict[str, Any]:
         return {

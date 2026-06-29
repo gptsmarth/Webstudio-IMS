@@ -72,6 +72,9 @@ export class ProductImageService {
     }
 
     let remoteUrl = options?.remoteUrl?.trim() || null;
+    if (remoteUrl?.startsWith('/assets/')) {
+      return { src: remoteUrl, source: 'remote', canUpload: true };
+    }
     if (!remoteUrl?.startsWith('https://')) {
       try {
         const resolved = await ProductSpecService.resolveModelImage(productModelId);

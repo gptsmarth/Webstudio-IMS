@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ChevronDown, ChevronUp, Laptop } from 'lucide-react';
 import type { ModelInventoryRow } from '../../lib/inventoryHierarchy';
-import { formatInventoryPrice } from '../../lib/inventoryPrice';
 import {
   buildStockModelSpecLines,
   displayScreenHint,
@@ -11,7 +10,7 @@ import {
 } from '../../lib/stockModelCard';
 import { ProductImageService } from '../../services/images/ProductImageService';
 
-const COLLAPSED_SPEC_COUNT = 8;
+const COLLAPSED_SPEC_COUNT = 6;
 
 interface StockModelCardProps {
   row: ModelInventoryRow;
@@ -24,10 +23,22 @@ function formatSpecBullet(line: StockModelSpecLine): string {
   const label = line.label.trim();
   if (!label) return value;
   if (label.toLowerCase() === 'operating system') {
-    return `OS: ${value}`;
+    return `${value}`;
   }
   if (value.toLowerCase().startsWith(label.toLowerCase())) return value;
   return `${label}: ${value}`;
+}
+
+function formatCardPrice(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || Number(val) === 0) return 'Price on request';
+  const num = typeof val === 'string' ? Number(val) : val;
+  if (Number.isNaN(num) || num === 0) return 'Price on request';
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num).replace('₹', '₹ ');
 }
 
 export function StockModelCard({
@@ -43,7 +54,6 @@ export function StockModelCard({
     () => orderStockCardSpecLines(buildStockModelSpecLines(row.model)),
     [row.model],
   );
-  const inStock = row.availableUnits > 0;
   const screenHint = displayScreenHint(row.model.display);
   const visibleSpecs = specsExpanded
     ? specLines
@@ -73,10 +83,14 @@ export function StockModelCard({
   return (
     <article className="stock-model-card">
       <button type="button" className="stock-model-card__main" onClick={onSelect}>
-        <div className="stock-model-card__media">
-          <span className={`stock-model-card__status ${inStock ? 'stock-model-card__status--in' : 'stock-model-card__status--out'}`}>
-            {inStock ? 'In stock' : 'Out of stock'}
+        <div className="stock-model-card__top-bar">
+          <div />
+          <span className="stock-model-card__stock-count">
+            {stockAvailabilityLabel(row.availableUnits)}
           </span>
+        </div>
+
+        <div className="stock-model-card__media">
           {imageLoading ? (
             <div className="stock-model-card__image stock-model-card__image--placeholder skeleton" />
           ) : imageSrc && !imageFailed ? (
@@ -92,16 +106,12 @@ export function StockModelCard({
             />
           ) : (
             <div className="stock-model-card__image stock-model-card__image--placeholder" aria-hidden>
-              <Laptop size={52} strokeWidth={1.1} />
+              <Laptop size={64} strokeWidth={1} />
             </div>
           )}
         </div>
 
         <div className="stock-model-card__content">
-          {row.model.color_options && (
-            <p className="stock-model-card__colors">{row.model.color_options}</p>
-          )}
-
           <header className="stock-model-card__header">
             {screenHint && (
               <p className="stock-model-card__screen-hint">{screenHint}</p>
@@ -110,13 +120,20 @@ export function StockModelCard({
             <p className="stock-model-card__number col-mono">{row.model.model_number}</p>
           </header>
 
+          <hr className="stock-model-card__divider" />
+
           {showPrice && (
-            <div className="stock-model-card__price-block">
-              <p className="stock-model-card__price-label">Selling price</p>
-              <p className="stock-model-card__price">
-                {formatInventoryPrice(row.model.selling_price)}
-              </p>
-            </div>
+            <>
+              <div className="stock-model-card__price-block">
+                <p
+                  className="stock-model-card__price"
+                  style={!row.model.selling_price || Number(row.model.selling_price) === 0 ? { fontSize: '18px', fontWeight: 600, color: 'var(--color-text-secondary)', letterSpacing: 'normal' } : undefined}
+                >
+                  {formatCardPrice(row.model.selling_price)}
+                </p>
+              </div>
+              <hr className="stock-model-card__divider" />
+            </>
           )}
 
           {specLines.length > 0 && (
@@ -124,8 +141,8 @@ export function StockModelCard({
               <ul className="stock-model-card__spec-list">
                 {visibleSpecs.map((line) => (
                   <li key={`${line.label}-${line.value}`} className="stock-model-card__spec-item">
-                    <span className="stock-model-card__spec-bullet" aria-hidden />
-                    <span>{formatSpecBullet(line)}</span>
+                    <span className="stock-model-card__spec-bullet" aria-hidden>•</span>
+                    <span className="stock-model-card__spec-text">{formatSpecBullet(line)}</span>
                   </li>
                 ))}
               </ul>
@@ -155,11 +172,8 @@ export function StockModelCard({
           )}
 
           <div className="stock-model-card__footer">
-            <span className="stock-model-card__availability">
-              {stockAvailabilityLabel(row.availableUnits)}
-            </span>
             <span className="stock-model-card__cta">
-              View units
+              View units & details
               <ArrowRight size={14} aria-hidden />
             </span>
           </div>

@@ -279,6 +279,26 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         statement = select(ProductModel).where(ProductModel.brand_id == brand_id)
         return await self._paginate(statement, page_params, sort_params)
 
+    async def list_all_for_brand(self, brand_id: int) -> list[ProductModel]:
+        statement = select(ProductModel).where(ProductModel.brand_id == brand_id)
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def archive_all_active_for_brand(
+        self,
+        brand_id: int,
+        *,
+        actor: AuditActor | None = None,
+    ) -> int:
+        models = await self.list_all_for_brand(brand_id)
+        archived_count = 0
+        for product_model in models:
+            if product_model.status is not ProductModelStatus.ACTIVE:
+                continue
+            await self.archive(product_model, actor=actor)
+            archived_count += 1
+        return archived_count
+
     async def find_active(
         self,
         page_params: PageParams,

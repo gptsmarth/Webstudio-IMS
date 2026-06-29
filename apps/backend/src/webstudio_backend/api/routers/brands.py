@@ -24,6 +24,9 @@ from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
 
@@ -143,6 +146,9 @@ async def archive_brand(
     brand = await repo.get_by_id(brand_id)
     if not brand:
         raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+
+    product_models = ProductModelRepository(db_session)
+    await product_models.archive_all_active_for_brand(brand_id, actor=_actor(current))
 
     updated = await repo.update(
         brand,

@@ -50,6 +50,14 @@ class NotificationType(StrEnum):
     SYNC_FAILURE = "sync_failure"
     INVENTORY_ALERT = "inventory_alert"
     SYSTEM_NOTIFICATION = "system_notification"
+    BACKUP_FAILED = "backup_failed"
+    BACKUP_COMPLETED = "backup_completed"
+    LOW_STORAGE = "low_storage"
+    RECOVERY_COMPLETED = "recovery_completed"
+    RESTORE_STARTED = "restore_started"
+    RESTORE_COMPLETED = "restore_completed"
+    RESTORE_FAILED = "restore_failed"
+    BACKUP_VERIFICATION_FAILED = "backup_verification_failed"
 
 
 class NotificationCategory(StrEnum):

@@ -3,6 +3,7 @@ import type { SettingsCategory } from '../lib/settings';
 import { LocationService, type Location } from '../services/api/LocationService';
 import {
   SettingsService,
+  type BackupSettingsUpdate,
   type IntegrationsSettingsUpdate,
   type SettingsWorkspace,
 } from '../services/api/SettingsService';
@@ -26,6 +27,7 @@ export interface SettingsWorkspaceState {
   saveIntegrations: (payload: IntegrationsSettingsUpdate) => Promise<void>;
   saveExcel: (payload: SettingsWorkspace['excel']) => Promise<void>;
   saveNotifications: (payload: SettingsWorkspace['notifications']) => Promise<void>;
+  saveBackup: (payload: BackupSettingsUpdate) => Promise<void>;
   createBackup: () => Promise<void>;
   restoreBackup: (filename: string) => Promise<void>;
   canWrite: boolean;
@@ -138,6 +140,13 @@ export function useSettingsWorkspace(canWrite: boolean): SettingsWorkspaceState 
     [runSave],
   );
 
+  const saveBackup = useCallback(
+    async (payload: BackupSettingsUpdate) => {
+      await runSave(() => SettingsService.updateBackup(payload), 'backup');
+    },
+    [runSave],
+  );
+
   const createBackup = useCallback(async () => {
     if (!canWrite) return;
     setSaving(true);
@@ -160,7 +169,7 @@ export function useSettingsWorkspace(canWrite: boolean): SettingsWorkspaceState 
       setSaving(true);
       setActionError(null);
       try {
-        await SettingsService.restoreBackup(filename);
+        await SettingsService.restoreBackup({ filename, confirmed: true });
         await refresh();
       } catch (err: unknown) {
         const message = err as { message?: string };
@@ -192,6 +201,7 @@ export function useSettingsWorkspace(canWrite: boolean): SettingsWorkspaceState 
     saveIntegrations,
     saveExcel,
     saveNotifications,
+    saveBackup,
     createBackup,
     restoreBackup,
     canWrite,

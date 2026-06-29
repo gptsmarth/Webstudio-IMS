@@ -276,6 +276,37 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         )
         return inventory_item
 
+    async def count_movable_at_location(self, location_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(
+                InventoryItem.current_location_id == location_id,
+                InventoryItem.is_archived.is_(False),
+                InventoryItem.status != InventoryStatus.SOLD,
+            )
+        )
+        result = await self._session.execute(statement)
+        return int(result.scalar_one() or 0)
+
+    async def transfer_all_movable_from_location(
+        self,
+        from_location_id: int,
+        to_location_id: int,
+        *,
+        actor: AuditActor,
+    ) -> int:
+        statement = select(InventoryItem).where(
+            InventoryItem.current_location_id == from_location_id,
+            InventoryItem.is_archived.is_(False),
+            InventoryItem.status != InventoryStatus.SOLD,
+        )
+        result = await self._session.execute(statement)
+        items = list(result.scalars().all())
+        for item in items:
+            await self.transfer_location(item, to_location_id=to_location_id, actor=actor)
+        return len(items)
+
     async def archive(
         self,
         inventory_item: InventoryItem,

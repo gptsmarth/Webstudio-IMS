@@ -256,6 +256,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
 export function countModelsByBrand(models: ProductModel[]): Map<number, number> {
   const map = new Map<number, number>();
   for (const model of models) {
+    if (model.status !== 'active') continue;
     map.set(model.brand_id, (map.get(model.brand_id) ?? 0) + 1);
   }
   return map;

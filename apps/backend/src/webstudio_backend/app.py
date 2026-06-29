@@ -19,9 +19,11 @@ from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
 from webstudio_backend.infrastructure.database.session import close_db, init_db, session_scope
+from webstudio_backend.services.backup_scheduler import backup_scheduler_loop
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 _tally_scheduler_task: asyncio.Task | None = None
+_backup_scheduler_task: asyncio.Task | None = None
 
 
 async def _tally_scheduler_loop() -> None:
@@ -43,15 +45,27 @@ async def _tally_scheduler_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _tally_scheduler_task
+    global _tally_scheduler_task, _backup_scheduler_task
     settings: Settings = app.state.settings
     await init_db(settings)
     scheduler_enabled = (
         not settings.is_test and os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
     )
+    backup_scheduler_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_BACKUP_SCHEDULER", "1") == "1"
+    )
     if scheduler_enabled:
         _tally_scheduler_task = asyncio.create_task(_tally_scheduler_loop())
+    if backup_scheduler_enabled:
+        _backup_scheduler_task = asyncio.create_task(backup_scheduler_loop())
     yield
+    if _backup_scheduler_task is not None:
+        _backup_scheduler_task.cancel()
+        try:
+            await _backup_scheduler_task
+        except asyncio.CancelledError:
+            pass
+        _backup_scheduler_task = None
     if _tally_scheduler_task is not None:
         _tally_scheduler_task.cancel()
         try:

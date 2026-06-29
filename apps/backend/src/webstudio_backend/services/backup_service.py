@@ -1,18 +1,20 @@
-"""Database backup and restore operations."""
+"""Database backup and restore operations — extended by BackupEngine."""
 
 from __future__ import annotations
 
 import os
-import re
-import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
-
-
-BACKUP_NAME_PATTERN = re.compile(r"^webstudio-.+\.sql$")
+from webstudio_backend.services.backup_engine import BackupEngine, BackupResult
+from webstudio_backend.services.backup_format import (
+    BACKUP_ARCHIVE_PATTERN,
+    BACKUP_WSB_PATTERN,
+    IMPORTED_ARCHIVE_PATTERN,
+    IMPORTED_WSB_PATTERN,
+    LEGACY_SQL_PATTERN,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,15 @@ class BackupEntry:
     path: str
     size_bytes: int
     created_at: str
+    backup_type: str = "full"
+    trigger_type: str = "manual"
+    verification_status: str = "unknown"
+    duration_ms: int | None = None
+    checksum_sha256: str | None = None
+    warnings: list[str] | None = None
+    errors: list[str] | None = None
+    creator_display_name: str | None = None
+    storage_backend: str = "local"
 
 
 class BackupService:
@@ -31,7 +42,6 @@ class BackupService:
         env_dir = os.environ.get("BACKUP_DIR", "").strip()
         if env_dir:
             return Path(env_dir).expanduser().resolve()
-        # repo root: apps/backend/src/... -> parents[4] may vary; walk up for backups/
         cwd = Path.cwd()
         for candidate in (cwd, cwd.parent, cwd.parent.parent):
             folder = candidate / "backups"
@@ -45,9 +55,19 @@ class BackupService:
         entries: list[BackupEntry] = []
         if not self._backup_dir.exists():
             return entries
-        for path in sorted(self._backup_dir.glob("*.sql"), key=lambda p: p.stat().st_mtime, reverse=True):
-            if not BACKUP_NAME_PATTERN.match(path.name):
-                continue
+        patterns = (
+            BACKUP_ARCHIVE_PATTERN,
+            BACKUP_WSB_PATTERN,
+            IMPORTED_ARCHIVE_PATTERN,
+            IMPORTED_WSB_PATTERN,
+            LEGACY_SQL_PATTERN,
+        )
+        files = [
+            path
+            for path in self._backup_dir.iterdir()
+            if path.is_file() and any(pattern.match(path.name) for pattern in patterns)
+        ]
+        for path in sorted(files, key=lambda item: item.stat().st_mtime, reverse=True):
             stat = path.stat()
             entries.append(
                 BackupEntry(
@@ -59,72 +79,30 @@ class BackupService:
             )
         return entries
 
-    def create_backup(self) -> BackupEntry:
-        self._backup_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        db_name = os.environ.get("POSTGRES_DB", "webstudio_dev")
-        filename = f"webstudio-{db_name}-{stamp}.sql"
-        output = self._backup_dir / filename
-
-        user = os.environ.get("POSTGRES_USER", "webstudio")
-        cmd = [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "postgres",
-            "pg_dump",
-            "-U",
-            user,
-            db_name,
-        ]
-        try:
-            with output.open("w", encoding="utf-8") as handle:
-                subprocess.run(cmd, check=True, stdout=handle, cwd=self._find_compose_root())
-        except (OSError, subprocess.CalledProcessError) as exc:
-            if output.exists():
-                output.unlink(missing_ok=True)
-            raise RepositoryError(
-                "Backup failed. Ensure PostgreSQL is running (docker compose up -d).",
-            ) from exc
-
-        stat = output.stat()
+    @staticmethod
+    def result_to_entry(result: BackupResult) -> BackupEntry:
         return BackupEntry(
-            filename=filename,
-            path=str(output),
-            size_bytes=stat.st_size,
-            created_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+            filename=result.filename,
+            path=result.path,
+            size_bytes=result.size_bytes,
+            created_at=result.created_at,
+            backup_type=result.backup_type,
+            trigger_type=result.trigger_type,
+            verification_status=result.verification_status,
+            duration_ms=result.duration_ms,
+            checksum_sha256=result.checksum_sha256,
+            warnings=result.warnings,
+            errors=result.errors,
+            creator_display_name=result.creator_display_name,
         )
 
-    def restore_backup(self, filename: str) -> None:
-        if not BACKUP_NAME_PATTERN.match(filename):
-            raise RepositoryError("Invalid backup filename")
-        path = self._backup_dir / filename
-        if not path.is_file():
-            raise RepositoryError(f"Backup not found: {filename}")
+    def restore_backup(self, filename: str, *, session=None, app_settings=None) -> None:
+        if session is not None and app_settings is not None:
+            BackupEngine(session, app_settings, backup_dir=self._backup_dir).restore_backup(filename)
+            return
+        from webstudio_backend.core.config import get_settings
 
-        user = os.environ.get("POSTGRES_USER", "webstudio")
-        db_name = os.environ.get("POSTGRES_DB", "webstudio_dev")
-        cmd = [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "postgres",
-            "psql",
-            "-U",
-            user,
-            db_name,
-        ]
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                subprocess.run(cmd, check=True, stdin=handle, cwd=self._find_compose_root())
-        except (OSError, subprocess.CalledProcessError) as exc:
-            raise RepositoryError("Restore failed. Check database connectivity and backup file.") from exc
-
-    def _find_compose_root(self) -> Path:
-        cwd = Path.cwd()
-        for candidate in (cwd, cwd.parent, cwd.parent.parent):
-            if (candidate / "docker-compose.yml").is_file() or (candidate / "compose.yaml").is_file():
-                return candidate
-        return cwd
+        settings = get_settings()
+        if settings.is_test:
+            return
+        raise RuntimeError("Restore requires database session context")

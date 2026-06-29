@@ -49,5 +49,11 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "tally_alerts_enabled": ("true", SettingValueType.BOOLEAN),
     "inventory_alerts_enabled": ("true", SettingValueType.BOOLEAN),
     "audit_alerts_enabled": ("true", SettingValueType.BOOLEAN),
+    "backup_alerts_enabled": ("true", SettingValueType.BOOLEAN),
     "backup_folder": ("backups", SettingValueType.STRING),
+    "backup_schedule": ("manual", SettingValueType.STRING),
+    "backup_retention_count": ("30", SettingValueType.INTEGER),
+    "backup_retention_policy": ("last_30", SettingValueType.STRING),
+    "backup_storage_backend": ("local", SettingValueType.STRING),
+    "last_backup_at": ("", SettingValueType.STRING),
 }

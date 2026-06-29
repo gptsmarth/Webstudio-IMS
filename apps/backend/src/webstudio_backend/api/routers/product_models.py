@@ -94,14 +94,13 @@ async def _resolve_and_store_product_image(
     if pm.product_image_url:
         return pm
 
-    api_key, model = await resolve_gemini_credentials(db_session, app_settings)
-    gemini = GeminiSpecService(app_settings, api_key=api_key, model=model)
     image_url = await resolve_product_image(
         model_number=pm.model_number,
         brand_name=brand_name,
         model_name=pm.model_name,
         candidate_url=candidate_url,
-        gemini_service=gemini if gemini.is_configured else None,
+        model_id=str(pm.id),
+        persist_local=True,
     )
     if not image_url:
         return pm

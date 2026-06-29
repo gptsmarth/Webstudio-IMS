@@ -15,6 +15,7 @@ from webstudio_backend.infrastructure.database.enums import (
     AuditSource,
     HUMAN_USER_ROLES,
     InventoryStatus,
+    ProductModelStatus,
     UserStatus,
 )
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
@@ -173,6 +174,8 @@ class DashboardRepository:
             )
             .join(ProductModel, ProductModel.brand_id == Brand.id)
             .join(InventoryItem, InventoryItem.product_model_id == ProductModel.id)
+            .where(Brand.is_active.is_(True))
+            .where(ProductModel.status == ProductModelStatus.ACTIVE)
             .group_by(Brand.id, Brand.name)
             .order_by(Brand.name.asc())
         )
@@ -205,6 +208,7 @@ class DashboardRepository:
                 active_case.label("total"),
             )
             .join(InventoryItem, InventoryItem.current_location_id == Location.id)
+            .where(Location.is_active.is_(True))
             .group_by(Location.id, Location.name)
             .order_by(Location.name.asc())
         )
@@ -237,6 +241,7 @@ class DashboardRepository:
                 active_case.label("total"),
             )
             .join(InventoryItem, InventoryItem.product_model_id == ProductModel.id)
+            .where(ProductModel.status == ProductModelStatus.ACTIVE)
             .group_by(ProductModel.id, ProductModel.model_name)
             .order_by(ProductModel.model_name.asc())
         )

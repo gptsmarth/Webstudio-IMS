@@ -62,6 +62,16 @@ class InactiveLocationError(RepositoryError):
         super().__init__(f"Location {location_id} is not active")
 
 
+class LocationHasInventoryError(RepositoryError):
+    def __init__(self, location_id: int, *, movable_count: int) -> None:
+        self.location_id = location_id
+        self.movable_count = movable_count
+        super().__init__(
+            f"Location {location_id} still has {movable_count} movable inventory item(s). "
+            "Choose a destination location to transfer them before archiving.",
+        )
+
+
 class InventoryItemDeleteNotAllowedError(RepositoryError):
     def __init__(self, inventory_item_id: str, reason: str) -> None:
         self.inventory_item_id = inventory_item_id

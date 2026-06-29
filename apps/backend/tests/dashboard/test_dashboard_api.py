@@ -190,3 +190,60 @@ async def test_dashboard_service_total_available(db_session: AsyncSession) -> No
     await _seed_inventory(db_session)
     total = await DashboardService(db_session).get_total_available()
     assert total == 2
+
+
+@pytest.mark.asyncio
+async def test_distribution_excludes_archived_brands_and_locations(
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    db_session: AsyncSession,
+) -> None:
+    brand, product_model, warehouse = await _seed_inventory(db_session)
+    brand_repo = BrandRepository(db_session)
+    location_repo = LocationRepository(db_session)
+
+    archived_brand = await brand_repo.create("AggBrand")
+    archived_location = await location_repo.create(
+        "AggLoc",
+        location_type=LocationType.OTHER,
+    )
+    inventory_repo = InventoryItemRepository(db_session)
+    await inventory_repo.create(
+        serial_number="SN-AGG-001",
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=archived_location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await inventory_repo.create(
+        serial_number="SN-AGG-002",
+        product_model_id=(
+            await ProductModelRepository(db_session).create(
+                brand_id=archived_brand.id,
+                model_number="AGG-01",
+                model_name="Agg Model",
+                cpu="Intel i3",
+                ram_gb=8,
+                storage_value=Decimal("256"),
+                storage_unit=StorageUnit.GB,
+                storage_type=StorageType.SSD,
+            )
+        ).id,
+        color="Silver",
+        current_location_id=warehouse.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await brand_repo.update(archived_brand, is_active=False)
+    await location_repo.update(archived_location, is_active=False)
+    await db_session.commit()
+
+    response = await api_client.get("/api/v1/dashboard/distribution", headers=main_admin_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    brand_names = {row["name"] for row in data["by_brand"]}
+    location_names = {row["name"] for row in data["by_location"]}
+    assert "AggBrand" not in brand_names
+    assert "AggLoc" not in location_names
+    assert "ASUS" in brand_names
+    assert "Warehouse" in location_names
+

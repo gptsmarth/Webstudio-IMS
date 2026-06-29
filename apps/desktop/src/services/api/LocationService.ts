@@ -30,6 +30,15 @@ export interface UpdateLocationRequest {
   branch_id?: number | null;
 }
 
+export interface LocationArchivePreview {
+  movable_inventory_count: number;
+  requires_transfer: boolean;
+}
+
+export interface ArchiveLocationRequest {
+  transfer_to_location_id?: number | null;
+}
+
 export class LocationService {
   static async listLocations(): Promise<Location[]> {
     LoggingService.debug('API', 'Fetching locations list');
@@ -52,9 +61,14 @@ export class LocationService {
     return client.patch<Location>(`/api/v1/locations/${id}`, data);
   }
 
-  static async archiveLocation(id: number): Promise<Location> {
+  static async archiveLocation(id: number, data: ArchiveLocationRequest = {}): Promise<Location> {
     const client = await ApiClientProvider.getClient();
-    return client.post<Location>(`/api/v1/locations/${id}/archive`, {});
+    return client.post<Location>(`/api/v1/locations/${id}/archive`, data);
+  }
+
+  static async getArchivePreview(id: number): Promise<LocationArchivePreview> {
+    const client = await ApiClientProvider.getClient();
+    return client.get<LocationArchivePreview>(`/api/v1/locations/${id}/archive-preview`);
   }
 
   static async restoreLocation(id: number): Promise<Location> {

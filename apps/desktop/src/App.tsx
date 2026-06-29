@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { defaultRouteForPermissions } from './config/navigation';
+import { defaultRouteForPermissions, isRouteAllowedForPermissions } from './config/navigation';
 import { useThemeStore, useAuthStore, useNavigationStore, type AuthSession } from './store';
 import { VersionService, LoggingService, ConfigService, SetupService, AuthenticationService } from './services';
 import { AuthTokenStore } from './services/AuthTokenStore';
@@ -78,7 +78,11 @@ export function App(): JSX.Element {
       const restored = await AuthenticationService.restoreSession();
       if (restored) {
         setSession(sessionFromUser(restored));
-        useNavigationStore.getState().setRoute(defaultRouteForPermissions(restored.permissions ?? []));
+        const permissions = restored.permissions ?? [];
+        const { currentRoute, setRoute } = useNavigationStore.getState();
+        if (!isRouteAllowedForPermissions(currentRoute, permissions)) {
+          setRoute(defaultRouteForPermissions(permissions));
+        }
         setActiveView('workspace');
         return;
       }

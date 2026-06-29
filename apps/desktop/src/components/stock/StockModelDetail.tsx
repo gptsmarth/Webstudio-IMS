@@ -7,6 +7,7 @@ import { TransferLocationDialog } from '../inventory/TransferLocationDialog';
 import { ProductImagePanel } from '../inventory/ProductImagePanel';
 import { canTransferStockLocation } from '../../lib/inventory';
 import { buildStockModelSpecLines } from '../../lib/stockModelCard';
+import { splitModelNotes } from '../../lib/modelNotes';
 import { StockSerialRowActionsMenu } from './StockSerialRowActionsMenu';
 
 interface StockModelDetailProps {
@@ -26,7 +27,7 @@ export function StockModelDetail({
   units,
   locations,
   permissions,
-  loading,
+  loading = false,
   onTransfer,
   actionLoading,
   onEditModel,
@@ -38,9 +39,21 @@ export function StockModelDetail({
   const [menu, setMenu] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
   const [transferItem, setTransferItem] = useState<InventoryItemDetail | null>(null);
 
+  const formattedPrice = model.selling_price
+    ? new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(model.selling_price).replace('₹', '₹ ')
+    : null;
+
   if (loading) {
     return <div className="skeleton stock-detail__skeleton" />;
   }
+
+  const notesObj = splitModelNotes(model.notes);
+  const notesText = notesObj.description || model.notes?.trim();
 
   return (
     <div className="stock-detail">
@@ -67,6 +80,15 @@ export function StockModelDetail({
             )}
           </div>
           <p className="stock-detail__model-number col-mono">{model.model_number}</p>
+          
+          {formattedPrice && (
+            <div style={{ margin: '12px 0 16px', padding: '10px 14px', background: 'rgba(234, 88, 12, 0.08)', borderRadius: '6px', border: '1px solid rgba(234, 88, 12, 0.2)' }}>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ea580c' }}>
+                {formattedPrice}
+              </p>
+            </div>
+          )}
+
           <dl className="stock-detail__spec-grid">
             {specLines.map((line) => (
               <div key={line.label} className="stock-detail__spec-row">
@@ -75,6 +97,18 @@ export function StockModelDetail({
               </div>
             ))}
           </dl>
+
+          {notesText && (
+            <div style={{ marginTop: '16px', padding: '12px 14px', background: 'var(--color-bg-raised)', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
+              <h4 style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Additional details & description
+              </h4>
+              <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap' }}>
+                {notesText}
+              </p>
+            </div>
+          )}
+
           <p className="stock-detail__count">
             {available.length} unit{available.length === 1 ? '' : 's'} available
           </p>

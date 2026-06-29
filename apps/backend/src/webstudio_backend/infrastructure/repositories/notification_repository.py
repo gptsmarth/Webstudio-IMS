@@ -35,6 +35,14 @@ _CATEGORY_BY_TYPE: dict[NotificationType, NotificationCategory] = {
     NotificationType.SYNC_FAILURE: NotificationCategory.TALLY_SYNC,
     NotificationType.INVENTORY_ALERT: NotificationCategory.INVENTORY,
     NotificationType.SYSTEM_NOTIFICATION: NotificationCategory.SYSTEM,
+    NotificationType.BACKUP_FAILED: NotificationCategory.SYSTEM,
+    NotificationType.BACKUP_COMPLETED: NotificationCategory.SYSTEM,
+    NotificationType.LOW_STORAGE: NotificationCategory.SYSTEM,
+    NotificationType.RECOVERY_COMPLETED: NotificationCategory.SYSTEM,
+    NotificationType.RESTORE_STARTED: NotificationCategory.SYSTEM,
+    NotificationType.RESTORE_COMPLETED: NotificationCategory.SYSTEM,
+    NotificationType.RESTORE_FAILED: NotificationCategory.SYSTEM,
+    NotificationType.BACKUP_VERIFICATION_FAILED: NotificationCategory.SYSTEM,
 }
 
 

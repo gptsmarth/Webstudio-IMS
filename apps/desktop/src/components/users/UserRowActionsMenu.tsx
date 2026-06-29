@@ -17,7 +17,6 @@ import {
   canChangeRole,
   canDisableUser,
   canEnableUser,
-  canResetUserPassword,
   canRestoreUser,
 } from '../../lib/users';
 import { P, PermissionService, permissionDeniedTooltip } from '../../services/PermissionService';

@@ -18,10 +18,6 @@ GROUNDED_MODELS = (
     "gemini-2.5-flash-lite",
     "gemini-2.0-flash",
 )
-FALLBACK_MODELS = (
-    "gemini-2.5-flash-lite",
-    "gemini-flash-lite-latest",
-)
 
 
 class GeminiLookupError(Exception):
@@ -45,14 +41,6 @@ class GeminiSpecService:
     def _grounded_model_chain(self) -> list[str]:
         chain: list[str] = []
         for candidate in (self._model, *GROUNDED_MODELS):
-            name = candidate.strip()
-            if name and name not in chain:
-                chain.append(name)
-        return chain
-
-    def _fallback_model_chain(self) -> list[str]:
-        chain: list[str] = []
-        for candidate in (self._model, *FALLBACK_MODELS):
             name = candidate.strip()
             if name and name not in chain:
                 chain.append(name)
@@ -82,7 +70,11 @@ class GeminiSpecService:
             try:
                 payload = _build_payload(prompt, use_grounding=True)
                 body = await self._generate(gemini_model, payload)
-                result = _parse_lookup_response(body, fallback_name=model_name or model_number)
+                result = _parse_lookup_response(
+                    body,
+                    fallback_name=model_name or model_number,
+                    model_number=model_number,
+                )
                 if result:
                     if gemini_model != self._model:
                         logger.info("Gemini grounded lookup succeeded via {}", gemini_model)
@@ -103,36 +95,11 @@ class GeminiSpecService:
                     continue
                 raise
 
-        logger.warning("Grounded Gemini lookup failed; trying without web search")
-        for gemini_model in self._fallback_model_chain():
-            try:
-                payload = _build_payload(prompt, use_grounding=False)
-                body = await self._generate(gemini_model, payload)
-                result = _parse_lookup_response(body, fallback_name=model_name or model_number)
-                if result:
-                    result["notes"] = (
-                        (result.get("notes") or "")
-                        + " (Web search unavailable — verify specs manually.)"
-                    ).strip()
-                    return await self._finalize_lookup_result(
-                        result,
-                        body=body,
-                        model_number=model_number,
-                        brand_name=brand_name,
-                        model_name=model_name,
-                    )
-            except GeminiLookupError as exc:
-                last_error = exc
-                if exc.code == "RATE_LIMITED":
-                    rate_limited_models.append(gemini_model)
-                    continue
-                raise
-
         if rate_limited_models:
             raise GeminiLookupError(
                 "RATE_LIMITED",
-                "Gemini quota exhausted. Set GEMINI_MODEL=gemini-2.5-flash in .env, "
-                "wait a few minutes, or enter specs manually.",
+                "Gemini web search quota exhausted — specs cannot be fetched reliably without it. "
+                "Wait a few minutes and try again, or enter specifications manually.",
             )
 
         if last_error:
@@ -148,13 +115,13 @@ class GeminiSpecService:
         model_number: str,
         model_name: str | None = None,
         brand_name: str | None = None,
-    ) -> str | None:
+    ) -> tuple[str | None, dict[str, Any] | None]:
         if not self.is_configured:
-            return None
+            return None, None
 
         model_number = model_number.strip()
         if not model_number:
-            return None
+            return None, None
 
         brand_line = f"Brand: {brand_name}\n" if brand_name else ""
         name_line = f"Product line: {model_name}\n" if model_name else ""
@@ -176,21 +143,27 @@ Respond with ONLY valid JSON: {{"product_image_url": "https://..."}} or {{"produ
                 body = await self._generate(gemini_model, payload)
                 text = _extract_text(body)
                 parsed = _parse_json_object(text or "")
-                if not parsed:
-                    continue
-                image_url = parsed.get("product_image_url")
-                if image_url is None:
-                    return None
-                url = str(image_url).strip()
-                if url.lower() in {"null", "none", "n/a"}:
-                    return None
-                if url.startswith("https://"):
-                    return url[:512]
+                url_str = None
+                if parsed and isinstance(parsed, dict):
+                    image_url = parsed.get("product_image_url")
+                    if image_url is not None:
+                        url = str(image_url).strip()
+                        if (
+                            url.lower() not in {"null", "none", "n/a"}
+                            and url.startswith("https://")
+                        ):
+                            from webstudio_backend.services.product_image_service import (
+                                is_suspicious_placeholder_image_url,
+                            )
+
+                            if not is_suspicious_placeholder_image_url(url):
+                                url_str = url[:512]
+                return url_str, body
             except GeminiLookupError as exc:
                 if exc.code in {"RATE_LIMITED", "API_ERROR"}:
                     continue
                 raise
-        return None
+        return None, None
 
     async def _finalize_lookup_result(
         self,
@@ -209,10 +182,13 @@ Respond with ONLY valid JSON: {{"product_image_url": "https://..."}} or {{"produ
             model_name=result.get("model_name") or model_name,
             candidate_url=result.get("product_image_url"),
             grounding_body=body,
-            gemini_service=self,
         )
         if image_url:
             result["product_image_url"] = image_url
+            logger.info("Spec lookup image resolved for {}: {}", model_number, image_url[:120])
+        else:
+            result["product_image_url"] = None
+            logger.warning("Spec lookup found no product image for {}", model_number)
         return result
 
     async def _generate(self, gemini_model: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -274,11 +250,15 @@ def _build_lookup_prompt(
 
 {brand_line}Model number / SKU: {model_number}
 {name_line}
-Use Google Search to find the official manufacturer specification page or major retailer listing for this EXACT model number.
+Use Google Search with the exact query: "{model_number} specifications" (include brand if known).
+
+Find the official manufacturer specification page or major retailer listing for this EXACT model number.
 
 Important rules:
-1. Prefer the exact SKU "{model_number}" — do not substitute a different suffix unless the exact SKU cannot be found.
-2. If only a very close regional variant exists, use its specs but explain in "notes".
+1. The SKU "{model_number}" is authoritative — do NOT substitute a different model, product line, or regional variant unless the exact SKU cannot be found anywhere online.
+2. Do NOT guess from similar ASUS/Dell/HP model prefixes. If web search does not return this exact SKU, set cpu to null and explain in "notes" — never invent specs.
+3. model_name must match the official marketing name from the listing (e.g. "ASUS TUF Gaming A14", not "Vivobook" unless the listing says Vivobook).
+4. If only a very close regional variant exists, use its specs but explain in "notes".
 3. Extract the full configuration for this SKU: CPU, GPU, RAM, storage, display, colors, OS, battery, weight, ports/wireless.
 4. CPU must be the exact chip (e.g. "Intel Core i5-1335U", "AMD Ryzen 5 7530U", "Snapdragon X Elite X1E-78-100") — not a generic family.
 5. ram_gb is system RAM as an integer.
@@ -319,7 +299,12 @@ def _build_payload(prompt: str, use_grounding: bool) -> dict[str, Any]:
     return payload
 
 
-def _parse_lookup_response(body: dict[str, Any], fallback_name: str) -> dict[str, Any] | None:
+def _parse_lookup_response(
+    body: dict[str, Any],
+    fallback_name: str,
+    *,
+    model_number: str,
+) -> dict[str, Any] | None:
     text = _extract_text(body)
     if not text:
         return None
@@ -330,7 +315,21 @@ def _parse_lookup_response(body: dict[str, Any], fallback_name: str) -> dict[str
         return None
 
     normalized = _normalize_spec(parsed, fallback_name=fallback_name)
-    return normalized if normalized.get("cpu") else None
+    if not normalized.get("cpu"):
+        return None
+    if normalized.get("ram_gb") is None:
+        logger.warning("Gemini spec missing ram_gb for {}", model_number)
+        return None
+    if not normalized.get("storage_value"):
+        logger.warning("Gemini spec missing storage for {}", model_number)
+        return None
+    if not _response_anchors_model_number(model_number, normalized):
+        logger.warning(
+            "Gemini spec for {} does not reference the searched SKU in model_name/notes/description",
+            model_number,
+        )
+        return None
+    return normalized
 
 
 def _error_message(response: httpx.Response) -> str:
@@ -458,6 +457,23 @@ def _normalize_color_options(value: Any) -> str | None:
     return text[:256]
 
 
+def _response_anchors_model_number(model_number: str, result: dict[str, Any]) -> bool:
+    """Reject guesses that never mention the searched SKU or its family prefix."""
+    sku = model_number.strip().upper()
+    if not sku:
+        return False
+    haystack = " ".join(
+        str(result.get(key) or "")
+        for key in ("model_name", "notes", "description")
+    ).upper()
+    if sku in haystack:
+        return True
+    family = sku.split("-", 1)[0]
+    if len(family) >= 4 and family in haystack:
+        return True
+    return sku in str(result.get("model_name") or "").upper()
+
+
 def _normalize_spec(data: dict[str, Any], fallback_name: str) -> dict[str, Any]:
     storage_unit = str(data.get("storage_unit", "GB")).upper()
     if storage_unit not in {"GB", "TB"}:
@@ -466,15 +482,27 @@ def _normalize_spec(data: dict[str, Any], fallback_name: str) -> dict[str, Any]:
     if storage_type not in {"SSD", "HDD"}:
         storage_type = "SSD"
 
-    ram = data.get("ram_gb", 16)
+    ram = data.get("ram_gb")
     try:
-        ram_gb = int(ram)
+        ram_gb = int(ram) if ram is not None and str(ram).strip() else None
     except (TypeError, ValueError):
-        ram_gb = 16
+        ram_gb = None
+
+    storage_raw = data.get("storage_value")
+    storage_value = str(storage_raw).strip() if storage_raw is not None and str(storage_raw).strip() else None
 
     image_url = data.get("product_image_url")
-    if image_url is not None and not str(image_url).startswith("https://"):
-        image_url = None
+    if image_url is not None:
+        from webstudio_backend.services.product_image_service import (
+            _normalize_https_url,
+            is_suspicious_placeholder_image_url,
+        )
+
+        normalized = _normalize_https_url(str(image_url))
+        if not normalized or is_suspicious_placeholder_image_url(normalized):
+            image_url = None
+        else:
+            image_url = normalized
 
     notes = data.get("notes")
     spec_keys = (
@@ -504,7 +532,7 @@ def _normalize_spec(data: dict[str, Any], fallback_name: str) -> dict[str, Any]:
         "cpu": _normalize_cpu(str(data.get("cpu") or "")),
         "gpu": _normalize_gpu(data.get("gpu")),
         "ram_gb": ram_gb,
-        "storage_value": str(data.get("storage_value") or "512").strip(),
+        "storage_value": storage_value or "",
         "storage_unit": storage_unit,
         "storage_type": storage_type,
         "display": (str(data.get("display")).strip() or None) if data.get("display") else None,

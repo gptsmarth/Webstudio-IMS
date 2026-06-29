@@ -223,7 +223,15 @@ export function AddLaptopWizard({
   }, [open, step, mode, modelNumber, runGeminiFetch]);
 
   useEffect(() => {
-    if (!productImageUrl?.startsWith('https://')) {
+    if (!productImageUrl) {
+      setProductImagePreview(null);
+      return;
+    }
+    if (productImageUrl.startsWith('/assets/')) {
+      setProductImagePreview(productImageUrl);
+      return;
+    }
+    if (!productImageUrl.startsWith('https://')) {
       setProductImagePreview(null);
       return;
     }

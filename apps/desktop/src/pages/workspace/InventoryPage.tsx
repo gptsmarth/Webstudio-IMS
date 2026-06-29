@@ -12,7 +12,7 @@ import {
 } from '../../components/stock';
 import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../hooks/useInventoryHierarchyData';
 import { useInventoryWorkspace } from '../../hooks/useInventoryWorkspace';
-import { canWriteInventory } from '../../lib/inventory';
+import { canArchiveProductModels, canWriteInventory } from '../../lib/inventory';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
 import { useInventoryNavStore } from '../../store/useHierarchyNavStore';
@@ -33,6 +33,7 @@ export function InventoryPage(): JSX.Element {
   const [modelActionLoading, setModelActionLoading] = useState(false);
 
   const canWrite = session ? canWriteInventory(session.permissions) : false;
+  const canArchiveModel = session ? canArchiveProductModels(session.permissions) : false;
 
   useEffect(() => {
     if (session && !canWrite) {
@@ -109,6 +110,22 @@ export function InventoryPage(): JSX.Element {
       setModelActionLoading(false);
     }
   }, [editModel, hierarchy, workspace]);
+
+  const handleArchiveModel = useCallback(async () => {
+    if (!editModel) return;
+    setModelActionLoading(true);
+    try {
+      await ProductModelService.archiveModel(editModel.id);
+      setEditModelId(null);
+      if (nav.modelId === editModel.id) {
+        nav.goToModels();
+      }
+      await hierarchy.refresh();
+      await workspace.refresh();
+    } finally {
+      setModelActionLoading(false);
+    }
+  }, [editModel, hierarchy, nav, workspace]);
 
   const handleAddComplete = useCallback(async (payload: Parameters<typeof workspace.addLaptopWizard>[0]) => {
     await workspace.addLaptopWizard(payload);
@@ -264,8 +281,10 @@ export function InventoryPage(): JSX.Element {
         open={editModel !== null}
         model={editModel}
         loading={modelActionLoading}
+        canArchive={canArchiveModel}
         onClose={() => setEditModelId(null)}
         onConfirm={handleUpdateModel}
+        onArchive={handleArchiveModel}
       />
     </div>
   );

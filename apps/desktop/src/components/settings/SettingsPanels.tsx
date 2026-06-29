@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Database, Download, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Database, Download, RefreshCw, Shield } from 'lucide-react';
 import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
 import { auditSeverityBadgeClass, auditSeverityLabel } from '../../lib/audit';
 import { formatBytes } from '../../lib/settings';
+import { parseApiError } from '../../lib/apiError';
 import {
   loadAppearancePreferences,
   saveAppearancePreferences,
@@ -20,8 +21,13 @@ import {
 import { VersionService } from '../../services/VersionService';
 import { useAuthStore } from '../../store';
 import { TallySettingsForm } from './TallySettingsForm';
+import { RestoreWizard } from './RestoreWizard';
+import { BackupAdminCenter } from './BackupAdminCenter';
+import { RecoveryCenter } from './RecoveryCenter';
+import { RecoveryWizard } from './RecoveryWizard';
 import type { Location } from '../../services/api/LocationService';
-import type { SettingsWorkspace } from '../../services/api/SettingsService';
+import type { SettingsWorkspace, BackupSettingsUpdate } from '../../services/api/SettingsService';
+import { SettingsService } from '../../services/api/SettingsService';
 import { useThemeStore, type ThemeMode } from '../../store';
 import { Field, Readonly, SaveButton, Section } from './settingsShared';
 
@@ -943,6 +949,14 @@ export function NotificationsPanel({ workspace, data }: PanelProps): JSX.Element
           />
           Audit alerts
         </label>
+        <label className="stg-check">
+          <input
+            type="checkbox"
+            checked={form.backup_alerts_enabled}
+            onChange={(e) => setForm({ ...form, backup_alerts_enabled: e.target.checked })}
+          />
+          Backup &amp; recovery alerts
+        </label>
         <SaveButton label="Save notification settings" saving={workspace.saving} canWrite={workspace.canWrite} />
       </form>
     </Section>
@@ -951,68 +965,268 @@ export function NotificationsPanel({ workspace, data }: PanelProps): JSX.Element
 
 export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
   const backup = data.backup;
+  const [form, setForm] = useState<BackupSettingsUpdate>({
+    backup_folder: backup.backup_folder,
+    storage_backend: (backup.storage_backend as BackupSettingsUpdate['storage_backend']) || 'local',
+    schedule: (backup.schedule as BackupSettingsUpdate['schedule']) || 'manual',
+    retention_policy: (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
+    retention_count: backup.retention_count,
+  });
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreFilename, setRestoreFilename] = useState<string | null>(null);
+  const [recoveryWizardOpen, setRecoveryWizardOpen] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      backup_folder: backup.backup_folder,
+      storage_backend: (backup.storage_backend as BackupSettingsUpdate['storage_backend']) || 'local',
+      schedule: (backup.schedule as BackupSettingsUpdate['schedule']) || 'manual',
+      retention_policy: (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
+      retention_count: backup.retention_count,
+    });
+  }, [backup]);
+
+  const healthClass =
+    backup.health_status === 'healthy'
+      ? 'stg-backup-health--healthy'
+      : backup.health_status === 'degraded'
+        ? 'stg-backup-health--degraded'
+        : 'stg-backup-health--warning';
+
+  const runBackup = async () => {
+    setLastResult(null);
+    try {
+      const result = await SettingsService.createBackup({ backup_type: 'full', trigger_type: 'manual' });
+      const status = result.verification_status ?? 'success';
+      setLastResult(
+        `${status === 'success' ? 'Backup completed' : `Backup ${status}`}: ${result.filename} `
+        + `(${formatBytes(result.size_bytes)}, ${result.duration_ms ?? 0} ms)`,
+      );
+      await workspace.refresh();
+    } catch (err) {
+      setLastResult(parseApiError(err, 'Backup failed. Check server logs and storage location.'));
+    }
+  };
 
   return (
-    <Section title="Backup center">
-      <div className="stg-readonly-grid">
-        <Readonly label="Backup folder" value={backup.backup_folder} />
-        <Readonly label="Database size" value={formatBytes(backup.database_size_bytes)} />
-        <Readonly
-          label="Last backup"
-          value={backup.last_backup_at ? formatDateTime(backup.last_backup_at) : 'Never'}
-        />
-      </div>
-      {workspace.canWrite && (
-        <div className="stg-actions">
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            disabled={workspace.saving}
-            onClick={() => void workspace.createBackup()}
-          >
-            <Database size={14} /> Create backup
-          </button>
+    <>
+      <Section title="Backup dashboard">
+        <div className={`stg-backup-health ${healthClass}`}>
+          <Shield size={16} aria-hidden />
+          <div>
+            <strong>Health: {backup.health_status}</strong>
+            <p className="stg-muted">Protects database, settings, users, integrations, and brand assets.</p>
+          </div>
         </div>
+
+        <p className="stg-backup-warning" role="note">
+          Although automatic backups are maintained internally, it is recommended to create and safely store
+          an external manual backup (weekly or monthly) so your business can be fully recovered even if the
+          primary system or storage device fails.
+        </p>
+
+        <div className="stg-readonly-grid">
+          <Readonly
+            label="Last backup"
+            value={backup.last_backup_at ? formatDateTime(backup.last_backup_at) : 'Never'}
+          />
+          <Readonly
+            label="Next scheduled"
+            value={
+              backup.next_scheduled_backup_at
+                ? formatDateTime(backup.next_scheduled_backup_at)
+                : backup.schedule === 'manual'
+                  ? 'Manual only'
+                  : '—'
+            }
+          />
+          <Readonly label="Database size" value={formatBytes(backup.database_size_bytes)} />
+          <Readonly label="Retention policy" value={backup.retention_policy ?? 'last_30'} />
+          <Readonly label="Storage location" value={backup.backup_folder} />
+          <Readonly label="Storage backend" value={backup.storage_backend} />
+        </div>
+
+        {lastResult && <p className="stg-backup-result">{lastResult}</p>}
+
+        {workspace.canWrite && (
+          <div className="stg-actions">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={workspace.saving}
+              onClick={() => void runBackup()}
+            >
+              <Database size={14} aria-hidden />
+              Run manual backup
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={workspace.saving}
+              onClick={() => {
+                setRestoreFilename(null);
+                setRestoreOpen(true);
+              }}
+            >
+              <RefreshCw size={14} aria-hidden />
+              Open Restore Center
+            </button>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Backup policy">
+        <form
+          className="stg-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void workspace.saveBackup(form);
+          }}
+        >
+          <Field label="Local backup folder">
+            <input
+              className="input"
+              value={form.backup_folder}
+              onChange={(e) => setForm({ ...form, backup_folder: e.target.value })}
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <Field label="Schedule">
+            <select
+              className="input"
+              value={form.schedule}
+              onChange={(e) => setForm({
+                ...form,
+                schedule: e.target.value as BackupSettingsUpdate['schedule'],
+              })}
+              disabled={!workspace.canWrite}
+            >
+              <option value="manual">Manual</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </Field>
+          <Field label="Retention policy">
+            <select
+              className="input"
+              value={form.retention_policy}
+              onChange={(e) => setForm({
+                ...form,
+                retention_policy: e.target.value as BackupSettingsUpdate['retention_policy'],
+              })}
+              disabled={!workspace.canWrite}
+            >
+              <option value="last_7">Keep last 7</option>
+              <option value="last_30">Keep last 30</option>
+              <option value="last_90">Keep last 90</option>
+              <option value="unlimited">Unlimited</option>
+              <option value="custom">Custom count (future-ready)</option>
+            </select>
+          </Field>
+          {form.retention_policy === 'custom' && (
+            <Field label="Custom retention count">
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={365}
+                value={form.retention_count}
+                onChange={(e) => setForm({ ...form, retention_count: Number(e.target.value) })}
+                disabled={!workspace.canWrite}
+              />
+            </Field>
+          )}
+          <Field label="Storage backend">
+            <select
+              className="input"
+              value={form.storage_backend}
+              onChange={(e) => setForm({
+                ...form,
+                storage_backend: e.target.value as BackupSettingsUpdate['storage_backend'],
+              })}
+              disabled={!workspace.canWrite}
+            >
+              <option value="local">Local folder</option>
+              <option value="nas">NAS (future-ready)</option>
+              <option value="external_drive">External drive (future-ready)</option>
+              <option value="cloud">Cloud storage (future-ready)</option>
+            </select>
+          </Field>
+          <SaveButton label="Save backup policy" saving={workspace.saving} canWrite={workspace.canWrite} />
+        </form>
+      </Section>
+
+      <Section title="Recovery Center">
+        <RecoveryCenter
+          canWrite={workspace.canWrite}
+          onOpenWizard={() => setRecoveryWizardOpen(true)}
+          onOpenRestore={() => {
+            setRestoreFilename(null);
+            setRestoreOpen(true);
+          }}
+          onRunBackup={runBackup}
+        />
+      </Section>
+
+      <Section title="Backup administration">
+        <BackupAdminCenter
+          canWrite={workspace.canWrite}
+          onRestore={(filename) => {
+            setRestoreFilename(filename);
+            setRestoreOpen(true);
+          }}
+          onRefreshWorkspace={workspace.refresh}
+        />
+      </Section>
+
+      {(backup.restore_history?.length ?? 0) > 0 && (
+        <Section title="Recent restores">
+          <div className="stg-backup-list">
+            <ul>
+              {backup.restore_history.map((item) => (
+                <li key={item.id} className="stg-backup-row">
+                  <div>
+                    <span className="col-mono">{item.filename}</span>
+                    <span className="stg-muted">
+                      {item.restore_scope} · {item.source} · {formatDateTime(item.created_at)}
+                    </span>
+                    <span className={`stg-backup-verify stg-backup-verify--${item.verification_status}`}>
+                      {item.verification_status}
+                    </span>
+                    {item.emergency_backup_filename && (
+                      <span className="stg-muted col-mono">
+                        Emergency: {item.emergency_backup_filename}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Section>
       )}
-      <div className="stg-backup-list">
-        <h3 className="stg-subtitle">Backup history</h3>
-        {backup.history.length === 0 && <p className="stg-muted">No backups found.</p>}
-        <ul>
-          {backup.history.map((item) => (
-            <li key={item.filename} className="stg-backup-row">
-              <div>
-                <span className="col-mono">{item.filename}</span>
-                <span className="stg-muted">
-                  {formatBytes(item.size_bytes)} · {formatDateTime(item.created_at)}
-                </span>
-              </div>
-              {workspace.canWrite && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={workspace.saving}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Restore backup ${item.filename}? This will overwrite current data.`,
-                      )
-                    ) {
-                      void workspace.restoreBackup(item.filename);
-                    }
-                  }}
-                >
-                  Restore
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="stg-warning">
-        <AlertTriangle size={14} />
-        <span>Restore replaces live database content. Create a fresh backup before restoring.</span>
-      </div>
-    </Section>
+
+      <RestoreWizard
+        open={restoreOpen}
+        backups={backup.history}
+        initialFilename={restoreFilename}
+        onClose={() => setRestoreOpen(false)}
+        onComplete={workspace.refresh}
+      />
+      <RecoveryWizard
+        open={recoveryWizardOpen}
+        onClose={() => setRecoveryWizardOpen(false)}
+        onOpenRestore={() => {
+          setRecoveryWizardOpen(false);
+          setRestoreFilename(null);
+          setRestoreOpen(true);
+        }}
+        onRunBackup={runBackup}
+        onComplete={workspace.refresh}
+      />
+    </>
   );
 }
 

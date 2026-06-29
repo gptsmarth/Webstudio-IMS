@@ -51,7 +51,7 @@ export function CataloguePage(): JSX.Element {
         <div>
           <h1 className="cat-page__title">Catalogue</h1>
           <p className="cat-page__subtitle">
-            Manage brands and store locations. Product models are created from Inventory when adding laptops.
+            Manage brands and store locations. Product models are created and maintained from Inventory.
             Use Remove to hide entries — sales and inventory history are kept. Enable “Show archived” to restore.
           </p>
         </div>

@@ -24,6 +24,15 @@ class UpdateLocationRequest(BaseModel):
     branch_id: int | None = Field(default=None, gt=0)
 
 
+class ArchiveLocationRequest(BaseModel):
+    transfer_to_location_id: int | None = Field(default=None, gt=0)
+
+
+class LocationArchivePreviewResponse(BaseModel):
+    movable_inventory_count: int
+    requires_transfer: bool
+
+
 class LocationResponse(BaseModel):
     id: int
     name: str

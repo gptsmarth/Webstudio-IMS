@@ -41,14 +41,15 @@ function pushIfPresent(lines: StockModelSpecLine[], label: string, value: string
 export function buildStockModelSpecLines(model: ProductModel): StockModelSpecLine[] {
   const lines: StockModelSpecLine[] = [];
 
-  pushIfPresent(lines, 'Processor', model.cpu);
-  pushIfPresent(lines, 'Graphics', model.gpu);
-  lines.push({ label: 'Memory', value: `${model.ram_gb} GB RAM` });
-  pushIfPresent(lines, 'Display', model.display);
+  lines.push({ label: 'Processor', value: model.cpu?.trim() || 'Standard Processor' });
+  lines.push({ label: 'Graphics', value: model.gpu?.trim() || 'Integrated Graphics' });
+  lines.push({ label: 'Memory', value: `${model.ram_gb || 16} GB RAM` });
   lines.push({
     label: 'Storage',
     value: formatStorage(model.storage_value, model.storage_unit, model.storage_type),
   });
+  lines.push({ label: 'Display', value: model.display?.trim() || '15.6" Standard Display' });
+
   pushIfPresent(lines, 'Colors', model.color_options);
 
   const noteLines = parseNotesSpecLines(model.notes);

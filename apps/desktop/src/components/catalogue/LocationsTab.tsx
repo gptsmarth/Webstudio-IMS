@@ -19,6 +19,7 @@ import { CatalogueEmptyState } from './CatalogueEmptyState';
 import { CataloguePagination } from './CataloguePagination';
 import { CatalogueRowActionsMenu, type CatalogueRowAction } from './CatalogueRowActionsMenu';
 import { CatalogueToolbar } from './CatalogueToolbar';
+import { LocationArchiveDialog } from './LocationArchiveDialog';
 import { LocationFormDialog } from './LocationFormDialog';
 
 type LocationSortField = 'name' | 'location_type' | 'stock' | 'capacity';
@@ -42,6 +43,7 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
+  const [archiveDialog, setArchiveDialog] = useState<{ location: Location; movableCount: number } | null>(null);
   const [menu, setMenu] = useState<{ location: Location; rect: DOMRect } | null>(null);
   const pageSize = 25;
   const debouncedSearch = useDebounce(search, 300);
@@ -123,7 +125,16 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     setError(null);
     try {
       if (action === 'edit') { setEditing(location); setDialogOpen(true); }
-      else if (action === 'archive') { await LocationService.archiveLocation(location.id); await refresh(); onDataChange(); }
+      else if (action === 'archive') {
+        const preview = await LocationService.getArchivePreview(location.id);
+        if (preview.requires_transfer) {
+          setArchiveDialog({ location, movableCount: preview.movable_inventory_count });
+          return;
+        }
+        await LocationService.archiveLocation(location.id);
+        await refresh();
+        onDataChange();
+      }
       else if (action === 'restore') { await LocationService.restoreLocation(location.id); await refresh(); onDataChange(); }
     } catch (err: unknown) {
       setError(catalogueActionErrorMessage(err));
@@ -131,6 +142,28 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
       setActionLoading(false);
     }
   };
+
+  const handleArchiveWithTransfer = async (transferToLocationId: number) => {
+    if (!archiveDialog) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await LocationService.archiveLocation(archiveDialog.location.id, { transfer_to_location_id: transferToLocationId });
+      setArchiveDialog(null);
+      await refresh();
+      onDataChange();
+    } catch (err: unknown) {
+      setError(catalogueActionErrorMessage(err));
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const archiveDestinations = useMemo(() => {
+    if (!archiveDialog) return [];
+    return items.filter((loc) => loc.is_active && loc.id !== archiveDialog.location.id);
+  }, [archiveDialog, items]);
 
   const exportCsv = () => {
     exportRowsToCsv(
@@ -237,6 +270,15 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
       )}
 
       <LocationFormDialog open={dialogOpen} location={editing} loading={actionLoading} onClose={() => setDialogOpen(false)} onConfirm={handleSave} />
+      <LocationArchiveDialog
+        open={archiveDialog != null}
+        location={archiveDialog?.location ?? null}
+        movableCount={archiveDialog?.movableCount ?? 0}
+        destinations={archiveDestinations}
+        loading={actionLoading}
+        onClose={() => setArchiveDialog(null)}
+        onConfirm={handleArchiveWithTransfer}
+      />
     </div>
   );
 }

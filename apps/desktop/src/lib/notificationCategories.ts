@@ -24,6 +24,14 @@ export function notificationTypeLabel(type: string): string {
     sync_failure: 'Tally sync skipped',
     inventory_alert: 'Inventory alert',
     system_notification: 'System notification',
+    backup_failed: 'Backup failed',
+    backup_completed: 'Backup completed',
+    low_storage: 'Low storage',
+    recovery_completed: 'Recovery completed',
+    restore_started: 'Restore started',
+    restore_completed: 'Restore completed',
+    restore_failed: 'Restore failed',
+    backup_verification_failed: 'Backup verification failed',
   };
   return labels[type] ?? type.replaceAll('_', ' ');
 }

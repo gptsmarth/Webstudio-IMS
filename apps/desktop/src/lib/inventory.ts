@@ -6,6 +6,8 @@ import {
   canTransferStockLocation as canTransferStockLocationPermission,
   canViewPurchasePrice as canViewPurchasePricePermission,
   canWriteInventory as canWriteInventoryPermission,
+  P,
+  PermissionService,
 } from '../services/PermissionService';
 
 export function formatInventorySpecs(item: Pick<InventoryItemDetail, 'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'>): string {
@@ -86,4 +88,8 @@ export function canEditSellingPrice(permissions: string[]): boolean {
 
 export function canEditProductModels(permissions: string[]): boolean {
   return canEditProductModelsPermission(permissions);
+}
+
+export function canArchiveProductModels(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.productModels.archive);
 }
