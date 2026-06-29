@@ -76,7 +76,7 @@ export function useInventoryHierarchyData(): InventoryHierarchyData {
       ]);
       setBrands(brandList);
       setModels(modelList);
-      setLocations(locationList);
+      setLocations(locationList.filter((location) => location.is_active));
       setDistribution(dist);
       setItems(inventoryItems);
     } catch (err: unknown) {

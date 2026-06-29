@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timezone
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuditReadDep
+from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep
 from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
@@ -67,6 +67,8 @@ def _build_filters(
     model_number: str | None,
     search: str | None,
     result: str | None,
+    severity: str | None,
+    security_only: bool,
     created_at_from: datetime | date | None,
     created_at_to: datetime | date | None,
 ) -> AuditLogSearchFilters:
@@ -88,6 +90,8 @@ def _build_filters(
         model_number=model_number,
         search=search,
         result=result,
+        severity=severity,
+        security_only=security_only,
         created_at_from=parsed_from,
         created_at_to=parsed_to,
     )
@@ -96,7 +100,7 @@ def _build_filters(
 @router.get("")
 async def search_audit_logs(
     request: Request,
-    current: AuditReadDep,
+    current: AuditViewDep,
     db_session: AsyncSession = DbSessionDep,
     entity_type: str | None = None,
     entity_id: str | None = None,
@@ -113,6 +117,8 @@ async def search_audit_logs(
     model_number: str | None = None,
     search: str | None = None,
     result: str | None = Query(default=None, pattern="^(success|failure)$"),
+    severity: str | None = Query(default=None, pattern="^(low|medium|high|critical)$"),
+    security_only: bool = Query(default=False),
     created_at_from: datetime | date | None = None,
     created_at_to: datetime | date | None = None,
     page: int = Query(default=1, ge=1),
@@ -136,6 +142,8 @@ async def search_audit_logs(
         model_number=model_number,
         search=search,
         result=result,
+        severity=severity,
+        security_only=security_only,
         created_at_from=created_at_from,
         created_at_to=created_at_to,
     )
@@ -155,7 +163,7 @@ async def search_audit_logs(
 @router.get("/lifecycle/by-serial/{serial_number}")
 async def audit_lifecycle_by_serial(
     request: Request,
-    current: AuditReadDep,
+    current: AuditLifecycleDep,
     serial_number: str,
     db_session: AsyncSession = DbSessionDep,
     page: int = Query(default=1, ge=1),
@@ -182,7 +190,7 @@ async def audit_lifecycle_by_serial(
 @router.get("/by-entity/{entity_type}/{entity_id}")
 async def audit_history_by_entity(
     request: Request,
-    current: AuditReadDep,
+    current: AuditViewDep,
     entity_type: str,
     entity_id: str,
     db_session: AsyncSession = DbSessionDep,
@@ -205,7 +213,7 @@ async def audit_history_by_entity(
 @router.get("/by-inventory-item/{inventory_item_id}")
 async def audit_history_by_inventory_item(
     request: Request,
-    current: AuditReadDep,
+    current: AuditViewDep,
     inventory_item_id: uuid.UUID,
     db_session: AsyncSession = DbSessionDep,
     page: int = Query(default=1, ge=1),
@@ -227,7 +235,7 @@ async def audit_history_by_inventory_item(
 @router.get("/{audit_log_id}")
 async def get_audit_log(
     request: Request,
-    current: AuditReadDep,
+    current: AuditViewDep,
     audit_log_id: uuid.UUID,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:

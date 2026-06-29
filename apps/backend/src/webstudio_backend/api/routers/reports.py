@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import ReportsExportDep, ReportsViewDep
 from webstudio_backend.api.schemas.report import (
     AuditReportResponse,
     AuditReportRowResponse,
@@ -43,8 +43,6 @@ from webstudio_backend.infrastructure.repositories.report_filters import ExportF
 from webstudio_backend.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
-
-ReportsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("reports:read"))]
 
 _EXPORT_REPORT_TYPES = frozenset(
     {
@@ -100,6 +98,8 @@ def _common_report_params(
     audit_action: AuditAction | None = None,
     audit_source: AuditSource | None = None,
     actor_role: str | None = None,
+    security_only: bool = False,
+    audit_severity: str | None = None,
     search: str | None = None,
     sort_field: str | None = None,
     sort_direction: str | None = None,
@@ -128,6 +128,8 @@ def _common_report_params(
         audit_action=audit_action,
         audit_source=audit_source,
         actor_role=actor_role,
+        security_only=security_only,
+        audit_severity=audit_severity,
         search=search,
         sort_field=sort_field,
         sort_direction=sort_direction,
@@ -137,7 +139,7 @@ def _common_report_params(
 @router.get("/inventory")
 async def inventory_report(
     request: Request,
-    current: ReportsReadDep,
+    current: ReportsViewDep,
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -192,7 +194,7 @@ async def inventory_report(
 @router.get("/sales")
 async def sales_report(
     request: Request,
-    current: ReportsReadDep,
+    current: ReportsViewDep,
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -243,7 +245,7 @@ async def sales_report(
 @router.get("/audit")
 async def audit_report(
     request: Request,
-    current: ReportsReadDep,
+    current: ReportsViewDep,
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -290,7 +292,7 @@ async def audit_report(
 @router.get("/notifications")
 async def notifications_report(
     request: Request,
-    current: ReportsReadDep,
+    current: ReportsViewDep,
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -331,7 +333,7 @@ async def notifications_report(
 
 @router.get("/export")
 async def export_report(
-    current: ReportsReadDep,
+    current: ReportsExportDep,
     db_session: AsyncSession = DbSessionDep,
     report_type: ReportType = Query(...),
     format: ExportFormat = Query(default=ExportFormat.XLSX, alias="format"),
@@ -358,6 +360,8 @@ async def export_report(
     audit_action: AuditAction | None = None,
     audit_source: AuditSource | None = None,
     actor_role: str | None = None,
+    security_only: bool = False,
+    audit_severity: str | None = None,
     search: str | None = None,
     sort_field: str | None = None,
     sort_direction: str | None = None,
@@ -394,6 +398,8 @@ async def export_report(
         audit_action=audit_action,
         audit_source=audit_source,
         actor_role=actor_role,
+        security_only=security_only,
+        audit_severity=audit_severity,
         search=search,
         sort_field=sort_field,
         sort_direction=sort_direction,

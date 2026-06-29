@@ -22,8 +22,11 @@ class SecuritySettings(BaseModel):
     session_timeout_minutes: int = 15
     password_min_length: int = 10
     password_require_uppercase: bool = True
+    password_require_lowercase: bool = True
     password_require_number: bool = True
     password_require_symbol: bool = False
+    password_history_count: int = 5
+    remember_me_ttl_days: int = 30
     lockout_threshold: int = 5
     lockout_duration_minutes: int = 15
     jwt_access_token_ttl_minutes: int = 15

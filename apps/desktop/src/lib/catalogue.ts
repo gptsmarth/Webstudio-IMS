@@ -3,12 +3,14 @@ import type { StorageType, StorageUnit } from '../services/api/InventoryService'
 
 export type CatalogueTab = 'brands' | 'locations';
 
-export function canWriteCatalogue(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+import { canExportCatalogue as canExportCataloguePermission, canWriteCatalogue as canWriteCataloguePermission } from '../services/PermissionService';
+
+export function canWriteCatalogue(permissions: string[]): boolean {
+  return canWriteCataloguePermission(permissions);
 }
 
-export function canExportCatalogue(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+export function canExportCatalogue(permissions: string[]): boolean {
+  return canExportCataloguePermission(permissions);
 }
 
 export function brandLogoSrc(name: string, logoFilename?: string | null): string {

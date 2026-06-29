@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
+    LocationsArchiveDep,
+    LocationsCreateDep,
+    LocationsEditDep,
+    LocationsViewDep,
+)
 from webstudio_backend.api.schemas.location import (
     CreateLocationRequest,
     LocationResponse,
@@ -24,9 +30,6 @@ from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNa
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 
 router = APIRouter(prefix="/api/v1/locations", tags=["locations"])
-
-LocationsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:read"))]
-LocationsWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:write"))]
 
 
 def _envelope(request: Request, data: object) -> dict:
@@ -51,7 +54,7 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
 @router.get("")
 async def list_locations(
     request: Request,
-    current: LocationsReadDep,
+    current: LocationsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -73,7 +76,7 @@ async def list_locations(
 async def create_location(
     request: Request,
     body: CreateLocationRequest,
-    current: LocationsWriteDep,
+    current: LocationsCreateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = LocationRepository(db_session)
@@ -96,7 +99,7 @@ async def create_location(
 async def get_location(
     request: Request,
     location_id: int,
-    current: LocationsReadDep,
+    current: LocationsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -116,7 +119,7 @@ async def update_location(
     request: Request,
     location_id: int,
     body: UpdateLocationRequest,
-    current: LocationsWriteDep,
+    current: LocationsEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = LocationRepository(db_session)
@@ -148,7 +151,7 @@ async def update_location(
 async def archive_location(
     request: Request,
     location_id: int,
-    current: LocationsWriteDep,
+    current: LocationsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = LocationRepository(db_session)
@@ -173,7 +176,7 @@ async def archive_location(
 async def restore_location(
     request: Request,
     location_id: int,
-    current: LocationsWriteDep,
+    current: LocationsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = LocationRepository(db_session)

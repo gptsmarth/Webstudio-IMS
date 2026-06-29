@@ -18,8 +18,11 @@ export interface SecuritySettings {
   session_timeout_minutes: number;
   password_min_length: number;
   password_require_uppercase: boolean;
+  password_require_lowercase: boolean;
   password_require_number: boolean;
   password_require_symbol: boolean;
+  password_history_count: number;
+  remember_me_ttl_days: number;
   lockout_threshold: number;
   lockout_duration_minutes: number;
   jwt_access_token_ttl_minutes: number;

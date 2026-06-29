@@ -102,7 +102,7 @@ async def test_role_permissions_endpoint(
     role_names = {entry["role"] for entry in roles}
     assert role_names == {"main_admin", "admin", "salesperson"}
     main_admin = next(entry for entry in roles if entry["role"] == "main_admin")
-    assert "users:manage" in main_admin["permissions"]
+    assert "users:view" in main_admin["permissions"]
 
 
 @pytest.mark.asyncio

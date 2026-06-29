@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import SalesViewDep
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.sales import SaleDetailResponse, SaleListItem
 from webstudio_backend.core.dependencies import DbSessionDep
@@ -20,8 +20,6 @@ from webstudio_backend.infrastructure.repositories.report_filters import ReportF
 from webstudio_backend.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
-
-SalesReadDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:read"))]
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
@@ -55,7 +53,7 @@ def _parse_legacy_sort(sort: str | None) -> tuple[str | None, str | None]:
 @router.get("")
 async def list_sales(
     request: Request,
-    current: SalesReadDep,
+    current: SalesViewDep,
     db_session: AsyncSession = DbSessionDep,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -103,7 +101,7 @@ async def list_sales(
 async def get_sale(
     request: Request,
     sale_id: int,
-    current: SalesReadDep,
+    current: SalesViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current

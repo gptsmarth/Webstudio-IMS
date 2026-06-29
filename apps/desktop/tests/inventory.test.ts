@@ -33,9 +33,9 @@ describe('inventory utilities', () => {
     expect(inventoryStatusBadgeClass('available', true)).toBe('badge-neutral');
   });
 
-  it('restricts mark sold to admin roles', () => {
-    expect(canMarkSold('admin')).toBe(true);
-    expect(canMarkSold('salesperson')).toBe(false);
+  it('restricts mark sold to roles with sales:create', () => {
+    expect(canMarkSold(['sales:create', 'inventory:view'])).toBe(true);
+    expect(canMarkSold(['inventory:view', 'inventory:transfer'])).toBe(false);
   });
 
   it('maps inventory filters to export params', () => {

@@ -1,10 +1,21 @@
-import { InventoryService } from '../api/InventoryService';
+import { P } from '../../services/PermissionService';
 import { AuditService } from '../api/AuditService';
 import { BrandService } from '../api/BrandService';
+import { InventoryService } from '../api/InventoryService';
 import { LocationService } from '../api/LocationService';
 import { NotificationService } from '../api/NotificationService';
 import { ProductModelService } from '../api/ProductModelService';
 import { SalesService } from '../api/SalesService';
+
+const PROVIDER_PERMISSIONS: Record<string, string> = {
+  inventory: P.inventory.view,
+  sales: P.sales.view,
+  brands: P.brands.view,
+  models: P.productModels.view,
+  locations: P.locations.view,
+  notifications: P.notifications.view,
+  audit: P.audit.view,
+};
 
 export type SearchEntityType =
   | 'serial'
@@ -150,17 +161,15 @@ export interface GroupedSearchResults {
   items: SearchResult[];
 }
 
-export async function runGlobalSearch(query: string, role?: 'main_admin' | 'admin' | 'salesperson'): Promise<SearchResult[]> {
+export async function runGlobalSearch(query: string, permissions?: string[]): Promise<SearchResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const allowedProviderIds = role === 'salesperson'
-    ? new Set(['inventory', 'brands', 'models', 'locations'])
-    : null;
-
-  const providers = allowedProviderIds
-    ? SEARCH_PROVIDERS.filter((provider) => allowedProviderIds.has(provider.id))
-    : SEARCH_PROVIDERS;
+  const granted = new Set(permissions ?? []);
+  const providers = SEARCH_PROVIDERS.filter((provider) => {
+    const required = PROVIDER_PERMISSIONS[provider.id];
+    return required ? granted.has(required) : true;
+  });
 
   try {
     const batches = await Promise.all(providers.map((provider) => Promise.resolve(provider.search(trimmed))));

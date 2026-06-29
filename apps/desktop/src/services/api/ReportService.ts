@@ -30,6 +30,8 @@ export interface ReportQueryParams {
   audit_action?: string;
   audit_source?: string;
   actor_role?: string;
+  security_only?: boolean;
+  audit_severity?: string;
   notification_type?: string;
   notification_category?: string;
   search?: string;

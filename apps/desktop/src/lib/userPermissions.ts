@@ -1,111 +1,209 @@
-/** Display grouping for backend permission strings (presentation only). */
+/** Display grouping and metadata for backend permission strings (presentation only). */
 
-export interface PermissionCapability {
+import { resolveEffectivePermissions, type PermissionGrantSource } from './permissionArchitecture';
+import { filterPermissionsByLicense, createLicensePermissionContext } from './permissionLicense';
+
+export type PermissionModuleId =
+  | 'inventory'
+  | 'sales'
+  | 'reports'
+  | 'catalogue'
+  | 'administration'
+  | 'settings'
+  | 'tally'
+  | 'audit'
+  | 'notifications'
+  | 'other';
+
+export interface PermissionMetadata {
+  permission: string;
+  label: string;
+  description: string;
+  module: PermissionModuleId;
+  /** Stable key for future localization (permission.{module}.{action}). */
+  i18nKey: string;
+}
+
+export interface PermissionCapabilityView {
   label: string;
   permission: string;
+  description: string;
+  granted: boolean;
+  inheritedFrom: string;
+  source: PermissionGrantSource;
 }
 
 export interface PermissionModuleGroup {
   module: string;
-  capabilities: { label: string; granted: boolean }[];
+  moduleId: PermissionModuleId;
+  capabilities: PermissionCapabilityView[];
+  grantedCount: number;
 }
 
-const MODULE_DEFINITIONS: { module: string; capabilities: PermissionCapability[] }[] = [
-  {
-    module: 'Users',
-    capabilities: [{ label: 'Manage', permission: 'users:manage' }],
-  },
-  {
-    module: 'Inventory',
-    capabilities: [
-      { label: 'Read', permission: 'inventory:read' },
-      { label: 'Create / Update', permission: 'inventory:write' },
-      { label: 'Status transitions', permission: 'inventory:transition' },
-      { label: 'Transfer location', permission: 'location:transfer' },
-    ],
-  },
-  {
-    module: 'Catalogue',
-    capabilities: [
-      { label: 'Read brands', permission: 'brands:read' },
-      { label: 'Write brands', permission: 'brands:write' },
-      { label: 'Read models', permission: 'product_models:read' },
-      { label: 'Write models', permission: 'product_models:write' },
-      { label: 'Archive models', permission: 'product_models:archive' },
-    ],
-  },
-  {
-    module: 'Sales',
-    capabilities: [
-      { label: 'View', permission: 'sales:read' },
-      { label: 'Mark sold', permission: 'sales:reflect' },
-    ],
-  },
-  {
-    module: 'Reports',
-    capabilities: [{ label: 'Export', permission: 'reports:read' }],
-  },
-  {
-    module: 'Audit',
-    capabilities: [
-      { label: 'Lifecycle events', permission: 'audit:lifecycle' },
-      { label: 'Read logs', permission: 'audit:read' },
-    ],
-  },
-  {
-    module: 'Dashboard',
-    capabilities: [{ label: 'View', permission: 'dashboard:read' }],
-  },
-  {
-    module: 'Notifications',
-    capabilities: [
-      { label: 'Read', permission: 'notifications:read' },
-      { label: 'Resolve', permission: 'notifications:resolve' },
-    ],
-  },
-  {
-    module: 'Locations',
-    capabilities: [
-      { label: 'Read', permission: 'locations:read' },
-      { label: 'Write', permission: 'locations:write' },
-    ],
-  },
-  {
-    module: 'Settings',
-    capabilities: [
-      { label: 'Read', permission: 'settings:read' },
-      { label: 'Write', permission: 'settings:write' },
-    ],
-  },
-  {
-    module: 'Tally',
-    capabilities: [
-      { label: 'Sync', permission: 'tally:sync' },
-      { label: 'Dashboard', permission: 'tally:dashboard' },
-      { label: 'Notifications', permission: 'tally:notifications' },
-      { label: 'Admin', permission: 'tally:admin' },
-    ],
-  },
-  {
-    module: 'Sync',
-    capabilities: [{ label: 'Trigger', permission: 'sync:trigger' }],
-  },
+export const PERMISSION_MODULE_ORDER: { id: PermissionModuleId; label: string }[] = [
+  { id: 'inventory', label: 'Inventory' },
+  { id: 'sales', label: 'Sales' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'catalogue', label: 'Catalogue' },
+  { id: 'administration', label: 'Administration' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'tally', label: 'Tally' },
+  { id: 'audit', label: 'Audit' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'other', label: 'Other' },
 ];
 
-export function buildPermissionModules(permissions: string[]): PermissionModuleGroup[] {
-  const granted = new Set(permissions);
-  return MODULE_DEFINITIONS.map((definition) => ({
-    module: definition.module,
-    capabilities: definition.capabilities.map((cap) => ({
-      label: cap.label,
-      granted: granted.has(cap.permission),
-    })),
-  })).filter((group) => group.capabilities.some((cap) => cap.granted) || group.module === 'Settings');
+const PERMISSION_REGISTRY: PermissionMetadata[] = [
+  { permission: 'inventory:view', label: 'View', description: 'Browse stock and serial numbers', module: 'inventory', i18nKey: 'permission.inventory.view' },
+  { permission: 'inventory:create', label: 'Create', description: 'Add inventory items', module: 'inventory', i18nKey: 'permission.inventory.create' },
+  { permission: 'inventory:edit', label: 'Edit', description: 'Update inventory item details', module: 'inventory', i18nKey: 'permission.inventory.edit' },
+  { permission: 'inventory:transfer', label: 'Transfer', description: 'Move stock between locations', module: 'inventory', i18nKey: 'permission.inventory.transfer' },
+  { permission: 'inventory:archive', label: 'Archive', description: 'Archive inventory items', module: 'inventory', i18nKey: 'permission.inventory.archive' },
+  { permission: 'inventory:restore', label: 'Restore', description: 'Restore archived inventory', module: 'inventory', i18nKey: 'permission.inventory.restore' },
+  { permission: 'inventory:export', label: 'Export', description: 'Export inventory data', module: 'inventory', i18nKey: 'permission.inventory.export' },
+  { permission: 'sales:view', label: 'View', description: 'View sales records', module: 'sales', i18nKey: 'permission.sales.view' },
+  { permission: 'sales:create', label: 'Create', description: 'Record new sales', module: 'sales', i18nKey: 'permission.sales.create' },
+  { permission: 'sales:cancel', label: 'Cancel', description: 'Cancel sales transactions', module: 'sales', i18nKey: 'permission.sales.cancel' },
+  { permission: 'sales:export', label: 'Export', description: 'Export sales data', module: 'sales', i18nKey: 'permission.sales.export' },
+  { permission: 'reports:view', label: 'View', description: 'Open reports workspace', module: 'reports', i18nKey: 'permission.reports.view' },
+  { permission: 'reports:export', label: 'Export', description: 'Export report outputs', module: 'reports', i18nKey: 'permission.reports.export' },
+  { permission: 'brands:view', label: 'View brands', description: 'Browse product brands', module: 'catalogue', i18nKey: 'permission.brands.view' },
+  { permission: 'brands:create', label: 'Create brands', description: 'Add new brands', module: 'catalogue', i18nKey: 'permission.brands.create' },
+  { permission: 'brands:edit', label: 'Edit brands', description: 'Update brand details', module: 'catalogue', i18nKey: 'permission.brands.edit' },
+  { permission: 'brands:archive', label: 'Archive brands', description: 'Archive brands', module: 'catalogue', i18nKey: 'permission.brands.archive' },
+  { permission: 'product_models:view', label: 'View models', description: 'Browse product models', module: 'catalogue', i18nKey: 'permission.product_models.view' },
+  { permission: 'product_models:create', label: 'Create models', description: 'Add product models', module: 'catalogue', i18nKey: 'permission.product_models.create' },
+  { permission: 'product_models:edit', label: 'Edit models', description: 'Update full model specifications', module: 'catalogue', i18nKey: 'permission.product_models.edit' },
+  { permission: 'product_models:archive', label: 'Archive models', description: 'Archive product models', module: 'catalogue', i18nKey: 'permission.product_models.archive' },
+  { permission: 'product_models:selling_price:edit', label: 'Edit selling price', description: 'Update selling price from stock', module: 'catalogue', i18nKey: 'permission.product_models.selling_price.edit' },
+  { permission: 'locations:view', label: 'View locations', description: 'Browse store locations', module: 'catalogue', i18nKey: 'permission.locations.view' },
+  { permission: 'locations:create', label: 'Create locations', description: 'Add store locations', module: 'catalogue', i18nKey: 'permission.locations.create' },
+  { permission: 'locations:edit', label: 'Edit locations', description: 'Update location details', module: 'catalogue', i18nKey: 'permission.locations.edit' },
+  { permission: 'locations:archive', label: 'Archive locations', description: 'Archive locations', module: 'catalogue', i18nKey: 'permission.locations.archive' },
+  { permission: 'dashboard:view', label: 'View dashboard', description: 'Access the dashboard', module: 'catalogue', i18nKey: 'permission.dashboard.view' },
+  { permission: 'users:view', label: 'View', description: 'Open user administration', module: 'administration', i18nKey: 'permission.users.view' },
+  { permission: 'users:create', label: 'Create', description: 'Create user accounts', module: 'administration', i18nKey: 'permission.users.create' },
+  { permission: 'users:edit', label: 'Edit', description: 'Update user profiles', module: 'administration', i18nKey: 'permission.users.edit' },
+  { permission: 'users:reset_password', label: 'Reset password', description: 'Reset user passwords', module: 'administration', i18nKey: 'permission.users.reset_password' },
+  { permission: 'users:activate', label: 'Activate', description: 'Activate user accounts', module: 'administration', i18nKey: 'permission.users.activate' },
+  { permission: 'users:deactivate', label: 'Deactivate', description: 'Deactivate user accounts', module: 'administration', i18nKey: 'permission.users.deactivate' },
+  { permission: 'settings:view', label: 'View', description: 'Open system settings', module: 'settings', i18nKey: 'permission.settings.view' },
+  { permission: 'settings:modify', label: 'Modify', description: 'Change system settings', module: 'settings', i18nKey: 'permission.settings.modify' },
+  { permission: 'tally:view_status', label: 'View status', description: 'View Tally sync status', module: 'tally', i18nKey: 'permission.tally.view_status' },
+  { permission: 'tally:configure', label: 'Configure', description: 'Configure Tally integration', module: 'tally', i18nKey: 'permission.tally.configure' },
+  { permission: 'tally:run_sync', label: 'Run sync', description: 'Start Tally synchronisation', module: 'tally', i18nKey: 'permission.tally.run_sync' },
+  { permission: 'tally:retry_sync', label: 'Retry sync', description: 'Retry failed Tally sync jobs', module: 'tally', i18nKey: 'permission.tally.retry_sync' },
+  { permission: 'audit:view', label: 'View logs', description: 'Browse audit logs', module: 'audit', i18nKey: 'permission.audit.view' },
+  { permission: 'audit:export', label: 'Export', description: 'Export audit logs', module: 'audit', i18nKey: 'permission.audit.export' },
+  { permission: 'audit:lifecycle', label: 'Serial lifecycle', description: 'View serial lifecycle history', module: 'audit', i18nKey: 'permission.audit.lifecycle' },
+  { permission: 'notifications:view', label: 'View', description: 'Read notifications', module: 'notifications', i18nKey: 'permission.notifications.view' },
+  { permission: 'notifications:manage', label: 'Manage', description: 'Resolve and manage notifications', module: 'notifications', i18nKey: 'permission.notifications.manage' },
+  { permission: 'auth:login', label: 'Sign in', description: 'Authenticate to the application', module: 'other', i18nKey: 'permission.auth.login' },
+  { permission: 'sync:worker', label: 'Sync worker', description: 'Background sync service account', module: 'other', i18nKey: 'permission.sync.worker' },
+  { permission: 'tally:worker', label: 'Tally worker', description: 'Tally integration worker', module: 'other', i18nKey: 'permission.tally.worker' },
+  { permission: 'health:integrations', label: 'Integration health', description: 'Read integration health probes', module: 'other', i18nKey: 'permission.health.integrations' },
+];
+
+const REGISTRY_BY_PERMISSION = new Map(PERMISSION_REGISTRY.map((entry) => [entry.permission, entry]));
+
+export function getPermissionMetadata(permission: string): PermissionMetadata | undefined {
+  return REGISTRY_BY_PERMISSION.get(permission);
+}
+
+export function buildPermissionModules(
+  permissions: string[],
+  options?: { roleLabel?: string },
+): PermissionModuleGroup[] {
+  const roleLabel = options?.roleLabel ?? 'Role';
+  const licenseContext = createLicensePermissionContext();
+  const licensed = filterPermissionsByLicense(permissions, licenseContext);
+  const granted = new Set(licensed);
+  const effective = resolveEffectivePermissions({
+    rolePermissions: licensed,
+    roleLabel,
+  });
+  const effectiveByPermission = new Map(effective.map((entry) => [entry.permission, entry]));
+
+  const groups = PERMISSION_MODULE_ORDER.map(({ id, label }) => {
+    const capabilities = PERMISSION_REGISTRY
+      .filter((entry) => entry.module === id)
+      .map((entry) => {
+        const grant = effectiveByPermission.get(entry.permission);
+        const isGranted = granted.has(entry.permission);
+        return {
+          label: entry.label,
+          permission: entry.permission,
+          description: entry.description,
+          granted: isGranted,
+          inheritedFrom: grant?.inheritedFrom ?? roleLabel,
+          source: grant?.source ?? 'role',
+        };
+      });
+    const grantedCount = capabilities.filter((cap) => cap.granted).length;
+    return {
+      module: label,
+      moduleId: id,
+      capabilities,
+      grantedCount,
+    };
+  });
+
+  const known = new Set(PERMISSION_REGISTRY.map((entry) => entry.permission));
+  const unknown = licensed.filter((permission) => !known.has(permission)).sort();
+  if (unknown.length > 0) {
+    const otherGroup = groups.find((group) => group.moduleId === 'other');
+    const extra = unknown.map((permission) => ({
+      label: permission,
+      permission,
+      description: 'Additional capability',
+      granted: true,
+      inheritedFrom: roleLabel,
+      source: 'role' as const,
+    }));
+    if (otherGroup) {
+      otherGroup.capabilities.push(...extra);
+      otherGroup.grantedCount += extra.length;
+    }
+  }
+
+  return groups;
+}
+
+export function filterPermissionModules(
+  modules: PermissionModuleGroup[],
+  query: string,
+): PermissionModuleGroup[] {
+  const term = query.trim().toLowerCase();
+  if (!term) return modules;
+
+  return modules
+    .map((group) => ({
+      ...group,
+      capabilities: group.capabilities.filter((cap) => (
+        cap.label.toLowerCase().includes(term)
+        || cap.permission.toLowerCase().includes(term)
+        || cap.description.toLowerCase().includes(term)
+        || group.module.toLowerCase().includes(term)
+      )),
+      grantedCount: 0,
+    }))
+    .map((group) => ({
+      ...group,
+      grantedCount: group.capabilities.filter((cap) => cap.granted).length,
+    }))
+    .filter((group) => group.capabilities.length > 0);
 }
 
 export function listUnknownPermissions(permissions: string[]): string[] {
-  const known = new Set(
-    MODULE_DEFINITIONS.flatMap((group) => group.capabilities.map((cap) => cap.permission)),
-  );
+  const known = new Set(PERMISSION_REGISTRY.map((entry) => entry.permission));
   return permissions.filter((permission) => !known.has(permission)).sort();
+}
+
+/** Count capabilities granted from the role permission list (matches backend payload size). */
+export function countGrantedPermissions(permissions: string[]): number {
+  return permissions.length;
+}
+
+export function totalDefinedPermissions(): number {
+  return PERMISSION_REGISTRY.length;
 }

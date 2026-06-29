@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { assessPasswordStrength, generateTemporaryPassword } from '../src/lib/passwordStrength';
-import { buildPermissionModules } from '../src/lib/userPermissions';
+import { buildPermissionModules, countGrantedPermissions } from '../src/lib/userPermissions';
 import {
+  canArchiveUser,
   canDisableUser,
   canManageUsers,
+  canRestoreUser,
+  formatPasswordAge,
   userDisplayName,
+  userEffectiveStatus,
   userInitials,
 } from '../src/lib/users';
 import type { UserDetail } from '../src/services/api/UserService';
@@ -22,13 +26,25 @@ function user(overrides: Partial<UserDetail> = {}): UserDetail {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     permissions: [],
+    failed_login_count: 0,
+    is_locked: false,
+    is_archived: false,
+    active_session_count: 0,
+    password_age_days: null,
+    created_by_display_name: null,
+    locked_until: null,
+    password_changed_at: null,
+    created_by_user_id: null,
+    archived_at: null,
+    sessions: [],
+    login_events: [],
     ...overrides,
   };
 }
 
 describe('users helpers', () => {
-  it('checks users:manage permission from backend list', () => {
-    expect(canManageUsers(['users:manage', 'auth:login'])).toBe(true);
+  it('checks users:view permission from backend list', () => {
+    expect(canManageUsers(['users:view', 'auth:login'])).toBe(true);
     expect(canManageUsers(['auth:login'])).toBe(false);
   });
 
@@ -50,6 +66,18 @@ describe('users helpers', () => {
     expect(result.allowed).toBe(false);
     expect(result.reason).toMatch(/last active Main Administrator/i);
   });
+
+  it('derives effective status labels', () => {
+    expect(userEffectiveStatus({ status: 'active', is_archived: true }).label).toBe('Archived');
+    expect(userEffectiveStatus({ status: 'active', is_locked: true }).label).toBe('Locked');
+    expect(formatPasswordAge(3)).toBe('3 days');
+  });
+
+  it('controls archive and restore eligibility', () => {
+    const archived = user({ is_archived: true });
+    expect(canRestoreUser(archived)).toBe(true);
+    expect(canArchiveUser(archived, 1, 2).allowed).toBe(false);
+  });
 });
 
 describe('password strength', () => {
@@ -69,11 +97,16 @@ describe('password strength', () => {
 
 describe('permission viewer grouping', () => {
   it('marks granted permissions from backend payload', () => {
-    const modules = buildPermissionModules(['inventory:read', 'sales:read']);
-    const inventory = modules.find((group) => group.module === 'Inventory');
-    const sales = modules.find((group) => group.module === 'Sales');
-    expect(inventory?.capabilities.find((cap) => cap.label === 'Read')?.granted).toBe(true);
-    expect(inventory?.capabilities.find((cap) => cap.label === 'Create / Update')?.granted).toBe(false);
+    const modules = buildPermissionModules(['inventory:view', 'sales:view'], { roleLabel: 'Salesperson' });
+    const inventory = modules.find((group) => group.moduleId === 'inventory');
+    const sales = modules.find((group) => group.moduleId === 'sales');
+    expect(inventory?.capabilities.find((cap) => cap.label === 'View')?.granted).toBe(true);
+    expect(inventory?.capabilities.find((cap) => cap.label === 'Create')?.granted).toBe(false);
     expect(sales?.capabilities.find((cap) => cap.label === 'View')?.granted).toBe(true);
+    expect(inventory?.capabilities[0]?.inheritedFrom).toBe('Salesperson');
+  });
+
+  it('counts granted permissions from role payload', () => {
+    expect(countGrantedPermissions(['inventory:view', 'sales:view'])).toBe(2);
   });
 });

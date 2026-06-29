@@ -7,7 +7,15 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import MainAdminDep
+from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
+    UsersActivateDep,
+    UsersCreateDep,
+    UsersDeactivateDep,
+    UsersEditDep,
+    UsersResetPasswordDep,
+    UsersViewDep,
+)
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.user import (
     CreateUserRequest,
@@ -24,6 +32,7 @@ from webstudio_backend.core.permissions import permissions_for_role
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import UserRole, UserStatus
+from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateUsernameError,
@@ -31,6 +40,8 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     SelfMainAdminDisableError,
     UserNotFoundError,
 )
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
+from webstudio_backend.services.user_admin_service import UserAdminExtras, UserAdminService
 from webstudio_backend.services.user_service import UserService
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
@@ -55,7 +66,7 @@ def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) ->
     )
 
 
-def _actor(current: MainAdminDep) -> AuditActor:
+def _actor(current: AuthenticatedUser) -> AuditActor:
     user = current.user
     return AuditActor(
         user_id=user.id,
@@ -64,10 +75,50 @@ def _actor(current: MainAdminDep) -> AuditActor:
     )
 
 
+def _extras_payload(extras: UserAdminExtras, *, include_detail: bool = False) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "failed_login_count": extras.failed_login_count,
+        "is_locked": extras.is_locked,
+        "is_archived": extras.is_archived,
+        "active_session_count": extras.active_session_count,
+        "password_age_days": extras.password_age_days,
+        "created_by_display_name": extras.created_by_display_name,
+    }
+    if include_detail:
+        payload.update(
+            {
+                "locked_until": extras.locked_until,
+                "password_changed_at": extras.password_changed_at,
+                "created_by_user_id": extras.created_by_user_id,
+                "archived_at": extras.archived_at,
+            },
+        )
+    return payload
+
+
+def _serialize_summary(user: User, extras: UserAdminExtras) -> dict:
+    return UserSummary.from_model_with_extras(user, _extras_payload(extras)).model_dump()
+
+
+def _serialize_detail(
+    user: User,
+    extras: UserAdminExtras,
+    *,
+    sessions: list[dict[str, object]] | None = None,
+    login_events: list[dict[str, object]] | None = None,
+) -> dict:
+    return UserDetail.from_model_with_extras(
+        user,
+        _extras_payload(extras, include_detail=True),
+        sessions=sessions,
+        login_events=login_events,
+    ).model_dump()
+
+
 @router.get("")
 async def list_users(
     request: Request,
-    current: MainAdminDep,
+    current: UsersViewDep,
     db_session: AsyncSession = DbSessionDep,
     status_filter: UserStatus | None = Query(default=None, alias="status"),
     role: UserRole | None = None,
@@ -89,9 +140,13 @@ async def list_users(
         sort_field=sort_field,
         sort_direction=sort_direction,
     )
+    admin_service = UserAdminService(db_session)
+    user_ids = [user.id for user in result.items]
+    session_counts = await RefreshTokenRepository(db_session).count_active_by_user_ids(user_ids)
+    extras_map = await admin_service.batch_extras_for_users(result.items, session_counts)
     return _envelope(
         request,
-        [UserSummary.from_model(user).model_dump() for user in result.items],
+        [_serialize_summary(user, extras_map[user.id]) for user in result.items],
         _page_meta(result.page, result.page_size, result.total_items, result.total_pages),
     )
 
@@ -99,7 +154,7 @@ async def list_users(
 @router.get("/role-permissions")
 async def list_role_permissions(
     request: Request,
-    current: MainAdminDep,
+    current: UsersViewDep,
 ) -> dict:
     human_roles = (UserRole.MAIN_ADMIN, UserRole.ADMIN, UserRole.SALESPERSON)
     payload = RolePermissionsResponse(
@@ -115,7 +170,7 @@ async def list_role_permissions(
 async def create_user(
     request: Request,
     body: CreateUserRequest,
-    current: MainAdminDep,
+    current: UsersCreateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = UserService(db_session)
@@ -138,14 +193,21 @@ async def create_user(
 async def get_user(
     request: Request,
     user_id: int,
-    current: MainAdminDep,
+    current: UsersViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:
         user = await UserService(db_session).get_user(user_id)
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _envelope(request, UserDetail.from_model(user).model_dump())
+    admin_service = UserAdminService(db_session)
+    extras = await admin_service.extras_for_user(user)
+    sessions = await admin_service.list_sessions_for_user(user_id)
+    login_events = await admin_service.list_login_events_for_user(user_id)
+    return _envelope(
+        request,
+        _serialize_detail(user, extras, sessions=sessions, login_events=login_events),
+    )
 
 
 @router.patch("/{user_id}")
@@ -153,7 +215,7 @@ async def update_user(
     request: Request,
     user_id: int,
     body: UpdateUserRequest,
-    current: MainAdminDep,
+    current: UsersEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     if body.display_name is None:
@@ -175,7 +237,7 @@ async def update_user_role(
     request: Request,
     user_id: int,
     body: UpdateUserRoleRequest,
-    current: MainAdminDep,
+    current: UsersEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = UserService(db_session)
@@ -195,7 +257,7 @@ async def reset_password(
     request: Request,
     user_id: int,
     body: ResetPasswordRequest,
-    current: MainAdminDep,
+    current: UsersResetPasswordDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = UserService(db_session)
@@ -216,7 +278,7 @@ async def reset_password(
 async def disable_user(
     request: Request,
     user_id: int,
-    current: MainAdminDep,
+    current: UsersDeactivateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = UserService(db_session)
@@ -235,7 +297,7 @@ async def disable_user(
 async def enable_user(
     request: Request,
     user_id: int,
-    current: MainAdminDep,
+    current: UsersActivateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = UserService(db_session)
@@ -244,3 +306,74 @@ async def enable_user(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _envelope(request, UserDetail.from_model(user).model_dump())
+
+
+@router.post("/{user_id}/unlock")
+async def unlock_user(
+    request: Request,
+    user_id: int,
+    current: UsersEditDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = UserService(db_session)
+    try:
+        user = await service.unlock_user(user_id, actor=_actor(current))
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    extras = await UserAdminService(db_session).extras_for_user(user)
+    return _envelope(request, _serialize_detail(user, extras))
+
+
+@router.post("/{user_id}/logout-all")
+async def force_logout_user(
+    request: Request,
+    user_id: int,
+    current: UsersEditDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = UserService(db_session)
+    try:
+        revoked = await service.force_logout_user(user_id, actor=_actor(current))
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _envelope(request, {"success": True, "sessions_revoked": revoked})
+
+
+@router.post("/{user_id}/archive")
+async def archive_user(
+    request: Request,
+    user_id: int,
+    current: UsersDeactivateDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = UserService(db_session)
+    try:
+        user = await service.archive_user(user_id, actor=_actor(current))
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except LastMainAdminError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SelfMainAdminDisableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    extras = await UserAdminService(db_session).extras_for_user(user)
+    return _envelope(request, _serialize_detail(user, extras))
+
+
+@router.post("/{user_id}/restore")
+async def restore_user(
+    request: Request,
+    user_id: int,
+    current: UsersActivateDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = UserService(db_session)
+    try:
+        user = await service.restore_user(user_id, actor=_actor(current))
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    extras = await UserAdminService(db_session).extras_for_user(user)
+    return _envelope(request, _serialize_detail(user, extras))

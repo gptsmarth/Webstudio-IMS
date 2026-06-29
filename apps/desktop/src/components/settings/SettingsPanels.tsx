@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Database, RefreshCw } from 'lucide-react';
-import { formatDateTime } from '../../lib/datetime';
+import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Database, Download, RefreshCw } from 'lucide-react';
+import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
+import { auditSeverityBadgeClass, auditSeverityLabel } from '../../lib/audit';
 import { formatBytes } from '../../lib/settings';
 import {
   loadAppearancePreferences,
@@ -8,7 +9,16 @@ import {
   type AppearancePreferences,
 } from '../../lib/settingsUi';
 import type { SettingsWorkspaceState } from '../../hooks/useSettingsWorkspace';
+import { AuthenticationService, type SecurityDashboard } from '../../services/api/AuthenticationService';
+import { ApiClientProvider } from '../../services/api/ApiClientProvider';
+import {
+  INTEGRATION_SERVICE_TYPES,
+  IntegrationKeyService,
+  type IntegrationKeySummary,
+  type IntegrationServiceType,
+} from '../../services/api/IntegrationKeyService';
 import { VersionService } from '../../services/VersionService';
+import { useAuthStore } from '../../store';
 import { TallySettingsForm } from './TallySettingsForm';
 import type { Location } from '../../services/api/LocationService';
 import type { SettingsWorkspace } from '../../services/api/SettingsService';
@@ -51,7 +61,7 @@ export function GeneralPanel({ workspace, data, locations }: PanelProps): JSX.El
   useEffect(() => setForm(data.general), [data.general]);
 
   return (
-    <Section title="General">
+    <Section title="Company">
       <form
         className="stg-form"
         onSubmit={(e) => {
@@ -135,10 +145,205 @@ export function GeneralPanel({ workspace, data, locations }: PanelProps): JSX.El
 
 export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
   const [form, setForm] = useState(data.security);
+  const [dashboard, setDashboard] = useState<SecurityDashboard | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
+
   useEffect(() => setForm(data.security), [data.security]);
 
+  const refreshDashboard = useCallback(async () => {
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      setDashboard(await AuthenticationService.getSecurityDashboard());
+    } catch {
+      setDashboardError('Unable to load security dashboard.');
+      setDashboard(null);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDashboard();
+  }, [refreshDashboard]);
+
+  const unlockUser = async (userId: number) => {
+    const client = await ApiClientProvider.getClient();
+    await client.post(`/api/v1/users/${userId}/unlock`);
+    await refreshDashboard();
+  };
+
+  const revokeSession = async (sessionId: number) => {
+    await AuthenticationService.revokeSession(sessionId);
+    await refreshDashboard();
+  };
+
+  const exportSecurityEvents = async (format: 'pdf' | 'xlsx') => {
+    setExportLoading(true);
+    try {
+      await AuthenticationService.exportSecurityEvents(format);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   return (
-    <Section title="Security">
+    <>
+      <Section title="Security dashboard">
+        <div className="stg-security-dashboard">
+          {dashboardLoading && <p className="stg-security-dashboard__hint">Loading security status…</p>}
+          {dashboardError && <p className="stg-security-dashboard__error">{dashboardError}</p>}
+          {dashboard && (
+            <>
+              <div className="stg-readonly-grid">
+                <Readonly label="Your active sessions" value={String(dashboard.active_session_count)} />
+                <Readonly label="Org-wide sessions" value={String(dashboard.org_active_session_count)} />
+                <Readonly label="Failed logins (24h)" value={String(dashboard.failed_logins_24h)} />
+                <Readonly label="Locked accounts" value={String(dashboard.locked_users.length)} />
+                <Readonly
+                  label="Recovery key"
+                  value={dashboard.recovery.configured ? 'Configured' : 'Not configured'}
+                />
+              </div>
+
+              {dashboard.critical_alerts.length > 0 && (
+                <div className="stg-security-dashboard__block">
+                  <h3 className="stg-security-dashboard__subtitle">Critical alerts</h3>
+                  <ul className="stg-security-dashboard__alerts">
+                    {dashboard.critical_alerts.map((alert) => (
+                      <li key={alert.id} className="stg-security-dashboard__alert-row">
+                        <AlertTriangle size={16} aria-hidden />
+                        <div>
+                          <strong>{alert.description ?? alert.security_event ?? 'Security alert'}</strong>
+                          <div className="stg-security-dashboard__meta">
+                            {alert.actor_display_name ?? 'System'} · {formatRelativeTime(alert.created_at)}
+                          </div>
+                        </div>
+                        <span className={auditSeverityBadgeClass(alert.severity)}>{auditSeverityLabel(alert.severity)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="stg-security-dashboard__block">
+                <h3 className="stg-security-dashboard__subtitle">Password policy</h3>
+                <ul className="stg-security-dashboard__list">
+                  {dashboard.password_policy.rules.map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {dashboard.locked_users.length > 0 && workspace.canWrite && (
+                <div className="stg-security-dashboard__block">
+                  <h3 className="stg-security-dashboard__subtitle">Locked users</h3>
+                  <ul className="stg-security-dashboard__sessions">
+                    {dashboard.locked_users.map((user) => (
+                      <li key={user.id} className="stg-security-dashboard__session-row">
+                        <span>{user.display_name || user.username}</span>
+                        <span className="stg-security-dashboard__meta">
+                          until {user.locked_until ? formatDateTime(user.locked_until) : '—'}
+                        </span>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void unlockUser(user.id)}>
+                          Unlock
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="stg-security-dashboard__block">
+                <h3 className="stg-security-dashboard__subtitle">Your active sessions</h3>
+                {dashboard.active_sessions.length === 0 ? (
+                  <p className="stg-security-dashboard__hint">No active sessions.</p>
+                ) : (
+                  <ul className="stg-security-dashboard__sessions">
+                    {dashboard.active_sessions.map((session) => (
+                      <li key={session.id} className="stg-security-dashboard__session-row">
+                        <span>{session.device_label || 'Unknown device'}{session.is_current ? ' (current)' : ''}</span>
+                        <span className="stg-security-dashboard__meta">{session.ip_address ?? '—'}</span>
+                        {!session.is_current && (
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void revokeSession(session.id)}>
+                            Revoke
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void AuthenticationService.logoutAll().then(() => refreshDashboard())}>
+                  Sign out all devices
+                </button>
+              </div>
+
+              <div className="stg-security-dashboard__block">
+                <h3 className="stg-security-dashboard__subtitle">Recent security events</h3>
+                {dashboard.recent_security_events.length === 0 ? (
+                  <p className="stg-security-dashboard__hint">No security events recorded yet.</p>
+                ) : (
+                  <ul className="stg-security-dashboard__sessions">
+                    {dashboard.recent_security_events.slice(0, 12).map((event) => (
+                      <li key={event.id} className="stg-security-dashboard__session-row">
+                        <span>{event.description ?? event.security_event ?? 'Security event'}</span>
+                        <span className={auditSeverityBadgeClass(event.severity)}>{auditSeverityLabel(event.severity)}</span>
+                        <span className="stg-security-dashboard__meta">
+                          {event.actor_display_name ?? 'System'} · {formatRelativeTime(event.created_at)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="stg-security-dashboard__block">
+                <h3 className="stg-security-dashboard__subtitle">Recent login activity</h3>
+                <ul className="stg-security-dashboard__sessions">
+                  {dashboard.recent_login_events.slice(0, 10).map((event) => (
+                    <li key={event.id} className="stg-security-dashboard__session-row">
+                      <span>{event.username}</span>
+                      <span className={`badge ${event.success ? 'badge-success' : 'badge-danger'}`}>
+                        {event.success ? 'Success' : 'Failed'}
+                      </span>
+                      <span className="stg-security-dashboard__meta">{formatRelativeTime(event.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="stg-security-dashboard__export">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void exportSecurityEvents('xlsx')}
+                  disabled={exportLoading}
+                >
+                  <Download size={14} aria-hidden />
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void exportSecurityEvents('pdf')}
+                  disabled={exportLoading}
+                >
+                  <Download size={14} aria-hidden />
+                  Export PDF
+                </button>
+              </div>
+            </>
+          )}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void refreshDashboard()} disabled={dashboardLoading}>
+            <RefreshCw size={14} aria-hidden />
+            Refresh
+          </button>
+        </div>
+      </Section>
+
+      <Section title="Security policy">
       <form
         className="stg-form"
         onSubmit={(e) => {
@@ -153,6 +358,17 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             min={5}
             value={form.session_timeout_minutes}
             onChange={(e) => setForm({ ...form, session_timeout_minutes: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
+          />
+        </Field>
+        <Field label="Remember me session (days)">
+          <input
+            className="input"
+            type="number"
+            min={7}
+            value={form.remember_me_ttl_days}
+            onChange={(e) => setForm({ ...form, remember_me_ttl_days: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
           />
         </Field>
         <Field label="Minimum password length">
@@ -162,6 +378,18 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             min={8}
             value={form.password_min_length}
             onChange={(e) => setForm({ ...form, password_min_length: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
+          />
+        </Field>
+        <Field label="Password history count">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={24}
+            value={form.password_history_count}
+            onChange={(e) => setForm({ ...form, password_history_count: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
           />
         </Field>
         <label className="stg-check">
@@ -169,14 +397,25 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             type="checkbox"
             checked={form.password_require_uppercase}
             onChange={(e) => setForm({ ...form, password_require_uppercase: e.target.checked })}
+            disabled={!workspace.canWrite}
           />
           Require uppercase
         </label>
         <label className="stg-check">
           <input
             type="checkbox"
+            checked={form.password_require_lowercase}
+            onChange={(e) => setForm({ ...form, password_require_lowercase: e.target.checked })}
+            disabled={!workspace.canWrite}
+          />
+          Require lowercase
+        </label>
+        <label className="stg-check">
+          <input
+            type="checkbox"
             checked={form.password_require_number}
             onChange={(e) => setForm({ ...form, password_require_number: e.target.checked })}
+            disabled={!workspace.canWrite}
           />
           Require number
         </label>
@@ -185,6 +424,7 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             type="checkbox"
             checked={form.password_require_symbol}
             onChange={(e) => setForm({ ...form, password_require_symbol: e.target.checked })}
+            disabled={!workspace.canWrite}
           />
           Require symbol
         </label>
@@ -195,6 +435,7 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             min={3}
             value={form.lockout_threshold}
             onChange={(e) => setForm({ ...form, lockout_threshold: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
           />
         </Field>
         <Field label="Lockout duration (minutes)">
@@ -204,6 +445,7 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
             min={1}
             value={form.lockout_duration_minutes}
             onChange={(e) => setForm({ ...form, lockout_duration_minutes: Number(e.target.value) })}
+            disabled={!workspace.canWrite}
           />
         </Field>
         <div className="stg-readonly-grid">
@@ -224,6 +466,7 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
         <SaveButton label="Save security settings" saving={workspace.saving} canWrite={workspace.canWrite} />
       </form>
     </Section>
+    </>
   );
 }
 
@@ -377,6 +620,150 @@ const GEMINI_MODELS = [
   'gemini-flash-lite-latest',
 ];
 
+function IntegrationApiKeysSection(): JSX.Element | null {
+  const session = useAuthStore((state) => state.session);
+  const isMainAdmin = session?.role === 'main_admin';
+  const [keys, setKeys] = useState<IntegrationKeySummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [serviceType, setServiceType] = useState<IntegrationServiceType>('email');
+  const [label, setLabel] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadKeys = useCallback(async () => {
+    if (!isMainAdmin) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await IntegrationKeyService.listKeys(includeArchived);
+      setKeys(rows);
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setError(message.message ?? 'Unable to load integration keys.');
+      setKeys([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [includeArchived, isMainAdmin]);
+
+  useEffect(() => {
+    void loadKeys();
+  }, [loadKeys]);
+
+  if (!isMainAdmin) {
+    return (
+      <Section title="Integration API keys">
+        <p className="stg-section__lead">
+          Encrypted API keys for email, SMS, WhatsApp, and future services are managed by the Main Administrator.
+        </p>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Integration API keys">
+      <p className="stg-section__lead">
+        Store encrypted credentials for outbound integrations. Keys are never shown in full after saving.
+      </p>
+      {error && <p className="stg-error">{error}</p>}
+      <form
+        className="stg-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void (async () => {
+            setSaving(true);
+            setError(null);
+            try {
+              await IntegrationKeyService.createKey({
+                service_type: serviceType,
+                label: label.trim(),
+                api_key: apiKey.trim(),
+              });
+              setLabel('');
+              setApiKey('');
+              await loadKeys();
+            } catch (err: unknown) {
+              const message = err as { message?: string };
+              setError(message.message ?? 'Unable to save integration key.');
+            } finally {
+              setSaving(false);
+            }
+          })();
+        }}
+      >
+        <Field label="Service">
+          <select className="input" value={serviceType} onChange={(e) => setServiceType(e.target.value as IntegrationServiceType)}>
+            {INTEGRATION_SERVICE_TYPES.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.label}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Label">
+          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Production SMTP" />
+        </Field>
+        <Field label="API key">
+          <input
+            className="input"
+            type="password"
+            autoComplete="off"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Paste secret key"
+          />
+        </Field>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
+          {saving ? 'Saving…' : 'Add integration key'}
+        </button>
+      </form>
+      <label className="stg-check">
+        <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+        <span>Show archived keys</span>
+      </label>
+      {loading ? (
+        <p className="stg-muted">Loading keys…</p>
+      ) : keys.length === 0 ? (
+        <p className="stg-muted">No integration keys configured yet.</p>
+      ) : (
+        <div className="stg-key-list">
+          {keys.map((entry) => (
+            <div key={entry.id} className="stg-key-card">
+              <div>
+                <strong>{entry.label}</strong>
+                <p className="stg-muted">
+                  {entry.service_type}
+                  {entry.key_hint ? ` · ${entry.key_hint}` : ''}
+                  {entry.is_archived ? ' · Archived' : ''}
+                </p>
+              </div>
+              <div className="stg-key-card__actions">
+                {!entry.is_archived ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void IntegrationKeyService.archiveKey(entry.id).then(() => loadKeys())}
+                  >
+                    Archive
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void IntegrationKeyService.restoreKey(entry.id).then(() => loadKeys())}
+                  >
+                    Restore
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element {
   const [model, setModel] = useState(data.integrations.gemini_model);
   const [apiKey, setApiKey] = useState('');
@@ -389,7 +776,9 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
   }, [data.integrations]);
 
   return (
-    <Section title="Gemini AI">
+    <>
+      <IntegrationApiKeysSection />
+      <Section title="Gemini AI">
       <p className="stg-section__lead">
         Powers Add Laptop auto-fetch for specifications and product images. Get a free API key from{' '}
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
@@ -455,6 +844,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
         <SaveButton label="Save integration settings" saving={workspace.saving} canWrite={workspace.canWrite} />
       </form>
     </Section>
+    </>
   );
 }
 
@@ -631,7 +1021,7 @@ export function AppearancePanel(): JSX.Element {
   const [appearance, setAppearance] = useState<AppearancePreferences>(loadAppearancePreferences());
 
   return (
-    <Section title="Appearance">
+    <Section title="Branding">
       <div className="stg-form">
         <Field label="Theme">
           <select
@@ -750,14 +1140,14 @@ export function AboutPanel({ data }: { data: SettingsWorkspace }): JSX.Element {
   }, []);
 
   return (
-    <Section title="About WEBSTUDIO IMS">
+    <Section title="Version & license">
       <div className="stg-about">
         <p>
           <strong>WEBSTUDIO IMS</strong> — Inventory Management System
         </p>
         <p>Version {clientMeta?.appVersion ?? data.system.app_version}</p>
         <p className="stg-muted">Developed by WEBSTUDIO</p>
-        <p className="stg-muted">License: Proprietary · Internal use</p>
+        <Readonly label="License" value="Not activated (enterprise licensing coming soon)" />
         <h3 className="stg-subtitle">Credits</h3>
         <p className="stg-muted">
           Built for retail laptop inventory, sales, and Tally integration workflows.

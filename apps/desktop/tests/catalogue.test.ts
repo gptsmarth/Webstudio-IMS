@@ -11,8 +11,8 @@ import { countModelsByBrand } from '../src/components/catalogue/BrandsTab';
 
 describe('catalogue utilities', () => {
   it('checks write permissions', () => {
-    expect(canWriteCatalogue('admin')).toBe(true);
-    expect(canWriteCatalogue('salesperson')).toBe(false);
+    expect(canWriteCatalogue(['brands:create', 'locations:edit'])).toBe(true);
+    expect(canWriteCatalogue(['brands:view', 'locations:view'])).toBe(false);
   });
 
   it('paginates items', () => {

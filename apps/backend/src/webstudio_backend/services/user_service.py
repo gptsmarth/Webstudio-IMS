@@ -19,7 +19,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.repositories.user_validation import validate_human_role
-from webstudio_backend.infrastructure.security.password import hash_password, validate_password_strength
+from webstudio_backend.infrastructure.security.password import hash_password
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
+from webstudio_backend.services.user_admin_service import UserAdminService
 
 
 class UserService:
@@ -28,6 +30,7 @@ class UserService:
         self._users = UserRepository(session)
         self._refresh_tokens = RefreshTokenRepository(session)
         self._recorder = AuditRecorder(session)
+        self._password_policy = PasswordPolicyService(session)
 
     async def list_users(
         self,
@@ -68,16 +71,18 @@ class UserService:
         actor: AuditActor,
     ) -> User:
         validate_human_role(role)
-        validate_password_strength(temporary_password)
+        await self._password_policy.validate(temporary_password)
+        password_hash = hash_password(temporary_password)
         user = await self._users.create(
             username=username,
-            password_hash=hash_password(temporary_password),
+            password_hash=password_hash,
             role=role,
             display_name=display_name,
             must_change_password=True,
             created_by_user_id=actor.user_id,
         )
         await self._recorder.record_user_create(user, actor=actor)
+        await self._password_policy.record_password(user.id, password_hash)
         return user
 
     async def update_display_name(
@@ -124,15 +129,22 @@ class UserService:
         temporary_password: str,
         actor: AuditActor,
     ) -> User:
-        validate_password_strength(temporary_password)
         user = await self.get_user(user_id)
+        await self._password_policy.validate(temporary_password)
+        await self._password_policy.ensure_not_reused(
+            user_id,
+            temporary_password,
+            current_hash=user.password_hash,
+        )
+        password_hash = hash_password(temporary_password)
         updated = await self._users.set_password(
             user,
-            hash_password(temporary_password),
+            password_hash,
             must_change_password=True,
             actor_id=actor.user_id,
         )
         await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._password_policy.record_password(user.id, password_hash)
         await self._recorder.record_user_update(
             updated,
             field_name="password",
@@ -156,9 +168,51 @@ class UserService:
 
     async def enable_user(self, user_id: int, *, actor: AuditActor) -> User:
         user = await self.get_user(user_id)
+        if user.archived_at is not None:
+            raise ValueError("Archived users must be restored before activation")
         updated = await self._users.set_status(user, UserStatus.ACTIVE, actor_id=actor.user_id or 0)
         await self._recorder.record_user_enable(updated, actor=actor)
         return updated
+
+    async def unlock_user(self, user_id: int, *, actor: AuditActor) -> User:
+        user = await self.get_user(user_id)
+        updated = await self._users.clear_lockout(user)
+        await self._recorder.record_user_update(
+            updated,
+            field_name="lockout",
+            old_value={"locked_until": user.locked_until.isoformat() if user.locked_until else None},
+            new_value={"locked_until": None, "failed_login_count": 0},
+            actor=actor,
+            description=f"Account unlocked for user '{user.username}'",
+        )
+        return updated
+
+    async def archive_user(self, user_id: int, *, actor: AuditActor) -> User:
+        user = await self.get_user(user_id)
+        if actor.user_id == user_id and user.role == UserRole.MAIN_ADMIN:
+            raise SelfMainAdminDisableError()
+        if user.role == UserRole.MAIN_ADMIN:
+            await self._ensure_not_last_main_admin(user)
+        if user.archived_at is not None:
+            raise ValueError("User is already archived")
+        updated = await self._users.archive(user, actor_id=actor.user_id or 0)
+        await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._recorder.record_user_archive(updated, actor=actor)
+        return updated
+
+    async def restore_user(self, user_id: int, *, actor: AuditActor) -> User:
+        user = await self.get_user(user_id)
+        if user.archived_at is None:
+            raise ValueError("User is not archived")
+        updated = await self._users.restore_from_archive(user, actor_id=actor.user_id or 0)
+        await self._recorder.record_user_restore(updated, actor=actor)
+        return updated
+
+    async def force_logout_user(self, user_id: int, *, actor: AuditActor) -> int:
+        user = await self.get_user(user_id)
+        revoked = await UserAdminService(self._session).force_logout(user_id)
+        await self._recorder.record_user_force_logout(user, actor=actor, sessions_revoked=revoked)
+        return revoked
 
     async def _ensure_not_last_main_admin(self, user: User) -> None:
         if user.role != UserRole.MAIN_ADMIN:

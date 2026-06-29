@@ -1,4 +1,12 @@
 import type { InventoryItemDetail, InventoryStatus, StorageType, StorageUnit } from '../services/api/InventoryService';
+import {
+  canEditProductModels as canEditProductModelsPermission,
+  canEditSellingPrice as canEditSellingPricePermission,
+  canMarkSold as canMarkSoldPermission,
+  canTransferStockLocation as canTransferStockLocationPermission,
+  canViewPurchasePrice as canViewPurchasePricePermission,
+  canWriteInventory as canWriteInventoryPermission,
+} from '../services/PermissionService';
 
 export function formatInventorySpecs(item: Pick<InventoryItemDetail, 'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'>): string {
   const storage = formatStorage(item.storage_value, item.storage_unit, item.storage_type);
@@ -56,22 +64,26 @@ export function formatInventoryDate(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(timestamp);
 }
 
-export function canMarkSold(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+export function canMarkSold(permissions: string[]): boolean {
+  return canMarkSoldPermission(permissions);
 }
 
-export function canWriteInventory(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+export function canWriteInventory(permissions: string[]): boolean {
+  return canWriteInventoryPermission(permissions);
 }
 
-export function canTransferStockLocation(role: string): boolean {
-  return role === 'main_admin' || role === 'admin' || role === 'salesperson';
+export function canTransferStockLocation(permissions: string[]): boolean {
+  return canTransferStockLocationPermission(permissions);
 }
 
-export function canViewPurchasePrice(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+export function canViewPurchasePrice(permissions: string[]): boolean {
+  return canViewPurchasePricePermission(permissions);
 }
 
-export function canEditSellingPrice(role: string): boolean {
-  return role === 'main_admin' || role === 'admin' || role === 'salesperson';
+export function canEditSellingPrice(permissions: string[]): boolean {
+  return canEditSellingPricePermission(permissions);
+}
+
+export function canEditProductModels(permissions: string[]): boolean {
+  return canEditProductModelsPermission(permissions);
 }

@@ -6,11 +6,12 @@ import {
   ShoppingBag,
   Truck,
 } from 'lucide-react';
-import type { UserRole, WorkspaceRoute } from '../../config/navigation';
+import type { WorkspaceRoute } from '../../config/navigation';
+import { P } from '../../services/PermissionService';
 import { useNavigationStore, useSearchStore } from '../../store';
 
 interface DashboardQuickActionsProps {
-  role: UserRole;
+  permissions: string[];
   onTallySync: () => void;
   syncingTally: boolean;
 }
@@ -21,24 +22,24 @@ const ACTIONS: {
   icon: typeof Search;
   route?: WorkspaceRoute;
   search?: boolean;
-  adminOnly?: boolean;
+  permission?: string;
   tally?: boolean;
 }[] = [
-  { id: 'add', label: 'Add Laptop', icon: PackagePlus, route: 'inventory' },
+  { id: 'add', label: 'Add Laptop', icon: PackagePlus, route: 'inventory', permission: P.inventory.create },
   { id: 'search', label: 'Search', icon: Search, search: true },
-  { id: 'transfer', label: 'Transfer', icon: Truck, route: 'inventory' },
-  { id: 'sold', label: 'Mark Sold', icon: ShoppingBag, route: 'inventory' },
-  { id: 'sales', label: 'Sales', icon: ShoppingBag, route: 'sales' },
-  { id: 'reports', label: 'Reports & Export', icon: FileSpreadsheet, route: 'reports', adminOnly: true },
-  { id: 'tally', label: 'Run Tally Sync', icon: RefreshCw, tally: true, adminOnly: true },
+  { id: 'transfer', label: 'Transfer', icon: Truck, route: 'inventory', permission: P.inventory.transfer },
+  { id: 'sold', label: 'Mark Sold', icon: ShoppingBag, route: 'inventory', permission: P.sales.create },
+  { id: 'sales', label: 'Sales', icon: ShoppingBag, route: 'sales', permission: P.sales.view },
+  { id: 'reports', label: 'Reports & Export', icon: FileSpreadsheet, route: 'reports', permission: P.reports.view },
+  { id: 'tally', label: 'Run Tally Sync', icon: RefreshCw, tally: true, permission: P.tally.runSync },
 ];
 
-export function DashboardQuickActions({ role, onTallySync, syncingTally }: DashboardQuickActionsProps): JSX.Element {
+export function DashboardQuickActions({ permissions, onTallySync, syncingTally }: DashboardQuickActionsProps): JSX.Element {
   const { setRoute } = useNavigationStore();
   const { open: openSearch } = useSearchStore();
-  const isAdmin = role === 'main_admin' || role === 'admin';
+  const granted = new Set(permissions);
 
-  const visible = ACTIONS.filter((action) => !action.adminOnly || isAdmin);
+  const visible = ACTIONS.filter((action) => !action.permission || granted.has(action.permission));
 
   return (
     <div className="dash-quick-actions" role="toolbar" aria-label="Quick actions">

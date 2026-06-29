@@ -59,6 +59,8 @@ class ReportFilters:
     audit_action: AuditAction | None = None
     audit_source: AuditSource | None = None
     actor_role: str | None = None
+    security_only: bool = False
+    audit_severity: str | None = None
     search: str | None = None
     sort_field: str | None = None
     sort_direction: str | None = None

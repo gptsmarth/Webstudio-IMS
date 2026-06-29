@@ -21,6 +21,12 @@ class UserSummary(BaseModel):
     theme_preference: ThemePreference | None = None
     last_login_at: datetime | None = None
     created_at: datetime | None = None
+    failed_login_count: int = 0
+    is_locked: bool = False
+    is_archived: bool = False
+    active_session_count: int = 0
+    password_age_days: int | None = None
+    created_by_display_name: str | None = None
 
     @classmethod
     def from_model(cls, user: User) -> UserSummary:
@@ -36,11 +42,44 @@ class UserSummary(BaseModel):
             created_at=user.created_at,
         )
 
+    @classmethod
+    def from_model_with_extras(cls, user: User, extras: dict[str, object]) -> UserSummary:
+        base = cls.from_model(user)
+        merged = {**base.model_dump(), **extras}
+        return cls(**{key: merged[key] for key in cls.model_fields})
+
+
+class UserSessionSummary(BaseModel):
+    id: int
+    device_label: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    remember_me: bool = False
+    created_at: str
+    last_used_at: str | None = None
+    expires_at: str
+
+
+class UserLoginEventSummary(BaseModel):
+    id: int
+    username: str
+    success: bool
+    failure_reason: str | None = None
+    ip_address: str | None = None
+    device_label: str | None = None
+    created_at: str
+
 
 class UserDetail(UserSummary):
     created_at: datetime
     updated_at: datetime
     permissions: list[str] = Field(default_factory=list)
+    locked_until: datetime | None = None
+    password_changed_at: datetime | None = None
+    created_by_user_id: int | None = None
+    archived_at: datetime | None = None
+    sessions: list[UserSessionSummary] = Field(default_factory=list)
+    login_events: list[UserLoginEventSummary] = Field(default_factory=list)
 
     @classmethod
     def from_model(cls, user: User) -> UserDetail:
@@ -50,6 +89,28 @@ class UserDetail(UserSummary):
             updated_at=user.updated_at,
             permissions=permissions_for_role(user.role),
         )
+
+    @classmethod
+    def from_model_with_extras(
+        cls,
+        user: User,
+        extras: dict[str, object],
+        *,
+        sessions: list[dict[str, object]] | None = None,
+        login_events: list[dict[str, object]] | None = None,
+    ) -> UserDetail:
+        base = UserSummary.from_model_with_extras(user, extras)
+        detail_fields = {
+            "updated_at": user.updated_at,
+            "permissions": permissions_for_role(user.role),
+            "locked_until": extras.get("locked_until"),
+            "password_changed_at": extras.get("password_changed_at"),
+            "created_by_user_id": extras.get("created_by_user_id"),
+            "archived_at": extras.get("archived_at"),
+            "sessions": [UserSessionSummary.model_validate(item) for item in (sessions or [])],
+            "login_events": [UserLoginEventSummary.model_validate(item) for item in (login_events or [])],
+        }
+        return cls(**base.model_dump(), **detail_fields)
 
 
 class RolePermissionsEntry(BaseModel):
@@ -76,6 +137,8 @@ class CurrentUserResponse(UserSummary):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    remember_me: bool = False
+    device_label: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -96,6 +159,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str
     expires_in: int
+    session_id: int | None = None
     user: UserSummary
 
 

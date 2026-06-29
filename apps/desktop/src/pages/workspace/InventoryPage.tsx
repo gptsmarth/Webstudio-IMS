@@ -32,7 +32,7 @@ export function InventoryPage(): JSX.Element {
   const [editModelId, setEditModelId] = useState<string | null>(null);
   const [modelActionLoading, setModelActionLoading] = useState(false);
 
-  const canWrite = session ? canWriteInventory(session.role) : false;
+  const canWrite = session ? canWriteInventory(session.permissions) : false;
 
   useEffect(() => {
     if (session && !canWrite) {
@@ -223,7 +223,7 @@ export function InventoryPage(): JSX.Element {
           {workspace.selectedItem && (
             <InventoryDetailDrawer
               workspace={workspace}
-              role={session.role}
+              permissions={session.permissions}
               onTransfer={() => {}}
               onMarkSold={() => handleMarkSold(workspace.selectedItem!.id)}
               onArchive={() => void workspace.archiveItem()}

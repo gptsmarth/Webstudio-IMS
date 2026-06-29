@@ -1,5 +1,5 @@
 import type { AuditFilters, AuditWorkspaceState } from '../../hooks/useAuditWorkspace';
-import { AUDIT_ACTIONS, AUDIT_MODULES, AUDIT_SOURCES } from '../../lib/audit';
+import { AUDIT_ACTIONS, AUDIT_MODULES, AUDIT_SEVERITIES, AUDIT_SOURCES } from '../../lib/audit';
 import type { UserRole } from '../../config/navigation';
 import { formatRoleLabel } from '../../store/useAuthStore';
 import type { Location } from '../../services/api/LocationService';
@@ -30,6 +30,8 @@ export function AuditFiltersPanel({
     || filters.source
     || filters.locationId
     || filters.result
+    || filters.severity
+    || filters.module === 'Security'
     || filters.serialNumber
     || filters.invoiceNumber
     || filters.modelNumber
@@ -121,6 +123,21 @@ export function AuditFiltersPanel({
           {locations.map((location) => (
             <option key={location.id} value={location.id}>
               {location.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="aud-filters__field">
+        <span>Severity</span>
+        <select
+          className="input"
+          value={filters.severity}
+          onChange={(event) => setFilters({ severity: event.target.value as AuditFilters['severity'] })}
+        >
+          <option value="">All severities</option>
+          {AUDIT_SEVERITIES.map((severity) => (
+            <option key={severity} value={severity}>
+              {severity.charAt(0).toUpperCase() + severity.slice(1)}
             </option>
           ))}
         </select>

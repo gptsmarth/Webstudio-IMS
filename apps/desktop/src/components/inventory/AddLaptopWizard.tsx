@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { STORAGE_TYPES, STORAGE_UNITS } from '../../lib/catalogue';
+import { composeModelNotes } from '../../lib/modelNotes';
 import {
   fetchProductSpecFromInternet,
   findModelByNumber,
   lookupExistingModelInventory,
   modelToFetchedSpec,
+  type FetchedProductSpec,
 } from '../../lib/productSpecLookup';
 import type { Location } from '../../services/api/LocationService';
 import type { CreateProductModelRequest, ProductModel } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
+import { ProductSpecService } from '../../services/api/ProductSpecService';
 
 export interface SerialUnitEntry {
   serial_number: string;
@@ -39,6 +42,7 @@ interface AddLaptopWizardProps {
 }
 
 type WizardStep = 'model' | 'specs' | 'units' | 'review';
+type SpecTab = 'configuration' | 'description';
 
 function stepLabel(step: WizardStep, mode: 'existing' | 'new'): string {
   if (mode === 'existing') {
@@ -80,9 +84,13 @@ export function AddLaptopWizard({
   const [storageType, setStorageType] = useState<'SSD' | 'HDD'>('SSD');
   const [display, setDisplay] = useState('');
   const [colorOptions, setColorOptions] = useState('');
+  const [description, setDescription] = useState('');
   const [specNotes, setSpecNotes] = useState('');
+  const [specTab, setSpecTab] = useState<SpecTab>('configuration');
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
+  const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoFetchTriggered = useRef(false);
 
   const brandModels = productModels.filter((model) => model.brand_id === brandId);
   const selectedModel = brandModels.find((model) => model.id === productModelId) ?? existingLookup?.model ?? null;
@@ -109,9 +117,13 @@ export function AddLaptopWizard({
     setStorageType('SSD');
     setDisplay('');
     setColorOptions('');
+    setDescription('');
     setSpecNotes('');
+    setSpecTab('configuration');
     setProductImageUrl(null);
+    setProductImagePreview(null);
     setError(null);
+    autoFetchTriggered.current = false;
   }, [open, locations]);
 
   useEffect(() => {
@@ -143,12 +155,31 @@ export function AddLaptopWizard({
     setStorageType(spec.storage_type);
     setDisplay(spec.display ?? '');
     setColorOptions(spec.color_options ?? '');
+    setDescription(spec.description ?? '');
     setSpecNotes(spec.notes ?? '');
     setProductImageUrl(spec.product_image_url);
   }, []);
 
-  const runGeminiFetch = useCallback(async () => {
-    if (!modelNumber.trim() || fetching) return;
+  const applyInternetSpec = useCallback((internet: FetchedProductSpec) => {
+    if (!internet) return;
+    setModelName(internet.model_name || modelName);
+    setCpu(internet.cpu);
+    setGpu(internet.gpu ?? '');
+    setRamGb(String(internet.ram_gb));
+    setStorageValue(internet.storage_value);
+    setStorageUnit(internet.storage_unit);
+    setStorageType(internet.storage_type);
+    setDisplay(internet.display ?? '');
+    setColorOptions(internet.color_options ?? '');
+    if (internet.description) {
+      setDescription(internet.description);
+    }
+    setSpecNotes(internet.notes ?? '');
+    setProductImageUrl(internet.product_image_url);
+  }, [modelName]);
+
+  const runGeminiFetch = useCallback(async (): Promise<boolean> => {
+    if (!modelNumber.trim()) return false;
     setFetching(true);
     setFetchMessage(null);
     setError(null);
@@ -158,35 +189,67 @@ export function AddLaptopWizard({
         brandName,
       });
       if (internet) {
-        setModelName(internet.model_name || modelName);
-        setCpu(internet.cpu);
-        setGpu(internet.gpu ?? '');
-        setRamGb(String(internet.ram_gb));
-        setStorageValue(internet.storage_value);
-        setStorageUnit(internet.storage_unit);
-        setStorageType(internet.storage_type);
-        setDisplay(internet.display ?? '');
-        setColorOptions(internet.color_options ?? '');
-        setSpecNotes(internet.notes ?? '');
-        setProductImageUrl(internet.product_image_url);
+        applyInternetSpec(internet);
         const sourceNote = internet.notes?.includes('\n---\n')
           ? internet.notes.split('\n---\n').pop()?.trim()
-          : internet.notes;
+          : null;
         setFetchMessage(
           sourceNote
-            ? `Fetched via Gemini (web search). ${sourceNote}`
-            : 'Configuration fetched via Gemini web search — review and adjust if needed.',
+            ? `Configuration auto-fetched. ${sourceNote}`
+            : 'Configuration auto-fetched — review and adjust if needed.',
         );
-      } else {
-        setFetchMessage('Could not auto-fetch specs — enter configuration manually.');
+        return true;
       }
+      setFetchMessage('Auto-fetch found no match — enter details manually or tap Auto fetch to retry.');
+      return false;
     } catch (err: unknown) {
       const message = err as { message?: string };
-      setFetchMessage(message.message ?? 'Auto-fetch failed — enter details manually.');
+      setFetchMessage(message.message ?? 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.');
+      return false;
     } finally {
       setFetching(false);
     }
-  }, [brandName, fetching, modelName, modelNumber]);
+  }, [applyInternetSpec, brandName, modelName, modelNumber]);
+
+  useEffect(() => {
+    if (!open || step !== 'specs' || mode !== 'new' || !modelNumber.trim()) {
+      return;
+    }
+    if (autoFetchTriggered.current) {
+      return;
+    }
+    autoFetchTriggered.current = true;
+    void runGeminiFetch();
+  }, [open, step, mode, modelNumber, runGeminiFetch]);
+
+  useEffect(() => {
+    if (!productImageUrl?.startsWith('https://')) {
+      setProductImagePreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    void ProductSpecService.fetchImageBlob(productImageUrl)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setProductImagePreview(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProductImagePreview(productImageUrl);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [productImageUrl]);
 
   const continueFromModel = async () => {
     const trimmed = modelNumber.trim();
@@ -214,6 +277,7 @@ export function AddLaptopWizard({
       setMode('new');
       setProductModelId('');
       setExistingLookup(null);
+      autoFetchTriggered.current = false;
       setStep('specs');
     } finally {
       setChecking(false);
@@ -258,7 +322,7 @@ export function AddLaptopWizard({
         display: display.trim() || null,
         color_options: colorOptions.trim() || null,
         product_image_url: productImageUrl,
-        notes: specNotes.trim() || null,
+        notes: composeModelNotes(description, specNotes),
       } : undefined,
     };
 
@@ -320,57 +384,112 @@ export function AddLaptopWizard({
           )}
 
           {step === 'specs' && (
-            <div className="add-laptop-wizard__step add-laptop-wizard__form-grid">
-              <p className="add-laptop-wizard__field-full add-laptop-wizard__hint">
-                New model <span className="col-mono">{modelNumber}</span> — enter or confirm configuration.
+            <div className="add-laptop-wizard__step">
+              <p className="add-laptop-wizard__hint">
+                New model <span className="col-mono">{modelNumber}</span>
+                {fetching ? ' — auto-fetching configuration…' : ' — confirm or edit configuration below.'}
               </p>
-              {productImageUrl ? (
+              {(productImagePreview || productImageUrl) ? (
                 <div className="add-laptop-wizard__image">
                   <div className="inv-product-image">
                     <div className="inv-product-image__frame">
-                      <img src={productImageUrl} alt={modelName || modelNumber} className="inv-product-image__img" />
-                      <span className="inv-product-image__badge inv-product-image__badge--remote">Gemini</span>
+                      <img
+                        src={productImagePreview || productImageUrl || ''}
+                        alt={modelName || modelNumber}
+                        className="inv-product-image__img"
+                      />
+                      <span className="inv-product-image__badge inv-product-image__badge--remote">Auto fetch</span>
                     </div>
                     <p className="inv-product-image__hint">Preview from auto-fetch. Saved with the new product model.</p>
                   </div>
                 </div>
               ) : null}
-              <label className="add-laptop-wizard__field-full">Model name
+              <label className="form-label">Model name
                 <input className="input" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. Vivobook 15" />
               </label>
-              <div className="add-laptop-wizard__actions-row add-laptop-wizard__field-full">
+              <div className="add-laptop-wizard__actions-row">
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
                   disabled={fetching || !modelNumber.trim()}
                   onClick={() => void runGeminiFetch()}
                 >
-                  {fetching ? 'Fetching…' : 'Fetch from Gemini'}
+                  {fetching ? 'Fetching…' : 'Auto fetch'}
                 </button>
               </div>
-              {!fetchMessage && !cpu && (
-                <p className="add-laptop-wizard__hint add-laptop-wizard__field-full">
-                  Click Fetch from Gemini to auto-fill specs, or enter them manually below.
-                </p>
+              {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
+              <div className="add-laptop-wizard__tabs" role="tablist" aria-label="Model details">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={specTab === 'configuration'}
+                  className={`add-laptop-wizard__tab${specTab === 'configuration' ? ' add-laptop-wizard__tab--active' : ''}`}
+                  onClick={() => setSpecTab('configuration')}
+                >
+                  Configuration
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={specTab === 'description'}
+                  className={`add-laptop-wizard__tab${specTab === 'description' ? ' add-laptop-wizard__tab--active' : ''}`}
+                  onClick={() => setSpecTab('description')}
+                >
+                  Description
+                </button>
+              </div>
+              {specTab === 'configuration' ? (
+                <div className="add-laptop-wizard__form-grid" role="tabpanel">
+                  <label>CPU<input className="input" value={cpu} onChange={(e) => setCpu(e.target.value)} /></label>
+                  <label>GPU<input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} /></label>
+                  <label>RAM (GB)<input className="input" value={ramGb} onChange={(e) => setRamGb(e.target.value)} /></label>
+                  <label>Storage<input className="input" value={storageValue} onChange={(e) => setStorageValue(e.target.value)} /></label>
+                  <label>Storage unit
+                    <select className="input" value={storageUnit} onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}>
+                      {STORAGE_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                    </select>
+                  </label>
+                  <label>Storage type
+                    <select className="input" value={storageType} onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}>
+                      {STORAGE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </label>
+                  <label className="add-laptop-wizard__field-full">Display<input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} /></label>
+                  <label className="add-laptop-wizard__field-full">Color options<input className="input" value={colorOptions} onChange={(e) => setColorOptions(e.target.value)} placeholder="e.g. Quiet Blue, Cool Silver" /></label>
+                  <label className="add-laptop-wizard__field-full">Additional specs
+                    <textarea
+                      className="input add-laptop-wizard__textarea"
+                      rows={4}
+                      value={specNotes}
+                      onChange={(e) => setSpecNotes(e.target.value)}
+                      placeholder="OS, battery, weight, connectivity, warranty… (auto-filled when available)"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="add-laptop-wizard__description-panel" role="tabpanel">
+                  <label className="form-label">Product description
+                    <textarea
+                      className="input add-laptop-wizard__textarea"
+                      rows={8}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Retail summary for staff — positioning, key features, ideal customer. Auto-filled when available."
+                    />
+                  </label>
+                </div>
               )}
-              {fetchMessage && <p className="add-laptop-wizard__hint add-laptop-wizard__field-full">{fetchMessage}</p>}
-              <label>CPU<input className="input" value={cpu} onChange={(e) => setCpu(e.target.value)} /></label>
-              <label>GPU<input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} /></label>
-              <label>RAM (GB)<input className="input" value={ramGb} onChange={(e) => setRamGb(e.target.value)} /></label>
-              <label>Storage<input className="input" value={storageValue} onChange={(e) => setStorageValue(e.target.value)} /></label>
-              <label>Storage unit
-                <select className="input" value={storageUnit} onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}>
-                  {STORAGE_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-                </select>
-              </label>
-              <label>Storage type
-                <select className="input" value={storageType} onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}>
-                  {STORAGE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-                </select>
-              </label>
-              <label className="add-laptop-wizard__field-full">Display<input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} /></label>
-              <div className="add-laptop-wizard__nav add-laptop-wizard__field-full">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep('model')}>Back</button>
+              <div className="add-laptop-wizard__nav">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    autoFetchTriggered.current = false;
+                    setStep('model');
+                  }}
+                >
+                  Back
+                </button>
                 <button type="button" className="btn btn-primary" disabled={!modelName.trim() || !cpu.trim()} onClick={() => setStep('units')}>
                   Next — serial numbers
                 </button>

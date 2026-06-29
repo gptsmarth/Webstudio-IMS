@@ -15,7 +15,9 @@ import { ProductModelService } from '../../services/api/ProductModelService';
 import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
-import { canEditSellingPrice } from '../../lib/inventory';
+import { P, PermissionService } from '../../services/PermissionService';
+import { canEditProductModels, canEditSellingPrice } from '../../lib/inventory';
+import { brandLogoSrc } from '../../lib/catalogue';
 
 export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
@@ -47,11 +49,20 @@ export function StockPage(): JSX.Element {
     return hierarchy.filterStockModels(nav.brandId, debouncedSearch, nav.searchField);
   }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField]);
 
+  const brandSummary = useMemo(
+    () => hierarchy.brandSummaries.find((summary) => summary.brandId === nav.brandId) ?? null,
+    [hierarchy.brandSummaries, nav.brandId],
+  );
+
   const modelUnits = useMemo(() => (
     nav.modelId ? hierarchy.unitsForModel(nav.modelId, true) : []
   ), [hierarchy, nav.modelId]);
 
-  const canEditPrice = session ? canEditSellingPrice(session.role) : false;
+  const permissionService = PermissionService.from(session?.permissions);
+  const canFullModelEdit = session ? canEditProductModels(session.permissions) : false;
+  const canPriceEdit = session ? canEditSellingPrice(session.permissions) : false;
+  const canEditFromStock = canFullModelEdit || canPriceEdit;
+  const editModelLabel = canFullModelEdit ? 'Edit model & price' : 'Edit selling price';
 
   const handleTransfer = useCallback(async (itemId: string, locationId: number) => {
     setActionLoading(true);
@@ -112,7 +123,7 @@ export function StockPage(): JSX.Element {
   return (
     <div className="stock-page animate-fade-in">
       <header className="stock-page__header">
-        {nav.level === 'brands' && session.role !== 'salesperson' && <WorkspacePageBack />}
+        {nav.level === 'brands' && permissionService.has(P.inventory.create) && <WorkspacePageBack />}
         <div>
           <h1 className="stock-page__title">Stock</h1>
           <p className="stock-page__subtitle">
@@ -139,12 +150,26 @@ export function StockPage(): JSX.Element {
       />
 
       {nav.level !== 'serials' && (
-        <HierarchyToolbar
-          search={nav.search}
-          onSearchChange={nav.setSearch}
-          searchField={nav.searchField}
-          onSearchFieldChange={nav.setSearchField}
-        />
+        <div className={nav.level === 'models' ? 'stock-page__toolbar-wrap' : undefined}>
+          <HierarchyToolbar
+            search={nav.search}
+            onSearchChange={nav.setSearch}
+            searchField={nav.searchField}
+            onSearchFieldChange={nav.setSearchField}
+          />
+          {nav.level === 'models' && nav.brandName && (
+            <div
+              className="stock-page__brand-logo"
+              data-brand={nav.brandName.trim().toLowerCase()}
+            >
+              <img
+                src={brandLogoSrc(nav.brandName, brandSummary?.logoFilename ?? null)}
+                alt=""
+                className="stock-page__brand-logo-img"
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {nav.level === 'models' && (
@@ -198,11 +223,15 @@ export function StockPage(): JSX.Element {
           model={selectedModel}
           units={modelUnits}
           locations={hierarchy.locations}
-          role={session.role}
+          permissions={session.permissions}
           loading={hierarchy.loading}
           onTransfer={handleTransfer}
           actionLoading={actionLoading}
-          onEditModel={canEditPrice ? () => setEditModelId(selectedModel.id) : undefined}
+          onEditModel={canEditFromStock ? () => {
+            if (canFullModelEdit) setEditModelId(selectedModel.id);
+            else setPriceModelId(selectedModel.id);
+          } : undefined}
+          editModelLabel={editModelLabel}
         />
       )}
 

@@ -1,4 +1,5 @@
 import type { AuditAction, AuditListEntry, AuditSource } from '../services/api/AuditService';
+import { canReadAudit as canReadAuditPermission } from '../services/PermissionService';
 import { formatRoleLabel } from '../store/useAuthStore';
 
 export type AuditViewMode = 'table' | 'timeline';
@@ -29,23 +30,36 @@ export const AUDIT_MODULES = [
   'Sales',
   'Catalogue',
   'Users',
+  'Security',
   'System',
   'Notifications',
   'Reports',
 ] as const;
+
+export const AUDIT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type AuditSeverity = (typeof AUDIT_SEVERITIES)[number];
 
 export const ENTITY_TYPE_BY_MODULE: Record<string, string> = {
   Inventory: 'inventory_item',
   Sales: 'sale',
   Catalogue: 'brand',
   Users: 'user',
+  Security: 'permission',
   System: 'system',
   Notifications: 'notification',
   Reports: 'report',
 };
 
+export const SECURITY_ENTITY_TYPES = new Set([
+  'user',
+  'permission',
+  'system_setting',
+  'integration_api_key',
+  'system',
+]);
+
 export function canReadAudit(permissions: string[]): boolean {
-  return permissions.includes('audit:read');
+  return canReadAuditPermission(permissions);
 }
 
 export function auditResultBadgeClass(result: string): string {
@@ -54,6 +68,17 @@ export function auditResultBadgeClass(result: string): string {
 
 export function auditResultLabel(result: string): string {
   return result === 'failure' ? 'Failure' : 'Success';
+}
+
+export function auditSeverityBadgeClass(severity: string): string {
+  if (severity === 'critical') return 'aud-badge aud-badge--critical';
+  if (severity === 'high') return 'aud-badge aud-badge--high';
+  if (severity === 'medium') return 'aud-badge aud-badge--medium';
+  return 'aud-badge aud-badge--low';
+}
+
+export function auditSeverityLabel(severity: string): string {
+  return severity.charAt(0).toUpperCase() + severity.slice(1);
 }
 
 export function formatAuditEntity(entry: AuditListEntry): string {

@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import DashboardViewDep, InventoryViewDep
 from webstudio_backend.api.schemas.dashboard import (
     DashboardDistributionResponse,
     OperationsDashboardResponse,
@@ -20,9 +20,6 @@ from webstudio_backend.core.request_context import get_correlation_id, get_reque
 from webstudio_backend.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
-
-DashboardReadDep = Annotated[AuthenticatedUser, Depends(require_permission("dashboard:read"))]
-InventoryReadDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:read"))]
 
 
 def _envelope(request: Request, data: object) -> dict:
@@ -38,7 +35,7 @@ def _envelope(request: Request, data: object) -> dict:
 @router.get("")
 async def get_dashboard(
     request: Request,
-    current: DashboardReadDep,
+    current: DashboardViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -54,7 +51,7 @@ async def get_dashboard(
 @router.get("/recent-activity")
 async def get_recent_activity(
     request: Request,
-    current: DashboardReadDep,
+    current: DashboardViewDep,
     db_session: AsyncSession = DbSessionDep,
     limit: int = Query(default=20, ge=1, le=50),
 ) -> dict:
@@ -69,7 +66,7 @@ async def get_recent_activity(
 @router.get("/distribution")
 async def get_distribution(
     request: Request,
-    current: InventoryReadDep,
+    current: InventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current

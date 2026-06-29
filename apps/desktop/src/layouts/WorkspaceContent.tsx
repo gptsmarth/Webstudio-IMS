@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { defaultRouteForRole, isRouteAllowedForRole, type WorkspaceRoute } from '../config/navigation';
+import { defaultRouteForPermissions, isRouteAllowedForPermissions, type WorkspaceRoute } from '../config/navigation';
 import { useAuthStore, useNavigationStore } from '../store';
 import {
   AuditPage,
@@ -34,15 +34,15 @@ export function WorkspaceContent(): JSX.Element {
 
   useEffect(() => {
     if (!session) return;
-    if (!isRouteAllowedForRole(currentRoute, session.role)) {
-      setRoute(defaultRouteForRole(session.role));
+    if (!isRouteAllowedForPermissions(currentRoute, session.permissions)) {
+      setRoute(defaultRouteForPermissions(session.permissions));
     }
   }, [currentRoute, session, setRoute]);
 
-  const role = session?.role ?? 'salesperson';
-  const safeRoute: WorkspaceRoute = isRouteAllowedForRole(currentRoute, role)
+  const permissions = session?.permissions ?? [];
+  const safeRoute: WorkspaceRoute = isRouteAllowedForPermissions(currentRoute, permissions)
     ? currentRoute
-    : defaultRouteForRole(role);
+    : defaultRouteForPermissions(permissions);
   const PageComponent = ROUTE_COMPONENTS[safeRoute] ?? StockPage;
 
   return <PageComponent key={safeRoute} />;

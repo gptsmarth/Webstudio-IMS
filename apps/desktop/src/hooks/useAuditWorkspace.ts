@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
 import { auditFiltersToExportParams } from '../lib/auditExport';
-import type { AuditViewMode } from '../lib/audit';
+import type { AuditViewMode, AuditSeverity } from '../lib/audit';
 import { LocationService, type Location } from '../services/api/LocationService';
 import { ReportService } from '../services/api/ReportService';
 import { UserService, type UserSummary } from '../services/api/UserService';
@@ -21,6 +21,8 @@ export interface AuditFilters {
   source: AuditSource | '';
   locationId: number | null;
   result: '' | 'success' | 'failure';
+  severity: AuditSeverity | '';
+  securityOnly: boolean;
   serialNumber: string;
   invoiceNumber: string;
   modelNumber: string;
@@ -36,6 +38,8 @@ export const DEFAULT_AUDIT_FILTERS: AuditFilters = {
   source: '',
   locationId: null,
   result: '',
+  severity: '',
+  securityOnly: false,
   serialNumber: '',
   invoiceNumber: '',
   modelNumber: '',
@@ -130,7 +134,9 @@ export function useAuditWorkspace(): AuditWorkspaceState {
         actor_user_id: filters.userId ?? undefined,
         actor_role: filters.role || undefined,
         action: filters.operation || undefined,
-        entity_type: filters.module ? mapModuleToEntityType(filters.module) : undefined,
+        entity_type: filters.module && filters.module !== 'Security' ? mapModuleToEntityType(filters.module) : undefined,
+        security_only: (filters.securityOnly || filters.module === 'Security') ? true : undefined,
+        severity: filters.severity || undefined,
         source: filters.source || undefined,
         location_id: filters.locationId ?? undefined,
         result: filters.result || undefined,
@@ -234,11 +240,12 @@ export function useAuditWorkspace(): AuditWorkspaceState {
 }
 
 function mapModuleToEntityType(module: string): string | undefined {
-  const map: Record<string, string> = {
+  const map: Record<string, string | undefined> = {
     Inventory: 'inventory_item',
     Sales: 'sale',
     Catalogue: 'brand',
     Users: 'user',
+    Security: undefined,
     System: 'system',
     Notifications: 'notification',
     Reports: 'report',

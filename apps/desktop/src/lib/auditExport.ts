@@ -11,6 +11,8 @@ export function auditFiltersToExportParams(
     actor_role: filters.role || undefined,
     audit_action: filters.operation || undefined,
     audit_source: filters.source || undefined,
+    security_only: (filters.securityOnly || filters.module === 'Security') ? true : undefined,
+    audit_severity: filters.severity || undefined,
     location_id: filters.locationId ?? undefined,
     serial_number: filters.serialNumber.trim() || undefined,
     invoice_number: filters.invoiceNumber.trim() || undefined,
@@ -33,6 +35,9 @@ export function hasActiveAuditFilters(filters: AuditFilters, search: string): bo
     || filters.invoiceNumber.trim()
     || filters.modelNumber.trim()
     || filters.dateFrom
-    || filters.dateTo,
+    || filters.dateTo
+    || filters.severity
+    || filters.securityOnly
+    || filters.module === 'Security'
   );
 }

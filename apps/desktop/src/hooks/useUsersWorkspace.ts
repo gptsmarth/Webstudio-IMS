@@ -64,6 +64,10 @@ export interface UsersWorkspaceState {
   resetPassword: (userId: number, temporaryPassword: string) => Promise<void>;
   disableUser: (userId: number) => Promise<UserDetail>;
   enableUser: (userId: number) => Promise<UserDetail>;
+  unlockUser: (userId: number) => Promise<UserDetail>;
+  forceLogoutUser: (userId: number) => Promise<number>;
+  archiveUser: (userId: number) => Promise<UserDetail>;
+  restoreUser: (userId: number) => Promise<UserDetail>;
 }
 
 export function useUsersWorkspace(): UsersWorkspaceState {
@@ -283,6 +287,49 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     [refresh, runAction, selectedId],
   );
 
+  const unlockUser = useCallback(
+    async (userId: number) => {
+      const updated = await runAction(() => UserService.unlockUser(userId));
+      await refresh();
+      if (selectedId === userId) setSelectedUser(updated);
+      return updated;
+    },
+    [refresh, runAction, selectedId],
+  );
+
+  const forceLogoutUser = useCallback(
+    async (userId: number) => {
+      const result = await runAction(() => UserService.forceLogoutUser(userId));
+      await refresh();
+      if (selectedId === userId) {
+        const detail = await UserService.getUser(userId);
+        setSelectedUser(detail);
+      }
+      return result.sessions_revoked;
+    },
+    [refresh, runAction, selectedId],
+  );
+
+  const archiveUser = useCallback(
+    async (userId: number) => {
+      const updated = await runAction(() => UserService.archiveUser(userId));
+      await refresh();
+      if (selectedId === userId) setSelectedUser(updated);
+      return updated;
+    },
+    [refresh, runAction, selectedId],
+  );
+
+  const restoreUser = useCallback(
+    async (userId: number) => {
+      const updated = await runAction(() => UserService.restoreUser(userId));
+      await refresh();
+      if (selectedId === userId) setSelectedUser(updated);
+      return updated;
+    },
+    [refresh, runAction, selectedId],
+  );
+
   return {
     items,
     loading,
@@ -317,5 +364,9 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     resetPassword,
     disableUser,
     enableUser,
+    unlockUser,
+    forceLogoutUser,
+    archiveUser,
+    restoreUser,
   };
 }

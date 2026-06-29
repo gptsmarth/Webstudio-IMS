@@ -1,6 +1,6 @@
 import { formatDateTime } from '../../lib/datetime';
 import type { AuditWorkspaceState } from '../../hooks/useAuditWorkspace';
-import { auditResultBadgeClass, auditResultLabel, formatActorRole, formatAuditEntity } from '../../lib/audit';
+import { auditResultBadgeClass, auditResultLabel, auditSeverityBadgeClass, auditSeverityLabel, formatActorRole, formatAuditEntity } from '../../lib/audit';
 import type { AuditListEntry } from '../../services/api/AuditService';
 
 interface AuditTableProps {
@@ -23,6 +23,7 @@ export function AuditTable({ workspace, onView }: AuditTableProps): JSX.Element 
               <th>Entity</th>
               <th>Serial</th>
               <th>Location</th>
+              <th>Severity</th>
               <th>Result</th>
               <th>Description</th>
             </tr>
@@ -31,14 +32,14 @@ export function AuditTable({ workspace, onView }: AuditTableProps): JSX.Element 
             {workspace.loading &&
               Array.from({ length: 8 }).map((_, index) => (
                 <tr key={`sk-${index}`}>
-                  <td colSpan={10}>
+                  <td colSpan={11}>
                     <div className="aud-table__skeleton animate-pulse" />
                   </td>
                 </tr>
               ))}
             {!workspace.loading && workspace.items.length === 0 && (
               <tr>
-                <td colSpan={10} className="aud-table__empty">
+                <td colSpan={11} className="aud-table__empty">
                   No audit events match the current filters.
                 </td>
               </tr>
@@ -61,6 +62,9 @@ export function AuditTable({ workspace, onView }: AuditTableProps): JSX.Element 
                   <td className="aud-table__cell col-mono aud-table__cell--entity">{formatAuditEntity(entry)}</td>
                   <td className="aud-table__cell col-mono">{entry.serial_number ?? '—'}</td>
                   <td className="aud-table__cell">{entry.location_name ?? '—'}</td>
+                  <td className="aud-table__cell">
+                    <span className={auditSeverityBadgeClass(entry.severity)}>{auditSeverityLabel(entry.severity)}</span>
+                  </td>
                   <td className="aud-table__cell">
                     <span className={auditResultBadgeClass(entry.result)}>{auditResultLabel(entry.result)}</span>
                   </td>

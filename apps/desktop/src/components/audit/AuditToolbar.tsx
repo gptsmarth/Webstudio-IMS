@@ -74,6 +74,15 @@ export function AuditToolbar({ workspace, canExport }: AuditToolbarProps): JSX.E
               <Download size={14} aria-hidden />
               PDF
             </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled
+              title="CSV export coming soon"
+            >
+              <Download size={14} aria-hidden />
+              CSV
+            </button>
           </>
         )}
         <button

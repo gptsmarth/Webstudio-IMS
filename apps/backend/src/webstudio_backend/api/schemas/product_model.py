@@ -75,8 +75,14 @@ class ProductModelSpecLookupResponse(BaseModel):
     display: str | None
     color_options: str | None = None
     product_image_url: str | None
+    description: str | None = None
     notes: str | None = None
     source: str = "gemini"
+
+
+class ProductModelImageResolveResponse(BaseModel):
+    product_image_url: str | None
+    source: str = "resolved"
 
 
 class ProductModelResponse(BaseModel):

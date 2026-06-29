@@ -15,6 +15,8 @@ from webstudio_backend.services.audit_log_presenter import (
     audit_module,
     audit_operation,
     audit_result,
+    audit_severity,
+    extract_security_event,
     extract_correlation_id,
     extract_invoice_number,
     extract_location_name,
@@ -67,6 +69,8 @@ class AuditLogListEntry(AuditLogEntry):
     invoice_number: str | None = None
     model_number: str | None = None
     result: str
+    severity: str
+    security_event: str | None = None
 
     @classmethod
     def from_enriched(cls, row: AuditLogEnrichedRow) -> AuditLogListEntry:
@@ -91,6 +95,8 @@ class AuditLogListEntry(AuditLogEntry):
             ),
             model_number=row.model_number,
             result=audit_result(audit_log),
+            severity=audit_severity(audit_log),
+            security_event=extract_security_event(audit_log),
         )
 
 
@@ -132,6 +138,8 @@ class AuditLogSearchQuery(BaseModel):
     model_number: str | None = None
     search: str | None = None
     result: str | None = Field(default=None, pattern="^(success|failure)$")
+    severity: str | None = Field(default=None, pattern="^(low|medium|high|critical)$")
+    security_only: bool = False
     created_at_from: datetime | None = None
     created_at_to: datetime | None = None
     page: int = Field(default=1, ge=1)

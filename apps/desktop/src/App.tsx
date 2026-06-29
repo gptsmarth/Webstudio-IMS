@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { defaultRouteForRole } from './config/navigation';
+import { defaultRouteForPermissions } from './config/navigation';
 import { useThemeStore, useAuthStore, useNavigationStore, type AuthSession } from './store';
 import { VersionService, LoggingService, ConfigService, SetupService, AuthenticationService } from './services';
 import { AuthTokenStore } from './services/AuthTokenStore';
+import { sessionFromUser } from './store/useAuthStore';
 import { SplashScreen, type StartupStage } from './components';
 import { ConnectionPage, SetupWizardPage, LoginPage } from './pages';
 import { AppShell } from './layouts/AppShell';
@@ -74,6 +75,13 @@ export function App(): JSX.Element {
       }
 
       markLocalInitializedFlag(true);
+      const restored = await AuthenticationService.restoreSession();
+      if (restored) {
+        setSession(sessionFromUser(restored));
+        useNavigationStore.getState().setRoute(defaultRouteForPermissions(restored.permissions ?? []));
+        setActiveView('workspace');
+        return;
+      }
       setActiveView((current) => {
         if (current === 'connection' || current === 'setup') {
           return 'login';
@@ -84,7 +92,7 @@ export function App(): JSX.Element {
       setConnectionStatus('offline');
       setActiveView('connection');
     }
-  }, [clearSession]);
+  }, [clearSession, setSession]);
 
   useEffect(() => {
     const onSetupRequired = () => {
@@ -179,7 +187,7 @@ export function App(): JSX.Element {
   const handleLoginSuccess = (session: AuthSession) => {
     markLocalInitializedFlag(true);
     setSession(session);
-    useNavigationStore.getState().setRoute(defaultRouteForRole(session.role));
+    useNavigationStore.getState().setRoute(defaultRouteForPermissions(session.permissions));
     setActiveView('workspace');
   };
 
@@ -195,6 +203,7 @@ export function App(): JSX.Element {
       // Ignore network errors on logout
     }
     clearSession();
+    setActiveView('login');
     void evaluateServerState();
   };
 

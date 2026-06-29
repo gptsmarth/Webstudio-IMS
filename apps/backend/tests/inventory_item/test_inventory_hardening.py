@@ -135,7 +135,7 @@ async def test_success_response_includes_request_metadata(
         ("PATCH", "/api/v1/inventory/{id}", {"color": "Silver"}, ("main_admin", "admin")),
         ("POST", "/api/v1/inventory/{id}/archive", None, ("main_admin", "admin")),
         ("POST", "/api/v1/inventory/{id}/restore", None, ("main_admin", "admin")),
-        ("PATCH", "/api/v1/inventory/{id}/location", {"location_id": 0}, ("main_admin", "admin")),
+        ("PATCH", "/api/v1/inventory/{id}/location", {"location_id": 0}, ("main_admin", "admin", "salesperson")),
         ("PATCH", "/api/v1/inventory/{id}/mark-sold", {"needs_sale": True}, ("main_admin", "admin")),
     ],
 )

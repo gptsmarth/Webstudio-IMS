@@ -9,7 +9,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
+    InventoryArchiveDep,
+    InventoryCreateDep,
+    InventoryEditDep,
+    InventoryRestoreDep,
+    InventoryTransferDep,
+    InventoryViewDep,
+    SalesCreateDep,
+)
 from webstudio_backend.api.inventory_errors import raise_inventory_error
 from webstudio_backend.api.schemas.inventory import (
     CreateInventoryItemRequest,
@@ -32,11 +41,6 @@ from webstudio_backend.infrastructure.repositories.inventory_item_filters import
 from webstudio_backend.services.inventory_service import InventoryService
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
-
-InventoryReadDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:read"))]
-InventoryWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:write"))]
-LocationTransferDep = Annotated[AuthenticatedUser, Depends(require_permission("location:transfer"))]
-SalesReflectDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:reflect"))]
 
 _ALLOWED_SORT_FIELDS = frozenset(
     {
@@ -110,7 +114,7 @@ def _parse_sort(sort: str | None) -> list[SortParam]:
 @router.get("")
 async def list_inventory(
     request: Request,
-    current: InventoryReadDep,
+    current: InventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
     brand_id: int | None = None,
     product_model_id: uuid.UUID | None = None,
@@ -168,7 +172,7 @@ async def list_inventory(
 async def create_inventory(
     request: Request,
     body: CreateInventoryItemRequest,
-    current: InventoryWriteDep,
+    current: InventoryCreateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:
@@ -190,7 +194,7 @@ async def create_inventory(
 async def get_inventory_by_serial(
     request: Request,
     serial_number: str,
-    current: InventoryReadDep,
+    current: InventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     detail = await InventoryService(db_session).get_by_serial(serial_number)
@@ -207,7 +211,7 @@ async def get_inventory_by_serial(
 async def get_inventory(
     request: Request,
     inventory_id: uuid.UUID,
-    current: InventoryReadDep,
+    current: InventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     detail = await InventoryService(db_session).get_item(inventory_id)
@@ -225,7 +229,7 @@ async def update_inventory(
     request: Request,
     inventory_id: uuid.UUID,
     body: UpdateInventoryItemRequest,
-    current: InventoryWriteDep,
+    current: InventoryEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     if not body.model_fields_set:
@@ -255,11 +259,14 @@ async def update_inventory(
 async def archive_inventory(
     request: Request,
     inventory_id: uuid.UUID,
-    current: InventoryWriteDep,
+    current: InventoryArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:
-        detail = await InventoryService(db_session).archive_item(inventory_id, actor=_actor(current))
+        detail = await InventoryService(db_session).archive_item(
+            inventory_id,
+            actor=_actor(current),
+        )
     except Exception as exc:
         raise_inventory_error(exc)
     return _envelope(request, _item_payload(detail))
@@ -269,11 +276,14 @@ async def archive_inventory(
 async def restore_inventory(
     request: Request,
     inventory_id: uuid.UUID,
-    current: InventoryWriteDep,
+    current: InventoryRestoreDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:
-        detail = await InventoryService(db_session).restore_item(inventory_id, actor=_actor(current))
+        detail = await InventoryService(db_session).restore_item(
+            inventory_id,
+            actor=_actor(current),
+        )
     except Exception as exc:
         raise_inventory_error(exc)
     return _envelope(request, _item_payload(detail))
@@ -284,7 +294,7 @@ async def transfer_inventory_location(
     request: Request,
     inventory_id: uuid.UUID,
     body: TransferLocationRequest,
-    current: LocationTransferDep,
+    current: InventoryTransferDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:
@@ -303,7 +313,7 @@ async def mark_inventory_sold(
     request: Request,
     inventory_id: uuid.UUID,
     body: MarkSoldRequest,
-    current: SalesReflectDep,
+    current: SalesCreateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     try:

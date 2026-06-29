@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
+    BrandsArchiveDep,
+    BrandsCreateDep,
+    BrandsEditDep,
+    BrandsViewDep,
+)
 from webstudio_backend.api.schemas.brand import BrandResponse, CreateBrandRequest, UpdateBrandRequest
 from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
@@ -20,9 +26,6 @@ from webstudio_backend.infrastructure.repositories.brand_repository import Brand
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
-
-BrandsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:read"))]
-BrandsWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:write"))]
 
 
 def _envelope(request: Request, data: object) -> dict:
@@ -47,7 +50,7 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
 @router.get("")
 async def list_brands(
     request: Request,
-    current: BrandsReadDep,
+    current: BrandsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -66,7 +69,7 @@ async def list_brands(
 async def create_brand(
     request: Request,
     body: CreateBrandRequest,
-    current: BrandsWriteDep,
+    current: BrandsCreateDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = BrandRepository(db_session)
@@ -89,7 +92,7 @@ async def create_brand(
 async def get_brand(
     request: Request,
     brand_id: int,
-    current: BrandsReadDep,
+    current: BrandsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -105,7 +108,7 @@ async def update_brand(
     request: Request,
     brand_id: int,
     body: UpdateBrandRequest,
-    current: BrandsWriteDep,
+    current: BrandsEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = BrandRepository(db_session)
@@ -133,7 +136,7 @@ async def update_brand(
 async def archive_brand(
     request: Request,
     brand_id: int,
-    current: BrandsWriteDep,
+    current: BrandsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = BrandRepository(db_session)
@@ -154,7 +157,7 @@ async def archive_brand(
 async def restore_brand(
     request: Request,
     brand_id: int,
-    current: BrandsWriteDep,
+    current: BrandsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = BrandRepository(db_session)

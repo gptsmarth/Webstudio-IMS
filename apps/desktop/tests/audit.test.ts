@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  auditSeverityBadgeClass,
+  auditSeverityLabel,
   buildAuditTimeline,
   canReadAudit,
   formatActorRole,
@@ -37,8 +39,8 @@ function entry(overrides: Partial<AuditListEntry> = {}): AuditListEntry {
 }
 
 describe('audit helpers', () => {
-  it('checks audit:read permission', () => {
-    expect(canReadAudit(['audit:read'])).toBe(true);
+  it('checks audit:view permission', () => {
+    expect(canReadAudit(['audit:view'])).toBe(true);
     expect(canReadAudit(['audit:lifecycle'])).toBe(false);
   });
 
@@ -61,9 +63,27 @@ describe('audit helpers', () => {
     expect(steps.map((step) => step.id)).toEqual(['1', '2']);
   });
 
+  it('formats severity badges', () => {
+    expect(auditSeverityLabel('critical')).toBe('Critical');
+    expect(auditSeverityBadgeClass('high')).toContain('aud-badge--high');
+  });
+
+  it('maps security filters to export params', () => {
+    expect(
+      auditFiltersToExportParams(
+        { ...DEFAULT_AUDIT_FILTERS, module: 'Security', severity: 'critical' },
+        '',
+      ).security_only,
+    ).toBe(true);
+    expect(
+      auditFiltersToExportParams({ ...DEFAULT_AUDIT_FILTERS, severity: 'high' }, '').audit_severity,
+    ).toBe('high');
+  });
+
   it('requires filters before export', () => {
     expect(hasActiveAuditFilters(DEFAULT_AUDIT_FILTERS, '')).toBe(false);
-    expect(hasActiveAuditFilters(DEFAULT_AUDIT_FILTERS, 'SN-001')).toBe(true);
+    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, severity: 'critical' }, '')).toBe(true);
+    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, module: 'Security' }, '')).toBe(true);
     expect(auditFiltersToExportParams({ ...DEFAULT_AUDIT_FILTERS, operation: 'CREATE' }, '').audit_action).toBe(
       'CREATE',
     );

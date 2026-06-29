@@ -62,7 +62,7 @@ export function CataloguePage(): JSX.Element {
       <div className="cat-page__panel">
         {activeTab === 'brands' && (
           <BrandsTab
-            role={session.role}
+            permissions={session.permissions}
             distributionByBrand={distribution?.by_brand ?? []}
             modelCounts={modelCounts}
             onDataChange={onDataChange}
@@ -70,7 +70,7 @@ export function CataloguePage(): JSX.Element {
         )}
         {activeTab === 'locations' && (
           <LocationsTab
-            role={session.role}
+            permissions={session.permissions}
             distributionByLocation={distribution?.by_location ?? []}
             onDataChange={onDataChange}
           />

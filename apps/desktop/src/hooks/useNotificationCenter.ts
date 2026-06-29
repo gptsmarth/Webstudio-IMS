@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../store';
+import { canReadNotifications } from '../services/PermissionService';
 import { NotificationService, type NotificationDetail } from '../services/api/NotificationService';
 
 const POLL_MS = 60_000;
 
 export function useNotificationStore() {
   const session = useAuthStore((state) => state.session);
-  const canReadNotifications = session?.permissions.includes('notifications:read') ?? false;
+  const canRead = session ? canReadNotifications(session.permissions) : false;
   const [items, setItems] = useState<NotificationDetail[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!canReadNotifications) {
+    if (!canRead) {
       setItems([]);
       setUnreadCount(0);
       return;
@@ -28,10 +29,10 @@ export function useNotificationStore() {
     } finally {
       setLoading(false);
     }
-  }, [canReadNotifications]);
+  }, [canRead]);
 
   useEffect(() => {
-    if (!canReadNotifications) {
+    if (!canRead) {
       setItems([]);
       setUnreadCount(0);
       return;
@@ -39,7 +40,7 @@ export function useNotificationStore() {
     void refresh();
     const timer = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(timer);
-  }, [canReadNotifications, refresh]);
+  }, [canRead, refresh]);
 
   const markRead = useCallback(async (id: number) => {
     await NotificationService.markRead(id);

@@ -26,5 +26,7 @@ class AuditLogSearchFilters:
     model_number: str | None = None
     search: str | None = None
     result: str | None = None
+    severity: str | None = None
+    security_only: bool = False
     created_at_from: datetime | None = None
     created_at_to: datetime | None = None

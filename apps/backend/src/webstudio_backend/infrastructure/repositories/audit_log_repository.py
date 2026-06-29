@@ -302,6 +302,17 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             statement = statement.where(AuditLog.created_at >= filters.created_at_from)
         if filters.created_at_to is not None:
             statement = statement.where(AuditLog.created_at <= filters.created_at_to)
+        if filters.security_only:
+            from webstudio_backend.services.audit_log_presenter import SECURITY_ENTITY_TYPES
+
+            statement = statement.where(
+                or_(
+                    AuditLog.entity_type.in_(tuple(SECURITY_ENTITY_TYPES)),
+                    AuditLog.new_value["security_event"].astext.isnot(None),
+                ),
+            )
+        if filters.severity is not None:
+            statement = statement.where(AuditLog.new_value["severity"].astext == filters.severity)
         if filters.result == "failure":
             statement = statement.where(
                 or_(

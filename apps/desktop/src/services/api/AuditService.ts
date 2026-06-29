@@ -12,6 +12,8 @@ export type AuditAction =
 
 export type AuditSource = 'MANUAL' | 'TALLY_SYNC' | 'BACKGROUND_JOB' | 'SYSTEM';
 
+export type AuditSeverity = 'low' | 'medium' | 'high' | 'critical';
+
 export interface AuditLogEntry {
   id: string;
   entity_type: string;
@@ -37,6 +39,8 @@ export interface AuditListEntry extends AuditLogEntry {
   invoice_number: string | null;
   model_number: string | null;
   result: string;
+  severity: string;
+  security_event: string | null;
 }
 
 export interface AuditLogDetail extends AuditListEntry {
@@ -61,6 +65,8 @@ export interface AuditListParams {
   model_number?: string;
   search?: string;
   result?: 'success' | 'failure';
+  severity?: AuditSeverity;
+  security_only?: boolean;
   created_at_from?: string;
   created_at_to?: string;
   page?: number;

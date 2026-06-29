@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -36,3 +36,8 @@ class RefreshToken(PrimaryKeyMixin, Base):
         server_default="now()",
         nullable=False,
     )
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    device_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    remember_me: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

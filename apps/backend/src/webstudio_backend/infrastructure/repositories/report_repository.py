@@ -583,6 +583,17 @@ class ReportRepository:
                     InventoryItem.serial_number.ilike(f"%{term}%"),
                 ),
             )
+        if filters.security_only:
+            from webstudio_backend.services.audit_log_presenter import SECURITY_ENTITY_TYPES
+
+            clauses.append(
+                or_(
+                    AuditLog.entity_type.in_(tuple(SECURITY_ENTITY_TYPES)),
+                    AuditLog.new_value["security_event"].astext.isnot(None),
+                ),
+            )
+        if filters.audit_severity is not None:
+            clauses.append(AuditLog.new_value["severity"].astext == filters.audit_severity)
         return clauses
 
     def _apply_audit_sort(self, statement, filters: ReportFilters):

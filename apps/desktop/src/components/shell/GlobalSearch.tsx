@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, FileText, Hash, History, MapPin, Package, ScrollText, Search, Tag, X } from 'lucide-react';
+import { isRouteAllowedForPermissions } from '../../config/navigation';
 import { useDebounce } from '../../lib/useDebounce';
 import { useAuthStore, useInventoryStore, useNavigationStore, useSearchStore, useStockNavStore } from '../../store';
 import {
@@ -36,9 +37,11 @@ export function GlobalSearch(): JSX.Element | null {
 
   const openResult = (result: SearchResult) => {
     saveRecentSearch(query.trim());
-    const isSalesperson = session?.role === 'salesperson';
+    const permissions = session?.permissions ?? [];
+    const canAccessInventory = isRouteAllowedForPermissions('inventory', permissions);
+    const canAccessStock = isRouteAllowedForPermissions('stock', permissions);
 
-    if (isSalesperson) {
+    if (!canAccessInventory && canAccessStock) {
       setStockSearch(result.title);
       if (result.type === 'serial') setStockSearchField('serial');
       else if (result.type === 'product_model') setStockSearchField('model_number');
@@ -104,7 +107,7 @@ export function GlobalSearch(): JSX.Element | null {
     }
     let cancelled = false;
     setLoading(true);
-    void runGlobalSearch(debouncedQuery, session?.role).then((items) => {
+    void runGlobalSearch(debouncedQuery, session?.permissions).then((items) => {
       if (!cancelled) {
         setResults(items);
         setLoading(false);
@@ -113,7 +116,7 @@ export function GlobalSearch(): JSX.Element | null {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, isOpen, session?.role]);
+  }, [debouncedQuery, isOpen, session?.permissions]);
 
   if (!isOpen) return null;
 

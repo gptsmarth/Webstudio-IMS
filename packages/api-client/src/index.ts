@@ -40,6 +40,14 @@ export class ApiClient {
     return response.data;
   }
 
+  async getBlob(path: string, params?: Record<string, unknown>): Promise<Blob> {
+    const response = await this.http.get<Blob>(path, {
+      params,
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
   async post<T>(path: string, data?: unknown): Promise<T> {
     const response = await this.http.post<T>(path, data);
     return response.data;

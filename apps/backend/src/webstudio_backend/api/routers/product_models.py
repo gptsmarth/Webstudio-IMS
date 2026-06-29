@@ -9,9 +9,17 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
+    ProductModelsArchiveDep,
+    ProductModelsCreateDep,
+    ProductModelsEditDep,
+    ProductModelsSellingPriceDep,
+    ProductModelsViewDep,
+)
 from webstudio_backend.api.schemas.product_model import (
     CreateProductModelRequest,
+    ProductModelImageResolveResponse,
     ProductModelResponse,
     ProductModelSpecLookupRequest,
     ProductModelSpecLookupResponse,
@@ -34,17 +42,9 @@ from webstudio_backend.infrastructure.repositories.product_model_repository impo
 )
 from webstudio_backend.services.gemini_config import resolve_gemini_credentials
 from webstudio_backend.services.gemini_spec_service import GeminiLookupError, GeminiSpecService
+from webstudio_backend.services.product_image_service import resolve_product_image
 
 router = APIRouter(prefix="/api/v1/product-models", tags=["product-models"])
-
-ProductModelsReadDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:read"))]
-ProductModelsWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:write"))]
-ProductModelsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:archive"))]
-ProductModelsSellingPriceDep = Annotated[
-    AuthenticatedUser,
-    Depends(require_permission("product_models:selling_price:write")),
-]
-InventoryWriteDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:write"))]
 
 
 def _envelope(request: Request, data: object) -> dict:
@@ -81,10 +81,43 @@ def _model_payload(pm, *, brand_name: str | None, current: AuthenticatedUser) ->
     return response.model_dump(exclude=exclude)
 
 
+async def _resolve_and_store_product_image(
+    pm: ProductModel,
+    *,
+    brand_name: str | None,
+    db_session: AsyncSession,
+    repo: ProductModelRepository,
+    actor: AuditActor,
+    app_settings,
+    candidate_url: str | None = None,
+) -> ProductModel:
+    if pm.product_image_url:
+        return pm
+
+    api_key, model = await resolve_gemini_credentials(db_session, app_settings)
+    gemini = GeminiSpecService(app_settings, api_key=api_key, model=model)
+    image_url = await resolve_product_image(
+        model_number=pm.model_number,
+        brand_name=brand_name,
+        model_name=pm.model_name,
+        candidate_url=candidate_url,
+        gemini_service=gemini if gemini.is_configured else None,
+    )
+    if not image_url:
+        return pm
+
+    updated = await repo.update(
+        pm,
+        product_image_url=image_url,
+        actor=actor,
+    )
+    return updated
+
+
 @router.get("")
 async def list_product_models(
     request: Request,
-    current: ProductModelsReadDep,
+    current: ProductModelsViewDep,
     brand_id: int | None = None,
     active: bool | None = None,
     archived: bool | None = None,
@@ -122,8 +155,9 @@ async def list_product_models(
 async def create_product_model(
     request: Request,
     body: CreateProductModelRequest,
-    current: ProductModelsWriteDep,
+    current: ProductModelsCreateDep,
     db_session: AsyncSession = DbSessionDep,
+    app_settings=AppSettingsDep,
 ) -> dict:
     # Validate brand exists and is active
     brand_repo = BrandRepository(db_session)
@@ -163,6 +197,16 @@ async def create_product_model(
             selling_price=body.selling_price,
             actor=_actor(current),
         )
+        if not pm.product_image_url:
+            pm = await _resolve_and_store_product_image(
+                pm,
+                brand_name=brand.name,
+                db_session=db_session,
+                repo=repo,
+                actor=_actor(current),
+                app_settings=app_settings,
+                candidate_url=body.product_image_url,
+            )
         await db_session.commit()
         return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
@@ -173,7 +217,7 @@ async def create_product_model(
 async def get_product_model(
     request: Request,
     model_id: uuid.UUID,
-    current: ProductModelsReadDep,
+    current: ProductModelsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = ProductModelRepository(db_session)
@@ -195,7 +239,7 @@ async def update_product_model(
     request: Request,
     model_id: uuid.UUID,
     body: UpdateProductModelRequest,
-    current: ProductModelsWriteDep,
+    current: ProductModelsEditDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = ProductModelRepository(db_session)
@@ -352,7 +396,7 @@ async def restore_product_model(
 async def lookup_product_model_spec(
     request: Request,
     body: ProductModelSpecLookupRequest,
-    current: InventoryWriteDep,
+    current: ProductModelsCreateDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings=AppSettingsDep,
 ) -> dict:
@@ -393,7 +437,55 @@ async def lookup_product_model_spec(
         display=result.get("display"),
         color_options=result.get("color_options"),
         product_image_url=result.get("product_image_url"),
+        description=result.get("description"),
         notes=result.get("notes"),
         source=result.get("source", "gemini"),
+    )
+    return _envelope(request, response.model_dump())
+
+
+@router.post("/{model_id}/resolve-image")
+async def resolve_product_model_image(
+    request: Request,
+    model_id: uuid.UUID,
+    current: ProductModelsEditDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings=AppSettingsDep,
+) -> dict:
+    del current
+    repo = ProductModelRepository(db_session)
+    pm = await repo.get_by_id(model_id)
+    if not pm:
+        raise AppError(
+            "NOT_FOUND",
+            f"Product model with ID {model_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    brand_repo = BrandRepository(db_session)
+    brand = await brand_repo.get_by_id(pm.brand_id)
+    brand_name = brand.name if brand else None
+
+    if pm.product_image_url:
+        response = ProductModelImageResolveResponse(
+            product_image_url=pm.product_image_url,
+            source="database",
+        )
+        return _envelope(request, response.model_dump())
+
+    updated = await _resolve_and_store_product_image(
+        pm,
+        brand_name=brand_name,
+        db_session=db_session,
+        repo=repo,
+        actor=_actor(current),
+        app_settings=app_settings,
+    )
+    if updated.product_image_url and not pm.product_image_url:
+        await db_session.commit()
+
+    response = ProductModelImageResolveResponse(
+        product_image_url=updated.product_image_url,
+        source="resolved" if updated.product_image_url else "unresolved",
     )
     return _envelope(request, response.model_dump())

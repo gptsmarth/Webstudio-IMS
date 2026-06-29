@@ -1,5 +1,6 @@
 import type { ProductModel } from '../services/api/ProductModelService';
 import { formatStorage } from './inventory';
+import { splitModelNotes } from './modelNotes';
 
 export interface StockModelSpecLine {
   label: string;
@@ -8,9 +9,10 @@ export interface StockModelSpecLine {
 
 /** Parse structured Gemini extras stored in product model notes (before ---). */
 export function parseNotesSpecLines(notes: string | null | undefined): StockModelSpecLine[] {
-  if (!notes?.trim()) return [];
+  const { specNotes } = splitModelNotes(notes);
+  if (!specNotes.trim()) return [];
 
-  const structured = notes.split(/\n---\n/)[0]?.trim() ?? notes.trim();
+  const structured = specNotes.split(/\n---\n/)[0]?.trim() ?? specNotes.trim();
   const lines: StockModelSpecLine[] = [];
 
   for (const rawLine of structured.split('\n')) {
@@ -64,6 +66,52 @@ export function buildStockModelSpecLines(model: ProductModel): StockModelSpecLin
 
 export function stockAvailabilityLabel(availableUnits: number): string {
   return availableUnits === 1 ? '1 unit available' : `${availableUnits} units available`;
+}
+
+/** Leading screen size hint for retailer-style cards (e.g. 15.6" or 40.64cm (16)). */
+export function displayScreenHint(display: string | null | undefined): string | null {
+  if (!display?.trim()) return null;
+  const text = display.trim();
+  const inch = text.match(/(\d+(?:\.\d+)?)\s*(?:inch|inches|")\b/i);
+  if (inch) {
+    return `${inch[1]}"`;
+  }
+  const cm = text.match(/(\d+(?:\.\d+)?)\s*cm\s*\((\d+(?:\.\d+)?)\)/i);
+  if (cm) {
+    return `${cm[1]}cm (${cm[2]})`;
+  }
+  const segment = text.split(/[,;]/)[0]?.trim();
+  return segment && segment.length <= 28 ? segment : null;
+}
+
+const RETAILER_SPEC_ORDER = [
+  'operating system',
+  'os',
+  'processor',
+  'graphics',
+  'memory',
+  'memory type',
+  'storage',
+  'display',
+  'colors',
+  'battery',
+  'weight',
+  'connectivity',
+  'keyboard',
+  'webcam',
+  'audio',
+  'charger',
+  'warranty',
+] as const;
+
+export function orderStockCardSpecLines(lines: StockModelSpecLine[]): StockModelSpecLine[] {
+  const rank = new Map<string, number>(RETAILER_SPEC_ORDER.map((label, index) => [label, index]));
+  return [...lines].sort((left, right) => {
+    const leftRank = rank.get(left.label.toLowerCase()) ?? 99;
+    const rightRank = rank.get(right.label.toLowerCase()) ?? 99;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return left.label.localeCompare(right.label);
+  });
 }
 
 const CARD_SPEC_PRIORITY = ['Processor', 'Memory', 'Storage', 'Display', 'Graphics'] as const;

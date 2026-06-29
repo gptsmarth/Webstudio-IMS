@@ -13,7 +13,13 @@ export interface ProductSpecLookupResult {
   display: string | null;
   color_options: string | null;
   product_image_url: string | null;
+  description: string | null;
   notes: string | null;
+  source: string;
+}
+
+export interface ProductImageResolveResult {
+  product_image_url: string | null;
   source: string;
 }
 
@@ -34,5 +40,15 @@ export class ProductSpecService {
       }
       return null;
     }
+  }
+
+  static async resolveModelImage(modelId: string): Promise<ProductImageResolveResult> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<ProductImageResolveResult>(`/api/v1/product-models/${modelId}/resolve-image`, {});
+  }
+
+  static async fetchImageBlob(imageUrl: string): Promise<Blob> {
+    const client = await ApiClientProvider.getClient();
+    return client.getBlob('/api/v1/product-images/proxy', { url: imageUrl });
   }
 }

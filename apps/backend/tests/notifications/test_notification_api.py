@@ -138,14 +138,15 @@ async def test_resolve_notification_lifecycle(
 
 
 @pytest.mark.asyncio
-async def test_salesperson_cannot_read_notifications(
+async def test_salesperson_can_read_notifications(
     api_client: AsyncClient,
     db_session: AsyncSession,
     salesperson_headers: dict[str, str],
 ) -> None:
     await _seed_notifications(db_session)
     list_response = await api_client.get("/api/v1/notifications", headers=salesperson_headers)
-    assert list_response.status_code == 403
+    assert list_response.status_code == 200
+    assert list_response.json()["meta"]["total_items"] == 3
 
 
 @pytest.mark.asyncio

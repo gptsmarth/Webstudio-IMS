@@ -38,7 +38,7 @@ export function DashboardPage(): JSX.Element {
       <div className="dash-page">
         <div className="dash-page__top">
           <DashboardGreeting session={session} />
-          <DashboardQuickActions role={session.role} onTallySync={triggerTallySync} syncingTally={syncingTally} />
+          <DashboardQuickActions permissions={session.permissions} onTallySync={triggerTallySync} syncingTally={syncingTally} />
         </div>
 
         {error && (

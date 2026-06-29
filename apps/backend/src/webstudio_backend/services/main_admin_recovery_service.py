@@ -14,6 +14,7 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     MainAdminNotFoundError,
     SystemNotInitializedError,
 )
+from webstudio_backend.infrastructure.database.enums import NotificationSeverity
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
@@ -21,7 +22,9 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
     SystemSettingRepository,
 )
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
-from webstudio_backend.infrastructure.security.password import hash_password, validate_password_strength
+from webstudio_backend.infrastructure.security.password import hash_password
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
+from webstudio_backend.services.security_alert_service import SecurityAlertService
 from webstudio_backend.infrastructure.security.recovery_key import (
     generate_recovery_key,
     hash_recovery_key,
@@ -41,6 +44,7 @@ class MainAdminRecoveryService:
         self._users = UserRepository(session)
         self._refresh_tokens = RefreshTokenRepository(session)
         self._recorder = AuditRecorder(session)
+        self._password_policy = PasswordPolicyService(session)
 
     async def recover_password(
         self,
@@ -60,18 +64,30 @@ class MainAdminRecoveryService:
 
         if new_password != confirm_password:
             raise ValueError("Password confirmation does not match")
-        validate_password_strength(new_password)
+        await self._password_policy.validate(new_password)
+        await self._password_policy.ensure_not_reused(
+            main_admin.id,
+            new_password,
+            current_hash=main_admin.password_hash,
+        )
 
         await self._recorder.record_recovery_key_used(main_admin)
+        await SecurityAlertService(self._session).emit(
+            title="Recovery key used",
+            message=f"Main Admin recovery key was used for account '{main_admin.username}'.",
+            severity=NotificationSeverity.ERROR,
+        )
         await self._users.mark_recovery_key_used(main_admin)
 
+        password_hash = hash_password(new_password)
         await self._users.set_password(
             main_admin,
-            hash_password(new_password),
+            password_hash,
             must_change_password=False,
             actor_id=main_admin.id,
         )
         await self._refresh_tokens.revoke_all_for_user(main_admin.id)
+        await self._password_policy.record_password(main_admin.id, password_hash)
         await self._recorder.record_main_admin_password_recovered(main_admin)
 
         new_recovery_key = generate_recovery_key()

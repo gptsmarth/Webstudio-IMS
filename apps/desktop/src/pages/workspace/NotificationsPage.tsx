@@ -10,10 +10,14 @@ import {
 } from '../../lib/notificationCategories';
 import { formatRelativeTime } from '../../lib/datetime';
 import { useNotificationCenter } from '../../hooks/useNotificationCenter';
+import { canManageNotifications } from '../../services/PermissionService';
+import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 
 export function NotificationsPage(): JSX.Element {
+  const session = useAuthStore((state) => state.session);
   const center = useNotificationCenter();
+  const canManage = session ? canManageNotifications(session.permissions) : false;
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'' | 'info' | 'warning' | 'error'>('');
   const debouncedSearch = useDebounce(search, 250);
@@ -111,13 +115,13 @@ export function NotificationsPage(): JSX.Element {
               {item.serial_number && <p className="notif-card__serial col-mono">Serial {item.serial_number}</p>}
             </div>
             <div className="notif-card__actions">
-              {!item.is_read && (
+              {canManage && !item.is_read && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => void center.markRead(item.id)}>
                   <Check size={14} aria-hidden />
                   Mark read
                 </button>
               )}
-              {!item.is_resolved && (
+              {canManage && !item.is_resolved && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => void center.archive(item.id)}>
                   <Archive size={14} aria-hidden />
                   Archive

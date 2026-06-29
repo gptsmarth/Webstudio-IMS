@@ -26,7 +26,7 @@ export function SalesPage(): JSX.Element {
     );
   }
 
-  const canExport = canExportSales(session.role);
+  const canExport = canExportSales(session.permissions);
 
   return (
     <div className="sales-page animate-fade-in">

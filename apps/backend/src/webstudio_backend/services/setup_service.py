@@ -16,7 +16,8 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
     SystemSettingRepository,
 )
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
-from webstudio_backend.infrastructure.security.password import hash_password, validate_password_strength
+from webstudio_backend.infrastructure.security.password import hash_password
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
 from webstudio_backend.infrastructure.security.recovery_key import (
     generate_recovery_key,
     hash_recovery_key,
@@ -36,6 +37,7 @@ class SetupService:
         self._settings = SystemSettingRepository(session)
         self._users = UserRepository(session)
         self._recorder = AuditRecorder(session)
+        self._password_policy = PasswordPolicyService(session)
 
     async def get_status(self) -> dict[str, object]:
         initialized = await self._settings.is_system_initialized()
@@ -67,21 +69,23 @@ class SetupService:
             raise SetupPendingRecoveryConfirmationError()
         if password != confirm_password:
             raise ValueError("Password confirmation does not match")
-        validate_password_strength(password)
+        await self._password_policy.validate(password)
 
         normalized_company = company_name.strip()
         if not normalized_company:
             raise ValueError("Company name is required")
 
+        password_hash = hash_password(password)
         user = await self._users.create(
             username=username,
-            password_hash=hash_password(password),
+            password_hash=password_hash,
             role=UserRole.MAIN_ADMIN,
             display_name=main_admin_name.strip(),
             must_change_password=False,
         )
         recovery_key = generate_recovery_key()
         await self._users.set_recovery_key(user, hash_recovery_key(recovery_key))
+        await self._password_policy.record_password(user.id, password_hash)
         await self._settings.set_value(
             "company_name",
             normalized_company,

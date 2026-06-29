@@ -8,10 +8,10 @@ import {
 
 describe('settings helpers', () => {
   it('checks settings permissions from backend list', () => {
-    expect(canReadSettings(['settings:read', 'auth:login'])).toBe(true);
-    expect(canWriteSettings(['settings:write'])).toBe(true);
+    expect(canReadSettings(['settings:view', 'auth:login'])).toBe(true);
+    expect(canWriteSettings(['settings:modify'])).toBe(true);
     expect(canReadSettings(['auth:login'])).toBe(false);
-    expect(canWriteSettings(['settings:read'])).toBe(false);
+    expect(canWriteSettings(['settings:view'])).toBe(false);
   });
 
   it('lists all settings categories', () => {
@@ -19,7 +19,7 @@ describe('settings helpers', () => {
     expect(ids).toContain('general');
     expect(ids).toContain('backup');
     expect(ids).toContain('about');
-    expect(ids).toHaveLength(11);
+    expect(ids).toHaveLength(12);
   });
 
   it('formats byte sizes', () => {

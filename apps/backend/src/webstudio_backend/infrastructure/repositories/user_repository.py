@@ -72,6 +72,7 @@ class UserRepository(SqlAlchemyRepository[User]):
             must_change_password=must_change_password,
             created_by_user_id=created_by_user_id,
             updated_by_user_id=created_by_user_id,
+            password_changed_at=datetime.now(UTC),
         )
         return await self.add(user)
 
@@ -140,6 +141,7 @@ class UserRepository(SqlAlchemyRepository[User]):
         user.password_hash = password_hash
         user.must_change_password = must_change_password
         user.updated_by_user_id = actor_id
+        user.password_changed_at = datetime.now(UTC)
         user.token_version += 1
         await self._session.flush()
         await self._session.refresh(user)
@@ -173,6 +175,23 @@ class UserRepository(SqlAlchemyRepository[User]):
     async def clear_lockout(self, user: User) -> User:
         user.failed_login_count = 0
         user.locked_until = None
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
+    async def archive(self, user: User, *, actor_id: int) -> User:
+        user.archived_at = datetime.now(UTC)
+        user.status = UserStatus.DISABLED
+        user.updated_by_user_id = actor_id
+        user.token_version += 1
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
+
+    async def restore_from_archive(self, user: User, *, actor_id: int) -> User:
+        user.archived_at = None
+        user.status = UserStatus.ACTIVE
+        user.updated_by_user_id = actor_id
         await self._session.flush()
         await self._session.refresh(user)
         return user

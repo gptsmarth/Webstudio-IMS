@@ -13,24 +13,26 @@ interface StockModelDetailProps {
   model: ProductModel;
   units: InventoryItemDetail[];
   locations: Location[];
-  role: string;
+  permissions: string[];
   loading?: boolean;
   onTransfer: (itemId: string, locationId: number) => Promise<void>;
   actionLoading?: boolean;
   onEditModel?: () => void;
+  editModelLabel?: string;
 }
 
 export function StockModelDetail({
   model,
   units,
   locations,
-  role,
+  permissions,
   loading,
   onTransfer,
   actionLoading,
   onEditModel,
+  editModelLabel = 'Edit model & price',
 }: StockModelDetailProps): JSX.Element {
-  const canTransfer = canTransferStockLocation(role);
+  const canTransfer = canTransferStockLocation(permissions);
   const available = units.filter((item) => item.status !== 'sold' && !item.is_archived);
   const specLines = buildStockModelSpecLines(model);
   const [menu, setMenu] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
@@ -60,7 +62,7 @@ export function StockModelDetail({
             {onEditModel && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={onEditModel}>
                 <Pencil size={14} aria-hidden />
-                Edit model & price
+                {editModelLabel}
               </button>
             )}
           </div>

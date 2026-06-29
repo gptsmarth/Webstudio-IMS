@@ -23,13 +23,34 @@ from webstudio_backend.api.schemas.settings import (
     TallySettingsGroup,
 )
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.database.enums import SettingValueType
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
+from webstudio_backend.infrastructure.database.enums import NotificationSeverity, SettingValueType
 from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.services.backup_service import BackupService
 from webstudio_backend.services.gemini_config import mask_api_key, resolve_gemini_credentials
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
+from webstudio_backend.services.security_alert_service import SecurityAlertService
 from webstudio_backend.services.system_info_service import SystemInfoService
+
+_SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key"})
+
+
+def _setting_category(key: str) -> str:
+    if key.startswith("tally_"):
+        return "tally_configuration"
+    if key.startswith(("lockout_", "password_", "session_", "remember_me_")):
+        return "security_configuration"
+    return "server_configuration"
+
+
+def _mask_setting_value(key: str, value: str | None) -> str | None:
+    if value is None:
+        return None
+    if key in _SENSITIVE_SETTING_KEYS and value.strip():
+        return "••••"
+    return value
 
 
 class SettingsService:
@@ -38,6 +59,7 @@ class SettingsService:
         self._settings = SystemSettingRepository(session)
         self._users = UserRepository(session)
         self._app_settings = app_settings
+        self._recorder = AuditRecorder(session)
 
     async def get_workspace(self, *, api_health: str = "ok", database_health: str = "ok") -> SettingsWorkspace:
         await self._ensure_defaults()
@@ -62,8 +84,11 @@ class SettingsService:
                 session_timeout_minutes=await self._get_int("session_timeout_minutes", 15),
                 password_min_length=await self._get_int("password_min_length", 10),
                 password_require_uppercase=await self._get_bool("password_require_uppercase", True),
+                password_require_lowercase=await self._get_bool("password_require_lowercase", True),
                 password_require_number=await self._get_bool("password_require_number", True),
                 password_require_symbol=await self._get_bool("password_require_symbol", False),
+                password_history_count=await self._get_int("password_history_count", 5),
+                remember_me_ttl_days=await self._get_int("remember_me_ttl_days", 30),
                 lockout_threshold=await self._get_int("lockout_threshold", 5),
                 lockout_duration_minutes=await self._get_int("lockout_duration_minutes", 15),
                 jwt_access_token_ttl_minutes=self._app_settings.access_token_ttl_minutes,
@@ -160,8 +185,11 @@ class SettingsService:
         await self._set_int("session_timeout_minutes", payload.session_timeout_minutes, actor_id=actor_id)
         await self._set_int("password_min_length", payload.password_min_length, actor_id=actor_id)
         await self._set_bool("password_require_uppercase", payload.password_require_uppercase, actor_id=actor_id)
+        await self._set_bool("password_require_lowercase", payload.password_require_lowercase, actor_id=actor_id)
         await self._set_bool("password_require_number", payload.password_require_number, actor_id=actor_id)
         await self._set_bool("password_require_symbol", payload.password_require_symbol, actor_id=actor_id)
+        await self._set_int("password_history_count", payload.password_history_count, actor_id=actor_id)
+        await self._set_int("remember_me_ttl_days", payload.remember_me_ttl_days, actor_id=actor_id)
         await self._set_int("lockout_threshold", payload.lockout_threshold, actor_id=actor_id)
         await self._set_int("lockout_duration_minutes", payload.lockout_duration_minutes, actor_id=actor_id)
         workspace = await self.get_workspace()
@@ -284,36 +312,74 @@ class SettingsService:
         return []
 
     async def _set_str(self, key: str, value: str, *, actor_id: int) -> None:
+        old_raw = await self._get_str(key)
+        new_raw = value.strip()
         await self._settings.set_value(
             key,
-            value.strip(),
+            new_raw,
             value_type=SETTING_DEFAULTS.get(key, ("", SettingValueType.STRING))[1],
             updated_by_user_id=actor_id,
         )
+        if old_raw != new_raw:
+            await self._audit_setting_change(key, old_raw, new_raw, actor_id)
 
     async def _set_int(self, key: str, value: int, *, actor_id: int) -> None:
+        old_raw = str(await self._get_int(key, default=value))
+        new_raw = str(value)
         await self._settings.set_value(
             key,
-            str(value),
+            new_raw,
             value_type=SettingValueType.INTEGER,
             updated_by_user_id=actor_id,
         )
+        if old_raw != new_raw:
+            await self._audit_setting_change(key, old_raw, new_raw, actor_id)
 
     async def _set_bool(self, key: str, value: bool, *, actor_id: int) -> None:
+        old_raw = "true" if await self._get_bool(key, default=value) else "false"
+        new_raw = "true" if value else "false"
         await self._settings.set_value(
             key,
-            "true" if value else "false",
+            new_raw,
             value_type=SettingValueType.BOOLEAN,
             updated_by_user_id=actor_id,
         )
+        if old_raw != new_raw:
+            await self._audit_setting_change(key, old_raw, new_raw, actor_id)
 
     async def _set_json(self, key: str, value: list[Any], *, actor_id: int) -> None:
+        old_raw = json.dumps(await self._get_json_list(key))
+        new_raw = json.dumps(value)
         await self._settings.set_value(
             key,
-            json.dumps(value),
+            new_raw,
             value_type=SettingValueType.JSON,
             updated_by_user_id=actor_id,
         )
+        if old_raw != new_raw:
+            await self._audit_setting_change(key, old_raw, new_raw, actor_id)
+
+    async def _audit_setting_change(self, key: str, old_value: str, new_value: str, actor_id: int) -> None:
+        actor_user = await self._users.get_by_id(actor_id)
+        actor = AuditActor(
+            user_id=actor_id,
+            display_name=(actor_user.display_name or actor_user.username) if actor_user else "System",
+            role=actor_user.role.value if actor_user else "system",
+        )
+        category = _setting_category(key)
+        await self._recorder.record_configuration_change(
+            setting_key=key,
+            category=category,
+            old_value=_mask_setting_value(key, old_value),
+            new_value=_mask_setting_value(key, new_value),
+            actor=actor,
+        )
+        if category in {"security_configuration", "tally_configuration"}:
+            await SecurityAlertService(self._session).emit(
+                title="Security configuration changed",
+                message=f"Setting '{key}' was updated by {actor.display_name}.",
+                severity=NotificationSeverity.WARNING,
+            )
 
     @staticmethod
     def _parse_optional_int(value: str | None) -> int | None:

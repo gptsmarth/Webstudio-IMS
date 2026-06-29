@@ -21,9 +21,9 @@ describe('sales utilities', () => {
     expect(formatInvoiceDate('2025-06-15T10:30:00Z')).not.toBe('—');
   });
 
-  it('restricts export to admin roles', () => {
-    expect(canExportSales('admin')).toBe(true);
-    expect(canExportSales('salesperson')).toBe(false);
+  it('restricts export to users with sales:export', () => {
+    expect(canExportSales(['sales:export', 'sales:view'])).toBe(true);
+    expect(canExportSales(['sales:view', 'sales:create'])).toBe(false);
   });
 
   it('maps sales filters to export params', () => {

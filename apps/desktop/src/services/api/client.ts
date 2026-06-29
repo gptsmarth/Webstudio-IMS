@@ -4,6 +4,27 @@ import { dispatchSetupRequired, isSetupRequiredApiError } from '../../lib/setupG
 import { AuthTokenStore } from '../AuthTokenStore';
 import { LoggingService } from '../LoggingService';
 
+let refreshPromise: Promise<boolean> | null = null;
+
+async function attemptTokenRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const refreshToken = await AuthTokenStore.getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const { AuthenticationService } = await import('./AuthenticationService');
+      await AuthenticationService.refresh();
+      return true;
+    } catch {
+      await AuthTokenStore.clear();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 export class RetryingApiClient {
   private readonly inner: ApiClient;
   private readonly maxRetries = 3;
@@ -14,13 +35,27 @@ export class RetryingApiClient {
 
   private async executeWithRetry<T>(operationName: string, fn: () => Promise<T>): Promise<T> {
     let lastError: unknown;
+    let refreshed = false;
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         return await fn();
       } catch (err: unknown) {
-        const error = err as { response?: { status?: number; data?: unknown }; code?: string; status?: number; message?: string };
+        const error = err as { response?: { status?: number; data?: unknown }; code?: string; status?: number; message?: string; config?: { url?: string } };
         lastError = error;
         const status = error.response?.status ?? error.status ?? 0;
+        const url = error.config?.url ?? operationName;
+        const isAuthRoute = url.includes('/auth/login') || url.includes('/auth/refresh');
+
+        if (status === 401 && !isAuthRoute && !refreshed) {
+          const renewed = await attemptTokenRefresh();
+          if (renewed) {
+            const token = await AuthTokenStore.getAccessToken();
+            this.inner.setAccessToken(token);
+            refreshed = true;
+            continue;
+          }
+        }
+
         const isNetworkError = !error.response || error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || status >= 500;
         
         if (isNetworkError && attempt < this.maxRetries) {
@@ -70,6 +105,10 @@ export class RetryingApiClient {
   async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
     const res = await this.executeWithRetry(`GET ${path}`, () => this.inner.get<unknown>(path, params));
     return this.unwrap<T>(res);
+  }
+
+  async getBlob(path: string, params?: Record<string, unknown>): Promise<Blob> {
+    return this.executeWithRetry(`GET ${path}`, () => this.inner.getBlob(path, params));
   }
 
   async post<T>(path: string, data?: unknown): Promise<T> {

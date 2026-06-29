@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, require_permission
+from webstudio_backend.api.dependencies.auth import NotificationsManageDep, NotificationsViewDep
 from webstudio_backend.api.notification_errors import raise_notification_error
 from webstudio_backend.api.schemas.notification import NotificationDetail
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
@@ -29,9 +29,6 @@ from webstudio_backend.infrastructure.repositories.notification_filters import N
 from webstudio_backend.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
-
-NotificationReadDep = Annotated[AuthenticatedUser, Depends(require_permission("notifications:read"))]
-NotificationResolveDep = Annotated[AuthenticatedUser, Depends(require_permission("notifications:resolve"))]
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
@@ -56,7 +53,7 @@ def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) ->
 @router.get("")
 async def list_notifications(
     request: Request,
-    current: NotificationReadDep,
+    current: NotificationsViewDep,
     db_session: AsyncSession = DbSessionDep,
     notification_type: NotificationType | None = None,
     category: NotificationCategory | None = None,
@@ -93,7 +90,7 @@ async def list_notifications(
 async def get_notification(
     request: Request,
     notification_id: int,
-    current: NotificationReadDep,
+    current: NotificationsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -107,7 +104,7 @@ async def get_notification(
 async def mark_notification_read(
     request: Request,
     notification_id: int,
-    current: NotificationReadDep,
+    current: NotificationsViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
@@ -123,7 +120,7 @@ async def mark_notification_read(
 async def resolve_notification(
     request: Request,
     notification_id: int,
-    current: NotificationResolveDep,
+    current: NotificationsManageDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     service = NotificationService(db_session)

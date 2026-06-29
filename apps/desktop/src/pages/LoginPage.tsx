@@ -126,7 +126,12 @@ export const LoginPage: React.FC<Props> = ({ companyName, apiUrl, appVersion, on
       }
 
       setAuthStatus('Verifying credentials...');
-      const loginResult = await AuthenticationService.login({ username: username.trim(), password });
+      const loginResult = await AuthenticationService.login({
+        username: username.trim(),
+        password,
+        remember_me: rememberMe,
+        device_label: 'WEBSTUDIO Desktop',
+      });
       setAuthStatus('Establishing secure session...');
       let profile = loginResult.user;
       try {

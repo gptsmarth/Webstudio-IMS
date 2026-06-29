@@ -8,7 +8,7 @@ import uuid
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from pydantic import BaseModel
 
-from webstudio_backend.api.dependencies.auth import TallyDashboardDep, TallySyncDep
+from webstudio_backend.api.dependencies.auth import TallyRetrySyncDep, TallyRunSyncDep, TallyViewStatusDep
 from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
@@ -42,7 +42,7 @@ class TallyConnectionTestResponse(BaseModel):
 @router.get("/dashboard")
 async def tally_dashboard(
     request: Request,
-    current: TallyDashboardDep,
+    current: TallyViewStatusDep,
     db_session=DbSessionDep,
 ) -> dict:
     _ = current
@@ -53,7 +53,7 @@ async def tally_dashboard(
 @router.get("/status")
 async def tally_status(
     request: Request,
-    current: TallyDashboardDep,
+    current: TallyViewStatusDep,
     db_session=DbSessionDep,
 ) -> dict:
     _ = current
@@ -64,7 +64,7 @@ async def tally_status(
 @router.get("/sync-log")
 async def tally_sync_log(
     request: Request,
-    current: TallyDashboardDep,
+    current: TallyViewStatusDep,
     db_session=DbSessionDep,
 ) -> dict:
     _ = current
@@ -75,7 +75,7 @@ async def tally_sync_log(
 @router.post("/connection/test")
 async def tally_connection_test(
     request: Request,
-    current: TallySyncDep,
+    current: TallyRunSyncDep,
     db_session=DbSessionDep,
 ) -> dict:
     _ = current
@@ -103,7 +103,7 @@ async def _run_background_sync(correlation_id: str, user_id: int | None) -> None
 async def tally_sync_trigger(
     request: Request,
     background_tasks: BackgroundTasks,
-    current: TallySyncDep,
+    current: TallyRunSyncDep,
     db_session=DbSessionDep,
     body: TallySyncTriggerRequest | None = None,
 ) -> dict:
@@ -135,7 +135,7 @@ async def tally_sync_trigger(
 async def tally_sync_retry(
     request: Request,
     background_tasks: BackgroundTasks,
-    current: TallySyncDep,
+    current: TallyRetrySyncDep,
     db_session=DbSessionDep,
 ) -> dict:
     return await tally_sync_trigger(request, background_tasks, current, db_session)

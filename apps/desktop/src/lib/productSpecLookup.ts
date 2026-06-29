@@ -1,6 +1,7 @@
 import type { ProductModel } from '../services/api/ProductModelService';
 import type { InventoryItemDetail } from '../services/api/InventoryService';
 import { ProductSpecService } from '../services/api/ProductSpecService';
+import { splitModelNotes } from './modelNotes';
 import { fetchAllInventoryForModel } from './productModelSummary';
 
 export interface ExistingModelLookup {
@@ -20,6 +21,7 @@ export interface FetchedProductSpec {
   display: string | null;
   color_options: string | null;
   product_image_url: string | null;
+  description: string | null;
   notes: string | null;
   source: 'database' | 'gemini' | 'manual';
 }
@@ -74,12 +76,14 @@ export async function fetchProductSpecFromInternet(
     display: result.display,
     color_options: result.color_options,
     product_image_url: result.product_image_url,
+    description: result.description,
     notes: result.notes,
     source: 'gemini',
   };
 }
 
 export function modelToFetchedSpec(model: ProductModel): FetchedProductSpec {
+  const { description, specNotes } = splitModelNotes(model.notes);
   return {
     model_name: model.model_name,
     cpu: model.cpu,
@@ -91,7 +95,8 @@ export function modelToFetchedSpec(model: ProductModel): FetchedProductSpec {
     display: model.display,
     color_options: model.color_options,
     product_image_url: model.product_image_url,
-    notes: model.notes,
+    description: description || null,
+    notes: specNotes || null,
     source: 'database',
   };
 }

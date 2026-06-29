@@ -5,9 +5,13 @@ import { ReportPreviewTable } from '../../components/reports/ReportPreviewTable'
 import { ReportTypeSelector } from '../../components/reports/ReportTypeSelector';
 import { ReportWorkflowSteps } from '../../components/reports/ReportWorkflowSteps';
 import { useReportBuilder } from '../../hooks/useReportBuilder';
+import { canExportReports } from '../../services/PermissionService';
+import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 
 export function ReportsPage(): JSX.Element {
+  const session = useAuthStore((state) => state.session);
+  const canExport = session ? canExportReports(session.permissions) : false;
   const builder = useReportBuilder();
 
   return (
@@ -75,12 +79,14 @@ export function ReportsPage(): JSX.Element {
           toggleSort={builder.toggleSort}
         />
 
-        <ReportExportBar
-          hasPreviewed={builder.hasPreviewed}
-          exporting={builder.exporting}
-          totalItems={builder.totalItems}
-          onExport={(format) => void builder.exportReport(format)}
-        />
+        {canExport && (
+          <ReportExportBar
+            hasPreviewed={builder.hasPreviewed}
+            exporting={builder.exporting}
+            totalItems={builder.totalItems}
+            onExport={(format) => void builder.exportReport(format)}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { canExportSales as canExportSalesPermission } from '../services/PermissionService';
 import { formatInventoryDate, formatStorage } from './inventory';
 import type { SaleDetail } from '../services/api/SalesService';
 import type { StorageType, StorageUnit } from '../services/api/InventoryService';
@@ -41,8 +42,8 @@ export function formatSaleSpecs(item: Pick<SaleDetail, 'cpu' | 'ram_gb' | 'stora
   return `${item.cpu} • ${item.ram_gb} GB RAM • ${storage}`;
 }
 
-export function canExportSales(role: string): boolean {
-  return role === 'main_admin' || role === 'admin';
+export function canExportSales(permissions: string[]): boolean {
+  return canExportSalesPermission(permissions);
 }
 
 export function formatInvoiceDate(value: string): string {

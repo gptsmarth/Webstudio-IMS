@@ -47,7 +47,7 @@ interface InventoryDetailDrawerProps {
     | 'clearActionError'
     | 'updateItem'
   >;
-  role: string;
+  permissions: string[];
   editRequestId?: string | null;
   onEditRequestHandled?: () => void;
   onTransfer: () => void;
@@ -71,7 +71,7 @@ function AuditRow({ log }: { log: AuditLogEntry }): JSX.Element {
 
 export function InventoryDetailDrawer({
   workspace,
-  role,
+  permissions,
   editRequestId,
   onEditRequestHandled,
   onTransfer,
@@ -100,8 +100,8 @@ export function InventoryDetailDrawer({
 
   if (!workspace.selectedId || !item) return null;
 
-  const writable = canWriteInventory(role);
-  const markSoldAllowed = canMarkSold(role) && item.status !== 'sold' && !item.is_archived;
+  const writable = canWriteInventory(permissions);
+  const markSoldAllowed = canMarkSold(permissions) && item.status !== 'sold' && !item.is_archived;
   const tallyLogs = workspace.auditLogs.filter((log) => log.source === 'TALLY_SYNC');
   const modelLabel = modelDisplayName(item);
 
@@ -224,7 +224,7 @@ export function InventoryDetailDrawer({
                   <dt>Unit color</dt>
                   <dd>{editing ? <input className="input" value={color} onChange={(event) => setColor(event.target.value)} /> : item.color}</dd>
                 </div>
-                {canViewPurchasePrice(role) && workspace.productModel && (
+                {canViewPurchasePrice(permissions) && workspace.productModel && (
                   <div>
                     <dt>Purchase price (model)</dt>
                     <dd>{formatInventoryPrice(workspace.productModel.purchase_price)}</dd>

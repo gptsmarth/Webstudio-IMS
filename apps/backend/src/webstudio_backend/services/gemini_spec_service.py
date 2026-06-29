@@ -86,7 +86,13 @@ class GeminiSpecService:
                 if result:
                     if gemini_model != self._model:
                         logger.info("Gemini grounded lookup succeeded via {}", gemini_model)
-                    return result
+                    return await self._finalize_lookup_result(
+                        result,
+                        body=body,
+                        model_number=model_number,
+                        brand_name=brand_name,
+                        model_name=model_name,
+                    )
             except GeminiLookupError as exc:
                 last_error = exc
                 if exc.code == "RATE_LIMITED":
@@ -108,7 +114,13 @@ class GeminiSpecService:
                         (result.get("notes") or "")
                         + " (Web search unavailable — verify specs manually.)"
                     ).strip()
-                    return result
+                    return await self._finalize_lookup_result(
+                        result,
+                        body=body,
+                        model_number=model_number,
+                        brand_name=brand_name,
+                        model_name=model_name,
+                    )
             except GeminiLookupError as exc:
                 last_error = exc
                 if exc.code == "RATE_LIMITED":
@@ -130,6 +142,78 @@ class GeminiSpecService:
             "NOT_FOUND",
             "Could not resolve laptop specifications. Enter details manually.",
         )
+
+    async def lookup_product_image(
+        self,
+        model_number: str,
+        model_name: str | None = None,
+        brand_name: str | None = None,
+    ) -> str | None:
+        if not self.is_configured:
+            return None
+
+        model_number = model_number.strip()
+        if not model_number:
+            return None
+
+        brand_line = f"Brand: {brand_name}\n" if brand_name else ""
+        name_line = f"Product line: {model_name}\n" if model_name else ""
+        prompt = f"""Use Google Search to find a direct HTTPS URL for the official product photo of this exact laptop SKU.
+
+{brand_line}{name_line}Model number / SKU: {model_number}
+
+Rules:
+1. Return a DIRECT link to an image file (jpg, jpeg, png, or webp) — not an HTML product page.
+2. Prefer official manufacturer CDN URLs (asus.com, dell.com, hp.com, lenovo.com, etc.).
+3. The image must match SKU "{model_number}" when possible.
+4. Pick the standard front-facing hero product shot.
+
+Respond with ONLY valid JSON: {{"product_image_url": "https://..."}} or {{"product_image_url": null}} if not found."""
+
+        for gemini_model in self._grounded_model_chain():
+            try:
+                payload = _build_payload(prompt, use_grounding=True)
+                body = await self._generate(gemini_model, payload)
+                text = _extract_text(body)
+                parsed = _parse_json_object(text or "")
+                if not parsed:
+                    continue
+                image_url = parsed.get("product_image_url")
+                if image_url is None:
+                    return None
+                url = str(image_url).strip()
+                if url.lower() in {"null", "none", "n/a"}:
+                    return None
+                if url.startswith("https://"):
+                    return url[:512]
+            except GeminiLookupError as exc:
+                if exc.code in {"RATE_LIMITED", "API_ERROR"}:
+                    continue
+                raise
+        return None
+
+    async def _finalize_lookup_result(
+        self,
+        result: dict[str, Any],
+        *,
+        body: dict[str, Any],
+        model_number: str,
+        brand_name: str | None,
+        model_name: str | None,
+    ) -> dict[str, Any]:
+        from webstudio_backend.services.product_image_service import resolve_product_image
+
+        image_url = await resolve_product_image(
+            model_number=model_number,
+            brand_name=brand_name,
+            model_name=result.get("model_name") or model_name,
+            candidate_url=result.get("product_image_url"),
+            grounding_body=body,
+            gemini_service=self,
+        )
+        if image_url:
+            result["product_image_url"] = image_url
+        return result
 
     async def _generate(self, gemini_model: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
@@ -207,10 +291,18 @@ Important rules:
 12. weight: machine weight with unit (e.g. "1.45 kg" or "3.2 lbs").
 13. connectivity: Wi-Fi/BT generation plus main ports (e.g. "Wi-Fi 6E, Bluetooth 5.3, 2× USB-C, 1× HDMI 2.1").
 14. keyboard: backlight, layout, or numpad notes when relevant, or null.
+15. memory_type: RAM type when published (e.g. "DDR4", "DDR5", "LPDDR5X"), or null.
+16. warranty: standard warranty period for this SKU/region when known (e.g. "1 year onsite"), or null.
+17. webcam: camera resolution or features (e.g. "720p HD", "1080p IR with privacy shutter"), or null.
+18. audio: speaker/mic details (e.g. "2 speakers, SonicMaster, array mic"), or null.
+19. charger: adapter wattage and connector when known (e.g. "65W USB-C"), or null.
+20. description: 2–5 sentences for retail staff — product positioning, key selling points, and ideal use case. Plain text only.
+21. product_image_url: direct HTTPS URL to a product photo image file (jpg/png/webp) from the official manufacturer or major retailer CDN for this exact SKU — NOT an HTML product page. Use Google Search to find the hero product shot for "{model_number}".
 
 Respond with ONLY valid JSON (no markdown fences) using exactly these keys:
 model_name, cpu, gpu, ram_gb, storage_value, storage_unit, storage_type, display, color_options,
-operating_system, battery, weight, connectivity, keyboard, product_image_url, notes
+operating_system, battery, weight, connectivity, keyboard, memory_type, warranty, webcam, audio, charger,
+description, product_image_url, notes
 
 notes: brief source or caveat only (e.g. "Matched official ASUS India listing for X1504VA-D5321WS")."""
 
@@ -330,10 +422,15 @@ def _compose_spec_notes(data: dict[str, Any]) -> str | None:
     spec_lines: list[str] = []
     for key, label in (
         ("operating_system", "Operating system"),
+        ("memory_type", "Memory type"),
         ("battery", "Battery"),
         ("weight", "Weight"),
         ("connectivity", "Connectivity"),
         ("keyboard", "Keyboard"),
+        ("webcam", "Webcam"),
+        ("audio", "Audio"),
+        ("charger", "Charger"),
+        ("warranty", "Warranty"),
     ):
         raw = data.get(key)
         if raw is None:
@@ -380,9 +477,27 @@ def _normalize_spec(data: dict[str, Any], fallback_name: str) -> dict[str, Any]:
         image_url = None
 
     notes = data.get("notes")
-    notes_str = _compose_spec_notes(data) if any(
-        data.get(key) for key in ("operating_system", "battery", "weight", "connectivity", "keyboard", "notes")
-    ) else (str(notes).strip() if notes else None)
+    spec_keys = (
+        "operating_system",
+        "memory_type",
+        "battery",
+        "weight",
+        "connectivity",
+        "keyboard",
+        "webcam",
+        "audio",
+        "charger",
+        "warranty",
+        "notes",
+    )
+    notes_str = _compose_spec_notes(data) if any(data.get(key) for key in spec_keys) else (
+        str(notes).strip() if notes else None
+    )
+
+    description_raw = data.get("description")
+    description = str(description_raw).strip() if description_raw else None
+    if description and description.lower() in {"null", "none", "n/a"}:
+        description = None
 
     return {
         "model_name": str(data.get("model_name") or fallback_name).strip(),
@@ -395,6 +510,7 @@ def _normalize_spec(data: dict[str, Any], fallback_name: str) -> dict[str, Any]:
         "display": (str(data.get("display")).strip() or None) if data.get("display") else None,
         "color_options": _normalize_color_options(data.get("color_options")),
         "product_image_url": image_url,
+        "description": description,
         "notes": notes_str,
         "source": "gemini",
     }

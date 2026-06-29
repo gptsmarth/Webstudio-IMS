@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
-from webstudio_backend.api.routers import audit_logs, auth, brands, dashboard, health, inventory, locations, metadata, notifications, product_models, reports, sales, settings as settings_router, setup, tally, users
+from webstudio_backend.api.routers import audit_logs, auth, brands, dashboard, health, integration_keys, inventory, locations, metadata, notifications, product_images, product_models, reports, sales, security, settings as settings_router, setup, tally, users
 from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
@@ -94,10 +94,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(metadata.router)
     app.include_router(setup.router)
     app.include_router(auth.router)
+    app.include_router(security.router)
     app.include_router(users.router)
+    app.include_router(integration_keys.router)
     app.include_router(brands.router)
     app.include_router(locations.router)
     app.include_router(product_models.router)
+    app.include_router(product_images.router)
     app.include_router(inventory.router)
     app.include_router(sales.router)
     app.include_router(dashboard.router)

@@ -25,13 +25,13 @@ import { CatalogueToolbar } from './CatalogueToolbar';
 type BrandSortField = 'name' | 'display_order' | 'models' | 'available';
 
 interface BrandsTabProps {
-  role: string;
+  permissions: string[];
   distributionByBrand: DistributionGroup[];
   modelCounts: Map<number, number>;
   onDataChange: () => void;
 }
 
-export function BrandsTab({ role, distributionByBrand, modelCounts, onDataChange }: BrandsTabProps): JSX.Element {
+export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDataChange }: BrandsTabProps): JSX.Element {
   const [items, setItems] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -47,8 +47,8 @@ export function BrandsTab({ role, distributionByBrand, modelCounts, onDataChange
   const [menu, setMenu] = useState<{ brand: Brand; rect: DOMRect } | null>(null);
   const pageSize = 25;
   const debouncedSearch = useDebounce(search, 300);
-  const canWrite = canWriteCatalogue(role);
-  const canExport = canExportCatalogue(role);
+  const canWrite = canWriteCatalogue(permissions);
+  const canExport = canExportCatalogue(permissions);
 
   const stockByBrandId = useMemo(() => {
     const map = new Map<string, DistributionGroup>();

@@ -67,7 +67,7 @@ async def test_login_and_me(api_client: AsyncClient, initialized_system) -> None
     body = response.json()["data"]
     assert body["username"] == MAIN_ADMIN_USERNAME
     assert body["role"] == "main_admin"
-    assert "users:manage" in body["permissions"]
+    assert "users:view" in body["permissions"]
 
 
 @pytest.mark.asyncio

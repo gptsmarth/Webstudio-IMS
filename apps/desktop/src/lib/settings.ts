@@ -1,3 +1,8 @@
+import {
+  canReadSettings as canReadSettingsPermission,
+  canWriteSettings as canWriteSettingsPermission,
+} from '../services/PermissionService';
+
 export type SettingsCategory =
   | 'general'
   | 'security'
@@ -13,26 +18,26 @@ export type SettingsCategory =
   | 'about';
 
 export const SETTINGS_CATEGORIES: { id: SettingsCategory; label: string }[] = [
-  { id: 'general', label: 'General' },
+  { id: 'general', label: 'Company' },
+  { id: 'appearance', label: 'Branding' },
   { id: 'security', label: 'Security' },
+  { id: 'integrations', label: 'Integrations' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'sales', label: 'Sales' },
   { id: 'tally', label: 'Tally' },
-  { id: 'integrations', label: 'Integrations' },
   { id: 'excel', label: 'Excel' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'backup', label: 'Backup' },
-  { id: 'appearance', label: 'Appearance' },
   { id: 'system', label: 'System' },
-  { id: 'about', label: 'About' },
+  { id: 'about', label: 'Version' },
 ];
 
 export function canReadSettings(permissions: string[]): boolean {
-  return permissions.includes('settings:read');
+  return canReadSettingsPermission(permissions);
 }
 
 export function canWriteSettings(permissions: string[]): boolean {
-  return permissions.includes('settings:write');
+  return canWriteSettingsPermission(permissions);
 }
 
 export function formatBytes(bytes: number): string {

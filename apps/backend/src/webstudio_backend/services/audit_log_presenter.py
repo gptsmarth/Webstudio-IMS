@@ -16,9 +16,88 @@ MODULE_BY_ENTITY_TYPE: dict[str, str] = {
     "location": "Catalogue",
     "user": "Users",
     "system": "System",
+    "system_setting": "Security",
+    "permission": "Security",
+    "integration_api_key": "Security",
+    "tally_sync": "System",
     "notification": "Notifications",
     "report": "Reports",
 }
+
+SECURITY_ENTITY_TYPES = frozenset(
+    {"user", "permission", "system_setting", "integration_api_key", "system"},
+)
+
+SECURITY_EVENT_SEVERITY: dict[str, str] = {
+    "login_success": "low",
+    "logout": "low",
+    "login_failure": "high",
+    "account_locked": "critical",
+    "password_reset": "high",
+    "password_change": "medium",
+    "permission_change": "high",
+    "permission_denied": "high",
+    "user_creation": "medium",
+    "user_deactivation": "medium",
+    "user_activation": "medium",
+    "user_deletion": "high",
+    "user_restore": "medium",
+    "configuration_change": "high",
+    "tally_configuration": "high",
+    "recovery_key_used": "critical",
+    "recovery_key_regenerated": "critical",
+    "session_revoked": "medium",
+    "force_logout": "high",
+    "token_refresh_reuse": "critical",
+}
+
+
+def extract_security_event(audit_log: AuditLog) -> str | None:
+    if isinstance(audit_log.new_value, dict):
+        event = audit_log.new_value.get("security_event")
+        if isinstance(event, str) and event.strip():
+            return event.strip()
+    description = (audit_log.description or "").lower()
+    if "failed login" in description:
+        return "login_failure"
+    if "logged in" in description:
+        return "login_success"
+    if "logged out" in description:
+        return "logout"
+    if "permission denied" in description:
+        return "permission_denied"
+    if "password reset" in description:
+        return "password_reset"
+    if "deactivated" in description or "disabled" in description:
+        return "user_deactivation"
+    if "activated" in description and "user" in description:
+        return "user_activation"
+    if "archived" in description and "user" in description:
+        return "user_deletion"
+    if "recovery key" in description:
+        return "recovery_key_used"
+    return None
+
+
+def audit_severity(audit_log: AuditLog) -> str:
+    if isinstance(audit_log.new_value, dict):
+        stored = audit_log.new_value.get("severity")
+        if isinstance(stored, str) and stored in {"low", "medium", "high", "critical"}:
+            return stored
+    event = extract_security_event(audit_log)
+    if event and event in SECURITY_EVENT_SEVERITY:
+        return SECURITY_EVENT_SEVERITY[event]
+    if audit_result(audit_log) == "failure":
+        return "high"
+    if audit_log.entity_type in SECURITY_ENTITY_TYPES:
+        return "medium"
+    return "low"
+
+
+def is_security_event(audit_log: AuditLog) -> bool:
+    if audit_log.entity_type in SECURITY_ENTITY_TYPES:
+        return True
+    return extract_security_event(audit_log) is not None
 
 
 def audit_module(entity_type: str) -> str:

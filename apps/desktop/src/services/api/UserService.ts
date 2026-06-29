@@ -14,12 +14,45 @@ export interface UserSummary {
   theme_preference: string | null;
   last_login_at: string | null;
   created_at: string | null;
+  failed_login_count: number;
+  is_locked: boolean;
+  is_archived: boolean;
+  active_session_count: number;
+  password_age_days: number | null;
+  created_by_display_name: string | null;
+}
+
+export interface UserSessionSummary {
+  id: number;
+  device_label: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  remember_me: boolean;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string;
+}
+
+export interface UserLoginEventSummary {
+  id: number;
+  username: string;
+  success: boolean;
+  failure_reason: string | null;
+  ip_address: string | null;
+  device_label: string | null;
+  created_at: string;
 }
 
 export interface UserDetail extends UserSummary {
   created_at: string;
   updated_at: string;
   permissions: string[];
+  locked_until: string | null;
+  password_changed_at: string | null;
+  created_by_user_id: number | null;
+  archived_at: string | null;
+  sessions: UserSessionSummary[];
+  login_events: UserLoginEventSummary[];
 }
 
 export interface RolePermissionsEntry {
@@ -135,6 +168,30 @@ export class UserService {
     LoggingService.info('API', 'Enabling user', { userId });
     const client = await ApiClientProvider.getClient();
     return client.post<UserDetail>(`/api/v1/users/${userId}/enable`);
+  }
+
+  static async unlockUser(userId: number): Promise<UserDetail> {
+    LoggingService.info('API', 'Unlocking user', { userId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<UserDetail>(`/api/v1/users/${userId}/unlock`);
+  }
+
+  static async forceLogoutUser(userId: number): Promise<{ success: boolean; sessions_revoked: number }> {
+    LoggingService.info('API', 'Force logout user', { userId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<{ success: boolean; sessions_revoked: number }>(`/api/v1/users/${userId}/logout-all`);
+  }
+
+  static async archiveUser(userId: number): Promise<UserDetail> {
+    LoggingService.info('API', 'Archiving user', { userId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<UserDetail>(`/api/v1/users/${userId}/archive`);
+  }
+
+  static async restoreUser(userId: number): Promise<UserDetail> {
+    LoggingService.info('API', 'Restoring user', { userId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<UserDetail>(`/api/v1/users/${userId}/restore`);
   }
 
   static async getRolePermissions(): Promise<RolePermissionsResponse> {

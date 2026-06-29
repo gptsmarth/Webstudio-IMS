@@ -24,12 +24,12 @@ import { LocationFormDialog } from './LocationFormDialog';
 type LocationSortField = 'name' | 'location_type' | 'stock' | 'capacity';
 
 interface LocationsTabProps {
-  role: string;
+  permissions: string[];
   distributionByLocation: DistributionGroup[];
   onDataChange: () => void;
 }
 
-export function LocationsTab({ role, distributionByLocation, onDataChange }: LocationsTabProps): JSX.Element {
+export function LocationsTab({ permissions, distributionByLocation, onDataChange }: LocationsTabProps): JSX.Element {
   const [items, setItems] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -45,8 +45,8 @@ export function LocationsTab({ role, distributionByLocation, onDataChange }: Loc
   const [menu, setMenu] = useState<{ location: Location; rect: DOMRect } | null>(null);
   const pageSize = 25;
   const debouncedSearch = useDebounce(search, 300);
-  const canWrite = canWriteCatalogue(role);
-  const canExport = canExportCatalogue(role);
+  const canWrite = canWriteCatalogue(permissions);
+  const canExport = canExportCatalogue(permissions);
 
   const stockByLocationId = useMemo(() => {
     const map = new Map<string, DistributionGroup>();

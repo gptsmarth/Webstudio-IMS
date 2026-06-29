@@ -159,15 +159,14 @@ async def test_dashboard_rbac_admin_roles(
 
 
 @pytest.mark.asyncio
-async def test_salesperson_can_read_distribution_only(
+async def test_salesperson_can_read_dashboard_endpoints(
     api_client: AsyncClient,
     salesperson_headers: dict[str, str],
     db_session: AsyncSession,
 ) -> None:
     await _seed_inventory(db_session)
-    assert (await api_client.get("/api/v1/dashboard/distribution", headers=salesperson_headers)).status_code == 200
-    assert (await api_client.get("/api/v1/dashboard", headers=salesperson_headers)).status_code == 403
-    assert (await api_client.get("/api/v1/dashboard/recent-activity", headers=salesperson_headers)).status_code == 403
+    for path in ("/api/v1/dashboard", "/api/v1/dashboard/distribution", "/api/v1/dashboard/recent-activity"):
+        assert (await api_client.get(path, headers=salesperson_headers)).status_code == 200
 
 
 @pytest.mark.asyncio
