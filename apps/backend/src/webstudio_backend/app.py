@@ -14,16 +14,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
-from webstudio_backend.api.routers import audit_logs, auth, brands, dashboard, health, integration_keys, inventory, locations, metadata, notifications, product_images, product_models, reports, sales, security, settings as settings_router, setup, tally, users
+from webstudio_backend.api.routers import access_roles, audit_logs, auth, brands, dashboard, health, integration_keys, inventory, locations, metadata, notifications, platform, product_images, product_models, reports, sales, search, security, settings as settings_router, setup, sync, tally, users
 from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
 from webstudio_backend.infrastructure.database.session import close_db, init_db, session_scope
+from webstudio_backend.services.audit_retention_scheduler import audit_retention_loop
 from webstudio_backend.services.backup_scheduler import backup_scheduler_loop
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 _tally_scheduler_task: asyncio.Task | None = None
 _backup_scheduler_task: asyncio.Task | None = None
+_audit_retention_task: asyncio.Task | None = None
 
 
 async def _tally_scheduler_loop() -> None:
@@ -45,7 +47,7 @@ async def _tally_scheduler_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _tally_scheduler_task, _backup_scheduler_task
+    global _tally_scheduler_task, _backup_scheduler_task, _audit_retention_task
     settings: Settings = app.state.settings
     await init_db(settings)
     scheduler_enabled = (
@@ -54,11 +56,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     backup_scheduler_enabled = (
         not settings.is_test and os.getenv("WEBSTUDIO_BACKUP_SCHEDULER", "1") == "1"
     )
+    audit_retention_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_AUDIT_RETENTION_SCHEDULER", "1") == "1"
+    )
     if scheduler_enabled:
         _tally_scheduler_task = asyncio.create_task(_tally_scheduler_loop())
     if backup_scheduler_enabled:
         _backup_scheduler_task = asyncio.create_task(backup_scheduler_loop())
+    if audit_retention_enabled:
+        try:
+            await maybe_purge_audit_logs()
+        except Exception:
+            pass
+        _audit_retention_task = asyncio.create_task(audit_retention_loop())
     yield
+    if _audit_retention_task is not None:
+        _audit_retention_task.cancel()
+        try:
+            await _audit_retention_task
+        except asyncio.CancelledError:
+            pass
+        _audit_retention_task = None
     if _backup_scheduler_task is not None:
         _backup_scheduler_task.cancel()
         try:
@@ -106,10 +124,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(metadata.router)
+    app.include_router(platform.router)
+    app.include_router(sync.router)
+    app.include_router(search.router)
     app.include_router(setup.router)
     app.include_router(auth.router)
     app.include_router(security.router)
     app.include_router(users.router)
+    app.include_router(access_roles.router)
     app.include_router(integration_keys.router)
     app.include_router(brands.router)
     app.include_router(locations.router)

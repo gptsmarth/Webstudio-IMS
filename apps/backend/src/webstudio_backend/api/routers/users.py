@@ -16,8 +16,10 @@ from webstudio_backend.api.dependencies.auth import (
     UsersResetPasswordDep,
     UsersViewDep,
 )
+from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.user import (
+    AssignUserAccessRequest,
     CreateUserRequest,
     ResetPasswordRequest,
     RolePermissionsEntry,
@@ -26,6 +28,7 @@ from webstudio_backend.api.schemas.user import (
     UpdateUserRoleRequest,
     UserDetail,
     UserSummary,
+    access_label_for_user,
 )
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.permissions import permissions_for_role
@@ -41,6 +44,8 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     UserNotFoundError,
 )
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
+from webstudio_backend.services.custom_access_role_service import CustomAccessRoleNotFoundError, CustomAccessRoleService
+from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.services.user_admin_service import UserAdminExtras, UserAdminService
 from webstudio_backend.services.user_service import UserService
 
@@ -58,12 +63,7 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
-    return ResponseMeta(
-        page=page,
-        page_size=page_size,
-        total_items=total_items,
-        total_pages=total_pages,
-    )
+    return build_page_meta(page, page_size, total_items, total_pages)
 
 
 def _actor(current: AuthenticatedUser) -> AuditActor:
@@ -96,23 +96,47 @@ def _extras_payload(extras: UserAdminExtras, *, include_detail: bool = False) ->
     return payload
 
 
-def _serialize_summary(user: User, extras: UserAdminExtras) -> dict:
-    return UserSummary.from_model_with_extras(user, _extras_payload(extras)).model_dump()
+def _serialize_summary(
+    user: User,
+    extras: UserAdminExtras,
+    *,
+    custom_role_name: str | None = None,
+) -> dict:
+    payload = UserSummary.from_model_with_extras(user, _extras_payload(extras)).model_dump()
+    payload["custom_access_role_id"] = user.custom_access_role_id
+    payload["custom_access_role_name"] = custom_role_name
+    payload["access_label"] = access_label_for_user(user, custom_role_name=custom_role_name)
+    return payload
 
 
 def _serialize_detail(
     user: User,
     extras: UserAdminExtras,
     *,
+    permissions: list[str],
+    custom_role_name: str | None = None,
     sessions: list[dict[str, object]] | None = None,
     login_events: list[dict[str, object]] | None = None,
 ) -> dict:
-    return UserDetail.from_model_with_extras(
+    detail = UserDetail.from_model_with_extras(
         user,
         _extras_payload(extras, include_detail=True),
+        permissions=permissions,
         sessions=sessions,
         login_events=login_events,
     ).model_dump()
+    detail["custom_access_role_id"] = user.custom_access_role_id
+    detail["custom_access_role_name"] = custom_role_name
+    detail["access_label"] = access_label_for_user(user, custom_role_name=custom_role_name)
+    return detail
+
+
+async def _custom_role_name_map(db_session: AsyncSession, users: list[User]) -> dict[int, str]:
+    role_ids = {user.custom_access_role_id for user in users if user.custom_access_role_id is not None}
+    if not role_ids:
+        return {}
+    roles = await CustomAccessRoleService(db_session).list_roles(include_inactive=True)
+    return {role.id: role.name for role in roles if role.id in role_ids}
 
 
 @router.get("")
@@ -144,9 +168,17 @@ async def list_users(
     user_ids = [user.id for user in result.items]
     session_counts = await RefreshTokenRepository(db_session).count_active_by_user_ids(user_ids)
     extras_map = await admin_service.batch_extras_for_users(result.items, session_counts)
+    role_names = await _custom_role_name_map(db_session, result.items)
     return _envelope(
         request,
-        [_serialize_summary(user, extras_map[user.id]) for user in result.items],
+        [
+            _serialize_summary(
+                user,
+                extras_map[user.id],
+                custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            )
+            for user in result.items
+        ],
         _page_meta(result.page, result.page_size, result.total_items, result.total_pages),
     )
 
@@ -204,9 +236,18 @@ async def get_user(
     extras = await admin_service.extras_for_user(user)
     sessions = await admin_service.list_sessions_for_user(user_id)
     login_events = await admin_service.list_login_events_for_user(user_id)
+    role_names = await _custom_role_name_map(db_session, [user])
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
     return _envelope(
         request,
-        _serialize_detail(user, extras, sessions=sessions, login_events=login_events),
+        _serialize_detail(
+            user,
+            extras,
+            permissions=permissions,
+            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            sessions=sessions,
+            login_events=login_events,
+        ),
     )
 
 
@@ -249,7 +290,35 @@ async def update_user_role(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    return _envelope(request, UserDetail.from_model(user).model_dump())
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return _envelope(request, UserDetail.from_model(user, permissions=permissions).model_dump())
+
+
+@router.patch("/{user_id}/access")
+async def assign_user_access(
+    request: Request,
+    user_id: int,
+    body: AssignUserAccessRequest,
+    current: UsersEditDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    service = UserService(db_session)
+    try:
+        user = await service.assign_access(
+            user_id,
+            access_type=body.access_type,
+            role=body.role,
+            custom_role_id=body.custom_role_id,
+            actor=_actor(current),
+        )
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except CustomAccessRoleNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return _envelope(request, UserDetail.from_model(user, permissions=permissions).model_dump())
 
 
 @router.post("/{user_id}/reset-password")

@@ -11,6 +11,25 @@ from webstudio_backend.infrastructure.database.enums import ThemePreference, Use
 from webstudio_backend.infrastructure.database.models.user import User
 
 
+def _builtin_role_label(role: UserRole) -> str:
+    return {
+        UserRole.MAIN_ADMIN: "Main Admin",
+        UserRole.ADMIN: "Admin",
+        UserRole.SALESPERSON: "Salesperson",
+        UserRole.SERVICE_ACCOUNT: "Service Account",
+    }.get(role, role.value)
+
+
+def access_label_for_user(
+    user: User,
+    *,
+    custom_role_name: str | None = None,
+) -> str:
+    if user.custom_access_role_id is not None and custom_role_name:
+        return custom_role_name
+    return _builtin_role_label(user.role)
+
+
 class UserSummary(BaseModel):
     id: int
     username: str
@@ -27,6 +46,9 @@ class UserSummary(BaseModel):
     active_session_count: int = 0
     password_age_days: int | None = None
     created_by_display_name: str | None = None
+    custom_access_role_id: int | None = None
+    custom_access_role_name: str | None = None
+    access_label: str | None = None
 
     @classmethod
     def from_model(cls, user: User) -> UserSummary:
@@ -82,12 +104,12 @@ class UserDetail(UserSummary):
     login_events: list[UserLoginEventSummary] = Field(default_factory=list)
 
     @classmethod
-    def from_model(cls, user: User) -> UserDetail:
+    def from_model(cls, user: User, *, permissions: list[str] | None = None) -> UserDetail:
         base = UserSummary.from_model(user)
         return cls(
             **base.model_dump(),
             updated_at=user.updated_at,
-            permissions=permissions_for_role(user.role),
+            permissions=permissions if permissions is not None else permissions_for_role(user.role),
         )
 
     @classmethod
@@ -96,13 +118,14 @@ class UserDetail(UserSummary):
         user: User,
         extras: dict[str, object],
         *,
+        permissions: list[str] | None = None,
         sessions: list[dict[str, object]] | None = None,
         login_events: list[dict[str, object]] | None = None,
     ) -> UserDetail:
         base = UserSummary.from_model_with_extras(user, extras)
         detail_fields = {
             "updated_at": user.updated_at,
-            "permissions": permissions_for_role(user.role),
+            "permissions": permissions if permissions is not None else permissions_for_role(user.role),
             "locked_until": extras.get("locked_until"),
             "password_changed_at": extras.get("password_changed_at"),
             "created_by_user_id": extras.get("created_by_user_id"),
@@ -126,11 +149,11 @@ class CurrentUserResponse(UserSummary):
     permissions: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_model(cls, user: User) -> CurrentUserResponse:
+    def from_model(cls, user: User, *, permissions: list[str] | None = None) -> CurrentUserResponse:
         base = UserSummary.from_model(user)
         return cls(
             **base.model_dump(),
-            permissions=permissions_for_role(user.role),
+            permissions=permissions if permissions is not None else permissions_for_role(user.role),
         )
 
 
@@ -217,6 +240,12 @@ class UpdateUserRequest(BaseModel):
 
 class UpdateUserRoleRequest(BaseModel):
     role: UserRole
+
+
+class AssignUserAccessRequest(BaseModel):
+    access_type: str = Field(pattern="^(builtin|custom)$")
+    role: UserRole | None = None
+    custom_role_id: int | None = None
 
 
 class ResetPasswordRequest(BaseModel):

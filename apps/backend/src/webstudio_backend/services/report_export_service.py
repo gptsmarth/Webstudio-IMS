@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from collections.abc import AsyncIterator, Callable, Sequence
 from datetime import UTC, datetime
@@ -36,11 +37,11 @@ class ReportExportService:
     ) -> tuple[bytes, str, str]:
         collected = await self._collect_batches(row_batches)
         if export_format is ExportFormat.XLSX:
-            content = self._build_xlsx(title, headers, collected)
+            content = await asyncio.to_thread(self._build_xlsx, title, headers, collected)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             extension = "xlsx"
         else:
-            content = self._build_pdf(title, headers, collected)
+            content = await asyncio.to_thread(self._build_pdf, title, headers, collected)
             media_type = "application/pdf"
             extension = "pdf"
         filename = f"{report_type.value}-report-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.{extension}"

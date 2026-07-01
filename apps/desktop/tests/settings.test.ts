@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canReadSettings, canWriteSettings, formatBytes, SETTINGS_CATEGORIES } from '../src/lib/settings';
+import { canReadSettings, canWriteSettings, canAccessBackupModule, formatBytes, SETTINGS_CATEGORIES, visibleSettingsCategories } from '../src/lib/settings';
+import { canManageBackup, canViewBackup } from '../src/services/PermissionService';
 import {
   loadAppearancePreferences,
   saveAppearancePreferences,
@@ -20,6 +21,20 @@ describe('settings helpers', () => {
     expect(ids).toContain('backup');
     expect(ids).toContain('about');
     expect(ids).toHaveLength(12);
+  });
+
+  it('hides backup category unless backup or restore view is granted', () => {
+    const withoutBackup = visibleSettingsCategories(['settings:view']).map((entry) => entry.id);
+    expect(withoutBackup).not.toContain('backup');
+    const withBackup = visibleSettingsCategories(['backup:view']).map((entry) => entry.id);
+    expect(withBackup).toContain('backup');
+  });
+
+  it('exposes granular backup permissions', () => {
+    expect(canViewBackup(['backup:view'])).toBe(true);
+    expect(canManageBackup(['backup:view'])).toBe(false);
+    expect(canAccessBackupModule(['restore:view'])).toBe(true);
+    expect(canAccessBackupModule(['settings:view'])).toBe(false);
   });
 
   it('formats byte sizes', () => {

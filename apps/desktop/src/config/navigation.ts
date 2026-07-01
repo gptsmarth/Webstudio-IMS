@@ -131,6 +131,12 @@ export function navItemsForPermissions(permissions: string[]): NavItemConfig[] {
   return NAV_ITEMS.filter((item) => granted.has(item.permission));
 }
 
+/** Salesperson-style users: can view stock but cannot create inventory. */
+export function isStockOnlyUser(permissions: string[]): boolean {
+  const granted = new Set(permissions);
+  return granted.has(ROUTE_PERMISSIONS.stock) && !granted.has(ROUTE_PERMISSIONS.inventory);
+}
+
 /** @deprecated Use navItemsForPermissions — kept for tests migrating to permission model. */
 export function navItemsForRole(role: UserRole): NavItemConfig[] {
   const rolePermissions: Record<UserRole, string[]> = {

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Numeric, String, Text, Uuid, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -20,13 +21,14 @@ from webstudio_backend.infrastructure.database.mixins import PrimaryKeyMixin
 class Sale(Base, PrimaryKeyMixin):
     __tablename__ = "sales"
 
-    inventory_item_id: Mapped[uuid.UUID] = mapped_column(
+    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
             f"{DATABASE_SCHEMA}.inventory_items.id",
             name="fk_sales_inventory_item",
+            ondelete="SET NULL",
         ),
-        nullable=False,
+        nullable=True,
         unique=True,
     )
     sale_source: Mapped[SaleSource] = mapped_column(
@@ -54,6 +56,20 @@ class Sale(Base, PrimaryKeyMixin):
     mapped_location_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    snapshot_serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    snapshot_product_model_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    snapshot_brand_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    snapshot_brand_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    snapshot_model_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    snapshot_model_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    snapshot_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snapshot_cpu: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    snapshot_gpu: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    snapshot_ram_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    snapshot_storage_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    snapshot_storage_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    snapshot_storage_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    snapshot_location_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

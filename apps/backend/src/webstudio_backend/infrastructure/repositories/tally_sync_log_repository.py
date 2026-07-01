@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import TallySyncRunStatus
@@ -82,15 +82,24 @@ class TallySyncLogRepository(SqlAlchemyRepository[TallySyncLog]):
         return list(result.scalars().all())
 
     async def aggregate_stats(self, company_sync_id: int) -> dict[str, int]:
-        statement = select(TallySyncLog).where(TallySyncLog.tally_company_sync_id == company_sync_id)
-        result = await self._session.execute(statement)
-        logs = list(result.scalars().all())
+        statement = select(
+            func.count().label("invoices_processed"),
+            func.coalesce(func.sum(TallySyncLog.successfully_updated), 0).label(
+                "successfully_updated",
+            ),
+            func.coalesce(func.sum(TallySyncLog.already_sold), 0).label("already_sold"),
+            func.coalesce(func.sum(TallySyncLog.missing_serial), 0).label("missing_serial"),
+            func.coalesce(func.sum(TallySyncLog.missing_model), 0).label("missing_model"),
+            func.coalesce(func.sum(TallySyncLog.model_mismatches), 0).label("model_mismatches"),
+            func.coalesce(func.sum(TallySyncLog.ignored_items), 0).label("ignored_items"),
+        ).where(TallySyncLog.tally_company_sync_id == company_sync_id)
+        row = (await self._session.execute(statement)).one()
         return {
-            "invoices_processed": len(logs),
-            "successfully_updated": sum(log.successfully_updated for log in logs),
-            "already_sold": sum(log.already_sold for log in logs),
-            "missing_serial": sum(log.missing_serial for log in logs),
-            "missing_model": sum(log.missing_model for log in logs),
-            "model_mismatches": sum(log.model_mismatches for log in logs),
-            "ignored_items": sum(log.ignored_items for log in logs),
+            "invoices_processed": int(row.invoices_processed),
+            "successfully_updated": int(row.successfully_updated),
+            "already_sold": int(row.already_sold),
+            "missing_serial": int(row.missing_serial),
+            "missing_model": int(row.missing_model),
+            "model_mismatches": int(row.model_mismatches),
+            "ignored_items": int(row.ignored_items),
         }

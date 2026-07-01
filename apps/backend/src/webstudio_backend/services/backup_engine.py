@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -150,7 +151,7 @@ class BackupEngine:
             with tempfile.TemporaryDirectory(prefix="webstudio-backup-") as temp_dir:
                 workspace = Path(temp_dir)
                 db_path = workspace / "database.sql"
-                self._dump_database(db_path)
+                await asyncio.to_thread(self._dump_database, db_path)
 
                 assets_dir = workspace / "assets"
                 assets_dir.mkdir()

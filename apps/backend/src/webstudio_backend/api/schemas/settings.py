@@ -111,7 +111,7 @@ class IntegrationsSettingsUpdate(BaseModel):
     ai_fallback_chain: list[str] = Field(default_factory=lambda: ["gemini"])
     ai_enrichment_enabled: bool = True
     ai_timeout_seconds: int = Field(default=90, ge=15, le=300)
-    ai_retry_count: int = Field(default=2, ge=0, le=5)
+    ai_retry_count: int = Field(default=2, ge=0, le=5, description="Total spec lookup attempts (includes the first try).")
     groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
     groq_api_key: str | None = Field(default=None, max_length=256)
     clear_groq_api_key: bool = False

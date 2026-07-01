@@ -1,3 +1,4 @@
+export * from './PlatformService';
 export * from './ApiClientProvider';
 export * from './client';
 export * from './InventoryService';

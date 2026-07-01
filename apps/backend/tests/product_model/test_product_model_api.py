@@ -115,25 +115,26 @@ async def test_product_model_rbac_and_crud(
     assert len(resp.json()["data"]) == 1
     assert resp.json()["data"][0]["brand_name"] == "Dell"
 
-    # 8. Archive / Restore (Admin allowed)
-    # Archive
-    resp = await api_client.post(f"/api/v1/product-models/{pm_id}/archive", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "archived"
+    # 8. Permanent delete (Admin allowed)
+    resp = await api_client.delete(f"/api/v1/product-models/{pm_id}", headers=admin_headers)
+    assert resp.status_code == 204
 
-    # Active filter now returns 1
+    # Deleted model no longer appears in list
     resp = await api_client.get("/api/v1/product-models?active=true", headers=salesperson_headers)
     assert len(resp.json()["data"]) == 1
+    assert all(row["id"] != pm_id for row in resp.json()["data"])
 
-    # Archived filter returns 1
-    resp = await api_client.get("/api/v1/product-models?archived=true", headers=salesperson_headers)
-    assert len(resp.json()["data"]) == 1
-    assert resp.json()["data"][0]["id"] == pm_id
+    resp = await api_client.get(f"/api/v1/product-models/{pm_id}", headers=salesperson_headers)
+    assert resp.status_code == 404
 
-    # Restore
-    resp = await api_client.post(f"/api/v1/product-models/{pm_id}/restore", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "active"
+    # Deprecated archive alias still deletes
+    resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
+    assert resp.status_code == 201
+    alias_id = resp.json()["data"]["id"]
+    resp = await api_client.post(f"/api/v1/product-models/{alias_id}/archive", headers=admin_headers)
+    assert resp.status_code == 204
+    resp = await api_client.get(f"/api/v1/product-models/{alias_id}", headers=salesperson_headers)
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -157,10 +158,10 @@ async def test_create_product_model_validates_brand(
         "storage_type": "SSD",
     }
 
-    # Creating a model under an archived brand should fail validation
+    # Creating a model under a deleted/inactive brand should fail
     resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
-    assert resp.status_code == 400
-    assert "archived" in resp.json()["error"]["message"].lower()
+    assert resp.status_code == 404
+    assert "not available" in resp.json()["error"]["message"].lower()
 
     # Creating under a non-existent brand should fail
     payload["brand_id"] = 99999

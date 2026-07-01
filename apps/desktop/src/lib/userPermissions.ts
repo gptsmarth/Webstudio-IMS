@@ -4,6 +4,8 @@ import { resolveEffectivePermissions, type PermissionGrantSource } from './permi
 import { filterPermissionsByLicense, createLicensePermissionContext } from './permissionLicense';
 
 export type PermissionModuleId =
+  | 'dashboard'
+  | 'stock'
   | 'inventory'
   | 'sales'
   | 'reports'
@@ -41,7 +43,9 @@ export interface PermissionModuleGroup {
 }
 
 export const PERMISSION_MODULE_ORDER: { id: PermissionModuleId; label: string }[] = [
-  { id: 'inventory', label: 'Inventory' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'stock', label: 'Stock' },
+  { id: 'inventory', label: 'Inventory (admin)' },
   { id: 'sales', label: 'Sales' },
   { id: 'reports', label: 'Reports' },
   { id: 'catalogue', label: 'Catalogue' },
@@ -54,10 +58,23 @@ export const PERMISSION_MODULE_ORDER: { id: PermissionModuleId; label: string }[
 ];
 
 const PERMISSION_REGISTRY: PermissionMetadata[] = [
-  { permission: 'inventory:view', label: 'View', description: 'Browse stock and serial numbers', module: 'inventory', i18nKey: 'permission.inventory.view' },
-  { permission: 'inventory:create', label: 'Create', description: 'Add inventory items', module: 'inventory', i18nKey: 'permission.inventory.create' },
+  { permission: 'dashboard:view', label: 'View dashboard', description: 'Open the Dashboard tab', module: 'dashboard', i18nKey: 'permission.dashboard.view' },
+  { permission: 'dashboard:quick_actions', label: 'Quick actions', description: 'Shortcut bar (add laptop, search, transfer, etc.)', module: 'dashboard', i18nKey: 'permission.dashboard.quick_actions' },
+  { permission: 'dashboard:inventory_distribution', label: 'Inventory distribution', description: 'Available stock by location chart', module: 'dashboard', i18nKey: 'permission.dashboard.inventory_distribution' },
+  { permission: 'dashboard:brand_distribution', label: 'Brand distribution', description: 'Stock breakdown by brand', module: 'dashboard', i18nKey: 'permission.dashboard.brand_distribution' },
+  { permission: 'dashboard:recent_sales', label: 'Recent sales', description: 'Latest sold units feed', module: 'dashboard', i18nKey: 'permission.dashboard.recent_sales' },
+  { permission: 'dashboard:recent_inventory', label: 'Recent inventory additions', description: 'Newly registered serial numbers', module: 'dashboard', i18nKey: 'permission.dashboard.recent_inventory' },
+  { permission: 'dashboard:recent_transfers', label: 'Recent transfers', description: 'Location movement feed', module: 'dashboard', i18nKey: 'permission.dashboard.recent_transfers' },
+  { permission: 'dashboard:recent_activity', label: 'Recent activity', description: 'Combined activity timeline', module: 'dashboard', i18nKey: 'permission.dashboard.recent_activity' },
+  { permission: 'dashboard:notifications', label: 'Notifications panel', description: 'Unresolved alerts on the dashboard', module: 'dashboard', i18nKey: 'permission.dashboard.notifications' },
+  { permission: 'dashboard:store_status', label: 'Store status', description: 'Operational stock by location', module: 'dashboard', i18nKey: 'permission.dashboard.store_status' },
+  { permission: 'dashboard:tally_status', label: 'Tally status', description: 'Synchronization readiness widget', module: 'dashboard', i18nKey: 'permission.dashboard.tally_status' },
+  { permission: 'dashboard:system_status', label: 'System status', description: 'API and database health', module: 'dashboard', i18nKey: 'permission.dashboard.system_status' },
+  { permission: 'inventory:view', label: 'View stock tab', description: 'Browse brands, models, and serial numbers in Stock', module: 'stock', i18nKey: 'permission.stock.view' },
+  { permission: 'inventory:stock_edit', label: 'Edit laptop in stock', description: 'Update model specs and selling price from Stock', module: 'stock', i18nKey: 'permission.inventory.stock_edit' },
+  { permission: 'inventory:create', label: 'Create', description: 'Add inventory items (Inventory tab)', module: 'inventory', i18nKey: 'permission.inventory.create' },
   { permission: 'inventory:edit', label: 'Edit', description: 'Update inventory item details', module: 'inventory', i18nKey: 'permission.inventory.edit' },
-  { permission: 'inventory:transfer', label: 'Transfer', description: 'Move stock between locations', module: 'inventory', i18nKey: 'permission.inventory.transfer' },
+  { permission: 'inventory:transfer', label: 'Transfer', description: 'Move stock between locations', module: 'stock', i18nKey: 'permission.inventory.transfer' },
   { permission: 'inventory:archive', label: 'Archive', description: 'Archive inventory items', module: 'inventory', i18nKey: 'permission.inventory.archive' },
   { permission: 'inventory:restore', label: 'Restore', description: 'Restore archived inventory', module: 'inventory', i18nKey: 'permission.inventory.restore' },
   { permission: 'inventory:export', label: 'Export', description: 'Export inventory data', module: 'inventory', i18nKey: 'permission.inventory.export' },
@@ -70,7 +87,7 @@ const PERMISSION_REGISTRY: PermissionMetadata[] = [
   { permission: 'brands:view', label: 'View brands', description: 'Browse product brands', module: 'catalogue', i18nKey: 'permission.brands.view' },
   { permission: 'brands:create', label: 'Create brands', description: 'Add new brands', module: 'catalogue', i18nKey: 'permission.brands.create' },
   { permission: 'brands:edit', label: 'Edit brands', description: 'Update brand details', module: 'catalogue', i18nKey: 'permission.brands.edit' },
-  { permission: 'brands:archive', label: 'Archive brands', description: 'Archive brands', module: 'catalogue', i18nKey: 'permission.brands.archive' },
+  { permission: 'brands:archive', label: 'Delete brands', description: 'Permanently delete brands', module: 'catalogue', i18nKey: 'permission.brands.archive' },
   { permission: 'product_models:view', label: 'View models', description: 'Browse product models', module: 'catalogue', i18nKey: 'permission.product_models.view' },
   { permission: 'product_models:create', label: 'Create models', description: 'Add product models', module: 'catalogue', i18nKey: 'permission.product_models.create' },
   { permission: 'product_models:edit', label: 'Edit models', description: 'Update full model specifications', module: 'catalogue', i18nKey: 'permission.product_models.edit' },
@@ -80,7 +97,6 @@ const PERMISSION_REGISTRY: PermissionMetadata[] = [
   { permission: 'locations:create', label: 'Create locations', description: 'Add store locations', module: 'catalogue', i18nKey: 'permission.locations.create' },
   { permission: 'locations:edit', label: 'Edit locations', description: 'Update location details', module: 'catalogue', i18nKey: 'permission.locations.edit' },
   { permission: 'locations:archive', label: 'Archive locations', description: 'Archive locations', module: 'catalogue', i18nKey: 'permission.locations.archive' },
-  { permission: 'dashboard:view', label: 'View dashboard', description: 'Access the dashboard', module: 'catalogue', i18nKey: 'permission.dashboard.view' },
   { permission: 'users:view', label: 'View', description: 'Open user administration', module: 'administration', i18nKey: 'permission.users.view' },
   { permission: 'users:create', label: 'Create', description: 'Create user accounts', module: 'administration', i18nKey: 'permission.users.create' },
   { permission: 'users:edit', label: 'Edit', description: 'Update user profiles', module: 'administration', i18nKey: 'permission.users.edit' },
@@ -89,6 +105,10 @@ const PERMISSION_REGISTRY: PermissionMetadata[] = [
   { permission: 'users:deactivate', label: 'Deactivate', description: 'Deactivate user accounts', module: 'administration', i18nKey: 'permission.users.deactivate' },
   { permission: 'settings:view', label: 'View', description: 'Open system settings', module: 'settings', i18nKey: 'permission.settings.view' },
   { permission: 'settings:modify', label: 'Modify', description: 'Change system settings', module: 'settings', i18nKey: 'permission.settings.modify' },
+  { permission: 'backup:view', label: 'View backups', description: 'View backup status, history, and downloads', module: 'settings', i18nKey: 'permission.backup.view' },
+  { permission: 'backup:manage', label: 'Manage backups', description: 'Run backups and configure retention policy', module: 'settings', i18nKey: 'permission.backup.manage' },
+  { permission: 'restore:view', label: 'View recovery', description: 'Open recovery center and preview restores', module: 'settings', i18nKey: 'permission.restore.view' },
+  { permission: 'restore:execute', label: 'Execute restore', description: 'Import archives and restore or roll back the database', module: 'settings', i18nKey: 'permission.restore.execute' },
   { permission: 'tally:view_status', label: 'View status', description: 'View Tally sync status', module: 'tally', i18nKey: 'permission.tally.view_status' },
   { permission: 'tally:configure', label: 'Configure', description: 'Configure Tally integration', module: 'tally', i18nKey: 'permission.tally.configure' },
   { permission: 'tally:run_sync', label: 'Run sync', description: 'Start Tally synchronisation', module: 'tally', i18nKey: 'permission.tally.run_sync' },

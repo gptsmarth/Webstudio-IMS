@@ -175,7 +175,7 @@ export function UserDetailDrawer({ workspace }: UserDetailDrawerProps): JSX.Elem
           )}
 
           {tab === 'permissions' && (
-            <section className="usr-drawer__section">
+            <section className="usr-drawer__section usr-drawer__section--permissions">
               <h3 className="usr-drawer__section-title">Permissions</h3>
               <PermissionViewer rolePermissions={workspace.rolePermissions} selectedRole={user.role} compact />
             </section>

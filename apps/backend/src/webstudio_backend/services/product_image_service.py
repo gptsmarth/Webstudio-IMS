@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from loguru import logger
-
-if TYPE_CHECKING:
-    from webstudio_backend.services.gemini_spec_service import GeminiSpecService
 
 IMAGE_CONTENT_TYPES = (
     "image/jpeg",
@@ -267,13 +264,11 @@ async def resolve_product_image(
     model_name: str | None = None,
     candidate_url: str | None = None,
     grounding_body: dict[str, Any] | None = None,
-    gemini_service: GeminiSpecService | None = None,
     model_id: str | None = None,
     persist_local: bool = False,
     image_search_query: str | None = None,
 ) -> str | None:
     """Find a loadable product image using free web scraping (DuckDuckGo + page HTML)."""
-    del gemini_service  # Image discovery no longer uses Gemini directly.
 
     candidates: list[str] = []
     if candidate_url:

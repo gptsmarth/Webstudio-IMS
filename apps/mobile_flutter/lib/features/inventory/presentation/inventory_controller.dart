@@ -1,0 +1,601 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/offline/offline_dashboard_service.dart';
+import '../../../core/offline/offline_models.dart';
+import '../../../core/offline/offline_providers.dart';
+import '../../../core/offline/offline_inventory_service.dart';
+import '../../../core/offline/pending_operation_factory.dart';
+import '../data/stock_show_price_preferences.dart';
+import '../../catalogue/presentation/catalogue_controller.dart';
+import '../../dashboard/domain/dashboard_models.dart';
+import '../data/inventory_repository.dart';
+import '../domain/inventory_hierarchy.dart';
+import '../domain/inventory_models.dart';
+import '../domain/product_spec_lookup.dart';
+
+enum InventoryNavLevel { brands, models, serials }
+
+class InventoryWorkspaceState {
+  const InventoryWorkspaceState({
+    this.loading = false,
+    this.error,
+    this.brands = const [],
+    this.models = const [],
+    this.locations = const [],
+    this.items = const [],
+    this.distribution,
+    this.brandSummaries = const [],
+    this.navLevel = InventoryNavLevel.brands,
+    this.selectedBrandId,
+    this.selectedModelId,
+    this.search = '',
+    this.searchField = HierarchySearchField.all,
+    this.filters = const InventoryListFilters(),
+    this.selectedItem,
+    this.actionInProgress = false,
+    this.includeZeroStock = false,
+    this.inventoryAdminMode = false,
+    this.showZeroStock = false,
+    this.showSellingPrice = false,
+    this.fromCache = false,
+    this.isStale = false,
+  });
+
+  final bool loading;
+  final String? error;
+  final List<Brand> brands;
+  final List<ProductModel> models;
+  final List<Location> locations;
+  final List<InventoryItem> items;
+  final DashboardDistribution? distribution;
+  final List<BrandInventorySummary> brandSummaries;
+  final InventoryNavLevel navLevel;
+  final int? selectedBrandId;
+  final String? selectedModelId;
+  final String search;
+  final HierarchySearchField searchField;
+  final InventoryListFilters filters;
+  final InventoryItem? selectedItem;
+  final bool actionInProgress;
+  final bool includeZeroStock;
+  final bool inventoryAdminMode;
+  final bool showZeroStock;
+  final bool showSellingPrice;
+  final bool fromCache;
+  final bool isStale;
+
+  Brand? get selectedBrand {
+    if (selectedBrandId == null) return null;
+    for (final brand in brands) {
+      if (brand.id == selectedBrandId) return brand;
+    }
+    return null;
+  }
+
+  ProductModel? get selectedModel {
+    if (selectedModelId == null) return null;
+    for (final model in models) {
+      if (model.id == selectedModelId) return model;
+    }
+    return null;
+  }
+
+  List<BrandInventorySummary> get visibleBrands {
+    if (search.trim().isEmpty) return brandSummaries;
+    final term = search.toLowerCase();
+    return brandSummaries.where((brand) => brand.brandName.toLowerCase().contains(term)).toList();
+  }
+
+  List<ModelInventoryRow> get visibleModels {
+    if (selectedBrandId == null) return [];
+    if (inventoryAdminMode) {
+      return filterInventoryModels(
+        models: models,
+        distributionByModel: distribution?.byProductModel ?? [],
+        brandId: selectedBrandId!,
+        items: items,
+        search: search,
+        searchField: searchField,
+        showZeroStock: showZeroStock,
+      );
+    }
+    final built = buildModelRows(
+      models,
+      distribution?.byProductModel ?? [],
+      selectedBrandId!,
+      items,
+    );
+    var rows = built.inStock;
+    if (search.trim().isEmpty) return rows;
+    return rows
+        .where((row) => matchesModelSearch(row.model, search, searchField, items: items))
+        .toList();
+  }
+
+  BrandInventorySummary? get selectedBrandSummary {
+    if (selectedBrandId == null) return null;
+    for (final summary in brandSummaries) {
+      if (summary.brandId == selectedBrandId) return summary;
+    }
+    return null;
+  }
+
+  List<InventoryItem> get availableUnitsForSelectedModel {
+    if (selectedModelId == null) return [];
+    return items
+        .where((item) =>
+            item.productModelId == selectedModelId &&
+            !item.isArchived &&
+            item.status != InventoryStatus.sold)
+        .toList()
+      ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+  }
+
+  /// Inventory admin — all non-archived serials for the selected model (includes sold).
+  List<InventoryItem> get serialUnitsForSelectedModel {
+    if (selectedModelId == null) return [];
+    return items
+        .where((item) => item.productModelId == selectedModelId && !item.isArchived)
+        .toList()
+      ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+  }
+
+  List<InventoryItem> get visibleSerials {
+    if (selectedModelId == null) return [];
+    var pool = items.where((item) => item.productModelId == selectedModelId && !item.isArchived);
+    if (filters.status == null) {
+      pool = pool.where((item) => item.status != InventoryStatus.sold);
+    }
+    if (filters.status != null) {
+      pool = pool.where((item) => item.status == filters.status);
+    }
+    if (filters.currentLocationId != null) {
+      pool = pool.where((item) => item.currentLocationId == filters.currentLocationId);
+    }
+    if (filters.color != null && filters.color!.trim().isNotEmpty) {
+      final color = filters.color!.toLowerCase();
+      pool = pool.where((item) => item.color.toLowerCase().contains(color));
+    }
+    if (search.trim().isNotEmpty) {
+      pool = pool.where((item) => matchesSerialSearch(item, search, searchField));
+    }
+    return pool.toList()
+      ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+  }
+
+  InventoryWorkspaceState copyWith({
+    bool? loading,
+    String? error,
+    List<Brand>? brands,
+    List<ProductModel>? models,
+    List<Location>? locations,
+    List<InventoryItem>? items,
+    DashboardDistribution? distribution,
+    List<BrandInventorySummary>? brandSummaries,
+    InventoryNavLevel? navLevel,
+    int? selectedBrandId,
+    String? selectedModelId,
+    String? search,
+    HierarchySearchField? searchField,
+    InventoryListFilters? filters,
+    InventoryItem? selectedItem,
+    bool? actionInProgress,
+    bool? includeZeroStock,
+    bool? inventoryAdminMode,
+    bool? showZeroStock,
+    bool? showSellingPrice,
+    bool? fromCache,
+    bool? isStale,
+    bool clearError = false,
+    bool clearSelection = false,
+  }) {
+    return InventoryWorkspaceState(
+      loading: loading ?? this.loading,
+      error: clearError ? null : error ?? this.error,
+      brands: brands ?? this.brands,
+      models: models ?? this.models,
+      locations: locations ?? this.locations,
+      items: items ?? this.items,
+      distribution: distribution ?? this.distribution,
+      brandSummaries: brandSummaries ?? this.brandSummaries,
+      navLevel: navLevel ?? this.navLevel,
+      selectedBrandId: selectedBrandId ?? this.selectedBrandId,
+      selectedModelId: selectedModelId ?? this.selectedModelId,
+      search: search ?? this.search,
+      searchField: searchField ?? this.searchField,
+      filters: filters ?? this.filters,
+      selectedItem: clearSelection ? null : selectedItem ?? this.selectedItem,
+      actionInProgress: actionInProgress ?? this.actionInProgress,
+      includeZeroStock: includeZeroStock ?? this.includeZeroStock,
+      inventoryAdminMode: inventoryAdminMode ?? this.inventoryAdminMode,
+      showZeroStock: showZeroStock ?? this.showZeroStock,
+      showSellingPrice: showSellingPrice ?? this.showSellingPrice,
+      fromCache: fromCache ?? this.fromCache,
+      isStale: isStale ?? this.isStale,
+    );
+  }
+}
+
+typedef InventoryWorkspaceProvider =
+    StateNotifierProvider<InventoryWorkspaceController, InventoryWorkspaceState>;
+
+final stockWorkspaceProvider =
+    StateNotifierProvider<InventoryWorkspaceController, InventoryWorkspaceState>((ref) {
+  return InventoryWorkspaceController(ref);
+});
+
+final inventoryAdminWorkspaceProvider =
+    StateNotifierProvider<InventoryWorkspaceController, InventoryWorkspaceState>((ref) {
+  return InventoryWorkspaceController(ref, inventoryAdminMode: true);
+});
+
+/// Admin inventory mutations (add laptop, global search → inventory).
+final inventoryWorkspaceProvider = inventoryAdminWorkspaceProvider;
+
+class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState> {
+  InventoryWorkspaceController(this._ref, {bool inventoryAdminMode = false})
+      : _inventoryAdminMode = inventoryAdminMode,
+        super(InventoryWorkspaceState(inventoryAdminMode: inventoryAdminMode));
+
+  final Ref _ref;
+  final bool _inventoryAdminMode;
+  bool _pricePreferenceLoaded = false;
+
+  InventoryRepository get _inventory => _ref.read(inventoryRepositoryProvider);
+  OfflineInventoryService get _offlineInventory => _ref.read(offlineInventoryServiceProvider);
+  bool get _isOnline => _ref.read(networkStatusProvider);
+
+  Future<void> load() async {
+    await _ensurePricePreferenceLoaded();
+    state = state.copyWith(loading: true, clearError: true);
+    try {
+      final result = await _offlineInventory.loadWorkspace(forceRefresh: _isOnline);
+      final workspace = result.data;
+      state = state.copyWith(
+        loading: false,
+        brands: workspace.brands,
+        models: workspace.models,
+        locations: workspace.locations,
+        distribution: workspace.distribution,
+        items: workspace.items,
+        brandSummaries: buildBrandSummaries(workspace.brands, workspace.distribution.byBrand, workspace.items),
+        fromCache: result.fromCache,
+        isStale: result.isStale,
+      );
+    } catch (error) {
+      state = state.copyWith(loading: false, error: error.toString());
+    }
+  }
+
+  void selectBrand(int brandId) {
+    state = state.copyWith(
+      selectedBrandId: brandId,
+      selectedModelId: null,
+      navLevel: InventoryNavLevel.models,
+      search: '',
+      searchField: HierarchySearchField.all,
+      clearSelection: true,
+    );
+  }
+
+  void selectModel(String modelId) {
+    state = state.copyWith(
+      selectedModelId: modelId,
+      navLevel: InventoryNavLevel.serials,
+      search: '',
+      clearSelection: true,
+    );
+  }
+
+  void goBack() {
+    switch (state.navLevel) {
+      case InventoryNavLevel.serials:
+        state = state.copyWith(navLevel: InventoryNavLevel.models, selectedModelId: null, clearSelection: true);
+      case InventoryNavLevel.models:
+        state = state.copyWith(navLevel: InventoryNavLevel.brands, selectedBrandId: null, clearSelection: true);
+      case InventoryNavLevel.brands:
+        break;
+    }
+  }
+
+  void setSearch(String value) => state = state.copyWith(search: value);
+  void setSearchField(HierarchySearchField field) => state = state.copyWith(searchField: field);
+  void setFilters(InventoryListFilters filters) => state = state.copyWith(filters: filters);
+  void setIncludeZeroStock(bool value) => state = state.copyWith(includeZeroStock: value);
+  void setShowZeroStock(bool value) => state = state.copyWith(showZeroStock: value);
+  void setShowSellingPrice(bool value) {
+    state = state.copyWith(showSellingPrice: value);
+    if (!_inventoryAdminMode) {
+      StockShowPricePreferences.writeShowSellingPrice(value);
+    }
+  }
+
+  Future<void> _ensurePricePreferenceLoaded() async {
+    if (_pricePreferenceLoaded || _inventoryAdminMode) return;
+    _pricePreferenceLoaded = true;
+    final show = await StockShowPricePreferences.readShowSellingPrice();
+    if (show != state.showSellingPrice) {
+      state = state.copyWith(showSellingPrice: show);
+    }
+  }
+
+  void selectItem(InventoryItem? item) => state = state.copyWith(selectedItem: item, clearSelection: item == null);
+
+  Future<void> openItemBySerial(String serial) async {
+    try {
+      final result = await _offlineInventory.lookupBySerial(serial);
+      final item = result.data;
+      if (item != null) {
+        state = state.copyWith(
+          selectedBrandId: item.brandId,
+          selectedModelId: item.productModelId,
+          navLevel: InventoryNavLevel.serials,
+          selectedItem: item,
+          fromCache: result.fromCache,
+          isStale: result.isStale,
+        );
+        return;
+      }
+      state = state.copyWith(search: serial, searchField: HierarchySearchField.serial);
+    } catch (_) {
+      state = state.copyWith(search: serial, searchField: HierarchySearchField.serial);
+    }
+  }
+
+  Future<void> updateProductModel(String modelId, Map<String, dynamic> data) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final updated = await _ref.read(catalogueRepositoryProvider).updateProductModel(modelId, data);
+      final models = state.models.map((model) => model.id == modelId ? updated : model).toList();
+      state = state.copyWith(models: models, actionInProgress: false);
+      await _refreshItems(refreshModels: true);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> createProductModel(Map<String, dynamic> data) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      await _ref.read(catalogueRepositoryProvider).createProductModel(data);
+      await load();
+      state = state.copyWith(actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> deleteProductModel(String modelId) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      await _ref.read(catalogueRepositoryProvider).deleteProductModel(modelId);
+      if (state.selectedModelId == modelId && state.navLevel == InventoryNavLevel.serials) {
+        goBack();
+      }
+      await load();
+      state = state.copyWith(actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> updateSellingPrice(String modelId, double? price) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final updated = await _ref.read(catalogueRepositoryProvider).updateSellingPrice(modelId, price);
+      final models = state.models
+          .map<ProductModel>((model) => model.id == modelId ? updated : model)
+          .toList();
+      state = state.copyWith(models: models, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> transferItem(String itemId, int locationId) async {
+    final matches = state.items.where((entry) => entry.id == itemId);
+    if (matches.isEmpty) return;
+    final item = matches.first;
+    state = state.copyWith(selectedItem: item, actionInProgress: true, clearError: true);
+    try {
+      if (!_isOnline) {
+        final pending = _ref.read(pendingOperationFactoryProvider).transferLocation(
+              itemId: item.id,
+              locationId: locationId,
+              entityUpdatedAt: item.updatedAt,
+            );
+        await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
+        state = state.copyWith(actionInProgress: false, isStale: true);
+        return;
+      }
+      await _inventory.transferLocation(item.id, locationId);
+      await _refreshItems();
+      state = state.copyWith(actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> transferSelected(int locationId) async {
+    final item = state.selectedItem;
+    if (item == null) return;
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      if (!_isOnline) {
+        final pending = _ref.read(pendingOperationFactoryProvider).transferLocation(
+              itemId: item.id,
+              locationId: locationId,
+              entityUpdatedAt: item.updatedAt,
+            );
+        await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
+        state = state.copyWith(actionInProgress: false, isStale: true);
+        return;
+      }
+      final updated = await _inventory.transferLocation(item.id, locationId);
+      await _refreshItems();
+      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> markSelectedSold(MarkSoldRequest request) async {
+    final item = state.selectedItem;
+    if (item == null) return;
+    await markItemSold(item.id, request);
+  }
+
+  Future<void> markItemSold(String itemId, MarkSoldRequest request) async {
+    final item = state.items.where((entry) => entry.id == itemId).firstOrNull;
+    if (item == null) return;
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      if (!_isOnline) {
+        final pending = _ref.read(pendingOperationFactoryProvider).markSold(
+              itemId: item.id,
+              entityUpdatedAt: item.updatedAt,
+              request: request.toJson(),
+            );
+        await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
+        state = state.copyWith(actionInProgress: false, isStale: true);
+        return;
+      }
+      await _inventory.markSold(item.id, request);
+      await _refreshItems();
+      final selected = state.selectedItem?.id == item.id
+          ? state.items.where((entry) => entry.id == item.id).firstOrNull
+          : state.selectedItem;
+      state = state.copyWith(selectedItem: selected, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<bool> checkSerialDuplicate(String serial) => _inventory.serialExists(serial);
+
+  int availableUnitsForModel(String productModelId) {
+    return state.items
+        .where((item) =>
+            item.productModelId == productModelId &&
+            !item.isArchived &&
+            item.status != InventoryStatus.sold)
+        .length;
+  }
+
+  Future<void> addLaptopWizard(AddLaptopWizardRequest request) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      var modelId = request.productModelId;
+      if (request.mode == 'new') {
+        final payload = request.newProductModel;
+        if (payload == null) {
+          throw StateError('New product model details are required.');
+        }
+        final created = await _ref.read(catalogueRepositoryProvider).createProductModel(payload);
+        modelId = created.id;
+      }
+      if (modelId == null || modelId.isEmpty) {
+        throw StateError('Product model is required.');
+      }
+
+      for (final unit in request.units) {
+        final itemRequest = CreateInventoryItemRequest(
+          serialNumber: unit.serialNumber.trim(),
+          productModelId: modelId,
+          color: unit.color.trim(),
+          currentLocationId: unit.currentLocationId,
+        );
+        if (!_isOnline) {
+          final pending =
+              _ref.read(pendingOperationFactoryProvider).createInventory(request: itemRequest.toJson());
+          await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
+        } else {
+          await _inventory.createItem(itemRequest);
+        }
+      }
+      if (_isOnline) {
+        await load();
+      } else {
+        state = state.copyWith(actionInProgress: false, isStale: true);
+      }
+      state = state.copyWith(actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> createItems(List<CreateInventoryItemRequest> requests) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      for (final request in requests) {
+        if (!_isOnline) {
+          final pending = _ref.read(pendingOperationFactoryProvider).createInventory(request: request.toJson());
+          await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
+        } else {
+          await _inventory.createItem(request);
+        }
+      }
+      if (_isOnline) await _refreshItems();
+      state = state.copyWith(actionInProgress: false, isStale: !_isOnline);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> updateSelectedItem(Map<String, dynamic> data) async {
+    final item = state.selectedItem;
+    if (item == null) return;
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final updated = await _inventory.updateItem(item.id, data);
+      await _refreshItems();
+      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> archiveSelected() async {
+    final item = state.selectedItem;
+    if (item == null) return;
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      await _inventory.archiveItem(item.id);
+      await _refreshItems();
+      state = state.copyWith(clearSelection: true, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> restoreSelected() async {
+    final item = state.selectedItem;
+    if (item == null) return;
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final updated = await _inventory.restoreItem(item.id);
+      await _refreshItems();
+      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> _refreshItems({bool refreshModels = false}) async {
+    final result = await _offlineInventory.loadWorkspace(forceRefresh: true);
+    final workspace = result.data;
+    state = state.copyWith(
+      models: refreshModels ? workspace.models : state.models,
+      distribution: workspace.distribution,
+      items: workspace.items,
+      brandSummaries: buildBrandSummaries(state.brands, workspace.distribution.byBrand, workspace.items),
+      fromCache: result.fromCache,
+      isStale: result.isStale,
+    );
+  }
+}
+
+final dashboardDataProvider = FutureProvider.autoDispose<OfflineLoadResult<DashboardCacheBundle>>((ref) async {
+  return ref.watch(offlineDashboardServiceProvider).loadDashboard();
+});

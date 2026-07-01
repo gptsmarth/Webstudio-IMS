@@ -23,6 +23,31 @@ export interface ProductImageResolveResult {
   source: string;
 }
 
+export class SpecLookupError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'SpecLookupError';
+    this.code = code;
+  }
+}
+
+const RETRIABLE_SPEC_LOOKUP_CODES = new Set([
+  'RATE_LIMITED',
+  'API_ERROR',
+  'TIMEOUT',
+  'QUOTA_EXCEEDED',
+]);
+
+export function isRetriableSpecLookupError(err: unknown): boolean {
+  if (err instanceof SpecLookupError) {
+    return RETRIABLE_SPEC_LOOKUP_CODES.has(err.code);
+  }
+  const code = (err as { code?: string }).code;
+  return typeof code === 'string' && RETRIABLE_SPEC_LOOKUP_CODES.has(code);
+}
+
 export class ProductSpecService {
   static async lookupSpec(input: {
     model_number: string;
@@ -35,8 +60,8 @@ export class ProductSpecService {
       return await client.post<ProductSpecLookupResult>('/api/v1/product-models/spec-lookup', input);
     } catch (err: unknown) {
       const api = err as { code?: string; message?: string };
-      if (api.code === 'SERVICE_UNAVAILABLE' || api.code === 'RATE_LIMITED' || api.code === 'API_ERROR') {
-        throw new Error(api.message ?? 'Gemini lookup failed.');
+      if (api.code && (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')) {
+        throw new SpecLookupError(api.code, api.message ?? 'Gemini lookup failed.');
       }
       return null;
     }

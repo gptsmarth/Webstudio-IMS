@@ -29,7 +29,8 @@ from webstudio_backend.api.schemas.inventory import (
     TransferLocationRequest,
     UpdateInventoryItemRequest,
 )
-from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
+from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
@@ -55,23 +56,16 @@ _ALLOWED_SORT_FIELDS = frozenset(
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
-    return Envelope(
-        data=data,
-        meta=meta,
-        request_id=get_request_id(request),
-        correlation_id=get_correlation_id(request),
-        timestamp=utc_now_iso(),
-    ).model_dump()
+    return build_envelope(request, data, meta)
 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
-    return ResponseMeta(
-        page=page,
-        page_size=page_size,
-        total_items=total_items,
-        total_pages=total_pages,
-        total_records=total_items,
-        current_page=page,
+    return build_page_meta(
+        page,
+        page_size,
+        total_items,
+        total_pages,
+        include_legacy_aliases=True,
     )
 
 

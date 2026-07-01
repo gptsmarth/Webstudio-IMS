@@ -153,8 +153,12 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     try {
       const detail = await SalesService.getSale(saleId);
       setSaleDetail(detail);
-      const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
-      setAuditLogs(logs);
+      if (detail.inventory_item_id) {
+        const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
+        setAuditLogs(logs);
+      } else {
+        setAuditLogs([]);
+      }
     } catch {
       setSaleDetail(null);
       setAuditLogs([]);

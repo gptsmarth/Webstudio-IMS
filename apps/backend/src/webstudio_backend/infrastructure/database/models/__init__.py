@@ -12,12 +12,18 @@ from webstudio_backend.infrastructure.database.models.refresh_token import Refre
 from webstudio_backend.infrastructure.database.models.restore_run import RestoreRun
 from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.system_setting import SystemSetting
+from webstudio_backend.infrastructure.database.models.custom_access_role import (
+    CustomAccessRole,
+    CustomAccessRolePermission,
+)
 from webstudio_backend.infrastructure.database.models.user import User
 
 __all__ = [
     "AuditLog",
     "BackupRun",
     "Brand",
+    "CustomAccessRole",
+    "CustomAccessRolePermission",
     "IntegrationApiKey",
     "InventoryItem",
     "Location",

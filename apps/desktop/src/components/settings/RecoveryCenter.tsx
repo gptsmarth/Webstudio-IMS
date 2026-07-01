@@ -17,7 +17,9 @@ import {
 } from '../../services/api/SettingsService';
 
 interface RecoveryCenterProps {
-  canWrite: boolean;
+  canManageBackup: boolean;
+  canViewRestore: boolean;
+  canExecuteRestore: boolean;
   onOpenWizard: () => void;
   onOpenRestore: () => void;
   onRunBackup: () => Promise<void>;
@@ -43,7 +45,9 @@ function readinessLabel(value: string): string {
 }
 
 export function RecoveryCenter({
-  canWrite,
+  canManageBackup,
+  canViewRestore,
+  canExecuteRestore,
   onOpenWizard,
   onOpenRestore,
   onRunBackup,
@@ -86,7 +90,7 @@ export function RecoveryCenter({
                 Recovery readiness is {readinessLabel(center.recovery_readiness).toLowerCase()}.
               </p>
             </div>
-            {canWrite && (
+            {canExecuteRestore && (
               <button type="button" className="btn btn-primary btn-sm" onClick={onOpenWizard}>
                 <Wand2 size={14} aria-hidden />
                 Recovery wizard
@@ -241,17 +245,21 @@ export function RecoveryCenter({
         </div>
       )}
 
-      {canWrite && (
+      {(canManageBackup || canViewRestore) && (
         <div className="stg-actions">
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load()}>
             Refresh
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void onRunBackup()}>
-            Run backup
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenRestore}>
-            Open restore center
-          </button>
+          {canManageBackup && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void onRunBackup()}>
+              Run backup
+            </button>
+          )}
+          {canViewRestore && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenRestore}>
+              Open restore center
+            </button>
+          )}
         </div>
       )}
     </div>

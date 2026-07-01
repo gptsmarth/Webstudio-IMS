@@ -55,11 +55,7 @@ class UserAdminService:
         session_counts: dict[int, int],
     ) -> dict[int, UserAdminExtras]:
         creator_ids = {user.created_by_user_id for user in users if user.created_by_user_id}
-        creators: dict[int, str] = {}
-        for creator_id in creator_ids:
-            name = await self._creator_name(creator_id)
-            if name:
-                creators[creator_id] = name
+        creators = await self._users.get_display_names_by_ids(creator_ids)
         return {
             user.id: self._build_extras(
                 user,

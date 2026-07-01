@@ -83,6 +83,40 @@ async def test_enrichment_service_fallback_to_mock_when_gemini_not_configured(db
     assert result["provider"] == "mock"
 
 
+def test_default_ai_config_uses_gemini_primary() -> None:
+    from webstudio_backend.services.ai.config import DEFAULT_FALLBACK_CHAIN, DEFAULT_PRIMARY_PROVIDER
+    from webstudio_backend.services.ai.types import AIProviderConfig
+
+    config = AIProviderConfig()
+    assert DEFAULT_PRIMARY_PROVIDER == "gemini"
+    assert DEFAULT_FALLBACK_CHAIN == ["gemini"]
+    assert config.primary_provider == "gemini"
+    assert config.fallback_chain == ["gemini"]
+
+
+def test_parse_fallback_chain_defaults_to_gemini() -> None:
+    assert _parse_fallback_chain(None) == ["gemini"]
+    assert _parse_fallback_chain("") == ["gemini"]
+
+
+@pytest.mark.asyncio
+async def test_enrichment_service_fallback_to_mock_when_groq_not_configured(db_session, test_settings) -> None:
+    AIProviderHealthTracker.reset()
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+    from webstudio_backend.infrastructure.database.enums import SettingValueType
+
+    repo = SystemSettingRepository(db_session)
+    await repo.set_value("groq_api_key", "", value_type=SettingValueType.STRING)
+    await repo.set_value("gemini_api_key", "", value_type=SettingValueType.STRING)
+    await repo.set_value("ai_primary_provider", "groq", value_type=SettingValueType.STRING)
+    await repo.set_value("ai_fallback_chain", '["groq","mock"]', value_type=SettingValueType.JSON)
+    await repo.set_value("ai_enrichment_enabled", "true", value_type=SettingValueType.BOOLEAN)
+
+    service = ProductEnrichmentService(db_session, test_settings)
+    result = await service.lookup_laptop_spec("MOCK-GROQ-FALLBACK-001", brand_name="Lenovo")
+    assert result["provider"] == "mock"
+
+
 def test_create_provider_builds_mock() -> None:
     config = AIProviderConfig()
     assert create_provider("mock", config).provider_id == "mock"

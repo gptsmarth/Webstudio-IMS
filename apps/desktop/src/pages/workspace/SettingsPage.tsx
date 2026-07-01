@@ -58,7 +58,11 @@ export function SettingsPage(): JSX.Element {
         )}
 
         <div className="stg-layout">
-          <SettingsNav active={workspace.category} onSelect={workspace.setCategory} />
+          <SettingsNav
+            active={workspace.category}
+            onSelect={workspace.setCategory}
+            permissions={session.permissions}
+          />
           <div className="stg-content">
             {workspace.loading && !workspace.workspace ? (
               <p className="stg-loading">Loading settings workspace…</p>

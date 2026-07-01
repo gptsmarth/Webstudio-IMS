@@ -347,6 +347,14 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             raise InventoryItemDeleteNotAllowedError(str(inventory_item.id), reason)
         await super().delete(inventory_item)
 
+    async def list_for_product_model(self, product_model_id: uuid.UUID) -> list[InventoryItem]:
+        statement = select(InventoryItem).where(InventoryItem.product_model_id == product_model_id)
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def force_delete(self, inventory_item: InventoryItem) -> None:
+        await super().delete(inventory_item)
+
     async def search(
         self,
         filters: InventorySearchFilters,

@@ -12,7 +12,7 @@ from webstudio_backend.infrastructure.repositories.report_repository import Sale
 
 class SaleListItem(BaseModel):
     id: int
-    inventory_item_id: uuid.UUID
+    inventory_item_id: uuid.UUID | None
     serial_number: str
     brand_name: str
     model_number: str
@@ -50,18 +50,18 @@ class SaleListItem(BaseModel):
 
 class SaleDetailResponse(BaseModel):
     id: int
-    inventory_item_id: uuid.UUID
+    inventory_item_id: uuid.UUID | None
     serial_number: str
-    brand_id: int
+    brand_id: int | None
     brand_name: str
-    product_model_id: uuid.UUID
+    product_model_id: uuid.UUID | None
     model_number: str
     model_name: str
-    location_id: int
+    location_id: int | None
     location_name: str
     color: str
     cpu: str
-    ram_gb: int
+    ram_gb: int | None
     storage_value: str
     storage_unit: str
     storage_type: str

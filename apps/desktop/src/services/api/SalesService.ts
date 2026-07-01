@@ -3,7 +3,7 @@ import { LoggingService } from '../LoggingService';
 
 export interface SaleListItem {
   id: number;
-  inventory_item_id: string;
+  inventory_item_id: string | null;
   serial_number: string;
   brand_name: string;
   model_number: string;
@@ -20,12 +20,12 @@ export interface SaleListItem {
 }
 
 export interface SaleDetail extends SaleListItem {
-  brand_id: number;
-  product_model_id: string;
-  location_id: number;
+  brand_id: number | null;
+  product_model_id: string | null;
+  location_id: number | null;
   color: string;
   cpu: string;
-  ram_gb: number;
+  ram_gb: number | null;
   storage_value: string;
   storage_unit: string;
   storage_type: string;

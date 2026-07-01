@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import (
@@ -35,6 +35,73 @@ from webstudio_backend.infrastructure.repositories.report_filters import ReportF
 STREAM_BATCH_SIZE = 500
 
 
+def _coalesce_serial():
+    return func.coalesce(InventoryItem.serial_number, Sale.snapshot_serial_number)
+
+
+def _coalesce_brand_name():
+    return func.coalesce(Brand.name, Sale.snapshot_brand_name)
+
+
+def _coalesce_model_number():
+    return func.coalesce(ProductModel.model_number, Sale.snapshot_model_number)
+
+
+def _coalesce_model_name():
+    return func.coalesce(ProductModel.model_name, Sale.snapshot_model_name)
+
+
+def _coalesce_location_name():
+    return func.coalesce(Location.name, Sale.snapshot_location_name)
+
+
+def _coalesce_brand_id():
+    return func.coalesce(Brand.id, Sale.snapshot_brand_id)
+
+
+def _coalesce_product_model_id():
+    return func.coalesce(ProductModel.id, Sale.snapshot_product_model_id)
+
+
+def _coalesce_color():
+    return func.coalesce(InventoryItem.color, Sale.snapshot_color)
+
+
+def _coalesce_cpu():
+    return func.coalesce(ProductModel.cpu, Sale.snapshot_cpu)
+
+
+def _coalesce_ram_gb():
+    return func.coalesce(ProductModel.ram_gb, Sale.snapshot_ram_gb)
+
+
+def _coalesce_storage_value():
+    return func.coalesce(ProductModel.storage_value, Sale.snapshot_storage_value)
+
+
+def _coalesce_storage_unit():
+    return func.coalesce(
+        func.cast(ProductModel.storage_unit, String),
+        Sale.snapshot_storage_unit,
+    )
+
+
+def _coalesce_storage_type():
+    return func.coalesce(
+        func.cast(ProductModel.storage_type, String),
+        Sale.snapshot_storage_type,
+    )
+
+
+def _sales_from_clause():
+    return (
+        Sale.__table__.outerjoin(InventoryItem, Sale.inventory_item_id == InventoryItem.id)
+        .outerjoin(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+        .outerjoin(Brand, or_(ProductModel.brand_id == Brand.id, Sale.snapshot_brand_id == Brand.id))
+        .outerjoin(Location, InventoryItem.current_location_id == Location.id)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class InventoryReportRow:
     serial_number: str
@@ -52,7 +119,7 @@ class InventoryReportRow:
 @dataclass(frozen=True, slots=True)
 class SalesReportRow:
     id: int
-    inventory_item_id: uuid.UUID
+    inventory_item_id: uuid.UUID | None
     serial_number: str
     brand_name: str
     model_number: str
@@ -70,12 +137,12 @@ class SalesReportRow:
 
 @dataclass(frozen=True, slots=True)
 class SaleDetailRow(SalesReportRow):
-    location_id: int
-    brand_id: int
-    product_model_id: uuid.UUID
+    location_id: int | None
+    brand_id: int | None
+    product_model_id: uuid.UUID | None
     color: str
     cpu: str
-    ram_gb: int
+    ram_gb: int | None
     storage_value: str
     storage_unit: str
     storage_type: str
@@ -371,24 +438,18 @@ class ReportRepository:
         return statement
 
     def _sales_base(self, filters: ReportFilters) -> Select:
-        statement = (
-            select(Sale)
-            .join(InventoryItem, Sale.inventory_item_id == InventoryItem.id)
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id)
-        )
+        statement = select(Sale).select_from(_sales_from_clause())
         return self._apply_sales_filters(statement, filters)
 
     def _sales_select(self, filters: ReportFilters):
         return select(
             Sale.id,
             Sale.inventory_item_id,
-            InventoryItem.serial_number,
-            Brand.name,
-            ProductModel.model_number,
-            ProductModel.model_name,
-            Location.name,
+            _coalesce_serial(),
+            _coalesce_brand_name(),
+            _coalesce_model_number(),
+            _coalesce_model_name(),
+            _coalesce_location_name(),
             Sale.invoice_number,
             Sale.customer_name,
             Sale.payment_mode,
@@ -398,25 +459,21 @@ class ReportRepository:
             Sale.recorded_by_user_id,
             User.display_name,
         ).select_from(
-            Sale.__table__.join(InventoryItem, Sale.inventory_item_id == InventoryItem.id)
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id)
-            .outerjoin(User, Sale.recorded_by_user_id == User.id),
+            _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
         ).where(*self._sales_where_clauses(filters))
 
     def _sales_detail_select(self):
         return select(
             Sale.id,
             Sale.inventory_item_id,
-            InventoryItem.serial_number,
-            Brand.id,
-            Brand.name,
-            ProductModel.id,
-            ProductModel.model_number,
-            ProductModel.model_name,
-            Location.id,
-            Location.name,
+            _coalesce_serial(),
+            _coalesce_brand_id(),
+            _coalesce_brand_name(),
+            _coalesce_product_model_id(),
+            _coalesce_model_number(),
+            _coalesce_model_name(),
+            func.coalesce(Location.id, Sale.mapped_location_id),
+            _coalesce_location_name(),
             Sale.invoice_number,
             Sale.customer_name,
             Sale.payment_mode,
@@ -425,12 +482,12 @@ class ReportRepository:
             Sale.sold_at,
             Sale.recorded_by_user_id,
             User.display_name,
-            InventoryItem.color,
-            ProductModel.cpu,
-            ProductModel.ram_gb,
-            ProductModel.storage_value,
-            ProductModel.storage_unit,
-            ProductModel.storage_type,
+            _coalesce_color(),
+            _coalesce_cpu(),
+            _coalesce_ram_gb(),
+            _coalesce_storage_value(),
+            _coalesce_storage_unit(),
+            _coalesce_storage_type(),
             Sale.notes,
             Sale.tally_company_name,
             Sale.tally_voucher_number,
@@ -440,23 +497,29 @@ class ReportRepository:
             Sale.tally_voucher_type,
             Sale.created_at,
         ).select_from(
-            Sale.__table__.join(InventoryItem, Sale.inventory_item_id == InventoryItem.id)
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id)
-            .outerjoin(User, Sale.recorded_by_user_id == User.id),
+            _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
         )
 
     def _sales_where_clauses(self, filters: ReportFilters) -> list:
         clauses = []
         if filters.brand_id is not None:
-            clauses.append(Brand.id == filters.brand_id)
+            clauses.append(
+                or_(
+                    Brand.id == filters.brand_id,
+                    Sale.snapshot_brand_id == filters.brand_id,
+                ),
+            )
         if filters.location_id is not None:
             clauses.append(Location.id == filters.location_id)
         if filters.location_type is not None:
             clauses.append(Location.location_type == filters.location_type)
         if filters.product_model_id is not None:
-            clauses.append(ProductModel.id == filters.product_model_id)
+            clauses.append(
+                or_(
+                    ProductModel.id == filters.product_model_id,
+                    Sale.snapshot_product_model_id == filters.product_model_id,
+                ),
+            )
         if filters.user_id is not None:
             clauses.append(Sale.recorded_by_user_id == filters.user_id)
         if filters.date_from is not None:
@@ -472,7 +535,13 @@ class ReportRepository:
         if filters.sale_source is not None:
             clauses.append(Sale.sale_source == filters.sale_source)
         if filters.serial_number is not None and filters.serial_number.strip():
-            clauses.append(InventoryItem.serial_number.ilike(f"%{filters.serial_number.strip()}%"))
+            serial_term = f"%{filters.serial_number.strip()}%"
+            clauses.append(
+                or_(
+                    InventoryItem.serial_number.ilike(serial_term),
+                    Sale.snapshot_serial_number.ilike(serial_term),
+                ),
+            )
         if filters.search is not None:
             term = filters.search.strip()
             if term:
@@ -481,9 +550,13 @@ class ReportRepository:
                         Sale.invoice_number.ilike(f"%{term}%"),
                         Sale.customer_name.ilike(f"%{term}%"),
                         InventoryItem.serial_number.ilike(f"{term}%"),
+                        Sale.snapshot_serial_number.ilike(f"{term}%"),
                         Brand.name.ilike(f"%{term}%"),
+                        Sale.snapshot_brand_name.ilike(f"%{term}%"),
                         ProductModel.model_name.ilike(f"%{term}%"),
+                        Sale.snapshot_model_name.ilike(f"%{term}%"),
                         Location.name.ilike(f"%{term}%"),
+                        Sale.snapshot_location_name.ilike(f"%{term}%"),
                     ),
                 )
         return clauses
@@ -496,10 +569,10 @@ class ReportRepository:
             "sold_at": Sale.sold_at,
             "invoice_number": Sale.invoice_number,
             "customer_name": Sale.customer_name,
-            "serial_number": InventoryItem.serial_number,
-            "brand_name": Brand.name,
-            "model_name": ProductModel.model_name,
-            "location_name": Location.name,
+            "serial_number": _coalesce_serial(),
+            "brand_name": _coalesce_brand_name(),
+            "model_name": _coalesce_model_name(),
+            "location_name": _coalesce_location_name(),
             "payment_mode": Sale.payment_mode,
             "sale_source": Sale.sale_source,
         }
@@ -828,6 +901,12 @@ class ReportRepository:
         )
 
     @staticmethod
+    def _enum_label(value) -> str:
+        if value is None:
+            return ""
+        return value.value if hasattr(value, "value") else str(value)
+
+    @staticmethod
     def _map_sales_row(row) -> SalesReportRow:
         (
             sale_id,
@@ -919,12 +998,12 @@ class ReportRepository:
             location_id=location_id,
             brand_id=brand_id,
             product_model_id=product_model_id,
-            color=color,
-            cpu=cpu,
+            color=color or "",
+            cpu=cpu or "",
             ram_gb=ram_gb,
-            storage_value=str(storage_value),
-            storage_unit=storage_unit.value,
-            storage_type=storage_type.value,
+            storage_value=str(storage_value) if storage_value is not None else "",
+            storage_unit=ReportRepository._enum_label(storage_unit),
+            storage_type=ReportRepository._enum_label(storage_type),
             notes=notes,
             tally_company_name=tally_company_name,
             tally_voucher_number=tally_voucher_number,

@@ -102,10 +102,10 @@ export interface IntegrationsSettingsUpdate {
   ai_enrichment_enabled: boolean;
   ai_timeout_seconds: number;
   ai_retry_count: number;
-  groq_model: string;
+  groq_model?: string;
   groq_api_key?: string | null;
   clear_groq_api_key?: boolean;
-  openrouter_model: string;
+  openrouter_model?: string;
   openrouter_api_key?: string | null;
   clear_openrouter_api_key?: boolean;
 }

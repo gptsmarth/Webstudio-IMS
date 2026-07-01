@@ -22,6 +22,7 @@ from webstudio_backend.infrastructure.repositories.inventory_item_repository imp
     InventoryItemRepository,
 )
 from webstudio_backend.infrastructure.repositories.sale_repository import SaleRepository
+from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +66,10 @@ class SaleService:
         item.status = InventoryStatus.SOLD
         await self._session.flush()
 
+        detail = await self._inventory.get_detail(item.id)
+        assert detail is not None
+        snapshot = SaleProductSnapshot.from_detail(detail)
+
         sale = await self._sales.create_manual(
             inventory_item_id=item.id,
             sold_at=sold_at,
@@ -74,6 +79,7 @@ class SaleService:
             recorded_by_user_id=actor.user_id,
             notes=remarks,
             sale_amount=sale_amount,
+            snapshot=snapshot,
             actor=actor,
         )
 

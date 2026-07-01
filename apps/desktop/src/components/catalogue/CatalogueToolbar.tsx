@@ -11,8 +11,8 @@ interface CatalogueToolbarProps {
   onExport?: () => void;
   onRefresh: () => void;
   loading: boolean;
-  includeArchived: boolean;
-  onIncludeArchivedChange: (value: boolean) => void;
+  includeArchived?: boolean;
+  onIncludeArchivedChange?: (value: boolean) => void;
 }
 
 export function CatalogueToolbar({
@@ -26,7 +26,7 @@ export function CatalogueToolbar({
   onExport,
   onRefresh,
   loading,
-  includeArchived,
+  includeArchived = false,
   onIncludeArchivedChange,
 }: CatalogueToolbarProps): JSX.Element {
   return (
@@ -41,14 +41,16 @@ export function CatalogueToolbar({
           onChange={(event) => onSearchChange(event.target.value)}
         />
       </div>
-      <label className="cat-toolbar__checkbox">
-        <input
-          type="checkbox"
-          checked={includeArchived}
-          onChange={(event) => onIncludeArchivedChange(event.target.checked)}
-        />
-        <span>Include archived</span>
-      </label>
+      {onIncludeArchivedChange && (
+        <label className="cat-toolbar__checkbox">
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(event) => onIncludeArchivedChange(event.target.checked)}
+          />
+          <span>Include archived</span>
+        </label>
+      )}
       <div className="cat-toolbar__actions">
         {canWrite && onAdd && (
           <button type="button" className="btn btn-primary btn-sm" onClick={onAdd}>

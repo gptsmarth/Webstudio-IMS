@@ -22,6 +22,7 @@ from webstudio_backend.infrastructure.database.enums import (
     TallyProcessingStatus,
     TallySyncRunStatus,
 )
+from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
@@ -44,6 +45,7 @@ from webstudio_backend.integrations.tally.types import TallyInventoryLine, Tally
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError, TallyXmlClient
 from webstudio_backend.integrations.tally.xml_parser import models_equivalent, parse_vouchers_xml
 from webstudio_backend.services.notification_service import NotificationService
+from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 
 _sync_lock = asyncio.Lock()
 
@@ -552,6 +554,8 @@ class TallySyncService:
 
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         idempotency_key = f"{voucher.guid}:{inventory_item.id}"
+        detail = await self._inventory.get_detail(inventory_item.id)
+        snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -566,6 +570,7 @@ class TallySyncService:
             mapped_location_id=mapped_location_id,
             notes=voucher.narration,
             idempotency_key=idempotency_key,
+            snapshot=snapshot,
         )
 
         actor = AuditActor.system(display_name="Tally Sync", role="system")
@@ -620,21 +625,16 @@ class TallySyncService:
 
     async def _match_inventory_by_model(self, stock_item_name: str) -> InventoryItem | None:
         statement = (
-            select(InventoryItem)
+            select(InventoryItem, Brand.name, ProductModel.model_name, ProductModel.model_number)
             .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
             .where(InventoryItem.status == InventoryStatus.AVAILABLE)
             .where(InventoryItem.is_archived.is_(False))
         )
         result = await self._session.execute(statement)
-        candidates = list(result.scalars().all())
         matches: list[InventoryItem] = []
-        for item in candidates:
-            detail = await self._inventory.get_detail(item.id)
-            if not detail:
-                continue
-            inventory_label = (
-                f"{detail.brand.name} {detail.product_model.model_name} {detail.product_model.model_number}"
-            )
+        for item, brand_name, model_name, model_number in result.all():
+            inventory_label = f"{brand_name} {model_name} {model_number}"
             if models_equivalent(inventory_label, stock_item_name):
                 matches.append(item)
         if len(matches) == 1:

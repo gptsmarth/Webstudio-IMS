@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,8 +14,8 @@ from webstudio_backend.api.dependencies.auth import (
     ProductModelsArchiveDep,
     ProductModelsCreateDep,
     ProductModelsEditDep,
+    ProductModelsOrInventoryViewDep,
     ProductModelsSellingPriceDep,
-    ProductModelsViewDep,
 )
 from webstudio_backend.api.schemas.product_model import (
     CreateProductModelRequest,
@@ -26,7 +26,8 @@ from webstudio_backend.api.schemas.product_model import (
     UpdateProductModelRequest,
     UpdateSellingPriceRequest,
 )
-from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
+from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.exceptions import AppError
@@ -35,6 +36,7 @@ from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import ProductModelStatus, UserRole
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateModelNumberError
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
@@ -42,20 +44,14 @@ from webstudio_backend.infrastructure.repositories.product_model_repository impo
 )
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.types import AIProviderError
-from webstudio_backend.services.gemini_spec_service import GeminiLookupError
 from webstudio_backend.services.product_image_service import resolve_product_image
+from webstudio_backend.services.product_model_deletion_service import ProductModelDeletionService
 
 router = APIRouter(prefix="/api/v1/product-models", tags=["product-models"])
 
 
-def _envelope(request: Request, data: object) -> dict:
-    return Envelope(
-        data=data,
-        meta=None,
-        request_id=get_request_id(request),
-        correlation_id=get_correlation_id(request),
-        timestamp=utc_now_iso(),
-    ).model_dump()
+def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
+    return build_envelope(request, data, meta)
 
 
 def _actor(current: AuthenticatedUser) -> AuditActor:
@@ -114,39 +110,92 @@ async def _resolve_and_store_product_image(
     return updated
 
 
+def _product_model_list_filters(
+    *,
+    brand_id: int | None,
+    active: bool | None,
+    archived: bool | None,
+    search: str | None,
+) -> list:
+    clauses: list = []
+    if brand_id is not None:
+        clauses.append(ProductModel.brand_id == brand_id)
+    if active is not None:
+        if active:
+            clauses.append(ProductModel.status == ProductModelStatus.ACTIVE)
+        else:
+            clauses.append(ProductModel.status != ProductModelStatus.ACTIVE)
+    if archived is not None:
+        if archived:
+            clauses.append(ProductModel.status == ProductModelStatus.ARCHIVED)
+        else:
+            clauses.append(ProductModel.status != ProductModelStatus.ARCHIVED)
+    if search and search.strip():
+        term = f"{search.strip()}%"
+        clauses.append(
+            (ProductModel.model_number.ilike(term)) | (ProductModel.model_name.ilike(term)),
+        )
+    return clauses
+
+
 @router.get("")
 async def list_product_models(
     request: Request,
-    current: ProductModelsViewDep,
+    current: ProductModelsOrInventoryViewDep,
     brand_id: int | None = None,
     active: bool | None = None,
     archived: bool | None = None,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=128),
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    statement = select(ProductModel, Brand.name).outerjoin(Brand, ProductModel.brand_id == Brand.id)
+    filters = _product_model_list_filters(
+        brand_id=brand_id,
+        active=active,
+        archived=archived,
+        search=search,
+    )
+    statement = (
+        select(ProductModel)
+        .where(*filters)
+        .order_by(ProductModel.model_name, ProductModel.model_number)
+    )
 
-    if brand_id is not None:
-        statement = statement.where(ProductModel.brand_id == brand_id)
-    if active is not None:
-        if active:
-            statement = statement.where(ProductModel.status == ProductModelStatus.ACTIVE)
-        else:
-            statement = statement.where(ProductModel.status != ProductModelStatus.ACTIVE)
-    if archived is not None:
-        if archived:
-            statement = statement.where(ProductModel.status == ProductModelStatus.ARCHIVED)
-        else:
-            statement = statement.where(ProductModel.status != ProductModelStatus.ARCHIVED)
+    brand_repo = BrandRepository(db_session)
 
-    result = await db_session.execute(statement)
+    if page is not None:
+        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        brand_names: dict[int, str] = {}
+        for pm in page_result.items:
+            if pm.brand_id not in brand_names:
+                brand = await brand_repo.get_by_id(pm.brand_id)
+                brand_names[pm.brand_id] = brand.name if brand else ""
+        data = [
+            _model_payload(pm, brand_name=brand_names.get(pm.brand_id), current=current)
+            for pm in page_result.items
+        ]
+        return _envelope(
+            request,
+            data,
+            build_page_meta(
+                page_result.page,
+                page_result.page_size,
+                page_result.total_items,
+                page_result.total_pages,
+            ),
+        )
+
+    result = await db_session.execute(
+        select(ProductModel, Brand.name)
+        .outerjoin(Brand, ProductModel.brand_id == Brand.id)
+        .where(*filters)
+        .order_by(ProductModel.model_name, ProductModel.model_number),
+    )
     product_models = result.all()
-
-    # Sort product models by model_name, then by model_number
-    sorted_models = sorted(product_models, key=lambda row: (row[0].model_name.lower(), row[0].model_number.lower()))
-
     data = [
         _model_payload(row[0], brand_name=row[1], current=current)
-        for row in sorted_models
+        for row in product_models
     ]
     return _envelope(request, data)
 
@@ -170,9 +219,9 @@ async def create_product_model(
         )
     if not brand.is_active:
         raise AppError(
-            "VALIDATION_ERROR",
-            f"Brand '{brand.name}' is archived and cannot be referenced by new product models",
-            status_code=status.HTTP_400_BAD_REQUEST,
+            "NOT_FOUND",
+            f"Brand '{brand.name}' is not available",
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     repo = ProductModelRepository(db_session)
@@ -217,7 +266,7 @@ async def create_product_model(
 async def get_product_model(
     request: Request,
     model_id: uuid.UUID,
-    current: ProductModelsViewDep,
+    current: ProductModelsOrInventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     repo = ProductModelRepository(db_session)
@@ -263,9 +312,9 @@ async def update_product_model(
             )
         if not brand.is_active:
             raise AppError(
-                "VALIDATION_ERROR",
-                f"Brand '{brand.name}' is archived and cannot be referenced",
-                status_code=status.HTTP_400_BAD_REQUEST,
+                "NOT_FOUND",
+                f"Brand '{brand.name}' is not available",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
     fields_set = body.model_fields_set
@@ -344,13 +393,12 @@ async def update_product_model_selling_price(
     return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
-@router.post("/{model_id}/archive")
-async def archive_product_model(
-    request: Request,
+@router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_model(
     model_id: uuid.UUID,
     current: ProductModelsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
-) -> dict:
+) -> None:
     repo = ProductModelRepository(db_session)
     pm = await repo.get_by_id(model_id)
     if not pm:
@@ -360,36 +408,33 @@ async def archive_product_model(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    updated = await repo.archive(pm, actor=_actor(current))
+    await ProductModelDeletionService(db_session).delete_product_model(pm, actor=_actor(current))
     await db_session.commit()
-    brand_repo = BrandRepository(db_session)
-    brand = await brand_repo.get_by_id(updated.brand_id)
-    brand_name = brand.name if brand else None
-    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
-@router.post("/{model_id}/restore")
+@router.post("/{model_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_product_model(
+    model_id: uuid.UUID,
+    current: ProductModelsArchiveDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> None:
+    """Deprecated alias — permanently deletes the model and its inventory units."""
+    await delete_product_model(model_id, current, db_session)
+
+
+@router.post("/{model_id}/restore", status_code=status.HTTP_410_GONE)
 async def restore_product_model(
     request: Request,
     model_id: uuid.UUID,
     current: ProductModelsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    repo = ProductModelRepository(db_session)
-    pm = await repo.get_by_id(model_id)
-    if not pm:
-        raise AppError(
-            "NOT_FOUND",
-            f"Product model with ID {model_id} not found",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    updated = await repo.restore(pm, actor=_actor(current))
-    await db_session.commit()
-    brand_repo = BrandRepository(db_session)
-    brand = await brand_repo.get_by_id(updated.brand_id)
-    brand_name = brand.name if brand else None
-    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
+    del model_id, current, db_session
+    raise AppError(
+        "GONE",
+        "Product model restore is no longer supported. Deleted models cannot be recovered.",
+        status_code=status.HTTP_410_GONE,
+    )
 
 
 @router.post("/spec-lookup")

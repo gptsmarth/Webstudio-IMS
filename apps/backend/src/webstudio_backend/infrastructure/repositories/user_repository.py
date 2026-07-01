@@ -36,6 +36,16 @@ class UserRepository(SqlAlchemyRepository[User]):
     async def get_by_id(self, user_id: int) -> User | None:
         return await self._session.get(self._model, user_id)
 
+    async def get_display_names_by_ids(self, user_ids: set[int]) -> dict[int, str]:
+        if not user_ids:
+            return {}
+        statement = select(User.id, User.display_name, User.username).where(User.id.in_(user_ids))
+        result = await self._session.execute(statement)
+        return {
+            user_id: (display_name or username)
+            for user_id, display_name, username in result.all()
+        }
+
     async def get_by_username(self, username: str) -> User | None:
         normalized = normalize_username(username)
         result = await self._session.execute(
@@ -122,13 +132,29 @@ class UserRepository(SqlAlchemyRepository[User]):
         await self._session.refresh(user)
         return user
 
-    async def update_role(self, user: User, role: UserRole, *, actor_id: int) -> User:
+    async def update_access(
+        self,
+        user: User,
+        *,
+        role: UserRole,
+        custom_access_role_id: int | None,
+        actor_id: int,
+    ) -> User:
         user.role = role
+        user.custom_access_role_id = custom_access_role_id
         user.updated_by_user_id = actor_id
         user.token_version += 1
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
+    async def update_role(self, user: User, role: UserRole, *, actor_id: int) -> User:
+        return await self.update_access(
+            user,
+            role=role,
+            custom_access_role_id=None,
+            actor_id=actor_id,
+        )
 
     async def set_password(
         self,

@@ -61,6 +61,8 @@ export interface UsersWorkspaceState {
   }) => Promise<UserDetail>;
   updateUser: (userId: number, displayName: string) => Promise<UserDetail>;
   changeRole: (userId: number, role: UserRole) => Promise<UserDetail>;
+  assignBuiltinAccess: (userId: number, role: UserRole) => Promise<UserDetail>;
+  assignCustomAccess: (userId: number, customRoleId: number) => Promise<UserDetail>;
   resetPassword: (userId: number, temporaryPassword: string) => Promise<void>;
   disableUser: (userId: number) => Promise<UserDetail>;
   enableUser: (userId: number) => Promise<UserDetail>;
@@ -260,6 +262,30 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     [refresh, runAction, selectedId],
   );
 
+  const assignBuiltinAccess = useCallback(
+    async (userId: number, role: UserRole) => {
+      const updated = await runAction(() =>
+        UserService.assignUserAccess(userId, { access_type: 'builtin', role }),
+      );
+      await refresh();
+      if (selectedId === userId) setSelectedUser(updated);
+      return updated;
+    },
+    [refresh, runAction, selectedId],
+  );
+
+  const assignCustomAccess = useCallback(
+    async (userId: number, customRoleId: number) => {
+      const updated = await runAction(() =>
+        UserService.assignUserAccess(userId, { access_type: 'custom', custom_role_id: customRoleId }),
+      );
+      await refresh();
+      if (selectedId === userId) setSelectedUser(updated);
+      return updated;
+    },
+    [refresh, runAction, selectedId],
+  );
+
   const resetPassword = useCallback(
     async (userId: number, temporaryPassword: string) => {
       await runAction(() => UserService.resetPassword(userId, { temporary_password: temporaryPassword }));
@@ -361,6 +387,8 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     createUser,
     updateUser,
     changeRole,
+    assignBuiltinAccess,
+    assignCustomAccess,
     resetPassword,
     disableUser,
     enableUser,

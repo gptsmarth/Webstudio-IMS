@@ -96,6 +96,21 @@ class AuditRecorder:
             description=self._field_change_description(field_name, old_value, new_value),
         )
 
+    async def record_brand_delete(self, brand: Brand, *, actor: AuditActor) -> None:
+        await self.record(
+            entity_type="brand",
+            entity_id=str(brand.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            field_name="deleted",
+            old_value={
+                "brand": entity_ref(entity_id=brand.id, name=brand.name),
+                "is_active": brand.is_active,
+            },
+            new_value={"deleted": True},
+            description=f"Brand '{brand.name}' permanently deleted",
+        )
+
     async def record_location_create(self, location: Location, *, actor: AuditActor) -> None:
         await self.record(
             entity_type="location",
@@ -166,6 +181,27 @@ class AuditRecorder:
             old_value=old_value,
             new_value=new_value,
             description=self._field_change_description(field_name, old_value, new_value),
+        )
+
+    async def record_product_model_delete(
+        self,
+        product_model: ProductModel,
+        *,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="product_model",
+            entity_id=str(product_model.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            field_name="status",
+            old_value={
+                "status": product_model.status.value,
+                "model_number": product_model.model_number,
+                "model_name": product_model.model_name,
+            },
+            new_value={"deleted": True},
+            description=f"Product model '{product_model.model_name}' permanently deleted",
         )
 
     async def record_product_model_archive(

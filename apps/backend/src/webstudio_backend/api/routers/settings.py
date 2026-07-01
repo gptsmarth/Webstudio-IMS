@@ -10,7 +10,16 @@ from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import SettingsReadDep, SettingsWriteDep
+from webstudio_backend.api.dependencies.auth import (
+    BackupManageDep,
+    BackupOrRestoreViewDep,
+    BackupViewDep,
+    RestoreExecuteDep,
+    RestoreViewDep,
+    SettingsReadDep,
+    SettingsWriteDep,
+)
+from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.settings import (
     BackupAdminDashboard,
@@ -51,6 +60,7 @@ from webstudio_backend.api.schemas.settings import (
 )
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
+from webstudio_backend.core.permissions import user_has_permission
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.backup_run_filters import BackupHistoryFilters
@@ -103,12 +113,7 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
-    return ResponseMeta(
-        page=page,
-        page_size=page_size,
-        total_items=total_items,
-        total_pages=total_pages,
-    )
+    return build_page_meta(page, page_size, total_items, total_pages)
 
 
 async def _health_snapshot(db_session: AsyncSession) -> tuple[str, str]:
@@ -283,7 +288,7 @@ async def update_notification_settings(
 async def update_backup_settings(
     request: Request,
     body: BackupSettingsUpdate,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -297,7 +302,7 @@ async def update_backup_settings(
 @router.post("/backups")
 async def create_backup(
     request: Request,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
     body: BackupCreateRequest | None = None,
@@ -338,7 +343,7 @@ async def create_backup(
 async def validate_backup(
     request: Request,
     body: BackupValidateRequest,
-    current: SettingsWriteDep,
+    current: RestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -392,7 +397,7 @@ async def validate_backup(
 async def preview_restore(
     request: Request,
     body: BackupPreviewRequest,
-    current: SettingsWriteDep,
+    current: RestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -444,7 +449,7 @@ async def preview_restore(
 @router.post("/backups/import")
 async def import_backup(
     request: Request,
-    current: SettingsWriteDep,
+    current: RestoreExecuteDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
     file: UploadFile = File(...),
@@ -475,7 +480,7 @@ async def import_backup(
 async def restore_backup(
     request: Request,
     body: BackupRestoreRequest,
-    current: SettingsWriteDep,
+    current: RestoreExecuteDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -517,7 +522,7 @@ async def restore_backup(
 async def rollback_backup(
     request: Request,
     body: BackupRollbackRequest,
-    current: SettingsWriteDep,
+    current: RestoreExecuteDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -555,7 +560,7 @@ async def rollback_backup(
 @router.get("/recovery/center")
 async def recovery_center(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupOrRestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -574,7 +579,7 @@ async def recovery_center(
 @router.post("/recovery/validate")
 async def recovery_validate(
     request: Request,
-    current: SettingsWriteDep,
+    current: RestoreExecuteDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -595,7 +600,7 @@ async def recovery_validate(
 @router.get("/recovery/health-checks")
 async def recovery_health_checks(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupOrRestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -610,7 +615,7 @@ async def recovery_health_checks(
 @router.get("/recovery/reports")
 async def recovery_reports(
     request: Request,
-    current: SettingsReadDep,
+    current: RestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -636,7 +641,7 @@ async def recovery_reports(
 @router.get("/backups/admin/dashboard")
 async def backup_admin_dashboard(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -650,7 +655,7 @@ async def backup_admin_dashboard(
 @router.get("/backups/admin/history")
 async def backup_admin_history(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
     page: int = Query(default=1, ge=1),
@@ -682,7 +687,7 @@ async def backup_admin_history(
 
 @router.get("/backups/admin/history/export")
 async def backup_admin_history_export(
-    current: SettingsReadDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
     format: str = Query(default="xlsx", pattern="^(xlsx|pdf)$"),
@@ -717,7 +722,7 @@ async def backup_admin_history_export(
 async def backup_details(
     request: Request,
     filename: str,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -733,7 +738,7 @@ async def backup_details(
 @router.get("/backups/{filename}/download")
 async def backup_download(
     filename: str,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> Response:
@@ -756,7 +761,7 @@ async def backup_download(
 async def backup_verify(
     request: Request,
     filename: str,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -776,7 +781,7 @@ async def backup_verify(
 async def backup_archive(
     request: Request,
     filename: str,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -796,7 +801,7 @@ async def backup_archive(
 async def backup_delete(
     request: Request,
     filename: str,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -815,7 +820,7 @@ async def backup_delete(
 @router.get("/backups/mobile/status")
 async def mobile_backup_status(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -824,6 +829,7 @@ async def mobile_backup_status(
     dashboard = await admin.get_dashboard(database_health=database_health)
     settings = SettingsService(db_session, app_settings)
     last_backup = (await settings.get_workspace()).backup.last_backup_at
+    granted = set(current.permissions)
     return _envelope(
         request,
         MobileBackupStatusResponse(
@@ -834,8 +840,8 @@ async def mobile_backup_status(
             failed_backups=dashboard.failed_backup_count,
             storage_free_bytes=dashboard.storage_free_bytes,
             storage_total_bytes=dashboard.storage_total_bytes,
-            can_trigger_backup=False,
-            restore_history_available=True,
+            can_trigger_backup=user_has_permission(granted, "backup:manage"),
+            restore_history_available=user_has_permission(granted, "restore:view"),
         ).model_dump(),
     )
 
@@ -843,7 +849,7 @@ async def mobile_backup_status(
 @router.get("/backups/mobile/history")
 async def mobile_backup_history(
     request: Request,
-    current: SettingsReadDep,
+    current: BackupViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
     page: int = Query(default=1, ge=1),
@@ -860,7 +866,7 @@ async def mobile_backup_history(
 @router.post("/backups/mobile")
 async def mobile_trigger_backup(
     request: Request,
-    current: SettingsWriteDep,
+    current: BackupManageDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
@@ -893,7 +899,7 @@ async def mobile_trigger_backup(
 @router.get("/backups/mobile/restore-history")
 async def mobile_restore_history(
     request: Request,
-    current: SettingsReadDep,
+    current: RestoreViewDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:

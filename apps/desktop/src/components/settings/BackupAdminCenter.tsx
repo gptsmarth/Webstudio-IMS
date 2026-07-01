@@ -31,7 +31,8 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 interface BackupAdminCenterProps {
-  canWrite: boolean;
+  canManageBackup: boolean;
+  canExecuteRestore: boolean;
   onRestore: (filename: string) => void;
   onRefreshWorkspace: () => Promise<void>;
 }
@@ -39,7 +40,8 @@ interface BackupAdminCenterProps {
 const EMPTY_FILTERS: BackupHistoryFilters = {};
 
 export function BackupAdminCenter({
-  canWrite,
+  canManageBackup,
+  canExecuteRestore,
   onRestore,
   onRefreshWorkspace,
 }: BackupAdminCenterProps): JSX.Element {
@@ -230,7 +232,7 @@ export function BackupAdminCenter({
                     >
                       <Download size={12} aria-hidden />
                     </button>
-                    {canWrite && (
+                    {canManageBackup && (
                       <>
                         <button
                           type="button"
@@ -244,15 +246,17 @@ export function BackupAdminCenter({
                         >
                           <ShieldCheck size={12} aria-hidden />
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs"
-                          title="Restore"
-                          disabled={actionBusy === item.filename}
-                          onClick={() => onRestore(item.filename)}
-                        >
-                          <RefreshCw size={12} aria-hidden />
-                        </button>
+                        {canExecuteRestore && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            title="Restore"
+                            disabled={actionBusy === item.filename}
+                            onClick={() => onRestore(item.filename)}
+                          >
+                            <RefreshCw size={12} aria-hidden />
+                          </button>
+                        )}
                         {!item.is_archived && (
                           <button
                             type="button"

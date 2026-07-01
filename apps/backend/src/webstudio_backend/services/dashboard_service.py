@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -45,8 +46,8 @@ class DashboardService:
     async def _fetch_distribution(
         self,
     ) -> tuple[list[DistributionRow], list[DistributionRow], list[DistributionRow]]:
-        return (
-            await self._repo.get_distribution_by_brand(),
-            await self._repo.get_distribution_by_location(),
-            await self._repo.get_distribution_by_product_model(),
+        return await asyncio.gather(
+            self._repo.get_distribution_by_brand(),
+            self._repo.get_distribution_by_location(),
+            self._repo.get_distribution_by_product_model(),
         )

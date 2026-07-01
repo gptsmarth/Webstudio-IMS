@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_version: str = "1.0"
     min_client_version: str = "0.1.0"
+    min_desktop_version: str = "0.1.0"
+    min_mobile_version: str = "0.1.0"
+    build_version: str = ""
 
     api_host: str = "127.0.0.1"
     api_port: int = 8000
@@ -51,6 +54,7 @@ class Settings(BaseSettings):
 
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 100
+    slow_request_threshold_ms: int = 750
 
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"

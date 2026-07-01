@@ -2,6 +2,8 @@ import type { InventoryItemDetail, InventoryStatus, StorageType, StorageUnit } f
 import {
   canEditProductModels as canEditProductModelsPermission,
   canEditSellingPrice as canEditSellingPricePermission,
+  canEditStockLaptop as canEditStockLaptopPermission,
+  canEditStockProductModel as canEditStockProductModelPermission,
   canMarkSold as canMarkSoldPermission,
   canTransferStockLocation as canTransferStockLocationPermission,
   canViewPurchasePrice as canViewPurchasePricePermission,
@@ -84,6 +86,14 @@ export function canViewPurchasePrice(permissions: string[]): boolean {
 
 export function canEditSellingPrice(permissions: string[]): boolean {
   return canEditSellingPricePermission(permissions);
+}
+
+export function canEditStockLaptop(permissions: string[]): boolean {
+  return canEditStockLaptopPermission(permissions);
+}
+
+export function canEditStockProductModel(permissions: string[]): boolean {
+  return canEditStockProductModelPermission(permissions);
 }
 
 export function canEditProductModels(permissions: string[]): boolean {

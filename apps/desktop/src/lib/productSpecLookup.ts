@@ -1,6 +1,6 @@
 import type { ProductModel } from '../services/api/ProductModelService';
 import type { InventoryItemDetail } from '../services/api/InventoryService';
-import { ProductSpecService } from '../services/api/ProductSpecService';
+import { isRetriableSpecLookupError, ProductSpecService } from '../services/api/ProductSpecService';
 import { splitModelNotes } from './modelNotes';
 import { fetchAllInventoryForModel } from './productModelSummary';
 
@@ -81,6 +81,8 @@ export async function fetchProductSpecFromInternet(
     source: 'gemini',
   };
 }
+
+export { isRetriableSpecLookupError };
 
 export function modelToFetchedSpec(model: ProductModel): FetchedProductSpec {
   const { description, specNotes } = splitModelNotes(model.notes);

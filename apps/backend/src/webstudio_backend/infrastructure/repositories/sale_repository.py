@@ -15,6 +15,7 @@ from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 from webstudio_backend.infrastructure.repositories.exceptions import RequiredFieldError
 from webstudio_backend.infrastructure.repositories.validation import normalize_required_name
+from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 
 
 class SaleRepository(SqlAlchemyRepository[Sale]):
@@ -37,6 +38,7 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
         recorded_by_user_id: int,
         notes: str | None = None,
         sale_amount: float | None = None,
+        snapshot: SaleProductSnapshot | None = None,
         actor: AuditActor,
     ) -> Sale:
         normalized_invoice = normalize_required_name(invoice_number)
@@ -49,19 +51,20 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
         if not normalized_payment:
             raise RequiredFieldError("payment_mode")
 
-        sale = await self.add(
-            Sale(
-                inventory_item_id=inventory_item_id,
-                sale_source=SaleSource.MANUAL,
-                sold_at=sold_at,
-                invoice_number=normalized_invoice,
-                customer_name=normalized_customer,
-                payment_mode=normalized_payment,
-                recorded_by_user_id=recorded_by_user_id,
-                notes=notes.strip() if notes else None,
-                sale_amount=sale_amount,
-            ),
+        sale = Sale(
+            inventory_item_id=inventory_item_id,
+            sale_source=SaleSource.MANUAL,
+            sold_at=sold_at,
+            invoice_number=normalized_invoice,
+            customer_name=normalized_customer,
+            payment_mode=normalized_payment,
+            recorded_by_user_id=recorded_by_user_id,
+            notes=notes.strip() if notes else None,
+            sale_amount=sale_amount,
         )
+        if snapshot is not None:
+            snapshot.apply_to(sale)
+        sale = await self.add(sale)
         await AuditRecorder(self._session).record_sale_create(sale, actor=actor)
         return sale
 
@@ -81,27 +84,29 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
         mapped_location_id: int | None,
         notes: str | None = None,
         idempotency_key: str,
+        snapshot: SaleProductSnapshot | None = None,
     ) -> Sale:
-        sale = await self.add(
-            Sale(
-                inventory_item_id=inventory_item_id,
-                sale_source=SaleSource.TALLY,
-                sold_at=sold_at,
-                invoice_number=printed_invoice_number,
-                printed_invoice_number=printed_invoice_number,
-                customer_name=customer_name,
-                payment_mode=payment_mode,
-                recorded_by_user_id=None,
-                tally_company_name=tally_company_name,
-                tally_voucher_number=internal_voucher_number,
-                tally_voucher_guid=tally_voucher_guid,
-                tally_master_id=tally_master_id,
-                tally_voucher_type=tally_voucher_type,
-                mapped_location_id=mapped_location_id,
-                notes=notes,
-                idempotency_key=idempotency_key,
-            ),
+        sale = Sale(
+            inventory_item_id=inventory_item_id,
+            sale_source=SaleSource.TALLY,
+            sold_at=sold_at,
+            invoice_number=printed_invoice_number,
+            printed_invoice_number=printed_invoice_number,
+            customer_name=customer_name,
+            payment_mode=payment_mode,
+            recorded_by_user_id=None,
+            tally_company_name=tally_company_name,
+            tally_voucher_number=internal_voucher_number,
+            tally_voucher_guid=tally_voucher_guid,
+            tally_master_id=tally_master_id,
+            tally_voucher_type=tally_voucher_type,
+            mapped_location_id=mapped_location_id,
+            notes=notes,
+            idempotency_key=idempotency_key,
         )
+        if snapshot is not None:
+            snapshot.apply_to(sale)
+        sale = await self.add(sale)
         actor = AuditActor.system(display_name="Tally Sync", role="system")
         await AuditRecorder(self._session).record_sale_create(
             sale,

@@ -1,7 +1,8 @@
-"""Google Gemini AI provider."""
+"""Google Gemini AI provider — web search first, knowledge fallback second."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -26,9 +27,10 @@ from webstudio_backend.services.ai.types import (
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+# flash-lite has a separate quota and often succeeds when flash models are rate-limited.
 GROUNDED_MODELS = (
-    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
 )
 
@@ -62,7 +64,7 @@ class GeminiProvider(AIProvider):
         if not self.is_configured():
             raise AIProviderError(
                 "NOT_CONFIGURED",
-                "Gemini API is not configured.",
+                "Gemini API is not configured. Add your API key in System Settings → Integrations.",
                 provider="gemini",
             )
 
@@ -70,68 +72,161 @@ class GeminiProvider(AIProvider):
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.", provider="gemini")
 
-        prompt = build_spec_lookup_prompt(sku, brand_name=brand_name, model_name=model_name, use_web_search=True)
+        grounded_prompt = build_spec_lookup_prompt(
+            sku,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_web_search=True,
+        )
+        parsed, grounding_body, last_error = await self._try_spec_lookup(
+            sku,
+            prompt=grounded_prompt,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_grounding=True,
+            strict_validation=False,
+        )
+        if parsed is not None:
+            return await self._finalize_spec_result(
+                parsed,
+                sku=sku,
+                brand_name=brand_name,
+                model_name=model_name,
+                grounding_body=grounding_body,
+                lookup_mode="web_search",
+            )
+
+        knowledge_prompt = build_spec_lookup_prompt(
+            sku,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_web_search=False,
+        )
+        logger.info("Gemini web search did not validate for {}, trying knowledge-only fallback", sku)
+        parsed_knowledge, knowledge_body, knowledge_error = await self._try_spec_lookup(
+            sku,
+            prompt=knowledge_prompt,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_grounding=False,
+            strict_validation=True,
+            models=[self._model, *GROUNDED_MODELS[:2]],
+        )
+        if parsed_knowledge is not None:
+            return await self._finalize_spec_result(
+                parsed_knowledge,
+                sku=sku,
+                brand_name=brand_name,
+                model_name=model_name,
+                grounding_body=knowledge_body,
+                lookup_mode="knowledge",
+            )
+
+        if last_error and last_error.code == "RATE_LIMITED":
+            raise last_error
+        if knowledge_error and knowledge_error.code == "RATE_LIMITED":
+            raise knowledge_error
+        if last_error:
+            raise last_error
+        if knowledge_error:
+            raise knowledge_error
+        raise AIProviderError(
+            "NOT_FOUND",
+            f"Could not find verified specifications for {sku}. Enter details manually.",
+            provider="gemini",
+        )
+
+    async def _try_spec_lookup(
+        self,
+        sku: str,
+        *,
+        prompt: str,
+        brand_name: str | None,
+        model_name: str | None,
+        use_grounding: bool,
+        strict_validation: bool,
+        models: list[str] | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, AIProviderError | None]:
         last_error: AIProviderError | None = None
         rate_limited = False
+        last_body: dict[str, Any] | None = None
 
-        for gemini_model in self._model_chain():
+        for gemini_model in models or self._model_chain():
             started = time.perf_counter()
             AIProviderHealthTracker.record_request("gemini")
             try:
-                payload = _build_payload(prompt, use_grounding=True)
+                payload = _build_payload(prompt, use_grounding=use_grounding)
                 body = await self._generate(gemini_model, payload)
                 parsed = _parse_lookup_body(
                     body,
                     fallback_name=model_name or sku,
                     model_number=sku,
                     brand_name=brand_name,
+                    strict_validation=strict_validation,
                 )
                 if not parsed:
                     continue
                 duration_ms = int((time.perf_counter() - started) * 1000)
+                mode = "grounded" if use_grounding else "knowledge"
                 logger.info(
-                    "Gemini enrichment succeeded for {} via {} in {}ms",
+                    "Gemini {} lookup succeeded for {} via {} in {}ms",
+                    mode,
                     sku,
                     gemini_model,
                     duration_ms,
                 )
                 AIProviderHealthTracker.record_success("gemini")
-                image_query = await self.generate_image_search_query(
-                    sku,
-                    brand_name=brand_name,
-                    model_name=parsed.get("model_name") or model_name,
-                )
-                return _to_enrichment_result(
-                    parsed,
-                    provider="gemini",
-                    image_search_query=image_query,
-                    grounding_body=body,
-                )
+                return parsed, body, None
             except AIProviderError as exc:
                 last_error = exc
                 if exc.code == "RATE_LIMITED":
                     rate_limited = True
                     AIProviderHealthTracker.record_rate_limit("gemini", message=exc.message)
                     logger.info("Gemini model {} rate-limited, trying next", gemini_model)
+                    await asyncio.sleep(1.5)
+                    continue
+                if exc.code in {"API_ERROR", "TIMEOUT"} and rate_limited:
                     continue
                 if exc.code == "API_ERROR" and "unsupported" in exc.message.lower():
                     AIProviderHealthTracker.record_failure("gemini", message=exc.message)
                     continue
                 AIProviderHealthTracker.record_failure("gemini", message=exc.message)
-                raise
+                if not use_grounding:
+                    raise
 
-        if rate_limited:
-            raise AIProviderError(
+        if rate_limited and use_grounding:
+            return None, last_body, AIProviderError(
                 "RATE_LIMITED",
-                "Gemini web search quota exhausted. Try another provider or enter specifications manually.",
+                "Gemini web search quota exhausted. Knowledge fallback also failed or was skipped.",
                 provider="gemini",
             )
-        if last_error:
-            raise last_error
-        raise AIProviderError(
-            "NOT_FOUND",
-            "Could not resolve laptop specifications via Gemini.",
+        return None, last_body, last_error
+
+    async def _finalize_spec_result(
+        self,
+        parsed: dict[str, Any],
+        *,
+        sku: str,
+        brand_name: str | None,
+        model_name: str | None,
+        grounding_body: dict[str, Any] | None,
+        lookup_mode: str,
+    ) -> EnrichmentResult:
+        image_query = await self.generate_image_search_query(
+            sku,
+            brand_name=brand_name,
+            model_name=parsed.get("model_name") or model_name,
+        )
+        notes = parsed.get("notes") or ""
+        if sku.upper() not in notes.upper():
+            source_note = f"Matched listing for {sku} ({lookup_mode})"
+            parsed["notes"] = f"{notes}\n---\n{source_note}".strip() if notes else source_note
+
+        return _to_enrichment_result(
+            parsed,
             provider="gemini",
+            image_search_query=image_query,
+            grounding_body=grounding_body,
         )
 
     async def generate_image_search_query(
@@ -154,18 +249,19 @@ class GeminiProvider(AIProvider):
             brand_name=brand_name,
             model_name=model_name,
         )
-        for gemini_model in self._model_chain()[:2]:
-            try:
-                payload = _build_payload(prompt, use_grounding=False)
-                body = await self._generate(gemini_model, payload)
-                text = _extract_text(body)
-                parsed = parse_json_object(text or "")
-                if parsed and isinstance(parsed.get("image_search_query"), str):
-                    query = parsed["image_search_query"].strip()
-                    if query:
-                        return query[:256]
-            except AIProviderError:
-                continue
+        for use_grounding in (True, False):
+            for gemini_model in self._model_chain()[:2]:
+                try:
+                    payload = _build_payload(prompt, use_grounding=use_grounding)
+                    body = await self._generate(gemini_model, payload)
+                    text = _extract_text(body)
+                    parsed = parse_json_object(text or "")
+                    if parsed and isinstance(parsed.get("image_search_query"), str):
+                        query = parsed["image_search_query"].strip()
+                        if query:
+                            return query[:256]
+                except AIProviderError:
+                    continue
         return fallback
 
     async def test_connection(self) -> ProviderTestResult:
@@ -271,6 +367,7 @@ def _parse_lookup_body(
     fallback_name: str,
     model_number: str,
     brand_name: str | None = None,
+    strict_validation: bool = False,
 ) -> dict[str, Any] | None:
     text = _extract_text(body)
     if not text:
@@ -280,12 +377,18 @@ def _parse_lookup_body(
         logger.warning("Gemini returned non-JSON text: {}", text[:200])
         return None
     normalized = normalize_spec(parsed, fallback_name=fallback_name, source="gemini")
+    provider_key = "groq" if strict_validation else "gemini"
     if not validate_enrichment_payload(
         normalized,
         model_number=model_number,
-        provider="gemini",
+        provider=provider_key,
         brand_name=brand_name,
     ):
+        logger.info(
+            "Gemini payload rejected for {} (strict={})",
+            model_number,
+            strict_validation,
+        )
         return None
     return normalized
 
@@ -332,4 +435,4 @@ def _parse_rate_limit_message(response: httpx.Response) -> str:
             return f"Gemini rate limit: {message.split('Please retry in')[-1].strip()}"
     except (json.JSONDecodeError, AttributeError):
         pass
-    return "Gemini rate limit reached."
+    return "Gemini rate limit reached. Wait a few minutes and try again."

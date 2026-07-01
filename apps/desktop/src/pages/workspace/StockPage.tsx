@@ -16,7 +16,7 @@ import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { P, PermissionService } from '../../services/PermissionService';
-import { canEditProductModels, canEditSellingPrice } from '../../lib/inventory';
+import { canEditStockProductModel } from '../../lib/inventory';
 import { brandLogoSrc } from '../../lib/catalogue';
 
 export function StockPage(): JSX.Element {
@@ -59,10 +59,7 @@ export function StockPage(): JSX.Element {
   ), [hierarchy, nav.modelId]);
 
   const permissionService = PermissionService.from(session?.permissions);
-  const canFullModelEdit = session ? canEditProductModels(session.permissions) : false;
-  const canPriceEdit = session ? canEditSellingPrice(session.permissions) : false;
-  const canEditFromStock = canFullModelEdit || canPriceEdit;
-  const editModelLabel = canFullModelEdit ? 'Edit model & price' : 'Edit selling price';
+  const canEditFromStock = session ? canEditStockProductModel(session.permissions) : false;
 
   const handleTransfer = useCallback(async (itemId: string, locationId: number) => {
     setActionLoading(true);
@@ -212,7 +209,6 @@ export function StockPage(): JSX.Element {
         <StockModelCardGrid
           rows={modelRows}
           loading={hierarchy.loading}
-          availableOnly
           showPrice={nav.showSellingPrice}
           onSelect={(modelId, label) => nav.openModel(modelId, label)}
         />
@@ -227,11 +223,8 @@ export function StockPage(): JSX.Element {
           loading={hierarchy.loading}
           onTransfer={handleTransfer}
           actionLoading={actionLoading}
-          onEditModel={canEditFromStock ? () => {
-            if (canFullModelEdit) setEditModelId(selectedModel.id);
-            else setPriceModelId(selectedModel.id);
-          } : undefined}
-          editModelLabel={editModelLabel}
+          onEditModel={canEditFromStock ? () => setEditModelId(selectedModel.id) : undefined}
+          editModelLabel="Edit model & price"
         />
       )}
 

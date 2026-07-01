@@ -35,6 +35,7 @@ class AuditLog(Base):
         ForeignKey(
             f"{DATABASE_SCHEMA}.inventory_items.id",
             name="fk_audit_logs_inventory_item",
+            ondelete="SET NULL",
         ),
         nullable=True,
     )

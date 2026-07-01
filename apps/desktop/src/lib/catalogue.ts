@@ -68,6 +68,11 @@ export function catalogueActionErrorMessage(err: unknown): string {
 
 export function confirmCatalogueRemoval(label: string, kind: 'brand' | 'location' | 'model'): boolean {
   const noun = kind === 'brand' ? 'brand' : kind === 'location' ? 'location' : 'product model';
+  if (kind === 'model' || kind === 'brand') {
+    return window.confirm(
+      `Delete ${label}?\n\nThis permanently removes the ${noun}${kind === 'brand' ? ' and all of its product models' : ''} and all serial numbers still in stock. Past sales records and audit history are kept with the details recorded at the time of sale.`,
+    );
+  }
   return window.confirm(
     `Remove ${label}?\n\nThis hides the ${noun} from Stock and new entries. Sales and inventory history are preserved. Turn on "Show archived" to restore it later.`,
   );

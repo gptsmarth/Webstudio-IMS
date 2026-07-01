@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { CataloguePagination } from '../../components/catalogue/CataloguePagination';
 import {
-  ChangeRoleDialog,
+  ChangeAccessDialog,
   ConfirmUserActionDialog,
+  CustomRolesPanel,
   ResetPasswordDialog,
   UserDetailDrawer,
   UserFormDialog,
@@ -90,6 +91,8 @@ export function UsersPage(): JSX.Element {
       </header>
 
       <div className="usr-page__panel">
+        <CustomRolesPanel onRolesChanged={() => void workspace.refresh()} />
+
         <UsersToolbar
           workspace={workspace}
           onCreate={() => setCreateOpen(true)}
@@ -186,15 +189,19 @@ export function UsersPage(): JSX.Element {
         }}
       />
 
-      <ChangeRoleDialog
+      <ChangeAccessDialog
         open={Boolean(roleUser)}
         user={roleUser}
         rolePermissions={workspace.rolePermissions}
         loading={workspace.actionLoading}
         onClose={() => setRoleUser(null)}
-        onConfirm={async (role) => {
+        onConfirmBuiltin={async (role) => {
           if (!roleUser) return;
-          await workspace.changeRole(roleUser.id, role);
+          await workspace.assignBuiltinAccess(roleUser.id, role);
+        }}
+        onConfirmCustom={async (customRoleId) => {
+          if (!roleUser) return;
+          await workspace.assignCustomAccess(roleUser.id, customRoleId);
         }}
       />
 

@@ -13,7 +13,8 @@ from webstudio_backend.services.ai.types import AIProviderConfig, ProviderCreden
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
-VALID_PROVIDERS: tuple[ProviderId, ...] = ("gemini", "groq", "openrouter", "mock")
+DEFAULT_PRIMARY_PROVIDER: ProviderId = "gemini"
+DEFAULT_FALLBACK_CHAIN: list[ProviderId] = ["gemini"]
 
 
 def mask_api_key(api_key: str) -> str | None:
@@ -25,7 +26,10 @@ def mask_api_key(api_key: str) -> str | None:
     return f"{'•' * 8}{trimmed[-4:]}"
 
 
-def _parse_provider(value: str | None, *, default: ProviderId = "gemini") -> ProviderId:
+VALID_PROVIDERS: tuple[ProviderId, ...] = ("gemini", "groq", "openrouter", "mock")
+
+
+def _parse_provider(value: str | None, *, default: ProviderId = DEFAULT_PRIMARY_PROVIDER) -> ProviderId:
     token = (value or default).strip().lower()
     if token in VALID_PROVIDERS:
         return token  # type: ignore[return-value]
@@ -34,19 +38,19 @@ def _parse_provider(value: str | None, *, default: ProviderId = "gemini") -> Pro
 
 def _parse_fallback_chain(raw: str | None) -> list[ProviderId]:
     if not raw:
-        return ["gemini"]
+        return list(DEFAULT_FALLBACK_CHAIN)
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         parsed = [part.strip() for part in raw.split(",") if part.strip()]
     if not isinstance(parsed, list):
-        return ["gemini"]
+        return list(DEFAULT_FALLBACK_CHAIN)
     chain: list[ProviderId] = []
     for item in parsed:
-        provider = _parse_provider(str(item), default="gemini")
+        provider = _parse_provider(str(item), default=DEFAULT_PRIMARY_PROVIDER)
         if provider not in chain:
             chain.append(provider)
-    return chain or ["gemini"]
+    return chain or list(DEFAULT_FALLBACK_CHAIN)
 
 
 async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AIProviderConfig:

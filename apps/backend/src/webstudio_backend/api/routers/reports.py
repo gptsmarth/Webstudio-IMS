@@ -24,6 +24,7 @@ from webstudio_backend.api.schemas.report import (
     page_meta,
     summary_response,
 )
+from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
@@ -65,12 +66,7 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
-    return ResponseMeta(
-        page=page,
-        page_size=page_size,
-        total_items=total_items,
-        total_pages=total_pages,
-    )
+    return build_page_meta(page, page_size, total_items, total_pages)
 
 
 def _common_report_params(

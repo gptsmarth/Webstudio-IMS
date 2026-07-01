@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.core.permissions import permissions_for_role
+from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
 from webstudio_backend.infrastructure.database.models.user import User
@@ -185,7 +185,7 @@ class AuthenticationService:
         )
         await self._refresh_tokens.revoke(stored, replaced_by_id=new_stored.id)
 
-        access_token, expires_in = self._create_access_token(user)
+        access_token, expires_in = await self._create_access_token(user)
         return TokenPair(
             access_token=access_token,
             refresh_token=new_refresh,
@@ -252,7 +252,7 @@ class AuthenticationService:
         user_agent: str | None = None,
         device_label: str | None = None,
     ) -> TokenPair:
-        access_token, expires_in = self._create_access_token(user)
+        access_token, expires_in = await self._create_access_token(user)
         refresh_token = generate_refresh_token()
         expires_at = await self._refresh_expiry(remember_me=remember_me)
         stored = await self._refresh_tokens.create(
@@ -273,8 +273,8 @@ class AuthenticationService:
             session_id=stored.id,
         )
 
-    def _create_access_token(self, user: User) -> tuple[str, int]:
-        permissions = permissions_for_role(user.role)
+    async def _create_access_token(self, user: User) -> tuple[str, int]:
+        permissions = await PermissionResolver(self._session).resolve_for_user(user)
         return create_access_token(
             user_id=user.id,
             username=user.username,

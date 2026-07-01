@@ -266,8 +266,9 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         return product_model
 
     async def delete(self, product_model: ProductModel) -> None:
-        if await self._has_blocking_references(product_model.id):
-            raise ProductModelHasHistoryError(str(product_model.id))
+        await self.force_delete(product_model)
+
+    async def force_delete(self, product_model: ProductModel) -> None:
         await super().delete(product_model)
 
     async def find_by_brand(

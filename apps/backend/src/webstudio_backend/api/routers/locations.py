@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
@@ -15,31 +15,26 @@ from webstudio_backend.api.dependencies.auth import (
     LocationsEditDep,
     LocationsViewDep,
 )
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.location import (
     CreateLocationRequest,
     LocationResponse,
     UpdateLocationRequest,
 )
-from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
+from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
-from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.models.location import Location
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 
 router = APIRouter(prefix="/api/v1/locations", tags=["locations"])
 
 
-def _envelope(request: Request, data: object) -> dict:
-    return Envelope(
-        data=data,
-        meta=None,
-        request_id=get_request_id(request),
-        correlation_id=get_correlation_id(request),
-        timestamp=utc_now_iso(),
-    ).model_dump()
+def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
+    return build_envelope(request, data, meta)
 
 
 def _actor(current: AuthenticatedUser) -> AuditActor:
@@ -56,19 +51,34 @@ async def list_locations(
     request: Request,
     current: LocationsViewDep,
     db_session: AsyncSession = DbSessionDep,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=128),
 ) -> dict:
     del current
-    statement = select(Location)
+    statement = select(Location).order_by(Location.sort_order.nulls_last(), Location.name)
+    if search and search.strip():
+        statement = statement.where(Location.name.ilike(f"{search.strip()}%"))
+
+    if page is not None:
+        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        data = [LocationResponse.from_model(item).model_dump() for item in page_result.items]
+        return _envelope(
+            request,
+            data,
+            build_page_meta(
+                page_result.page,
+                page_result.page_size,
+                page_result.total_items,
+                page_result.total_pages,
+            ),
+        )
+
     result = await db_session.execute(statement)
     locations = result.scalars().all()
-    # Sort locations by sort_order (put None last), then by name
-    sorted_locations = sorted(
-        locations,
-        key=lambda l: (l.sort_order if l.sort_order is not None else float("inf"), l.name.lower()),
-    )
     return _envelope(
         request,
-        [LocationResponse.from_model(l).model_dump() for l in sorted_locations],
+        [LocationResponse.from_model(item).model_dump() for item in locations],
     )
 
 

@@ -20,6 +20,9 @@ export interface UserSummary {
   active_session_count: number;
   password_age_days: number | null;
   created_by_display_name: string | null;
+  custom_access_role_id?: number | null;
+  custom_access_role_name?: string | null;
+  access_label?: string | null;
 }
 
 export interface UserSessionSummary {
@@ -99,6 +102,12 @@ export interface UpdateUserRoleRequest {
   role: UserRole;
 }
 
+export interface AssignUserAccessRequest {
+  access_type: 'builtin' | 'custom';
+  role?: UserRole;
+  custom_role_id?: number | null;
+}
+
 export interface ResetPasswordRequest {
   temporary_password: string;
 }
@@ -150,6 +159,12 @@ export class UserService {
     LoggingService.info('API', 'Updating user role', { userId, role: payload.role });
     const client = await ApiClientProvider.getClient();
     return client.patch<UserDetail>(`/api/v1/users/${userId}/role`, payload);
+  }
+
+  static async assignUserAccess(userId: number, payload: AssignUserAccessRequest): Promise<UserDetail> {
+    LoggingService.info('API', 'Assigning user access', { userId, access_type: payload.access_type });
+    const client = await ApiClientProvider.getClient();
+    return client.patch<UserDetail>(`/api/v1/users/${userId}/access`, payload);
   }
 
   static async resetPassword(userId: number, payload: ResetPasswordRequest): Promise<void> {

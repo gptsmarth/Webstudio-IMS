@@ -36,11 +36,7 @@ export function StockModelCardGrid({
   if (visibleRows.length === 0) {
     return (
       <div className="hierarchy-empty hierarchy-empty--panel">
-        <p>
-          {availableOnly
-            ? 'No models with available stock match your search.'
-            : 'No models in catalogue for this brand match your search.'}
-        </p>
+        <p>No in-stock models for this brand match your search.</p>
       </div>
     );
   }

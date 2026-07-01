@@ -1,6 +1,7 @@
 import {
   canReadSettings as canReadSettingsPermission,
   canWriteSettings as canWriteSettingsPermission,
+  canAccessBackupModule as canAccessBackupModulePermission,
 } from '../services/PermissionService';
 
 export type SettingsCategory =
@@ -38,6 +39,21 @@ export function canReadSettings(permissions: string[]): boolean {
 
 export function canWriteSettings(permissions: string[]): boolean {
   return canWriteSettingsPermission(permissions);
+}
+
+export function canAccessBackupModule(permissions: string[]): boolean {
+  return canAccessBackupModulePermission(permissions);
+}
+
+export function visibleSettingsCategories(
+  permissions: string[],
+): { id: SettingsCategory; label: string }[] {
+  return SETTINGS_CATEGORIES.filter((category) => {
+    if (category.id === 'backup') {
+      return canAccessBackupModule(permissions);
+    }
+    return true;
+  });
 }
 
 export function formatBytes(bytes: number): string {

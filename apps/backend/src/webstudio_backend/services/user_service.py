@@ -18,8 +18,13 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
 )
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
+from webstudio_backend.infrastructure.repositories.custom_access_role_repository import (
+    CustomAccessRoleRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_validation import validate_human_role
 from webstudio_backend.infrastructure.security.password import hash_password
+from webstudio_backend.services.custom_access_role_service import CustomAccessRoleNotFoundError
+from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.services.password_policy_service import PasswordPolicyService
 from webstudio_backend.services.user_admin_service import UserAdminService
 
@@ -119,6 +124,57 @@ class UserService:
             new_value={"role": role.value},
             actor=actor,
             description=f"Role changed from {old_role} to {role.value}",
+        )
+        return updated
+
+    async def assign_access(
+        self,
+        user_id: int,
+        *,
+        access_type: str,
+        role: UserRole | None,
+        custom_role_id: int | None,
+        actor: AuditActor,
+    ) -> User:
+        user = await self.get_user(user_id)
+        if user.role == UserRole.MAIN_ADMIN:
+            raise ValueError("Main Admin access cannot be customized")
+        if access_type == "builtin":
+            if role is None:
+                raise ValueError("Built-in role is required")
+            validate_human_role(role)
+            if role == UserRole.MAIN_ADMIN:
+                raise ValueError("Cannot assign Main Admin through access assignment")
+            old_label = user.role.value
+            updated = await self._users.update_access(
+                user,
+                role=role,
+                custom_access_role_id=None,
+                actor_id=actor.user_id or 0,
+            )
+            new_label = role.value
+        else:
+            if custom_role_id is None:
+                raise ValueError("Custom access role is required")
+            custom_role = await CustomAccessRoleRepository(self._session).get_by_id(custom_role_id)
+            if custom_role is None or not custom_role.is_active:
+                raise CustomAccessRoleNotFoundError(custom_role_id)
+            old_label = user.role.value
+            updated = await self._users.update_access(
+                user,
+                role=UserRole.SALESPERSON,
+                custom_access_role_id=custom_role_id,
+                actor_id=actor.user_id or 0,
+            )
+            new_label = custom_role.name
+        await self._refresh_tokens.revoke_all_for_user(user.id)
+        await self._recorder.record_user_update(
+            updated,
+            field_name="access",
+            old_value={"access": old_label},
+            new_value={"access": new_label, "access_type": access_type},
+            actor=actor,
+            description=f"Access updated to {new_label}",
         )
         return updated
 

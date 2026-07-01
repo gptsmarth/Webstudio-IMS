@@ -50,13 +50,13 @@ export class BrandService {
     return client.patch<Brand>(`/api/v1/brands/${id}`, data);
   }
 
-  static async archiveBrand(id: number): Promise<Brand> {
+  static async deleteBrand(id: number): Promise<void> {
     const client = await ApiClientProvider.getClient();
-    return client.post<Brand>(`/api/v1/brands/${id}/archive`, {});
+    await client.delete(`/api/v1/brands/${id}`);
   }
 
-  static async restoreBrand(id: number): Promise<Brand> {
-    const client = await ApiClientProvider.getClient();
-    return client.post<Brand>(`/api/v1/brands/${id}/restore`, {});
+  /** @deprecated Use deleteBrand — permanently removes the brand. */
+  static async archiveBrand(id: number): Promise<void> {
+    return BrandService.deleteBrand(id);
   }
 }

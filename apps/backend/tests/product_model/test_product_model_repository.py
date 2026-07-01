@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +16,6 @@ from webstudio_backend.infrastructure.database.repositories import PageParams, S
 from webstudio_backend.infrastructure.repositories import (
     DuplicateModelNumberError,
     InvalidFieldValueError,
-    ProductModelHasHistoryError,
     ProductModelRepository,
     RequiredFieldError,
 )
@@ -87,15 +85,12 @@ async def test_archive_and_restore(db_session: AsyncSession, brand: Brand) -> No
 
 
 @pytest.mark.asyncio
-async def test_delete_guard_blocks_references(db_session: AsyncSession, brand: Brand) -> None:
+async def test_force_delete_removes_model(db_session: AsyncSession, brand: Brand) -> None:
     repository = ProductModelRepository(db_session)
     model = await repository.create(**sample_product_model_payload(brand.id))
 
-    with (
-        patch.object(repository, "_has_blocking_references", AsyncMock(return_value=True)),
-        pytest.raises(ProductModelHasHistoryError),
-    ):
-        await repository.delete(model)
+    await repository.force_delete(model)
+    assert await repository.get_by_id(model.id) is None
 
 
 @pytest.mark.asyncio

@@ -149,3 +149,6 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         actor: AuditActor | None = None,
     ) -> Brand:
         return await self.update(brand, name=name, actor=actor)
+
+    async def force_delete(self, brand: Brand) -> None:
+        await super().delete(brand)

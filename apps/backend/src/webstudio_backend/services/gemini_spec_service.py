@@ -1,4 +1,4 @@
-"""Backward-compatible Gemini service shim."""
+"""Backward-compatible enrichment service shim."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from webstudio_backend.core.config import Settings
 from webstudio_backend.services.ai.config import DEFAULT_GEMINI_MODEL
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.json_utils import parse_json_object as _parse_json_object
-from webstudio_backend.services.ai.providers.gemini import GROUNDED_MODELS, GeminiProvider
+from webstudio_backend.services.ai.providers.factory import create_provider
+from webstudio_backend.services.ai.providers.gemini import GROUNDED_MODELS
 from webstudio_backend.services.ai.spec_normalization import (
     normalize_cpu as _normalize_cpu,
     normalize_spec as _normalize_spec,
     response_anchors_model_number as _response_anchors_model_number,
 )
-from webstudio_backend.services.ai.types import AIProviderError
+from webstudio_backend.services.ai.types import AIProviderConfig, AIProviderError, ProviderCredentials
 
 DEFAULT_MODEL = DEFAULT_GEMINI_MODEL
 
@@ -61,43 +62,41 @@ class GeminiSpecService:
         model_name: str | None = None,
         brand_name: str | None = None,
     ) -> dict[str, Any]:
-        if self._session is None:
-            provider = GeminiProvider(
-                _build_inline_config(self._api_key, self._model),
-            )
-            if not provider.is_configured():
-                raise GeminiLookupError(
-                    "SERVICE_UNAVAILABLE",
-                    "Gemini API is not configured. Add your API key in System Settings → Integrations.",
-                )
+        if self._session is not None:
+            service = ProductEnrichmentService(self._session, self._settings)
             try:
-                result = await provider.enrich_product_spec(
+                return await service.lookup_laptop_spec(
                     model_number,
-                    brand_name=brand_name,
                     model_name=model_name,
-                )
-                from webstudio_backend.services.product_image_service import resolve_product_image
-
-                payload = result.to_dict()
-                payload["product_image_url"] = await resolve_product_image(
-                    model_number=model_number,
                     brand_name=brand_name,
-                    model_name=result.model_name,
-                    candidate_url=result.product_image_url,
-                    grounding_body=result.grounding_body,
-                    image_search_query=result.image_search_query,
                 )
-                return payload
             except AIProviderError as exc:
                 raise _to_gemini_error(exc) from exc
 
-        service = ProductEnrichmentService(self._session, self._settings)
-        try:
-            return await service.lookup_laptop_spec(
-                model_number,
-                model_name=model_name,
-                brand_name=brand_name,
+        provider = create_provider("gemini", _build_inline_config(self._api_key, self._model))
+        if not provider.is_configured():
+            raise GeminiLookupError(
+                "SERVICE_UNAVAILABLE",
+                "Gemini API is not configured. Add your API key in System Settings → Integrations.",
             )
+        try:
+            result = await provider.enrich_product_spec(
+                model_number,
+                brand_name=brand_name,
+                model_name=model_name,
+            )
+            from webstudio_backend.services.product_image_service import resolve_product_image
+
+            payload = result.to_dict()
+            payload["product_image_url"] = await resolve_product_image(
+                model_number=model_number,
+                brand_name=brand_name,
+                model_name=result.model_name,
+                candidate_url=result.product_image_url,
+                grounding_body=result.grounding_body,
+                image_search_query=result.image_search_query,
+            )
+            return payload
         except AIProviderError as exc:
             raise _to_gemini_error(exc) from exc
 
@@ -109,7 +108,7 @@ class GeminiSpecService:
     ) -> tuple[str | None, dict[str, Any] | None]:
         if not self.is_configured:
             return None, None
-        provider = GeminiProvider(_build_inline_config(self._api_key, self._model))
+        provider = create_provider("gemini", _build_inline_config(self._api_key, self._model))
         query = await provider.generate_image_search_query(
             model_number,
             brand_name=brand_name,
@@ -126,9 +125,7 @@ class GeminiSpecService:
         return image_url, None
 
 
-def _build_inline_config(api_key: str, model: str):
-    from webstudio_backend.services.ai.types import AIProviderConfig, ProviderCredentials
-
+def _build_inline_config(api_key: str, model: str) -> AIProviderConfig:
     return AIProviderConfig(
         gemini=ProviderCredentials(provider="gemini", api_key=api_key, model=model),
     )

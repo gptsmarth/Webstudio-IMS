@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
@@ -13,32 +13,25 @@ from webstudio_backend.api.dependencies.auth import (
     BrandsArchiveDep,
     BrandsCreateDep,
     BrandsEditDep,
-    BrandsViewDep,
+    BrandsOrInventoryViewDep,
 )
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.brand import BrandResponse, CreateBrandRequest, UpdateBrandRequest
-from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
+from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
-from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.models.brand import Brand
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
-from webstudio_backend.infrastructure.repositories.product_model_repository import (
-    ProductModelRepository,
-)
+from webstudio_backend.services.brand_deletion_service import BrandDeletionService
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
 
 
-def _envelope(request: Request, data: object) -> dict:
-    return Envelope(
-        data=data,
-        meta=None,
-        request_id=get_request_id(request),
-        correlation_id=get_correlation_id(request),
-        timestamp=utc_now_iso(),
-    ).model_dump()
+def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
+    return build_envelope(request, data, meta)
 
 
 def _actor(current: AuthenticatedUser) -> AuditActor:
@@ -53,18 +46,36 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
 @router.get("")
 async def list_brands(
     request: Request,
-    current: BrandsViewDep,
+    current: BrandsOrInventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=128),
 ) -> dict:
     del current
-    statement = select(Brand)
+    statement = select(Brand).order_by(Brand.display_order, Brand.name)
+    if search and search.strip():
+        statement = statement.where(Brand.name.ilike(f"{search.strip()}%"))
+
+    if page is not None:
+        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        data = [BrandResponse.from_model(b).model_dump() for b in page_result.items]
+        return _envelope(
+            request,
+            data,
+            build_page_meta(
+                page_result.page,
+                page_result.page_size,
+                page_result.total_items,
+                page_result.total_pages,
+            ),
+        )
+
     result = await db_session.execute(statement)
     brands = result.scalars().all()
-    # Sort brands by display_order, then by name
-    sorted_brands = sorted(brands, key=lambda b: (b.display_order, b.name.lower()))
     return _envelope(
         request,
-        [BrandResponse.from_model(b).model_dump() for b in sorted_brands],
+        [BrandResponse.from_model(b).model_dump() for b in brands],
     )
 
 
@@ -135,46 +146,40 @@ async def update_brand(
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
 
 
-@router.post("/{brand_id}/archive")
-async def archive_brand(
-    request: Request,
+@router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_brand(
     brand_id: int,
     current: BrandsArchiveDep,
     db_session: AsyncSession = DbSessionDep,
-) -> dict:
+) -> None:
     repo = BrandRepository(db_session)
     brand = await repo.get_by_id(brand_id)
     if not brand:
         raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
 
-    product_models = ProductModelRepository(db_session)
-    await product_models.archive_all_active_for_brand(brand_id, actor=_actor(current))
-
-    updated = await repo.update(
-        brand,
-        is_active=False,
-        actor=_actor(current),
-    )
+    await BrandDeletionService(db_session).delete_brand(brand, actor=_actor(current))
     await db_session.commit()
-    return _envelope(request, BrandResponse.from_model(updated).model_dump())
 
 
-@router.post("/{brand_id}/restore")
+@router.post("/{brand_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_brand(
+    brand_id: int,
+    current: BrandsArchiveDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> None:
+    """Deprecated alias — permanently deletes the brand and its product models."""
+    await delete_brand(brand_id, current, db_session)
+
+
+@router.post("/{brand_id}/restore", status_code=status.HTTP_410_GONE)
 async def restore_brand(
     request: Request,
     brand_id: int,
     current: BrandsArchiveDep,
-    db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    repo = BrandRepository(db_session)
-    brand = await repo.get_by_id(brand_id)
-    if not brand:
-        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
-
-    updated = await repo.update(
-        brand,
-        is_active=True,
-        actor=_actor(current),
+    del request, brand_id, current
+    raise AppError(
+        "GONE",
+        "Brand restore is no longer supported. Deleted brands cannot be recovered.",
+        status_code=status.HTTP_410_GONE,
     )
-    await db_session.commit()
-    return _envelope(request, BrandResponse.from_model(updated).model_dump())

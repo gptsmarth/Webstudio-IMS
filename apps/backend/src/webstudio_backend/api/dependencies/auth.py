@@ -13,9 +13,10 @@ from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.dependencies import DbSessionDep, get_app_settings
 from webstudio_backend.core.permissions import (
     permissions_for_role,
-    role_has_any_permission,
-    role_has_permission,
+    user_has_any_permission,
+    user_has_permission,
 )
+from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import UserRole
@@ -58,7 +59,8 @@ async def get_current_user(
     if int(payload.get("token_version", -1)) != user.token_version:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
 
-    return AuthenticatedUser(user=user, permissions=permissions_for_role(user.role))
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return AuthenticatedUser(user=user, permissions=permissions)
 
 
 CurrentUserDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
@@ -87,7 +89,8 @@ def require_permission(permission: str):
         current: CurrentUserDep,
         db_session: AsyncSession = DbSessionDep,
     ) -> AuthenticatedUser:
-        if not role_has_permission(current.user.role, permission):
+        granted = set(current.permissions)
+        if not user_has_permission(granted, permission):
             await _audit_permission_denied(db_session, request, current.user, permission)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
         return current
@@ -101,7 +104,8 @@ def require_any_permission(*permissions: str):
         current: CurrentUserDep,
         db_session: AsyncSession = DbSessionDep,
     ) -> AuthenticatedUser:
-        if not role_has_any_permission(current.user.role, *permissions):
+        granted = set(current.permissions)
+        if not user_has_any_permission(granted, *permissions):
             await _audit_permission_denied(
                 db_session,
                 request,
@@ -143,17 +147,45 @@ DashboardViewDep = Annotated[AuthenticatedUser, Depends(require_permission("dash
 
 # Catalogue
 BrandsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:view"))]
+# Stock browse and inventory screens need the full brand catalogue for users with inventory access.
+BrandsOrInventoryViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(
+        require_any_permission("brands:view", "inventory:view", "inventory:create"),
+    ),
+]
 BrandsCreateDep = Annotated[AuthenticatedUser, Depends(require_any_permission("brands:create", "brands:edit"))]
 BrandsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:edit"))]
 BrandsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:archive"))]
 
 ProductModelsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:view"))]
+ProductModelsOrInventoryViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(
+        require_any_permission(
+            "product_models:view",
+            "inventory:view",
+            "inventory:create",
+        ),
+    ),
+]
 ProductModelsCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:create"))]
-ProductModelsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:edit"))]
+ProductModelsEditDep = Annotated[
+    AuthenticatedUser,
+    Depends(
+        require_any_permission(
+            "product_models:edit",
+            "product_models:selling_price:edit",
+            "inventory:stock_edit",
+        ),
+    ),
+]
 ProductModelsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:archive"))]
 ProductModelsSellingPriceDep = Annotated[
     AuthenticatedUser,
-    Depends(require_permission("product_models:selling_price:edit")),
+    Depends(
+        require_any_permission("product_models:selling_price:edit", "inventory:stock_edit"),
+    ),
 ]
 
 LocationsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:view"))]
@@ -180,6 +212,16 @@ NotificationsManageDep = Annotated[AuthenticatedUser, Depends(require_permission
 # Settings
 SettingsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("settings:view"))]
 SettingsModifyDep = Annotated[AuthenticatedUser, Depends(require_permission("settings:modify"))]
+
+# Backup & recovery
+BackupViewDep = Annotated[AuthenticatedUser, Depends(require_permission("backup:view"))]
+BackupManageDep = Annotated[AuthenticatedUser, Depends(require_permission("backup:manage"))]
+RestoreViewDep = Annotated[AuthenticatedUser, Depends(require_permission("restore:view"))]
+RestoreExecuteDep = Annotated[AuthenticatedUser, Depends(require_permission("restore:execute"))]
+BackupOrRestoreViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_any_permission("backup:view", "restore:view")),
+]
 
 # Tally
 TallyViewStatusDep = Annotated[AuthenticatedUser, Depends(require_permission("tally:view_status"))]

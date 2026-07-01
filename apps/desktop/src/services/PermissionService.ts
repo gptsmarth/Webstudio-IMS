@@ -8,6 +8,7 @@ export const P = {
     view: 'inventory:view',
     create: 'inventory:create',
     edit: 'inventory:edit',
+    stockEdit: 'inventory:stock_edit',
     transfer: 'inventory:transfer',
     archive: 'inventory:archive',
     restore: 'inventory:restore',
@@ -25,6 +26,17 @@ export const P = {
   },
   dashboard: {
     view: 'dashboard:view',
+    quickActions: 'dashboard:quick_actions',
+    inventoryDistribution: 'dashboard:inventory_distribution',
+    brandDistribution: 'dashboard:brand_distribution',
+    recentSales: 'dashboard:recent_sales',
+    recentInventory: 'dashboard:recent_inventory',
+    recentTransfers: 'dashboard:recent_transfers',
+    recentActivity: 'dashboard:recent_activity',
+    notifications: 'dashboard:notifications',
+    storeStatus: 'dashboard:store_status',
+    tallyStatus: 'dashboard:tally_status',
+    systemStatus: 'dashboard:system_status',
   },
   brands: {
     view: 'brands:view',
@@ -66,6 +78,14 @@ export const P = {
     view: 'settings:view',
     modify: 'settings:modify',
   },
+  backup: {
+    view: 'backup:view',
+    manage: 'backup:manage',
+  },
+  restore: {
+    view: 'restore:view',
+    execute: 'restore:execute',
+  },
   tally: {
     viewStatus: 'tally:view_status',
     configure: 'tally:configure',
@@ -75,6 +95,29 @@ export const P = {
 } as const;
 
 export type PermissionCode = typeof P[keyof typeof P][keyof typeof P[keyof typeof P]];
+
+export const DASHBOARD_WIDGET_PERMISSIONS: readonly string[] = [
+  P.dashboard.quickActions,
+  P.dashboard.inventoryDistribution,
+  P.dashboard.brandDistribution,
+  P.dashboard.recentSales,
+  P.dashboard.recentInventory,
+  P.dashboard.recentTransfers,
+  P.dashboard.recentActivity,
+  P.dashboard.notifications,
+  P.dashboard.storeStatus,
+  P.dashboard.tallyStatus,
+  P.dashboard.systemStatus,
+] as const;
+
+/** Legacy roles with only dashboard:view still see all widgets until granular picks are saved. */
+export function canViewDashboardWidget(permissions: string[], widget: string): boolean {
+  const granted = new Set(permissions);
+  if (!granted.has(P.dashboard.view)) return false;
+  if (granted.has(widget)) return true;
+  const hasGranular = DASHBOARD_WIDGET_PERMISSIONS.some((permission) => granted.has(permission));
+  return !hasGranular;
+}
 
 const ROUTE_PERMISSIONS: Record<string, string> = {
   dashboard: P.dashboard.view,
@@ -187,6 +230,19 @@ export function canEditSellingPrice(permissions: string[]): boolean {
   return PermissionService.from(permissions).has(P.productModels.sellingPriceEdit);
 }
 
+export function canEditStockLaptop(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.inventory.stockEdit);
+}
+
+export function canEditStockProductModel(permissions: string[]): boolean {
+  const ps = PermissionService.from(permissions);
+  return ps.hasAny(
+    P.productModels.edit,
+    P.productModels.sellingPriceEdit,
+    P.inventory.stockEdit,
+  );
+}
+
 export function canEditProductModels(permissions: string[]): boolean {
   return PermissionService.from(permissions).has(P.productModels.edit);
 }
@@ -220,6 +276,29 @@ export function canReadSettings(permissions: string[]): boolean {
 
 export function canWriteSettings(permissions: string[]): boolean {
   return PermissionService.from(permissions).has(P.settings.modify);
+}
+
+export function canViewBackup(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.backup.view);
+}
+
+export function canManageBackup(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.backup.manage);
+}
+
+export function canViewRestore(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.restore.view);
+}
+
+export function canExecuteRestore(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.restore.execute);
+}
+
+export function canAccessBackupModule(permissions: string[]): boolean {
+  return PermissionService.from(permissions).hasAny(
+    P.backup.view,
+    P.restore.view,
+  );
 }
 
 export function canReadAudit(permissions: string[]): boolean {

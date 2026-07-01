@@ -111,11 +111,11 @@ export function InventoryPage(): JSX.Element {
     }
   }, [editModel, hierarchy, workspace]);
 
-  const handleArchiveModel = useCallback(async () => {
+  const handleDeleteModel = useCallback(async () => {
     if (!editModel) return;
     setModelActionLoading(true);
     try {
-      await ProductModelService.archiveModel(editModel.id);
+      await ProductModelService.deleteModel(editModel.id);
       setEditModelId(null);
       if (nav.modelId === editModel.id) {
         nav.goToModels();
@@ -284,7 +284,7 @@ export function InventoryPage(): JSX.Element {
         canArchive={canArchiveModel}
         onClose={() => setEditModelId(null)}
         onConfirm={handleUpdateModel}
-        onArchive={handleArchiveModel}
+        onArchive={handleDeleteModel}
       />
     </div>
   );

@@ -1,11 +1,11 @@
-"""Product enrichment orchestrator with provider fallback."""
+"""Product enrichment orchestrator — Gemini-only spec lookup."""
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
-from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +14,35 @@ from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.services.ai.cache import EnrichmentCacheService
 from webstudio_backend.services.ai.config import resolve_ai_config
-from webstudio_backend.services.ai.providers.factory import build_provider_chain, create_provider
+from webstudio_backend.services.ai.logging import (
+    log_cache_hit,
+    log_cache_stale,
+    log_database_reuse,
+    log_enrichment_retry,
+    log_enrichment_start,
+    log_provider_attempt,
+    log_provider_failure,
+    log_provider_success,
+    log_provider_test,
+)
+from webstudio_backend.services.ai.providers.factory import create_provider
 from webstudio_backend.services.ai.types import AIProviderError, EnrichmentResult, ProviderId, ProviderTestResult
 from webstudio_backend.services.product_image_service import resolve_product_image
+
+
+def _spec_lookup_providers(config, app_settings: Settings):
+    """Return providers for laptop spec lookup. Production uses Gemini only; tests may use mock."""
+    if app_settings.is_test:
+        from webstudio_backend.services.ai.providers.factory import build_provider_chain
+
+        chain = build_provider_chain(config)
+        configured = [p for p in chain if p.is_configured() or p.provider_id == "mock"]
+        if configured:
+            return configured
+    provider = create_provider("gemini", config)
+    if not provider.is_configured():
+        return []
+    return [provider]
 
 
 class ProductEnrichmentService:
@@ -44,27 +70,33 @@ class ProductEnrichmentService:
                 "AI product enrichment is disabled in System Settings → Integrations.",
             )
 
+        if not config.gemini.api_key.strip() and not self._app_settings.is_test:
+            raise AIProviderError(
+                "NOT_CONFIGURED",
+                "Gemini API is not configured. Add your API key in System Settings → Integrations.",
+            )
+
         cache = EnrichmentCacheService(self._session)
         cached = await cache.get(sku, brand_name=brand_name)
         if cached and cached.get("cpu"):
             from webstudio_backend.services.ai.spec_normalization import validate_enrichment_payload
 
-            provider = str(cached.get("provider") or "gemini")
+            provider = str(cached.get("provider") or config.primary_provider)
             if validate_enrichment_payload(
                 cached,
                 model_number=sku,
                 provider=provider,
                 brand_name=brand_name,
             ):
-                logger.info("Enrichment cache hit for {}", sku)
+                log_cache_hit(sku=sku, provider=provider)
                 cached["cached"] = True
                 return cached
-            logger.info("Stale enrichment cache rejected for {}, refreshing", sku)
+            log_cache_stale(sku=sku)
             await cache.delete(sku, brand_name=brand_name)
 
         existing = await self._lookup_existing_model(sku, brand_name=brand_name)
         if existing:
-            logger.info("Reusing existing product model enrichment for {}", sku)
+            log_database_reuse(sku=sku)
             existing["cached"] = True
             await cache.set(
                 sku,
@@ -74,56 +106,80 @@ class ProductEnrichmentService:
             )
             return existing
 
-        chain = build_provider_chain(config)
-        configured_chain = [provider for provider in chain if provider.is_configured() or provider.provider_id == "mock"]
+        configured_chain = _spec_lookup_providers(config, self._app_settings)
         if not configured_chain:
             raise AIProviderError(
                 "NOT_CONFIGURED",
-                "No AI provider is configured. Add an API key in System Settings → Integrations.",
+                "Gemini API is not configured. Add your API key in System Settings → Integrations.",
             )
 
+        # retry_count = total lookup attempts (1 initial try + any follow-ups), not "extra" retries.
+        retry_attempts = max(1, config.retry_count)
         errors: list[AIProviderError] = []
-        for provider in configured_chain:
-            started = time.perf_counter()
-            try:
-                result = await provider.enrich_product_spec(
-                    sku,
-                    brand_name=brand_name,
-                    model_name=model_name,
+        provider_ids = [provider.provider_id for provider in configured_chain]
+        for attempt in range(retry_attempts):
+            if attempt > 0:
+                delay = 3.0 * attempt
+                log_enrichment_retry(
+                    sku=sku,
+                    attempt=attempt + 1,
+                    max_attempts=retry_attempts,
+                    delay_seconds=delay,
                 )
-                duration_ms = int((time.perf_counter() - started) * 1000)
-                logger.info(
-                    "Enrichment succeeded via {} for {} in {}ms (confidence={:.2f})",
-                    provider.provider_id,
-                    sku,
-                    duration_ms,
-                    result.confidence_score,
+                await asyncio.sleep(delay)
+            else:
+                log_enrichment_start(
+                    sku=sku,
+                    attempt=1,
+                    max_attempts=retry_attempts,
+                    providers=provider_ids,
                 )
-                finalized = await self._finalize_result(
-                    result,
-                    model_number=sku,
-                    brand_name=brand_name,
-                )
-                await cache.set(
-                    sku,
-                    brand_name=brand_name,
-                    payload=finalized,
-                    provider=provider.provider_id,
-                )
-                return finalized
-            except AIProviderError as exc:
-                duration_ms = int((time.perf_counter() - started) * 1000)
-                logger.warning(
-                    "Enrichment failed via {} for {} after {}ms: {}",
-                    provider.provider_id,
-                    sku,
-                    duration_ms,
-                    exc.message,
-                )
-                errors.append(exc)
-                if exc.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED", "API_ERROR", "NOT_FOUND"}:
+            errors = []
+            for provider in configured_chain:
+                started = time.perf_counter()
+                log_provider_attempt(provider=provider.provider_id, sku=sku, attempt=attempt + 1)
+                try:
+                    result = await provider.enrich_product_spec(
+                        sku,
+                        brand_name=brand_name,
+                        model_name=model_name,
+                    )
+                    duration_ms = int((time.perf_counter() - started) * 1000)
+                    log_provider_success(
+                        provider=provider.provider_id,
+                        sku=sku,
+                        duration_ms=duration_ms,
+                        confidence=result.confidence_score,
+                    )
+                    finalized = await self._finalize_result(
+                        result,
+                        model_number=sku,
+                        brand_name=brand_name,
+                    )
+                    await cache.set(
+                        sku,
+                        brand_name=brand_name,
+                        payload=finalized,
+                        provider=provider.provider_id,
+                    )
+                    return finalized
+                except AIProviderError as exc:
+                    duration_ms = int((time.perf_counter() - started) * 1000)
+                    log_provider_failure(
+                        provider=provider.provider_id,
+                        sku=sku,
+                        duration_ms=duration_ms,
+                        code=exc.code,
+                        message=exc.message,
+                    )
+                    errors.append(exc)
+                    if exc.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED", "API_ERROR", "NOT_FOUND"}:
+                        continue
+                    raise
+
+            if errors and attempt < retry_attempts - 1:
+                if any(error.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED"} for error in errors):
                     continue
-                raise
 
         if errors:
             raise self._combine_errors(errors)
@@ -133,9 +189,22 @@ class ProductEnrichmentService:
         )
 
     async def test_provider(self, provider_id: ProviderId) -> ProviderTestResult:
+        if provider_id != "gemini" and not self._app_settings.is_test:
+            return ProviderTestResult(
+                provider=provider_id,
+                success=False,
+                message="Only Gemini is supported for product enrichment.",
+            )
         config = await resolve_ai_config(self._session, self._app_settings)
-        provider = create_provider(provider_id, config)
-        return await provider.test_connection()
+        provider = create_provider(provider_id if self._app_settings.is_test else "gemini", config)
+        result = await provider.test_connection()
+        log_provider_test(
+            provider=result.provider,
+            success=result.success,
+            latency_ms=result.latency_ms,
+            message=result.message,
+        )
+        return result
 
     async def _lookup_existing_model(
         self,
@@ -198,17 +267,22 @@ class ProductEnrichmentService:
         if any(error.code == "RATE_LIMITED" for error in errors):
             return AIProviderError(
                 "RATE_LIMITED",
-                "All configured AI providers are rate-limited. Wait a few minutes or enter specifications manually.",
+                "Gemini is rate-limited. Wait a few minutes or enter specifications manually.",
             )
         if any(error.code == "QUOTA_EXCEEDED" for error in errors):
             return AIProviderError(
                 "QUOTA_EXCEEDED",
-                "All configured AI providers exceeded their quota. Enter specifications manually.",
+                "Gemini quota exceeded. Enter specifications manually or enable billing in Google AI Studio.",
             )
         if any(error.code == "TIMEOUT" for error in errors):
             return AIProviderError(
                 "TIMEOUT",
-                "AI enrichment timed out across all configured providers.",
+                "Gemini enrichment timed out. Try again in a moment.",
+            )
+        if any(error.code == "API_ERROR" for error in errors):
+            return AIProviderError(
+                "API_ERROR",
+                "Gemini enrichment failed. Check your API key and try again.",
             )
         last = errors[-1]
         return AIProviderError(

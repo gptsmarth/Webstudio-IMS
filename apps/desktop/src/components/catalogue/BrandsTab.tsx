@@ -3,8 +3,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import { useDebounce } from '../../lib/useDebounce';
 import {
   brandLogoSrc,
-  catalogueStatusBadgeClass,
-  catalogueStatusLabel,
   canExportCatalogue,
   canWriteCatalogue,
   catalogueActionErrorMessage,
@@ -37,7 +35,6 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [includeArchived, setIncludeArchived] = useState(false);
   const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [sortField, setSortField] = useState<BrandSortField>('display_order');
@@ -75,7 +72,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
   }, [refresh]);
 
   const filtered = useMemo(() => {
-    let rows = items.filter((brand) => includeArchived || brand.is_active);
+    let rows = [...items];
     if (brandFilter) rows = rows.filter((b) => b.id === brandFilter);
     rows = rows.filter((brand) => matchesSearch(debouncedSearch, [brand.name, brand.short_name]));
     rows.sort((a, b) => {
@@ -89,7 +86,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
       return 0;
     });
     return rows;
-  }, [items, includeArchived, brandFilter, debouncedSearch, sortField, sortDirection, modelCounts, stockByBrandId]);
+  }, [items, brandFilter, debouncedSearch, sortField, sortDirection, modelCounts, stockByBrandId]);
 
   const pageItems = paginateItems(filtered, page, pageSize);
 
@@ -131,11 +128,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
         setEditing(brand);
         setDialogOpen(true);
       } else if (action === 'archive') {
-        await BrandService.archiveBrand(brand.id);
-        await refresh();
-        onDataChange();
-      } else if (action === 'restore') {
-        await BrandService.restoreBrand(brand.id);
+        await BrandService.deleteBrand(brand.id);
         await refresh();
         onDataChange();
       }
@@ -149,14 +142,13 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
   const exportCsv = () => {
     exportRowsToCsv(
       'brands.csv',
-      ['Name', 'Models', 'Available', 'Status'],
+      ['Name', 'Models', 'Available'],
       filtered.map((brand) => {
         const stock = stockByBrandId.get(String(brand.id));
         return [
           brand.name,
           String(modelCounts.get(brand.id) ?? 0),
           String(stock?.available ?? 0),
-          catalogueStatusLabel(brand.is_active),
         ];
       }),
     );
@@ -175,8 +167,6 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
         onExport={exportCsv}
         onRefresh={() => void refresh()}
         loading={loading || actionLoading}
-        includeArchived={includeArchived}
-        onIncludeArchivedChange={(v) => { setIncludeArchived(v); setPage(1); }}
       />
 
       <div className="cat-filters">
@@ -200,16 +190,15 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
                 <th className="cat-table__th-sortable" onClick={() => toggleSort('name')}>Name {sortIcon('name')}</th>
                 <th className="cat-table__th-sortable" onClick={() => toggleSort('models')}>Models {sortIcon('models')}</th>
                 <th className="cat-table__th-sortable" onClick={() => toggleSort('available')}>Available {sortIcon('available')}</th>
-                <th>Status</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {loading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}>{Array.from({ length: 6 }).map((__, j) => <td key={j}><div className="skeleton cat-table__skeleton" /></td>)}</tr>
+                <tr key={i}>{Array.from({ length: 5 }).map((__, j) => <td key={j}><div className="skeleton cat-table__skeleton" /></td>)}</tr>
               ))}
               {!loading && pageItems.length === 0 && (
-                <tr><td colSpan={6}><CatalogueEmptyState title="No brands found" description="Add a brand or adjust filters." onClearFilters={() => { setSearch(''); setBrandFilter(null); setIncludeArchived(false); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add brand" /></td></tr>
+                <tr><td colSpan={5}><CatalogueEmptyState title="No brands found" description="Add a brand or adjust filters." onClearFilters={() => { setSearch(''); setBrandFilter(null); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add brand" /></td></tr>
               )}
               {!loading && pageItems.map((brand) => {
                 const stock = stockByBrandId.get(String(brand.id));
@@ -219,7 +208,6 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
                     <td>{brand.name}</td>
                     <td>{modelCounts.get(brand.id) ?? 0}</td>
                     <td>{stock?.available ?? 0}</td>
-                    <td><span className={`badge ${catalogueStatusBadgeClass(brand.is_active)}`}>{catalogueStatusLabel(brand.is_active)}</span></td>
                     <td>
                       {canWrite && (
                         <button type="button" className="cat-row-action" aria-label={`Actions for ${brand.name}`} onClick={(e) => setMenu({ brand, rect: e.currentTarget.getBoundingClientRect() })}>
@@ -240,7 +228,8 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
         <CatalogueRowActionsMenu
           label={menu.brand.name}
           canWrite={canWrite}
-          isArchived={!menu.brand.is_active}
+          isArchived={false}
+          permanentDelete
           anchorRect={menu.rect}
           onClose={() => setMenu(null)}
           onAction={(action) => void handleRowAction(action, menu.brand)}

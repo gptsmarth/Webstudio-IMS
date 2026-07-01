@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, ArchiveRestore, Pencil } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Trash2 } from 'lucide-react';
 import { rowMenuPosition, useRowActionsMenuDismiss } from '../../hooks/useRowActionsMenuDismiss';
 
 export type CatalogueRowAction = 'edit' | 'archive' | 'restore';
@@ -13,6 +13,7 @@ interface CatalogueRowActionsMenuProps {
   onAction: (action: CatalogueRowAction) => void;
   onClose: () => void;
   hideEdit?: boolean;
+  permanentDelete?: boolean;
 }
 
 export function CatalogueRowActionsMenu({
@@ -23,6 +24,7 @@ export function CatalogueRowActionsMenu({
   onAction,
   onClose,
   hideEdit = false,
+  permanentDelete = false,
 }: CatalogueRowActionsMenuProps): JSX.Element | null {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -47,10 +49,11 @@ export function CatalogueRowActionsMenu({
       )}
       {!isArchived && (
         <button type="button" className="cat-row-menu__item" role="menuitem" onClick={() => onAction('archive')}>
-          <Archive size={14} aria-hidden /> Remove
+          {permanentDelete ? <Trash2 size={14} aria-hidden /> : <Archive size={14} aria-hidden />}
+          {permanentDelete ? 'Delete' : 'Remove'}
         </button>
       )}
-      {isArchived && (
+      {isArchived && !permanentDelete && (
         <button type="button" className="cat-row-menu__item" role="menuitem" onClick={() => onAction('restore')}>
           <ArchiveRestore size={14} aria-hidden /> Restore
         </button>

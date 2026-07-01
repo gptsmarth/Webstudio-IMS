@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep
 from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
+from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
@@ -34,12 +35,7 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
-    return ResponseMeta(
-        page=page,
-        page_size=page_size,
-        total_items=total_items,
-        total_pages=total_pages,
-    )
+    return build_page_meta(page, page_size, total_items, total_pages)
 
 
 def _parse_date_start(value: date) -> datetime:

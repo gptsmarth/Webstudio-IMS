@@ -51,7 +51,7 @@ export function ChangeRoleDialog({
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
       <div className="cat-dialog cat-dialog--wide animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="cat-dialog__header">
-          <h2 className="cat-dialog__title">Change role</h2>
+          <h2 className="cat-dialog__title">Change access</h2>
           <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>

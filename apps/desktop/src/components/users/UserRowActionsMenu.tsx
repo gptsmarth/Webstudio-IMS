@@ -137,7 +137,7 @@ export function UserRowActionsMenu({
         title={!canChangeRolePerm ? permissionDeniedTooltip(P.users.edit) : roleCheck.reason}
         onClick={() => onAction('change-role')}
       >
-        <Shield size={14} aria-hidden /> Change role
+        <Shield size={14} aria-hidden /> Change access
       </button>
       {!user.is_archived && user.status === 'active' ? (
         <button

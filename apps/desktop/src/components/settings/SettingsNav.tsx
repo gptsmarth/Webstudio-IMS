@@ -1,15 +1,17 @@
 import type { SettingsCategory } from '../../lib/settings';
-import { SETTINGS_CATEGORIES } from '../../lib/settings';
+import { visibleSettingsCategories } from '../../lib/settings';
 
 interface SettingsNavProps {
   active: SettingsCategory;
   onSelect: (category: SettingsCategory) => void;
+  permissions: string[];
 }
 
-export function SettingsNav({ active, onSelect }: SettingsNavProps): JSX.Element {
+export function SettingsNav({ active, onSelect, permissions }: SettingsNavProps): JSX.Element {
+  const categories = visibleSettingsCategories(permissions);
   return (
     <nav className="stg-nav" aria-label="Settings categories">
-      {SETTINGS_CATEGORIES.map((item) => (
+      {categories.map((item) => (
         <button
           key={item.id}
           type="button"

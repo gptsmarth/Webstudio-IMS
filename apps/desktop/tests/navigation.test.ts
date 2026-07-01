@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultRouteForPermissions,
   isRouteAllowedForPermissions,
+  isStockOnlyUser,
   navItemsForPermissions,
   NAV_ITEMS,
 } from '../src/config/navigation';
@@ -27,10 +28,13 @@ describe('navigation config', () => {
     const ids = navItemsForPermissions(SALESPERSON_PERMS).map((item) => item.id);
     expect(ids).toContain('stock');
     expect(ids).toContain('dashboard');
-    expect(ids).toContain('sales');
+    expect(ids).not.toContain('sales');
+    expect(ids).not.toContain('catalogue');
+    expect(ids).not.toContain('notifications');
     expect(ids).not.toContain('inventory');
     expect(ids).not.toContain('users');
     expect(ids).not.toContain('settings');
+    expect(isStockOnlyUser(SALESPERSON_PERMS)).toBe(true);
   });
 
   it('defaults salesperson to stock when dashboard unavailable', () => {

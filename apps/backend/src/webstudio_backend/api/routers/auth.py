@@ -192,7 +192,10 @@ async def revoke_session(
 
 @router.get("/me")
 async def current_user(request: Request, current: CurrentUserDep) -> dict:
-    return _envelope(request, CurrentUserResponse.from_model(current.user).model_dump())
+    return _envelope(
+        request,
+        CurrentUserResponse.from_model(current.user, permissions=current.permissions).model_dump(),
+    )
 
 
 @router.get("/session-policy")

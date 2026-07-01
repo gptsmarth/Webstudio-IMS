@@ -90,9 +90,15 @@ export class ProductModelService {
     return client.patch<ProductModel>(`/api/v1/product-models/${id}/selling-price`, data);
   }
 
-  static async archiveModel(id: string): Promise<ProductModel> {
+  static async deleteModel(id: string): Promise<void> {
     const client = await ApiClientProvider.getClient();
-    return client.post<ProductModel>(`/api/v1/product-models/${id}/archive`, {});
+    await client.delete(`/api/v1/product-models/${id}`);
+  }
+
+  /** @deprecated Use deleteModel — permanently removes the model and its inventory units. */
+  static async archiveModel(id: string): Promise<void> {
+    const client = await ApiClientProvider.getClient();
+    await client.post(`/api/v1/product-models/${id}/archive`, {});
   }
 
   static async restoreModel(id: string): Promise<ProductModel> {

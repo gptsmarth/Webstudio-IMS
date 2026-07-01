@@ -83,16 +83,15 @@ async def test_brands_rbac_and_crud(
     resp = await api_client.patch(f"/api/v1/brands/{brand_id}", json={"name": "Dell"}, headers=admin_headers)
     assert resp.status_code == 409
 
-    # 6. Archive / Restore
-    # Archive
-    resp = await api_client.post(f"/api/v1/brands/{brand_id}/archive", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["is_active"] is False
+    # 6. Delete brand (permanent)
+    resp = await api_client.delete(f"/api/v1/brands/{brand_id}", headers=admin_headers)
+    assert resp.status_code == 204
 
-    # Restore
+    resp = await api_client.get(f"/api/v1/brands/{brand_id}", headers=salesperson_headers)
+    assert resp.status_code == 404
+
     resp = await api_client.post(f"/api/v1/brands/{brand_id}/restore", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["is_active"] is True
+    assert resp.status_code == 410
 
 
 @pytest.mark.asyncio
@@ -231,14 +230,14 @@ async def test_location_archive_preview_and_transfer(
 
 
 @pytest.mark.asyncio
-async def test_brand_archive_cascades_product_models(
+async def test_brand_delete_cascades_product_models(
     api_client: AsyncClient,
     admin_headers: dict[str, str],
     db_session: AsyncSession,
 ) -> None:
     from decimal import Decimal
 
-    from webstudio_backend.infrastructure.database.enums import ProductModelStatus, StorageType, StorageUnit
+    from webstudio_backend.infrastructure.database.enums import StorageType, StorageUnit
     from webstudio_backend.infrastructure.repositories import BrandRepository, ProductModelRepository
 
     brand = await BrandRepository(db_session).create("Cascade Brand")
@@ -254,10 +253,13 @@ async def test_brand_archive_cascades_product_models(
     )
     await db_session.commit()
 
-    resp = await api_client.post(f"/api/v1/brands/{brand.id}/archive", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["is_active"] is False
+    resp = await api_client.delete(f"/api/v1/brands/{brand.id}", headers=admin_headers)
+    assert resp.status_code == 204
 
-    await db_session.refresh(product_model)
-    assert product_model.status is ProductModelStatus.ARCHIVED
+    product_model_repo = ProductModelRepository(db_session)
+    deleted = await product_model_repo.get_by_id(product_model.id)
+    assert deleted is None
+
+    brand_repo = BrandRepository(db_session)
+    assert await brand_repo.get_by_id(brand.id) is None
 
