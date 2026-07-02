@@ -276,6 +276,64 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         )
         return inventory_item
 
+    async def count_at_location(self, location_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(InventoryItem.current_location_id == location_id)
+        )
+        result = await self._session.execute(statement)
+        return int(result.scalar_one() or 0)
+
+    async def reassign_location_for_deletion(
+        self,
+        inventory_item: InventoryItem,
+        *,
+        to_location_id: int,
+        actor: AuditActor,
+    ) -> InventoryItem:
+        if to_location_id == inventory_item.current_location_id:
+            return inventory_item
+
+        location = await self._session.get(Location, to_location_id)
+        if location is None:
+            raise LocationNotFoundError(to_location_id)
+
+        old_location_id = inventory_item.current_location_id
+        inventory_item.current_location_id = to_location_id
+        await self._session.flush()
+        await self._session.refresh(inventory_item)
+        await AuditRecorder(self._session).record_inventory_location_change(
+            inventory_item,
+            old_location_id=old_location_id,
+            new_location_id=to_location_id,
+            actor=actor,
+        )
+        return inventory_item
+
+    async def transfer_all_for_location_deletion(
+        self,
+        from_location_id: int,
+        to_location_id: int,
+        *,
+        actor: AuditActor,
+    ) -> int:
+        if from_location_id == to_location_id:
+            raise SameLocationMovementError()
+
+        statement = select(InventoryItem).where(
+            InventoryItem.current_location_id == from_location_id,
+        )
+        result = await self._session.execute(statement)
+        items = list(result.scalars().all())
+        for item in items:
+            await self.reassign_location_for_deletion(
+                item,
+                to_location_id=to_location_id,
+                actor=actor,
+            )
+        return len(items)
+
     async def count_movable_at_location(self, location_id: int) -> int:
         statement = (
             select(func.count())

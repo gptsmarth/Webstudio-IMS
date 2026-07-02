@@ -39,8 +39,6 @@ export function TallyPage(): JSX.Element {
               saving={tallySettings.saving}
               onSave={tallySettings.saveTally}
               onSaved={tallySettings.refresh}
-              showStatus={false}
-              showManualSync={false}
             />
           )}
         </div>
@@ -52,7 +50,6 @@ export function TallyPage(): JSX.Element {
             loading={loading}
             onSync={() => void triggerTallySync()}
             syncing={syncingTally}
-            fullPage
           />
         </div>
       </div>

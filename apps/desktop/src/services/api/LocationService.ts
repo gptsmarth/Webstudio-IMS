@@ -30,12 +30,13 @@ export interface UpdateLocationRequest {
   branch_id?: number | null;
 }
 
-export interface LocationArchivePreview {
+export interface LocationDeletePreview {
+  inventory_count: number;
   movable_inventory_count: number;
   requires_transfer: boolean;
 }
 
-export interface ArchiveLocationRequest {
+export interface DeleteLocationRequest {
   transfer_to_location_id?: number | null;
 }
 
@@ -61,18 +62,13 @@ export class LocationService {
     return client.patch<Location>(`/api/v1/locations/${id}`, data);
   }
 
-  static async archiveLocation(id: number, data: ArchiveLocationRequest = {}): Promise<Location> {
+  static async getDeletePreview(id: number): Promise<LocationDeletePreview> {
     const client = await ApiClientProvider.getClient();
-    return client.post<Location>(`/api/v1/locations/${id}/archive`, data);
+    return client.get<LocationDeletePreview>(`/api/v1/locations/${id}/delete-preview`);
   }
 
-  static async getArchivePreview(id: number): Promise<LocationArchivePreview> {
+  static async deleteLocation(id: number, data: DeleteLocationRequest = {}): Promise<void> {
     const client = await ApiClientProvider.getClient();
-    return client.get<LocationArchivePreview>(`/api/v1/locations/${id}/archive-preview`);
-  }
-
-  static async restoreLocation(id: number): Promise<Location> {
-    const client = await ApiClientProvider.getClient();
-    return client.post<Location>(`/api/v1/locations/${id}/restore`, {});
+    await client.delete(`/api/v1/locations/${id}`, data);
   }
 }

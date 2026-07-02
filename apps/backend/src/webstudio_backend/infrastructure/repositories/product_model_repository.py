@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Select, inspect, select, text
+from sqlalchemy import Select, func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
@@ -17,6 +17,7 @@ from webstudio_backend.infrastructure.database.enums import (
     StorageUnit,
 )
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 from webstudio_backend.infrastructure.database.repositories.pagination import (
     PageParams,
@@ -267,6 +268,15 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
 
     async def delete(self, product_model: ProductModel) -> None:
         await self.force_delete(product_model)
+
+    async def count_inventory_items(self, product_model_id: uuid.UUID) -> int:
+        statement = (
+            select(func.count())
+            .select_from(InventoryItem)
+            .where(InventoryItem.product_model_id == product_model_id)
+        )
+        result = await self._session.execute(statement)
+        return int(result.scalar_one() or 0)
 
     async def force_delete(self, product_model: ProductModel) -> None:
         await super().delete(product_model)

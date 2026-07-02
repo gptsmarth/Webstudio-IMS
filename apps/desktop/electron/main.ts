@@ -1,6 +1,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import { MdnsBrowser } from './mdns-discovery';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -8,6 +11,8 @@ if (!gotTheLock) {
   app.quit();
 } else {
   let mainWindow: BrowserWindow | null = null;
+  const mdnsBrowser = new MdnsBrowser();
+  let discoveredServers: unknown[] = [];
   const API_BASE_URL = process.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
   const APP_MODE = (process.env.NODE_ENV as 'development' | 'production' | 'test') ?? 'development';
 
@@ -197,6 +202,39 @@ if (!gotTheLock) {
     writeJson(getStoragePath(), storage);
   });
 
+  ipcMain.handle('network:startDiscovery', () => {
+    discoveredServers = [];
+    mdnsBrowser.start((servers) => {
+      discoveredServers = servers;
+    });
+  });
+
+  ipcMain.handle('network:stopDiscovery', () => {
+    mdnsBrowser.stop();
+  });
+
+  ipcMain.handle('network:getDiscoveredServers', () => discoveredServers);
+
+  ipcMain.handle('network:resolveHost', async (_event, host: string) => {
+    const trimmed = host.trim();
+    try {
+      const result = await dns.lookup(trimmed, { family: 4 });
+      return {
+        host: trimmed,
+        resolvedIp: result.address,
+        resolved: true,
+        message: `Resolved ${trimmed} to ${result.address}.`,
+      };
+    } catch (error) {
+      return {
+        host: trimmed,
+        resolvedIp: null,
+        resolved: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
   app.whenReady().then(() => {
     writeLog('Main', 'info', 'Application bootstrap started');
     createWindow();
@@ -210,6 +248,7 @@ if (!gotTheLock) {
 
   app.on('window-all-closed', () => {
     writeLog('Main', 'info', 'All windows closed');
+    mdnsBrowser.stop();
     if (process.platform !== 'darwin') {
       app.quit();
     }

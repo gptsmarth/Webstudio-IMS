@@ -23,6 +23,7 @@ from webstudio_backend.api.schemas.user import (
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import DbSessionDep, get_app_settings
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
+from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.repositories.exceptions import (
     AccountDisabledError,
     AccountLockedError,
@@ -31,6 +32,7 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     InvalidRefreshTokenError,
     MainAdminNotFoundError,
     RefreshTokenReuseError,
+    SessionIdleTimeoutError,
     SystemNotInitializedError,
 )
 from webstudio_backend.services.authentication_service import AuthenticationService
@@ -106,6 +108,12 @@ async def refresh_token_endpoint(
     service = AuthenticationService(db_session, settings)
     try:
         pair = await service.refresh(refresh_token=body.refresh_token)
+    except SessionIdleTimeoutError as exc:
+        raise AppError(
+            "SESSION_IDLE_TIMEOUT",
+            str(exc),
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        ) from exc
     except RefreshTokenReuseError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except (InvalidRefreshTokenError, AccountDisabledError) as exc:

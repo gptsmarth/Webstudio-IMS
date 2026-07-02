@@ -1,0 +1,36 @@
+---
+description: Milestone 12 packaging and branding — extend-only, no UI redesign
+globs:
+  - apps/desktop/**
+  - apps/mobile_flutter/**
+  - scripts/**
+  - .github/workflows/**
+  - docs/milestones/m12/**
+alwaysApply: false
+---
+
+# Milestone 12 — Packaging & Branding
+
+Read **docs/milestones/m12/M12_GLOBAL_RULES.md** before any M12 task.
+
+## Hard constraints
+
+- **Do NOT** redesign Desktop or Flutter UI (layouts, workflows, navigation).
+- **Do NOT** rewrite completed business modules — extend with build config, assets, scripts only.
+- **Release artifacts only:** Windows Setup.exe, macOS DMG, Android APK, iOS Release/IPA config.
+- **No** Play Store or App Store publishing assets.
+- **Branding:** WEBSTUDIO dark logo on white — source from `apps/desktop/public/assets/webstudio/`.
+- DB changes require safe Alembic migrations; maintain backward compatibility.
+
+## Allowed changes
+
+- `electron-builder` / installer config
+- Flutter launcher icons & native splash (asset generation)
+- Version bump scripts, CI `release.yml`
+- Production env gates (demo mode, CSP)
+- Documentation in `docs/milestones/m12/`
+
+## Reference
+
+- Branding matrix: `docs/milestones/m12/BRANDING_PACKAGING_MATRIX.md`
+- Release checklist: `docs/milestones/m11y/RELEASE_CHECKLIST.md`

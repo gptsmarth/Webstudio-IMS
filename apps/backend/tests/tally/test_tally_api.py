@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+import uuid
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,28 @@ async def api_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, No
 async def test_tally_dashboard_requires_auth(api_client: AsyncClient) -> None:
     response = await api_client.get("/api/v1/integrations/tally/dashboard")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_tally_health_endpoint(api_client: AsyncClient, initialized_system) -> None:
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    response = await api_client.get("/api/v1/integrations/tally/health", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert "status" in payload
+    assert "configured_host" in payload
+    assert "port" in payload
+
+
+@pytest.mark.asyncio
+async def test_tally_connection_test_returns_stages(api_client: AsyncClient, initialized_system) -> None:
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    response = await api_client.post("/api/v1/integrations/tally/connection/test", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert "stages" in payload
+    assert "message" in payload
+    assert "connected" in payload
 
 
 @pytest.mark.asyncio
@@ -84,27 +107,33 @@ async def test_tally_xml_processing_creates_sale(
 ) -> None:
     settings = SystemSettingRepository(db_session)
     await settings.set_value("tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=1)
+    company_name = f"WEBSTUDIO-TEST-{uuid.uuid4().hex[:8]}"
     await settings.set_value(
         "tally_company_name",
-        "WEBSTUDIO",
+        company_name,
         value_type=SettingValueType.STRING,
         updated_by_user_id=1,
     )
 
     inventory_repo = InventoryItemRepository(db_session)
-    await inventory_repo.create(
-        serial_number="SN-TALLY-001",
-        product_model_id=product_model.id,
-        color="Black",
-        current_location_id=location.id,
-        status=InventoryStatus.AVAILABLE,
-    )
+    existing_item = await inventory_repo.find_by_serial_number("SN-TALLY-001")
+    if existing_item is None:
+        await inventory_repo.create(
+            serial_number="SN-TALLY-001",
+            product_model_id=product_model.id,
+            color="Black",
+            current_location_id=location.id,
+            status=InventoryStatus.AVAILABLE,
+        )
+    else:
+        existing_item.status = InventoryStatus.AVAILABLE
+        await db_session.flush()
     await db_session.commit()
 
     result = await TallySyncService(db_session).process_voucher_xml(
         SAMPLE_VOUCHER_XML,
         correlation_id="test-correlation",
-        company_name="WEBSTUDIO",
+        company_name=company_name,
     )
     await db_session.commit()
 

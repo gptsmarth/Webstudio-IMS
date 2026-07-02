@@ -109,13 +109,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           ),
         ),
         if (workspace.tab == CatalogueTab.locations)
-          CheckboxListTile(
-            title: const Text('Include archived'),
-            value: workspace.includeArchived,
-            onChanged: (v) => controller.setIncludeArchived(v ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          ),
+          const SizedBox.shrink(),
         if (workspace.loading) const LinearProgressIndicator(minHeight: 2),
         if (workspace.error != null)
           Material(
@@ -177,7 +171,7 @@ class _BrandsList extends ConsumerWidget {
                         builder: (context) => AlertDialog(
                           title: Text('Delete ${brand.name}?'),
                           content: const Text(
-                            'This permanently removes the brand and all of its product models and serial numbers still in stock. Past sales and audit history are preserved.',
+                            'This permanently removes the brand. Deletion is blocked while product models or inventory still reference it. Past sales, reports, audit history, and backups are preserved.',
                           ),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -243,15 +237,56 @@ class _LocationsList extends ConsumerWidget {
                   onSelected: (action) async {
                     final ctrl = ref.read(catalogueWorkspaceProvider.notifier);
                     if (action == 'edit') await showEditLocationSheet(context, ref, location, workspace.locations);
-                    if (action == 'archive') await ctrl.archiveLocation(location.id);
-                    if (action == 'restore') await ctrl.restoreLocation(location.id);
+                    if (action == 'delete') {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text('Delete ${location.name}?'),
+                          content: const Text(
+                            'This permanently removes the location. Inventory must be transferred first when items remain at this location. This action cannot be undone.',
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
+                          ],
+                        ),
+                      );
+                      if (!context.mounted || confirmed != true) return;
+                      final repo = ref.read(catalogueRepositoryProvider);
+                      final preview = await repo.getLocationDeletePreview(location.id);
+                      if (!context.mounted) return;
+                      if (preview.requiresTransfer) {
+                        final destinations = workspace.locations.where((l) => l.id != location.id).toList();
+                        if (destinations.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Add another location before deleting this one.')),
+                          );
+                          return;
+                        }
+                        final transferTo = await showDialog<int>(
+                          context: context,
+                          builder: (context) => SimpleDialog(
+                            title: Text('Transfer ${preview.inventoryCount} item(s)'),
+                            children: destinations
+                                .map(
+                                  (dest) => SimpleDialogOption(
+                                    onPressed: () => Navigator.pop(context, dest.id),
+                                    child: Text(dest.name),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        );
+                        if (!context.mounted || transferTo == null) return;
+                        await ctrl.deleteLocation(location.id, transferToLocationId: transferTo);
+                      } else {
+                        await ctrl.deleteLocation(location.id);
+                      }
+                    }
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    if (location.isActive)
-                      const PopupMenuItem(value: 'archive', child: Text('Archive'))
-                    else
-                      const PopupMenuItem(value: 'restore', child: Text('Restore')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
                   ],
                 ),
             ],

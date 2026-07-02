@@ -18,6 +18,7 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     RefreshTokenReuseError,
+    SessionIdleTimeoutError,
     SystemNotInitializedError,
 )
 from webstudio_backend.infrastructure.database.enums import NotificationSeverity
@@ -169,6 +170,28 @@ class AuthenticationService:
         user = await self._users.get_by_id(stored.user_id)
         if user is None or user.status.value == "disabled" or user.archived_at is not None:
             raise AccountDisabledError()
+
+        timeout_minutes = await self._system_settings.get_int("session_timeout_minutes", default=15)
+        last_activity = stored.last_used_at or stored.created_at
+        idle_delta = datetime.now(UTC) - last_activity
+        if idle_delta > timedelta(minutes=timeout_minutes):
+            if user is not None:
+                await self._refresh_tokens.revoke(stored)
+                await self._recorder.record_session_idle_timeout(
+                    user,
+                    session_id=stored.id,
+                    idle_minutes=timeout_minutes,
+                )
+                await self._login_events.record(
+                    username=user.username,
+                    success=False,
+                    user_id=user.id,
+                    failure_reason="session_idle_timeout",
+                    ip_address=stored.ip_address,
+                    user_agent=stored.user_agent,
+                    device_label=stored.device_label,
+                )
+            raise SessionIdleTimeoutError()
 
         await self._refresh_tokens.touch(stored)
 

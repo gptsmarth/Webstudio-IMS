@@ -19,11 +19,13 @@ class RetryQueue {
   final ConflictDetector _conflicts;
   final int maxAttempts;
 
-  Future<RetryQueueResult> processAll() async {
+  Future<RetryQueueResult> processAll({void Function(int completed, int total)? onProgress}) async {
     final operations = _store.listAll();
+    final actionable = operations.where((op) => !op.hasConflict && op.attemptCount < maxAttempts).length;
     var applied = 0;
     var failed = 0;
     var conflicts = 0;
+    var processed = 0;
 
     for (final operation in operations) {
       if (operation.hasConflict) {
@@ -44,6 +46,8 @@ class RetryQueue {
         }
         await _store.remove(operation.id);
         applied += 1;
+        processed += 1;
+        onProgress?.call(processed, actionable);
       } catch (error) {
         await _store.update(
           operation.copyWith(
@@ -52,6 +56,8 @@ class RetryQueue {
           ),
         );
         failed += 1;
+        processed += 1;
+        onProgress?.call(processed, actionable);
       }
     }
 

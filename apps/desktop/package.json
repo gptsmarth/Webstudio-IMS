@@ -14,6 +14,7 @@
     "@webstudio/api-client": "workspace:*",
     "@webstudio/shared-kernel": "workspace:*",
     "@webstudio/ui-components": "workspace:*",
+    "bonjour-service": "^1.2.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

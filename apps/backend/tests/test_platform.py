@@ -35,6 +35,11 @@ def test_api_version(client: TestClient) -> None:
     assert "build_version" in body["data"]
     assert "min_desktop_version" in body["data"]
     assert "min_mobile_version" in body["data"]
+    assert "mobile" in body["data"]
+    mobile = body["data"]["mobile"]
+    assert mobile["latest_version"]
+    assert mobile["min_supported_version"]
+    assert mobile["release_channel"] in {"stable", "beta"}
     assert body["request_id"]
     assert body["correlation_id"]
     assert body["timestamp"]

@@ -35,6 +35,17 @@ def resolve_build_version(settings: Settings) -> str:
 
 async def build_version_payload(session: AsyncSession, settings: Settings) -> dict[str, object]:
     schema_version = await resolve_schema_version(session)
+    repo = SystemSettingRepository(session)
+    latest_mobile = (
+        await repo.get_string("mobile_latest_version") or settings.app_version
+    ).strip()
+    release_date = (await repo.get_string("mobile_release_date") or "").strip()
+    release_notes = (await repo.get_string("mobile_release_notes") or "").strip()
+    apk_url = (await repo.get_string("mobile_apk_download_url") or "").strip()
+    channel_raw = (await repo.get_string("mobile_release_channel") or "stable").strip().lower()
+    release_channel = channel_raw if channel_raw in {"stable", "beta"} else "stable"
+    min_mobile = (settings.min_mobile_version or settings.min_client_version).strip()
+
     return {
         "backend_version": settings.app_version,
         "schema_version": schema_version,
@@ -42,8 +53,16 @@ async def build_version_payload(session: AsyncSession, settings: Settings) -> di
         "build_version": resolve_build_version(settings),
         "environment": settings.app_env,
         "min_desktop_version": settings.min_desktop_version or settings.min_client_version,
-        "min_mobile_version": settings.min_mobile_version or settings.min_client_version,
+        "min_mobile_version": min_mobile,
         "min_client_version": settings.min_client_version,
+        "mobile": {
+            "latest_version": latest_mobile,
+            "min_supported_version": min_mobile,
+            "release_date": release_date or None,
+            "release_notes": release_notes or None,
+            "apk_download_url": apk_url or None,
+            "release_channel": release_channel,
+        },
     }
 
 

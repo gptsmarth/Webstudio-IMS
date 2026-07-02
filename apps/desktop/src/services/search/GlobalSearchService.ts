@@ -63,7 +63,7 @@ async function searchSales(query: string, limit = 5): Promise<SearchResult[]> {
     group: 'Sales',
     title: sale.invoice_number,
     subtitle: `${sale.customer_name ?? 'Customer'} · ${sale.serial_number}`,
-    inventoryId: sale.inventory_item_id,
+    inventoryId: sale.inventory_item_id ?? undefined,
   }));
 }
 

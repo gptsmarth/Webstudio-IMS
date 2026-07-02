@@ -7,10 +7,13 @@ from datetime import date, datetime
 import httpx
 
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
+from webstudio_backend.integrations.tally.connectivity import map_exception_to_user_message
 
 
 class TallyConnectionError(Exception):
-    pass
+    def __init__(self, message: str, *, user_message: str | None = None) -> None:
+        super().__init__(message)
+        self.user_message = user_message or message
 
 
 class TallyXmlClient:
@@ -24,6 +27,10 @@ class TallyXmlClient:
     def base_url(self) -> str:
         return self._base_url
 
+    @property
+    def resolved_host(self) -> str:
+        return self._host
+
     async def post_xml(self, payload: str) -> str:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -34,7 +41,7 @@ class TallyXmlClient:
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise TallyConnectionError(str(exc)) from exc
+            raise TallyConnectionError(str(exc), user_message=map_exception_to_user_message(exc)) from exc
         return response.text
 
     async def test_connection(self) -> bool:

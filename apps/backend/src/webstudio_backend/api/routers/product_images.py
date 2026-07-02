@@ -24,18 +24,13 @@ from webstudio_backend.services.product_image_service import (
     USER_AGENT,
     is_safe_public_https_url,
     validate_image_url,
+    validate_product_image_upload,
 )
-from webstudio_backend.services.web_image_scraper import (
-    _extension_for_content_type,
-    find_public_assets_dir,
-)
+from webstudio_backend.services.web_image_scraper import find_public_assets_dir
 
 router = APIRouter(prefix="/api/v1/product-images", tags=["product-images"])
 
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-_ALLOWED_CONTENT_TYPES = frozenset(
-    {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"},
-)
 
 
 def _serve_managed_asset(url: str) -> Response:
@@ -152,23 +147,26 @@ async def upload_product_image(
     if model is None:
         raise AppError("NOT_FOUND", "Product model not found.", status_code=status.HTTP_404_NOT_FOUND)
 
-    content_type = (file.content_type or "").split(";")[0].strip().lower()
-    if content_type not in _ALLOWED_CONTENT_TYPES:
-        raise AppError(
-            "VALIDATION_ERROR",
-            "Only JPEG, PNG, WebP, and GIF images are supported.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
     payload = await file.read()
-    if not payload:
-        raise AppError("VALIDATION_ERROR", "Uploaded file is empty.", status_code=status.HTTP_400_BAD_REQUEST)
     if len(payload) > _MAX_UPLOAD_BYTES:
         raise AppError(
             "VALIDATION_ERROR",
             "Image must be 5 MB or smaller.",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    try:
+        image_format = validate_product_image_upload(
+            filename=file.filename,
+            content_type=file.content_type,
+            payload=payload,
+        )
+    except ValueError as exc:
+        raise AppError(
+            "VALIDATION_ERROR",
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        ) from exc
 
     assets_root = find_public_assets_dir()
     if assets_root is None:
@@ -180,8 +178,7 @@ async def upload_product_image(
 
     folder = assets_root / "product-images"
     folder.mkdir(parents=True, exist_ok=True)
-    ext = _extension_for_content_type(content_type)
-    filename = f"{product_model_id}.{ext}"
+    filename = f"{product_model_id}.{image_format}"
     (folder / filename).write_bytes(payload)
     image_url = f"/assets/product-images/{filename}"
 

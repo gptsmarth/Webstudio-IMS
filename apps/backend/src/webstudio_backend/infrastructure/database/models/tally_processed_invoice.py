@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -29,6 +30,9 @@ class TallyProcessedInvoice(Base, PrimaryKeyMixin, TimestampMixin):
     tally_voucher_number: Mapped[str] = mapped_column(String(128), nullable=False)
     printed_invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     voucher_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    voucher_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    party_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    voucher_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     processing_status: Mapped[TallyProcessingStatus] = mapped_column(
         Enum(
             TallyProcessingStatus,

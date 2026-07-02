@@ -124,7 +124,7 @@ export function NotificationsPage(): JSX.Element {
               {canManage && !item.is_resolved && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => void center.archive(item.id)}>
                   <Archive size={14} aria-hidden />
-                  Archive
+                  Resolve
                 </button>
               )}
             </div>

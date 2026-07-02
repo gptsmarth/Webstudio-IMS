@@ -53,7 +53,15 @@ class Sale(Base, PrimaryKeyMixin):
     tally_voucher_guid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tally_master_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tally_voucher_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    mapped_location_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    mapped_location_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.locations.id",
+            name="fk_sales_mapped_location",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)

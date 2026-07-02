@@ -98,12 +98,13 @@ describe('password strength', () => {
 describe('permission viewer grouping', () => {
   it('marks granted permissions from backend payload', () => {
     const modules = buildPermissionModules(['inventory:view', 'sales:view'], { roleLabel: 'Salesperson' });
+    const stock = modules.find((group) => group.moduleId === 'stock');
     const inventory = modules.find((group) => group.moduleId === 'inventory');
     const sales = modules.find((group) => group.moduleId === 'sales');
-    expect(inventory?.capabilities.find((cap) => cap.label === 'View')?.granted).toBe(true);
+    expect(stock?.capabilities.find((cap) => cap.label === 'View stock tab')?.granted).toBe(true);
     expect(inventory?.capabilities.find((cap) => cap.label === 'Create')?.granted).toBe(false);
     expect(sales?.capabilities.find((cap) => cap.label === 'View')?.granted).toBe(true);
-    expect(inventory?.capabilities[0]?.inheritedFrom).toBe('Salesperson');
+    expect(stock?.capabilities[0]?.inheritedFrom).toBe('Salesperson');
   });
 
   it('counts granted permissions from role payload', () => {

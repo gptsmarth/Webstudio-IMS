@@ -15,6 +15,7 @@ import '../data/settings_repository.dart';
 import '../data/settings_write_repository.dart';
 import '../domain/settings_models.dart';
 import '../presentation/settings_write_panel.dart';
+import '../presentation/version_about_section.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -57,7 +58,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _requestPermission(DevicePermissionKind kind) async {
-    await ref.read(devicePermissionsProvider).ensure(kind);
+    await ref.read(devicePermissionsProvider).requestWithContext(context, kind);
     await _refreshPermissions();
   }
 
@@ -244,6 +245,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const Divider(),
           ],
+          const VersionAboutSection(),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Sign out'),

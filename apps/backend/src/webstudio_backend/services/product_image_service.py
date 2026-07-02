@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -172,6 +173,97 @@ def _content_looks_like_image(content: bytes, content_type: str) -> bool:
     if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
         return True
     return False
+
+
+UPLOAD_ALLOWED_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp"})
+UPLOAD_ALLOWED_MIME_TYPES = frozenset(
+    {"image/jpeg", "image/jpg", "image/png", "image/webp"},
+)
+_UPLOAD_MIME_TO_FORMAT = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
+
+
+def _extension_from_filename(filename: str | None) -> str | None:
+    if not filename:
+        return None
+    ext = Path(filename).suffix.lower()
+    if ext == ".jpeg":
+        return "jpg"
+    if ext == ".jpg":
+        return "jpg"
+    if ext == ".png":
+        return "png"
+    if ext == ".webp":
+        return "webp"
+    return None
+
+
+def detect_upload_image_format(payload: bytes) -> str | None:
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if len(payload) >= 12 and payload[:4] == b"RIFF" and payload[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def _verify_image_decodable(payload: bytes) -> None:
+    from io import BytesIO
+
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(BytesIO(payload)) as image:
+            image.verify()
+        with Image.open(BytesIO(payload)) as image:
+            image.load()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValueError("Uploaded file is not a valid image.") from exc
+
+
+def validate_product_image_upload(
+    *,
+    filename: str | None,
+    content_type: str | None,
+    payload: bytes,
+) -> str:
+    """Validate an uploaded product image and return the normalized file extension."""
+    if not payload:
+        raise ValueError("Uploaded file is empty.")
+
+    extension_format = _extension_from_filename(filename)
+    if extension_format is None:
+        raise ValueError("Unsupported file extension. Allowed: JPG, JPEG, PNG, WEBP.")
+
+    raw_filename = (filename or "").strip()
+    if raw_filename and Path(raw_filename).suffix.lower() not in UPLOAD_ALLOWED_EXTENSIONS:
+        raise ValueError("Unsupported file extension. Allowed: JPG, JPEG, PNG, WEBP.")
+
+    mime = (content_type or "").split(";")[0].strip().lower()
+    if mime not in UPLOAD_ALLOWED_MIME_TYPES:
+        raise ValueError("Unsupported content type. Allowed: JPEG, PNG, WEBP.")
+
+    mime_format = _UPLOAD_MIME_TO_FORMAT.get(mime)
+    if mime_format is None or mime_format != extension_format:
+        raise ValueError("File extension and content type do not match.")
+
+    magic_format = detect_upload_image_format(payload)
+    if magic_format is None:
+        raise ValueError("File signature is not a supported image format.")
+
+    if magic_format != extension_format:
+        raise ValueError("File signature does not match the declared image type.")
+
+    if payload[:2] == b"MZ" or payload[:4] == b"\x7fELF":
+        raise ValueError("Executable files are not allowed.")
+
+    _verify_image_decodable(payload)
+    return magic_format
 
 
 async def validate_image_url(url: str, *, client: httpx.AsyncClient | None = None) -> bool:

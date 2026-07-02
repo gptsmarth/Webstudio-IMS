@@ -14,12 +14,20 @@ from webstudio_backend.infrastructure.repositories import BrandRepository, Locat
 
 @pytest_asyncio.fixture
 async def brand(db_session: AsyncSession) -> Brand:
-    return await BrandRepository(db_session).create("ASUS")
+    repo = BrandRepository(db_session)
+    existing = await repo.get_by_name("ASUS")
+    if existing is not None:
+        return existing
+    return await repo.create("ASUS")
 
 
 @pytest_asyncio.fixture
 async def location(db_session: AsyncSession) -> Location:
-    return await LocationRepository(db_session).create(
+    repo = LocationRepository(db_session)
+    existing = await repo.get_by_name("Warehouse")
+    if existing is not None:
+        return existing
+    return await repo.create(
         "Warehouse",
         location_type=LocationType.WAREHOUSE,
     )
@@ -27,9 +35,14 @@ async def location(db_session: AsyncSession) -> Location:
 
 @pytest_asyncio.fixture
 async def product_model(db_session: AsyncSession, brand: Brand) -> ProductModel:
-    return await ProductModelRepository(db_session).create(
+    repo = ProductModelRepository(db_session)
+    model_number = "X1502ZA-EJ541WS"
+    for existing in await repo.list_all_for_brand(brand.id):
+        if existing.model_number == model_number:
+            return existing
+    return await repo.create(
         brand_id=brand.id,
-        model_number="X1502ZA-EJ541WS",
+        model_number=model_number,
         model_name="Vivobook 15",
         cpu="Intel Core i5-1235U",
         ram_gb=16,

@@ -118,7 +118,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
 
   const handleRowAction = async (action: CatalogueRowAction, brand: Brand) => {
     if (!canWrite) return;
-    if (action === 'archive' && !confirmCatalogueRemoval(brand.name, 'brand')) return;
+    if (action === 'delete' && !confirmCatalogueRemoval(brand.name, 'brand')) return;
 
     setMenu(null);
     setActionLoading(true);
@@ -127,7 +127,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
       if (action === 'edit') {
         setEditing(brand);
         setDialogOpen(true);
-      } else if (action === 'archive') {
+      } else if (action === 'delete') {
         await BrandService.deleteBrand(brand.id);
         await refresh();
         onDataChange();
@@ -228,8 +228,6 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
         <CatalogueRowActionsMenu
           label={menu.brand.name}
           canWrite={canWrite}
-          isArchived={false}
-          permanentDelete
           anchorRect={menu.rect}
           onClose={() => setMenu(null)}
           onAction={(action) => void handleRowAction(action, menu.brand)}

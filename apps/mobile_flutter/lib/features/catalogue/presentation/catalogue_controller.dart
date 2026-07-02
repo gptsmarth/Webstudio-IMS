@@ -92,7 +92,7 @@ class CatalogueWorkspaceState {
   }
 
   List<CatalogueLocation> get visibleLocations {
-    var rows = locations.where((l) => includeArchived || l.isActive).toList();
+    var rows = [...locations];
     if (locationTypeFilter != null) {
       rows = rows.where((l) => l.locationType == locationTypeFilter).toList();
     }
@@ -258,21 +258,10 @@ class CatalogueWorkspaceController extends StateNotifier<CatalogueWorkspaceState
     }
   }
 
-  Future<void> archiveLocation(int id) async {
+  Future<void> deleteLocation(int id, {int? transferToLocationId}) async {
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
-      await _repo.archiveLocation(id);
-      await load();
-      state = state.copyWith(actionInProgress: false);
-    } catch (error) {
-      state = state.copyWith(actionInProgress: false, error: error.toString());
-    }
-  }
-
-  Future<void> restoreLocation(int id) async {
-    state = state.copyWith(actionInProgress: true, clearError: true);
-    try {
-      await _repo.restoreLocation(id);
+      await _repo.deleteLocation(id, transferToLocationId: transferToLocationId);
       await load();
       state = state.copyWith(actionInProgress: false);
     } catch (error) {

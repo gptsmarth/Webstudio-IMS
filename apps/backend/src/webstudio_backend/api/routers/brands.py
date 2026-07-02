@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
+from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
-    BrandsArchiveDep,
     BrandsCreateDep,
+    BrandsDeleteDep,
     BrandsEditDep,
     BrandsOrInventoryViewDep,
+    BrandsViewDep,
 )
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.brand import BrandResponse, CreateBrandRequest, UpdateBrandRequest
+from webstudio_backend.api.schemas.catalogue_deletion import BrandDeletePreviewResponse
 from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
@@ -117,6 +120,23 @@ async def get_brand(
     return _envelope(request, BrandResponse.from_model(brand).model_dump())
 
 
+@router.get("/{brand_id}/delete-preview")
+async def brand_delete_preview(
+    request: Request,
+    brand_id: int,
+    current: BrandsDeleteDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    del current
+    repo = BrandRepository(db_session)
+    brand = await repo.get_by_id(brand_id)
+    if not brand:
+        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+
+    preview = await BrandDeletionService(db_session).preview(brand)
+    return _envelope(request, BrandDeletePreviewResponse.model_validate(preview).model_dump())
+
+
 @router.patch("/{brand_id}")
 async def update_brand(
     request: Request,
@@ -149,7 +169,7 @@ async def update_brand(
 @router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_brand(
     brand_id: int,
-    current: BrandsArchiveDep,
+    current: BrandsDeleteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> None:
     repo = BrandRepository(db_session)
@@ -157,29 +177,8 @@ async def delete_brand(
     if not brand:
         raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
 
-    await BrandDeletionService(db_session).delete_brand(brand, actor=_actor(current))
-    await db_session.commit()
-
-
-@router.post("/{brand_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
-async def archive_brand(
-    brand_id: int,
-    current: BrandsArchiveDep,
-    db_session: AsyncSession = DbSessionDep,
-) -> None:
-    """Deprecated alias — permanently deletes the brand and its product models."""
-    await delete_brand(brand_id, current, db_session)
-
-
-@router.post("/{brand_id}/restore", status_code=status.HTTP_410_GONE)
-async def restore_brand(
-    request: Request,
-    brand_id: int,
-    current: BrandsArchiveDep,
-) -> dict:
-    del request, brand_id, current
-    raise AppError(
-        "GONE",
-        "Brand restore is no longer supported. Deleted brands cannot be recovered.",
-        status_code=status.HTTP_410_GONE,
-    )
+    try:
+        await BrandDeletionService(db_session).delete_brand(brand, actor=_actor(current))
+        await db_session.commit()
+    except Exception as exc:
+        raise_catalogue_deletion_error(exc)

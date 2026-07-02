@@ -79,7 +79,3 @@ final backupAdminDashboardProvider = FutureProvider.autoDispose<BackupAdminDashb
 final tallyStatusProvider = FutureProvider.autoDispose<TallyStatusSummary>((ref) async {
   return ref.watch(settingsRepositoryProvider).getTallyStatus();
 });
-
-final tallyDashboardProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  return ref.watch(settingsRepositoryProvider).getTallyDashboard();
-});

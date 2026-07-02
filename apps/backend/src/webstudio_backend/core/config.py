@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
+    mdns_enabled: bool = True
+    mdns_server_name: str = ""
+
     database_url: str = Field(
         default="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_dev",
     )
@@ -75,6 +78,10 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.app_env == "test"
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "production"
 
 
 @lru_cache

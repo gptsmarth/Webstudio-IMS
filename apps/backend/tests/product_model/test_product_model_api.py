@@ -127,15 +127,6 @@ async def test_product_model_rbac_and_crud(
     resp = await api_client.get(f"/api/v1/product-models/{pm_id}", headers=salesperson_headers)
     assert resp.status_code == 404
 
-    # Deprecated archive alias still deletes
-    resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
-    assert resp.status_code == 201
-    alias_id = resp.json()["data"]["id"]
-    resp = await api_client.post(f"/api/v1/product-models/{alias_id}/archive", headers=admin_headers)
-    assert resp.status_code == 204
-    resp = await api_client.get(f"/api/v1/product-models/{alias_id}", headers=salesperson_headers)
-    assert resp.status_code == 404
-
 
 @pytest.mark.asyncio
 async def test_create_product_model_validates_brand(

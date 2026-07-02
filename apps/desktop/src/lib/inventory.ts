@@ -101,5 +101,5 @@ export function canEditProductModels(permissions: string[]): boolean {
 }
 
 export function canArchiveProductModels(permissions: string[]): boolean {
-  return PermissionService.from(permissions).has(P.productModels.archive);
+  return PermissionService.from(permissions).hasAny(P.productModels.delete, 'product_models:archive');
 }

@@ -43,6 +43,7 @@ BACKUP_DATABASE_TABLES = (
     "tally_processed_invoice",
     "tally_processed_invoice_line",
     "tally_sync_log",
+    "tally_sync_history",
     "users",
 )
 

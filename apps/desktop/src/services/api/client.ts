@@ -126,8 +126,8 @@ export class RetryingApiClient {
     return this.unwrap<T>(res);
   }
 
-  async delete<T>(path: string): Promise<T> {
-    const res = await this.executeWithRetry(`DELETE ${path}`, () => this.inner.delete<unknown>(path));
+  async delete<T>(path: string, data?: unknown): Promise<T> {
+    const res = await this.executeWithRetry(`DELETE ${path}`, () => this.inner.delete<unknown>(path, data));
     return this.unwrap<T>(res);
   }
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,9 +39,17 @@ from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
     TallyProcessedInvoiceRepository,
 )
+from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import TallySyncHistoryRepository
 from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import TallySyncLogRepository
-from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES, VOUCHER_TYPE_STORE_MAP
+from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS, MONITORED_VOUCHER_TYPES, VOUCHER_TYPE_STORE_MAP
+from webstudio_backend.integrations.tally.incremental_sync import (
+    REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
+    clamp_sync_interval_seconds,
+    resolve_incremental_from_date,
+)
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
+from webstudio_backend.integrations.tally.connectivity import map_exception_to_user_message
+from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError, TallyXmlClient
 from webstudio_backend.integrations.tally.xml_parser import models_equivalent, parse_vouchers_xml
 from webstudio_backend.services.notification_service import NotificationService
@@ -53,6 +61,9 @@ _sync_lock = asyncio.Lock()
 @dataclass(slots=True)
 class TallySyncCounters:
     vouchers_processed: int = 0
+    invoices_checked: int = 0
+    invoices_imported: int = 0
+    invoices_skipped: int = 0
     inventory_entries_processed: int = 0
     sales_created: int = 0
     duplicates: int = 0
@@ -81,6 +92,7 @@ class TallySyncService:
         self._processed_invoices = TallyProcessedInvoiceRepository(session)
         self._processed_lines = TallyProcessedInvoiceLineRepository(session)
         self._sync_logs = TallySyncLogRepository(session)
+        self._sync_history = TallySyncHistoryRepository(session)
         self._inventory = InventoryItemRepository(session)
         self._sales = SaleRepository(session)
         self._locations = LocationRepository(session)
@@ -114,13 +126,14 @@ class TallySyncService:
         host = await self._get_str("tally_host", "127.0.0.1")
         port = await self._get_str("tally_port", "9000")
         company = await self._get_str("tally_company_name", "WEBSTUDIO")
-        interval = await self._get_int("tally_sync_interval_seconds", 1800)
+        interval = clamp_sync_interval_seconds(
+            await self._get_int("tally_sync_interval_seconds", DEFAULT_SYNC_INTERVAL_SECONDS),
+        )
         return host, port, company, interval
 
     async def test_connection(self) -> bool:
-        host, port, _, _ = await self.get_connection_config()
-        client = TallyXmlClient(host, port)
-        return await client.test_connection()
+        diagnostics = await TallyConnectivityService(self._session).test_connection()
+        return diagnostics.reachable
 
     async def run_sync(self, *, correlation_id: str, triggered_by_user_id: int | None = None) -> TallySyncResult:
         if _sync_lock.locked():
@@ -145,6 +158,7 @@ class TallySyncService:
     ) -> TallySyncResult:
         sync_run_id = uuid.uuid4()
         counters = TallySyncCounters()
+        started_at = datetime.now(UTC)
 
         if not await self.is_enabled():
             return TallySyncResult(
@@ -155,49 +169,65 @@ class TallySyncService:
 
         host, port, company_name, _ = await self.get_connection_config()
         company_sync = await self._company_sync.get_or_create(company_name)
-        client = TallyXmlClient(host, port)
 
-        await self._notifications.create_notification(
-            notification_type=NotificationType.TALLY_SYNC_STARTED,
-            severity=NotificationSeverity.INFO,
-            title="Tally synchronization started",
-            message=f"Synchronization run {sync_run_id} started for {company_name}.",
-            category=NotificationCategory.TALLY_SYNC,
-            tally_company_name=company_name,
-        )
-        await self._recorder.record_system_action(
-            entity_type="tally_sync",
-            entity_id=str(sync_run_id),
-            description="Tally sync started",
-            source=AuditSource.TALLY_SYNC,
-        )
-
-        try:
-            connected = await client.test_connection()
-        except TallyConnectionError as exc:
-            await self._company_sync.update_sync_state(
-                company_sync,
-                connection_status="error",
-                last_error=str(exc),
-            )
-            await self._notify_connection_lost(company_name, str(exc))
+        if company_sync.sync_in_progress:
             return TallySyncResult(
                 sync_run_id=str(sync_run_id),
                 success=False,
-                message=str(exc),
-                counters=counters,
-                connection_status="error",
-                last_error=str(exc),
+                message="Synchronization already in progress.",
+                connection_status=company_sync.connection_status,
             )
 
-        if not connected:
-            message = "Unable to reach Tally ERP 9."
-            await self._company_sync.update_sync_state(
-                company_sync,
-                connection_status="disconnected",
-                last_error=message,
+        history = await self._sync_history.create_started(
+            company_sync_id=company_sync.id,
+            sync_run_id=sync_run_id,
+            correlation_id=correlation_id,
+        )
+        await self._company_sync.update_sync_state(company_sync, sync_in_progress=True)
+
+        try:
+            return await self._execute_sync_cycle(
+                sync_run_id=sync_run_id,
+                company_sync=company_sync,
+                company_name=company_name,
+                correlation_id=correlation_id,
+                counters=counters,
+                history=history,
+                started_at=started_at,
             )
-            await self._notify_connection_lost(company_name, message)
+        finally:
+            await self._company_sync.update_sync_state(company_sync, sync_in_progress=False)
+
+    async def _execute_sync_cycle(
+        self,
+        *,
+        sync_run_id: uuid.UUID,
+        company_sync: TallyCompanySync,
+        company_name: str,
+        correlation_id: str,
+        counters: TallySyncCounters,
+        history,
+        started_at: datetime,
+    ) -> TallySyncResult:
+        connectivity = TallyConnectivityService(self._session)
+        diagnostics = await connectivity.ensure_workstation_reachable(company_name=company_name)
+
+        if not diagnostics.reachable:
+            message = diagnostics.user_message
+            await self._sync_history.finalize(
+                history,
+                status="offline",
+                invoices_checked=0,
+                invoices_imported=0,
+                invoices_skipped=0,
+                errors_count=0,
+            )
+            await self._recorder.record_system_action(
+                entity_type="tally_sync",
+                entity_id=str(sync_run_id),
+                description="Tally sync skipped — workstation offline",
+                source=AuditSource.TALLY_SYNC,
+            )
             return TallySyncResult(
                 sync_run_id=str(sync_run_id),
                 success=False,
@@ -207,76 +237,85 @@ class TallySyncService:
                 last_error=message,
             )
 
-        previous_status = company_sync.connection_status
-        await self._company_sync.update_sync_state(company_sync, connection_status="connected", last_error="")
-        if previous_status in {"disconnected", "error"}:
-            await self._notifications.create_notification(
-                notification_type=NotificationType.CONNECTION_RESTORED,
-                severity=NotificationSeverity.INFO,
-                title="Tally connection restored",
-                message=f"Connection to Tally ERP 9 at {host}:{port} is healthy.",
-                category=NotificationCategory.TALLY_SYNC,
-                tally_company_name=company_name,
+        try:
+            client = await connectivity.build_client_for_sync(diagnostics)
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc)
+            await self._company_sync.update_sync_state(
+                company_sync,
+                connection_status="error",
+                last_error=message,
+            )
+            await self._sync_history.finalize(
+                history,
+                status="offline",
+                invoices_checked=0,
+                invoices_imported=0,
+                invoices_skipped=0,
+                errors_count=0,
+                error_summary=message,
+            )
+            return TallySyncResult(
+                sync_run_id=str(sync_run_id),
+                success=False,
+                message=message,
+                counters=counters,
+                connection_status="error",
+                last_error=message,
             )
 
-        from_date = (
-            company_sync.last_successful_sync_at.date()
-            if company_sync.last_successful_sync_at
-            else datetime.now(UTC).date() - timedelta(days=30)
+        await self._company_sync.update_sync_state(
+            company_sync,
+            connection_status="connected",
+            clear_last_error=True,
         )
 
+        from_date = resolve_incremental_from_date(company_sync)
         all_vouchers: list[TallyVoucher] = []
         try:
             exports = await client.export_monitored_voucher_types(
                 company_name=company_name,
                 from_date=from_date,
             )
-            for voucher_type, xml_text in exports.items():
-                parsed = parse_vouchers_xml(xml_text)
-                all_vouchers.extend(parsed)
+            for _voucher_type, xml_text in exports.items():
+                all_vouchers.extend(parse_vouchers_xml(xml_text))
         except TallyConnectionError as exc:
+            message = exc.user_message
             await self._company_sync.update_sync_state(
                 company_sync,
                 connection_status="error",
-                last_error=str(exc),
+                last_error=message,
             )
-            counters.failures += 1
-            await self._finalize_run(
-                sync_run_id=sync_run_id,
-                company_sync=company_sync,
-                correlation_id=correlation_id,
-                counters=counters,
-                success=False,
-                message=str(exc),
+            await self._sync_history.finalize(
+                history,
+                status="offline",
+                invoices_checked=counters.invoices_checked,
+                invoices_imported=counters.invoices_imported,
+                invoices_skipped=counters.invoices_skipped,
+                errors_count=0,
+                error_summary=message,
             )
             return TallySyncResult(
                 sync_run_id=str(sync_run_id),
                 success=False,
-                message=str(exc),
+                message=message,
                 counters=counters,
                 connection_status="error",
-                last_error=str(exc),
+                last_error=message,
             )
 
         all_vouchers.sort(key=lambda voucher: (voucher.voucher_date, voucher.guid))
-        last_guid: str | None = company_sync.last_processed_guid
+        last_imported_guid: str | None = company_sync.last_processed_guid
+        last_imported_voucher_date: date | None = company_sync.last_imported_voucher_date
+        error_messages: list[str] = []
 
         for voucher in all_vouchers:
             if voucher.voucher_type not in MONITORED_VOUCHER_TYPES:
                 continue
-            if last_guid and voucher.guid == last_guid:
-                continue
 
-            invoice, created = await self._processed_invoices.get_or_create_pending(
-                company_sync_id=company_sync.id,
-                guid=voucher.guid,
-                master_id=voucher.master_id,
-                voucher_number=voucher.voucher_number,
-                printed_invoice_number=voucher.printed_invoice_number,
-                voucher_type=voucher.voucher_type,
-            )
-            if not created and invoice.processing_status is TallyProcessingStatus.SUCCESS:
-                counters.skipped_vouchers += 1
+            counters.invoices_checked += 1
+            if await self._should_skip_voucher(company_sync.id, voucher):
+                counters.invoices_skipped += 1
                 await self._sync_logs.create_run_log(
                     sync_run_id=sync_run_id,
                     company_sync_id=company_sync.id,
@@ -286,12 +325,29 @@ class TallySyncService:
                     printed_invoice_number=voucher.printed_invoice_number,
                     voucher_type=voucher.voucher_type,
                     customer_name=voucher.party_name,
-                    processed_invoice_id=invoice.id,
                     status=TallySyncRunStatus.SKIPPED,
                 )
                 continue
 
+            invoice, created = await self._processed_invoices.get_or_create_pending(
+                company_sync_id=company_sync.id,
+                guid=voucher.guid,
+                master_id=voucher.master_id,
+                voucher_number=voucher.voucher_number,
+                printed_invoice_number=voucher.printed_invoice_number,
+                voucher_type=voucher.voucher_type,
+                voucher_date=voucher.voucher_date,
+                party_name=voucher.party_name,
+                amount=voucher.amount,
+            )
+            if not created and invoice.processing_status is TallyProcessingStatus.SUCCESS:
+                counters.invoices_skipped += 1
+                continue
+
             counters.vouchers_processed += 1
+            if created:
+                counters.invoices_imported += 1
+
             line_stats = await self._process_voucher(
                 voucher=voucher,
                 company_sync=company_sync,
@@ -312,6 +368,9 @@ class TallySyncService:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
                 run_status = TallySyncRunStatus.FAILED
                 counters.failures += 1
+                error_messages.append(
+                    f"{voucher.printed_invoice_number}: processing failed",
+                )
 
             log = await self._sync_logs.create_run_log(
                 sync_run_id=sync_run_id,
@@ -337,7 +396,10 @@ class TallySyncService:
                 ignored_items=line_stats["ignored"],
             )
 
-            last_guid = voucher.guid
+            last_imported_guid = voucher.guid
+            if last_imported_voucher_date is None or voucher.voucher_date >= last_imported_voucher_date:
+                last_imported_voucher_date = voucher.voucher_date
+
             await self._recorder.record_system_action(
                 entity_type="tally_voucher",
                 entity_id=voucher.guid,
@@ -352,31 +414,119 @@ class TallySyncService:
             )
 
         now = datetime.now(UTC)
-        await self._company_sync.update_sync_state(
-            company_sync,
-            last_successful_sync_at=now,
-            last_processed_guid=last_guid,
-            last_processed_master_id=all_vouchers[-1].master_id if all_vouchers else company_sync.last_processed_master_id,
-            connection_status="connected",
-            last_error="",
+        duration_ms = int((now - started_at).total_seconds() * 1000)
+        run_success = counters.failures == 0
+        history_status = "success" if run_success else "partial" if counters.invoices_imported else "failed"
+
+        if run_success:
+            consecutive_failures = 0
+            await self._company_sync.update_sync_state(
+                company_sync,
+                last_successful_sync_at=now,
+                last_processed_guid=last_imported_guid,
+                last_imported_voucher_date=last_imported_voucher_date,
+                last_processed_master_id=all_vouchers[-1].master_id if all_vouchers else company_sync.last_processed_master_id,
+                connection_status="connected",
+                consecutive_sync_failures=0,
+                last_sync_duration_ms=duration_ms,
+                last_invoices_imported_count=counters.invoices_imported,
+                clear_last_error=True,
+            )
+        else:
+            consecutive_failures = company_sync.consecutive_sync_failures + 1
+            await self._company_sync.update_sync_state(
+                company_sync,
+                consecutive_sync_failures=consecutive_failures,
+                last_sync_duration_ms=duration_ms,
+                last_invoices_imported_count=counters.invoices_imported,
+                connection_status="connected",
+            )
+
+        await self._sync_history.finalize(
+            history,
+            status=history_status,
+            invoices_checked=counters.invoices_checked,
+            invoices_imported=counters.invoices_imported,
+            invoices_skipped=counters.invoices_skipped,
+            errors_count=counters.failures,
+            error_summary="; ".join(error_messages[:5]) if error_messages else None,
         )
 
-        await self._finalize_run(
-            sync_run_id=sync_run_id,
-            company_sync=company_sync,
-            correlation_id=correlation_id,
+        await self._notify_sync_outcome(
+            company_name=company_name,
             counters=counters,
-            success=True,
-            message="Synchronization completed.",
+            consecutive_failures=consecutive_failures if not run_success else 0,
+            success=run_success,
+        )
+        await self._recorder.record_system_action(
+            entity_type="tally_sync",
+            entity_id=str(sync_run_id),
+            description="Tally sync completed" if run_success else "Tally sync completed with issues",
+            source=AuditSource.TALLY_SYNC,
+            new_value={
+                "invoices_checked": counters.invoices_checked,
+                "invoices_imported": counters.invoices_imported,
+                "invoices_skipped": counters.invoices_skipped,
+                "vouchers_processed": counters.vouchers_processed,
+                "sales_created": counters.sales_created,
+                "failures": counters.failures,
+            },
         )
 
         return TallySyncResult(
             sync_run_id=str(sync_run_id),
-            success=True,
-            message="Synchronization completed.",
+            success=run_success,
+            message="Synchronization completed." if run_success else "Synchronization completed with issues.",
             counters=counters,
             connection_status="connected",
         )
+
+    async def _should_skip_voucher(self, company_sync_id: int, voucher: TallyVoucher) -> bool:
+        by_guid = await self._processed_invoices.find_by_guid(company_sync_id, voucher.guid)
+        if by_guid is not None and by_guid.processing_status is TallyProcessingStatus.SUCCESS:
+            return True
+        by_fallback = await self._processed_invoices.find_by_fallback_fingerprint(
+            company_sync_id,
+            voucher_date=voucher.voucher_date,
+            voucher_number=voucher.voucher_number,
+            amount=voucher.amount,
+            party_name=voucher.party_name,
+        )
+        return by_fallback is not None and by_fallback.processing_status is TallyProcessingStatus.SUCCESS
+
+    async def _notify_sync_outcome(
+        self,
+        *,
+        company_name: str,
+        counters: TallySyncCounters,
+        consecutive_failures: int,
+        success: bool,
+    ) -> None:
+        if counters.invoices_imported > 0:
+            await self._notifications.create_notification(
+                notification_type=NotificationType.TALLY_SYNC_COMPLETED,
+                severity=NotificationSeverity.INFO,
+                title="New Tally invoices imported",
+                message=(
+                    f"{counters.invoices_imported} invoice(s) imported from Tally "
+                    f"({counters.invoices_skipped} skipped as already processed)."
+                ),
+                category=NotificationCategory.TALLY_SYNC,
+                tally_company_name=company_name,
+            )
+        if not success and consecutive_failures >= REPEATED_FAILURE_NOTIFICATION_THRESHOLD:
+            await self._notifications.create_notification(
+                notification_type=NotificationType.SYNC_FAILURE,
+                severity=NotificationSeverity.ERROR,
+                title="Tally synchronization failing repeatedly",
+                message=(
+                    f"Tally sync has failed {consecutive_failures} consecutive times. "
+                    "Check Tally connectivity and sync logs."
+                ),
+                category=NotificationCategory.TALLY_SYNC,
+                tally_company_name=company_name,
+            )
+
 
     async def _process_voucher(
         self,
@@ -647,61 +797,6 @@ class TallySyncService:
             return None
         return await self._locations.get_by_name(store_name)
 
-    async def _notify_connection_lost(self, company_name: str, message: str) -> None:
-        await self._notifications.create_notification(
-            notification_type=NotificationType.CONNECTION_LOST,
-            severity=NotificationSeverity.ERROR,
-            title="Tally connection lost",
-            message=message,
-            category=NotificationCategory.TALLY_SYNC,
-            tally_company_name=company_name,
-        )
-        await self._notifications.create_notification(
-            notification_type=NotificationType.SYNC_FAILURE,
-            severity=NotificationSeverity.ERROR,
-            title="Tally synchronization failed",
-            message=message,
-            category=NotificationCategory.TALLY_SYNC,
-            tally_company_name=company_name,
-        )
-
-    async def _finalize_run(
-        self,
-        *,
-        sync_run_id: uuid.UUID,
-        company_sync: TallyCompanySync,
-        correlation_id: str,
-        counters: TallySyncCounters,
-        success: bool,
-        message: str,
-    ) -> None:
-        await self._notifications.create_notification(
-            notification_type=NotificationType.TALLY_SYNC_COMPLETED,
-            severity=NotificationSeverity.INFO if success else NotificationSeverity.WARNING,
-            title="Tally synchronization completed" if success else "Tally synchronization finished with issues",
-            message=(
-                f"{message} Vouchers: {counters.vouchers_processed}, "
-                f"sales: {counters.sales_created}, duplicates: {counters.duplicates}, "
-                f"missing serials: {counters.missing_serials}, mismatches: {counters.model_mismatches}."
-            ),
-            category=NotificationCategory.TALLY_SYNC,
-            tally_company_name=company_sync.company_name,
-        )
-        await self._recorder.record_system_action(
-            entity_type="tally_sync",
-            entity_id=str(sync_run_id),
-            description="Tally sync completed" if success else "Tally sync completed with issues",
-            source=AuditSource.TALLY_SYNC,
-            new_value={
-                "vouchers_processed": counters.vouchers_processed,
-                "sales_created": counters.sales_created,
-                "duplicates": counters.duplicates,
-                "missing_serials": counters.missing_serials,
-                "model_mismatches": counters.model_mismatches,
-                "failures": counters.failures,
-            },
-        )
-
     async def process_voucher_xml(
         self,
         xml_text: str,
@@ -710,7 +805,7 @@ class TallySyncService:
         company_name: str | None = None,
     ) -> TallySyncResult:
         """Process vouchers from XML text (used in tests and manual imports)."""
-        host, port, configured_company, _ = await self.get_connection_config()
+        configured_company = (await self.get_connection_config())[2]
         resolved_company = company_name or configured_company
         company_sync = await self._company_sync.get_or_create(resolved_company)
         sync_run_id = uuid.uuid4()
@@ -719,16 +814,28 @@ class TallySyncService:
         for voucher in vouchers:
             if voucher.voucher_type not in MONITORED_VOUCHER_TYPES:
                 continue
-            invoice, _ = await self._processed_invoices.get_or_create_pending(
+            counters.invoices_checked += 1
+            if await self._should_skip_voucher(company_sync.id, voucher):
+                counters.invoices_skipped += 1
+                continue
+            invoice, created = await self._processed_invoices.get_or_create_pending(
                 company_sync_id=company_sync.id,
                 guid=voucher.guid,
                 master_id=voucher.master_id,
                 voucher_number=voucher.voucher_number,
                 printed_invoice_number=voucher.printed_invoice_number,
                 voucher_type=voucher.voucher_type,
+                voucher_date=voucher.voucher_date,
+                party_name=voucher.party_name,
+                amount=voucher.amount,
             )
+            if not created and invoice.processing_status is TallyProcessingStatus.SUCCESS:
+                counters.invoices_skipped += 1
+                continue
             counters.vouchers_processed += 1
-            await self._process_voucher(
+            if created:
+                counters.invoices_imported += 1
+            line_stats = await self._process_voucher(
                 voucher=voucher,
                 company_sync=company_sync,
                 invoice_id=invoice.id,
@@ -737,6 +844,12 @@ class TallySyncService:
                 correlation_id=correlation_id,
                 counters=counters,
             )
+            if line_stats["failed"] == 0 and line_stats["completed"] > 0:
+                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.SUCCESS)
+            elif line_stats["completed"] > 0:
+                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.PARTIAL_SUCCESS)
+            else:
+                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
         return TallySyncResult(
             sync_run_id=str(sync_run_id),
             success=True,

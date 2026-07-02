@@ -7,7 +7,7 @@ import '../../features/inventory/data/inventory_repository.dart';
 import '../../core/offline/offline_providers.dart';
 import '../../features/inventory/domain/barcode_field_resolver.dart';
 import '../../features/inventory/domain/inventory_models.dart';
-import '../../features/inventory/presentation/barcode_scanner_screen.dart';
+import '../../core/device/barcode_scan_launcher.dart';
 import '../../features/inventory/presentation/widgets/inventory_action_dialogs.dart';
 import '../../features/sales/presentation/sales_controller.dart';
 
@@ -96,9 +96,7 @@ class _WorkspaceLookupSheetState extends ConsumerState<_WorkspaceLookupSheet> {
   }
 
   Future<void> _barcodeScan() async {
-    final scan = await Navigator.of(context).push<BarcodeScanResult>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
+    final scan = await openBarcodeScanner(context, ref);
     if (scan == null) return;
     _searchController.text = scan.rawValue;
     if (scan.targetField == BarcodeFieldTarget.serialNumber) {

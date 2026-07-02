@@ -42,20 +42,20 @@ export const P = {
     view: 'brands:view',
     create: 'brands:create',
     edit: 'brands:edit',
-    archive: 'brands:archive',
+    delete: 'brands:delete',
   },
   productModels: {
     view: 'product_models:view',
     create: 'product_models:create',
     edit: 'product_models:edit',
-    archive: 'product_models:archive',
+    delete: 'product_models:delete',
     sellingPriceEdit: 'product_models:selling_price:edit',
   },
   locations: {
     view: 'locations:view',
     create: 'locations:create',
     edit: 'locations:edit',
-    archive: 'locations:archive',
+    delete: 'locations:delete',
   },
   users: {
     view: 'users:view',
@@ -175,7 +175,20 @@ export class PermissionService {
     return this.has(group.edit);
   }
 
+  canDelete(module: 'brands' | 'productModels' | 'locations'): boolean {
+    const legacyMap: Record<string, string> = {
+      brands: 'brands:archive',
+      productModels: 'product_models:archive',
+      locations: 'locations:archive',
+    };
+    const group = P[module] as Record<string, string>;
+    return this.hasAny(group.delete, legacyMap[module]);
+  }
+
   canArchive(module: keyof typeof P): boolean {
+    if (module === 'brands' || module === 'productModels' || module === 'locations') {
+      return this.canDelete(module);
+    }
     const group = P[module] as Record<string, string>;
     return this.has(group.archive);
   }
@@ -252,13 +265,16 @@ export function canWriteCatalogue(permissions: string[]): boolean {
   return ps.hasAny(
     P.brands.create,
     P.brands.edit,
-    P.brands.archive,
+    P.brands.delete,
+    'brands:archive',
     P.locations.create,
     P.locations.edit,
-    P.locations.archive,
+    P.locations.delete,
+    'locations:archive',
     P.productModels.create,
     P.productModels.edit,
-    P.productModels.archive,
+    P.productModels.delete,
+    'product_models:archive',
   );
 }
 
@@ -303,6 +319,10 @@ export function canAccessBackupModule(permissions: string[]): boolean {
 
 export function canReadAudit(permissions: string[]): boolean {
   return PermissionService.from(permissions).has(P.audit.view);
+}
+
+export function canExportAudit(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.audit.export);
 }
 
 export function canManageUsers(permissions: string[]): boolean {

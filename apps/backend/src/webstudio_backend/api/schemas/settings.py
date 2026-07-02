@@ -67,7 +67,7 @@ class TallySettingsGroup(BaseModel):
     tally_host: str = "127.0.0.1"
     tally_port: str = "9000"
     tally_company_name: str = "WEBSTUDIO"
-    sync_interval_seconds: int = 1800
+    sync_interval_seconds: int = Field(default=300, ge=60, le=3600)
     last_sync_at: str | None = None
     next_sync_at: str | None = None
     companies: list[str] = Field(default_factory=list)

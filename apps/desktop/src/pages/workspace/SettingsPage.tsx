@@ -19,16 +19,18 @@ export function SettingsPage(): JSX.Element {
     return null;
   }, [session]);
 
-  if (permissionDenied) {
+  if (permissionDenied || !session) {
     return (
       <div className="stg-page">
         <div className="stg-empty">
           <p className="stg-empty__title">Access restricted</p>
-          <p className="stg-empty__text">{permissionDenied}</p>
+          <p className="stg-empty__text">{permissionDenied ?? 'Sign in again to access system settings.'}</p>
         </div>
       </div>
     );
   }
+
+  const { permissions } = session;
 
   return (
     <div className="stg-page animate-fade-in">
@@ -61,7 +63,7 @@ export function SettingsPage(): JSX.Element {
           <SettingsNav
             active={workspace.category}
             onSelect={workspace.setCategory}
-            permissions={session.permissions}
+            permissions={permissions}
           />
           <div className="stg-content">
             {workspace.loading && !workspace.workspace ? (

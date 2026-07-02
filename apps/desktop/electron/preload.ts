@@ -23,3 +23,10 @@ contextBridge.exposeInMainWorld('storage', {
   setItem: (key: string, value: unknown) => ipcRenderer.invoke('storage:setItem', key, value),
   removeItem: (key: string) => ipcRenderer.invoke('storage:removeItem', key),
 });
+
+contextBridge.exposeInMainWorld('network', {
+  startDiscovery: () => ipcRenderer.invoke('network:startDiscovery'),
+  stopDiscovery: () => ipcRenderer.invoke('network:stopDiscovery'),
+  getDiscoveredServers: () => ipcRenderer.invoke('network:getDiscoveredServers'),
+  resolveHost: (host: string) => ipcRenderer.invoke('network:resolveHost', host),
+});

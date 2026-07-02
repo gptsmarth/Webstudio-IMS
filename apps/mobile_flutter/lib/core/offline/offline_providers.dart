@@ -23,6 +23,7 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
 
   final Ref _ref;
   Timer? _pollTimer;
+  Timer? _syncSuccessTimer;
   bool _started = false;
 
   SyncStateRepository get _syncState => _ref.read(syncStateRepositoryProvider);
@@ -47,18 +48,31 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
   Future<void> syncNow() async {
     final online = _ref.read(networkStatusProvider);
     if (!online) {
-      state = state.copyWith(isStale: true, clearError: true);
+      state = state.copyWith(isStale: true, clearError: true, syncSuccessVisible: false, clearSyncProgress: true);
       _refreshCounts();
       return;
     }
 
-    state = state.copyWith(syncing: true, clearError: true);
+    final pendingAtStart = _pending.count;
+    state = state.copyWith(
+      syncing: true,
+      clearError: true,
+      syncSuccessVisible: false,
+      syncTotal: pendingAtStart,
+      syncCompleted: 0,
+    );
     try {
       final previous = _syncState.readLocal();
       final remote = await _syncState.fetchRemote();
       final entityChanged = remote.hasEntityChanges(previous);
 
-      final retryResult = await _retryQueue.processAll();
+      var syncedCount = 0;
+      final retryResult = await _retryQueue.processAll(
+        onProgress: (completed, total) {
+          syncedCount = completed;
+          state = state.copyWith(syncCompleted: completed, syncTotal: total > 0 ? total : pendingAtStart);
+        },
+      );
       if (entityChanged || retryResult.applied > 0) {
         await _inventoryOffline.loadWorkspace(forceRefresh: true);
         await _dashboardOffline.loadDashboard(forceRefresh: true);
@@ -66,6 +80,7 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
       }
 
       _schedulePoll(remote.pollIntervalSeconds);
+      final applied = retryResult.applied;
       state = state.copyWith(
         syncing: false,
         lastSyncAt: DateTime.now(),
@@ -73,7 +88,16 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
         isStale: false,
         pendingCount: _pending.count,
         conflictCount: _pending.conflictCount,
+        syncCompleted: applied > 0 ? applied : syncedCount,
+        syncTotal: pendingAtStart > 0 ? pendingAtStart : (syncedCount > 0 ? syncedCount : 0),
+        syncSuccessVisible: pendingAtStart > 0 && retryResult.failed == 0 && applied > 0,
       );
+      if (state.syncSuccessVisible) {
+        _syncSuccessTimer?.cancel();
+        _syncSuccessTimer = Timer(const Duration(seconds: 4), () {
+          state = state.copyWith(syncSuccessVisible: false, clearSyncProgress: true);
+        });
+      }
     } catch (error) {
       state = state.copyWith(
         syncing: false,
@@ -81,6 +105,7 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
         isStale: true,
         pendingCount: _pending.count,
         conflictCount: _pending.conflictCount,
+        syncSuccessVisible: false,
       );
     }
   }
@@ -105,6 +130,7 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _syncSuccessTimer?.cancel();
     super.dispose();
   }
 }

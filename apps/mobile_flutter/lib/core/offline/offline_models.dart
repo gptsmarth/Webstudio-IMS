@@ -196,6 +196,9 @@ class SyncWorkspaceState {
     this.conflictCount = 0,
     this.isStale = false,
     this.lastSyncState,
+    this.syncCompleted = 0,
+    this.syncTotal = 0,
+    this.syncSuccessVisible = false,
   });
 
   final bool syncing;
@@ -205,6 +208,9 @@ class SyncWorkspaceState {
   final int conflictCount;
   final bool isStale;
   final SyncStateSnapshot? lastSyncState;
+  final int syncCompleted;
+  final int syncTotal;
+  final bool syncSuccessVisible;
 
   SyncWorkspaceState copyWith({
     bool? syncing,
@@ -214,7 +220,11 @@ class SyncWorkspaceState {
     int? conflictCount,
     bool? isStale,
     SyncStateSnapshot? lastSyncState,
+    int? syncCompleted,
+    int? syncTotal,
+    bool? syncSuccessVisible,
     bool clearError = false,
+    bool clearSyncProgress = false,
   }) {
     return SyncWorkspaceState(
       syncing: syncing ?? this.syncing,
@@ -224,6 +234,9 @@ class SyncWorkspaceState {
       conflictCount: conflictCount ?? this.conflictCount,
       isStale: isStale ?? this.isStale,
       lastSyncState: lastSyncState ?? this.lastSyncState,
+      syncCompleted: clearSyncProgress ? 0 : syncCompleted ?? this.syncCompleted,
+      syncTotal: clearSyncProgress ? 0 : syncTotal ?? this.syncTotal,
+      syncSuccessVisible: syncSuccessVisible ?? this.syncSuccessVisible,
     );
   }
 }

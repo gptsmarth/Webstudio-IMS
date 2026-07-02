@@ -27,3 +27,4 @@ class TallyVoucher:
     narration: str | None
     inventory_lines: list[TallyInventoryLine]
     payment_mode: str | None = None
+    amount: str | None = None

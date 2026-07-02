@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.models.brand import Brand
+from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
+from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 from webstudio_backend.infrastructure.repositories.validation import normalize_required_name
@@ -149,6 +151,25 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         actor: AuditActor | None = None,
     ) -> Brand:
         return await self.update(brand, name=name, actor=actor)
+
+    async def count_product_models(self, brand_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(ProductModel)
+            .where(ProductModel.brand_id == brand_id)
+        )
+        result = await self._session.execute(statement)
+        return int(result.scalar_one() or 0)
+
+    async def count_inventory_references(self, brand_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(InventoryItem)
+            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+            .where(ProductModel.brand_id == brand_id)
+        )
+        result = await self._session.execute(statement)
+        return int(result.scalar_one() or 0)
 
     async def force_delete(self, brand: Brand) -> None:
         await super().delete(brand)

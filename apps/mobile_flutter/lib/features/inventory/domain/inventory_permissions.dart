@@ -14,6 +14,7 @@ bool canTransferStockLocation(List<String> permissions) => permissions.contains(
 
 bool canCreateProductModels(List<String> permissions) => permissions.contains('product_models:create');
 
-bool canDeleteProductModels(List<String> permissions) => permissions.contains('product_models:archive');
+bool canDeleteProductModels(List<String> permissions) =>
+    permissions.contains('product_models:delete') || permissions.contains('product_models:archive');
 
 bool canEditProductModels(List<String> permissions) => permissions.contains('product_models:edit');

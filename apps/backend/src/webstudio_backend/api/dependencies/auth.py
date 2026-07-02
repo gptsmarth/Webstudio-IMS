@@ -156,7 +156,7 @@ BrandsOrInventoryViewDep = Annotated[
 ]
 BrandsCreateDep = Annotated[AuthenticatedUser, Depends(require_any_permission("brands:create", "brands:edit"))]
 BrandsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:edit"))]
-BrandsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:archive"))]
+BrandsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:delete"))]
 
 ProductModelsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:view"))]
 ProductModelsOrInventoryViewDep = Annotated[
@@ -180,7 +180,7 @@ ProductModelsEditDep = Annotated[
         ),
     ),
 ]
-ProductModelsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:archive"))]
+ProductModelsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:delete"))]
 ProductModelsSellingPriceDep = Annotated[
     AuthenticatedUser,
     Depends(
@@ -191,7 +191,7 @@ ProductModelsSellingPriceDep = Annotated[
 LocationsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:view"))]
 LocationsCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:create"))]
 LocationsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:edit"))]
-LocationsArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:archive"))]
+LocationsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:delete"))]
 
 # Users
 UsersViewDep = Annotated[AuthenticatedUser, Depends(require_permission("users:view"))]

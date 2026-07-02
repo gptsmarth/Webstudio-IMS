@@ -44,6 +44,33 @@ class ProductModelHasHistoryError(RepositoryError):
         )
 
 
+class BrandHasDependenciesError(RepositoryError):
+    def __init__(
+        self,
+        brand_id: int,
+        *,
+        product_model_count: int,
+        inventory_count: int,
+    ) -> None:
+        self.brand_id = brand_id
+        self.product_model_count = product_model_count
+        self.inventory_count = inventory_count
+        super().__init__(
+            f"Brand {brand_id} cannot be deleted while dependencies exist "
+            f"({product_model_count} product model(s), {inventory_count} inventory item(s)).",
+        )
+
+
+class ProductModelHasInventoryError(RepositoryError):
+    def __init__(self, product_model_id: str, *, inventory_count: int) -> None:
+        self.product_model_id = product_model_id
+        self.inventory_count = inventory_count
+        super().__init__(
+            f"Product model {product_model_id} cannot be deleted while "
+            f"{inventory_count} inventory item(s) still reference it.",
+        )
+
+
 class DuplicateSerialNumberError(RepositoryError):
     def __init__(self, serial_number: str) -> None:
         self.serial_number = serial_number
@@ -67,8 +94,8 @@ class LocationHasInventoryError(RepositoryError):
         self.location_id = location_id
         self.movable_count = movable_count
         super().__init__(
-            f"Location {location_id} still has {movable_count} movable inventory item(s). "
-            "Choose a destination location to transfer them before archiving.",
+            f"Location {location_id} still has {movable_count} inventory item(s). "
+            "Choose a destination location to transfer them before deleting.",
         )
 
 
@@ -148,6 +175,11 @@ class InvalidRefreshTokenError(RepositoryError):
 class RefreshTokenReuseError(RepositoryError):
     def __init__(self) -> None:
         super().__init__("Refresh token reuse detected")
+
+
+class SessionIdleTimeoutError(RepositoryError):
+    def __init__(self) -> None:
+        super().__init__("Session expired due to inactivity")
 
 
 class SetupPendingRecoveryConfirmationError(RepositoryError):

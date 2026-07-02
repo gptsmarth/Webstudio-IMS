@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/config/app_config_provider.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/host_validation.dart';
 import '../data/server_preferences.dart';
 import '../data/server_repository.dart';
 import '../domain/server_models.dart';
@@ -19,6 +20,8 @@ class ServerConnectionState {
     this.errorMessage,
     this.lastResult,
     this.savedServers = const [],
+    this.discoveredServers = const [],
+    this.diagnosticStages = const [],
   });
 
   final ConnectionPhase phase;
@@ -27,6 +30,8 @@ class ServerConnectionState {
   final String? errorMessage;
   final ConnectionTestResult? lastResult;
   final List<SavedServer> savedServers;
+  final List<DiscoveredServer> discoveredServers;
+  final List<ConnectionStageResult> diagnosticStages;
 
   ServerConnectionState copyWith({
     ConnectionPhase? phase,
@@ -35,8 +40,11 @@ class ServerConnectionState {
     String? errorMessage,
     ConnectionTestResult? lastResult,
     List<SavedServer>? savedServers,
+    List<DiscoveredServer>? discoveredServers,
+    List<ConnectionStageResult>? diagnosticStages,
     bool clearError = false,
     bool clearResult = false,
+    bool clearDiagnostics = false,
   }) {
     return ServerConnectionState(
       phase: phase ?? this.phase,
@@ -45,6 +53,8 @@ class ServerConnectionState {
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
       lastResult: clearResult ? null : lastResult ?? this.lastResult,
       savedServers: savedServers ?? this.savedServers,
+      discoveredServers: discoveredServers ?? this.discoveredServers,
+      diagnosticStages: clearDiagnostics ? const [] : diagnosticStages ?? this.diagnosticStages,
     );
   }
 }
@@ -100,6 +110,8 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
       messageIndex: 0,
       clearError: true,
       clearResult: true,
+      clearDiagnostics: true,
+      discoveredServers: const [],
       savedServers: _ref.read(serverRepositoryProvider).savedServers(),
     );
 
@@ -111,24 +123,52 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
     });
 
     final repo = _ref.read(serverRepositoryProvider);
-    final config = _ref.read(appConfigProvider.notifier);
-    final client = _ref.read(apiClientProvider);
 
-    final candidates = <String>[
-      ...AppConfig.discoveryCandidates(),
-      ...state.savedServers.map((server) => server.url),
-    ];
+    final mdnsFuture = repo.discoverMdnsServers();
+    final savedUrlsFuture = repo.resolveSavedServerUrls();
+    final mdnsServers = await mdnsFuture;
+    final savedUrls = await savedUrlsFuture;
 
-    final result = await repo.discoverServer(candidates);
     _messageTimer?.cancel();
-
     if (_cancelled) return;
 
-    if (result != null) {
-      await config.setApiBaseUrl(result.url);
-      client.updateConfig(_ref.read(appConfigProvider));
-      await repo.rememberSuccessfulConnection(result);
-      state = state.copyWith(phase: ConnectionPhase.found, lastResult: result);
+    if (mdnsServers.isNotEmpty) {
+      state = state.copyWith(
+        phase: ConnectionPhase.manual,
+        discoveredServers: mdnsServers,
+        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : AppConfig.defaultApiBaseUrl(),
+      );
+      return;
+    }
+
+    final candidates = <String>[
+      ...savedUrls,
+      ...repo.staticDiscoveryCandidates(),
+    ];
+    final probeResult = await repo.discoverServer(candidates);
+    if (_cancelled) return;
+
+    if (probeResult != null) {
+      state = state.copyWith(
+        phase: ConnectionPhase.manual,
+        discoveredServers: [
+          DiscoveredServer(
+            id: 'probe-${probeResult.url}',
+            serverName: probeResult.companyName ?? 'WEBSTUDIO Server',
+            companyName: probeResult.companyName ?? 'WEBSTUDIO',
+            backendVersion: probeResult.backendVersion ?? 'unknown',
+            apiVersion: '1.0',
+            buildVersion: '',
+            environment: 'local',
+            port: Uri.parse(probeResult.url).port,
+            host: Uri.parse(probeResult.url).host,
+            url: probeResult.url,
+            lastSeen: DateTime.now(),
+            status: 'online',
+          ),
+        ],
+        manualUrl: probeResult.url,
+      );
       return;
     }
 
@@ -144,28 +184,49 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
   }
 
   Future<ConnectionTestResult?> connectToUrl(String url) async {
-    state = state.copyWith(phase: ConnectionPhase.testing, clearError: true);
+    state = state.copyWith(
+      phase: ConnectionPhase.testing,
+      clearError: true,
+      clearDiagnostics: true,
+    );
     final repo = _ref.read(serverRepositoryProvider);
     final config = _ref.read(appConfigProvider.notifier);
     final client = _ref.read(apiClientProvider);
 
-    final result = await repo.testConnection(url);
-    if (_cancelled) return null;
+    try {
+      final normalized = normalizeServerUrl(url);
+      final result = await repo.testConnection(normalized);
+      if (_cancelled) return null;
 
-    if (result.success) {
-      await config.setApiBaseUrl(result.url);
-      client.updateConfig(_ref.read(appConfigProvider));
-      await repo.rememberSuccessfulConnection(result);
-      state = state.copyWith(phase: ConnectionPhase.found, lastResult: result, manualUrl: result.url);
-      return result;
+      state = state.copyWith(diagnosticStages: result.stages);
+
+      if (result.success) {
+        await config.setApiBaseUrl(result.url);
+        client.updateConfig(_ref.read(appConfigProvider));
+        await repo.rememberSuccessfulConnection(result);
+        state = state.copyWith(
+          phase: ConnectionPhase.found,
+          lastResult: result,
+          manualUrl: result.url,
+          savedServers: repo.savedServers(),
+        );
+        return result;
+      }
+
+      state = state.copyWith(
+        phase: ConnectionPhase.manual,
+        manualUrl: normalized,
+        errorMessage: result.errorMessage ?? 'Could not connect to this address.',
+      );
+      return null;
+    } on HostValidationException catch (error) {
+      state = state.copyWith(
+        phase: ConnectionPhase.manual,
+        manualUrl: url,
+        errorMessage: error.message,
+      );
+      return null;
     }
-
-    state = state.copyWith(
-      phase: ConnectionPhase.manual,
-      manualUrl: url,
-      errorMessage: result.errorMessage ?? 'Could not connect to this address.',
-    );
-    return null;
   }
 
   Future<void> removeSaved(String url) async {

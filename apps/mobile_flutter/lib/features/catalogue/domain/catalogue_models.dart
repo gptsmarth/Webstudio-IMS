@@ -120,13 +120,33 @@ class CreateLocationRequest {
       };
 }
 
+class LocationDeletePreview {
+  const LocationDeletePreview({
+    required this.inventoryCount,
+    required this.movableInventoryCount,
+    required this.requiresTransfer,
+  });
+
+  final int inventoryCount;
+  final int movableInventoryCount;
+  final bool requiresTransfer;
+
+  factory LocationDeletePreview.fromJson(Map<String, dynamic> json) => LocationDeletePreview(
+        inventoryCount: json['inventory_count'] as int? ?? 0,
+        movableInventoryCount: json['movable_inventory_count'] as int? ?? 0,
+        requiresTransfer: json['requires_transfer'] as bool? ?? false,
+      );
+}
+
 bool canWriteCatalogue(List<String> permissions) {
   const keys = [
     'brands:create',
     'brands:edit',
+    'brands:delete',
     'brands:archive',
     'locations:create',
     'locations:edit',
+    'locations:delete',
     'locations:archive',
   ];
   return keys.any(permissions.contains);

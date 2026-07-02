@@ -49,9 +49,39 @@ interface StorageNamespace {
   removeItem: (key: string) => Promise<void>;
 }
 
+interface HostResolutionResult {
+  host: string;
+  resolvedIp: string | null;
+  resolved: boolean;
+  message: string;
+}
+
+interface DiscoveredServer {
+  id: string;
+  serverName: string;
+  companyName: string;
+  backendVersion: string;
+  apiVersion: string;
+  buildVersion: string;
+  environment: string;
+  port: number;
+  host: string;
+  url: string;
+  lastSeen: string;
+  status: 'online' | 'offline' | 'unknown';
+}
+
+interface NetworkNamespace {
+  startDiscovery: () => Promise<void>;
+  stopDiscovery: () => Promise<void>;
+  getDiscoveredServers: () => Promise<DiscoveredServer[]>;
+  resolveHost: (host: string) => Promise<HostResolutionResult>;
+}
+
 interface Window {
   api?: ApiNamespace;
   config?: ConfigNamespace;
   system?: SystemNamespace;
   storage?: StorageNamespace;
+  network?: NetworkNamespace;
 }

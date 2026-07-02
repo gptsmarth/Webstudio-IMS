@@ -19,7 +19,7 @@ import { CatalogueEmptyState } from './CatalogueEmptyState';
 import { CataloguePagination } from './CataloguePagination';
 import { CatalogueRowActionsMenu, type CatalogueRowAction } from './CatalogueRowActionsMenu';
 import { CatalogueToolbar } from './CatalogueToolbar';
-import { LocationArchiveDialog } from './LocationArchiveDialog';
+import { LocationDeleteDialog } from './LocationDeleteDialog';
 import { LocationFormDialog } from './LocationFormDialog';
 
 type LocationSortField = 'name' | 'location_type' | 'stock' | 'capacity';
@@ -36,14 +36,17 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [includeArchived, setIncludeArchived] = useState(false);
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [sortField, setSortField] = useState<LocationSortField>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Location | null>(null);
-  const [archiveDialog, setArchiveDialog] = useState<{ location: Location; movableCount: number } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    location: Location;
+    inventoryCount: number;
+    movableCount: number;
+  } | null>(null);
   const [menu, setMenu] = useState<{ location: Location; rect: DOMRect } | null>(null);
   const pageSize = 25;
   const debouncedSearch = useDebounce(search, 300);
@@ -75,7 +78,7 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
   }, [refresh]);
 
   const filtered = useMemo(() => {
-    let rows = items.filter((loc) => includeArchived || loc.is_active);
+    let rows = [...items];
     if (typeFilter) rows = rows.filter((loc) => loc.location_type === typeFilter);
     rows = rows.filter((loc) => matchesSearch(debouncedSearch, [loc.name, loc.location_type]));
     rows.sort((a, b) => {
@@ -89,7 +92,7 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
       return 0;
     });
     return rows;
-  }, [items, includeArchived, typeFilter, debouncedSearch, sortField, sortDirection, stockByLocationId]);
+  }, [items, typeFilter, debouncedSearch, sortField, sortDirection, stockByLocationId]);
 
   const pageItems = paginateItems(filtered, page, pageSize);
 
@@ -118,24 +121,29 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
 
   const handleRowAction = async (action: CatalogueRowAction, location: Location) => {
     if (!canWrite) return;
-    if (action === 'archive' && !confirmCatalogueRemoval(location.name, 'location')) return;
+    if (action === 'delete' && !confirmCatalogueRemoval(location.name, 'location')) return;
 
     setMenu(null);
     setActionLoading(true);
     setError(null);
     try {
-      if (action === 'edit') { setEditing(location); setDialogOpen(true); }
-      else if (action === 'archive') {
-        const preview = await LocationService.getArchivePreview(location.id);
+      if (action === 'edit') {
+        setEditing(location);
+        setDialogOpen(true);
+      } else if (action === 'delete') {
+        const preview = await LocationService.getDeletePreview(location.id);
         if (preview.requires_transfer) {
-          setArchiveDialog({ location, movableCount: preview.movable_inventory_count });
+          setDeleteDialog({
+            location,
+            inventoryCount: preview.inventory_count,
+            movableCount: preview.movable_inventory_count,
+          });
           return;
         }
-        await LocationService.archiveLocation(location.id);
+        await LocationService.deleteLocation(location.id);
         await refresh();
         onDataChange();
       }
-      else if (action === 'restore') { await LocationService.restoreLocation(location.id); await refresh(); onDataChange(); }
     } catch (err: unknown) {
       setError(catalogueActionErrorMessage(err));
     } finally {
@@ -143,13 +151,13 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     }
   };
 
-  const handleArchiveWithTransfer = async (transferToLocationId: number) => {
-    if (!archiveDialog) return;
+  const handleDeleteWithTransfer = async (transferToLocationId: number) => {
+    if (!deleteDialog) return;
     setActionLoading(true);
     setError(null);
     try {
-      await LocationService.archiveLocation(archiveDialog.location.id, { transfer_to_location_id: transferToLocationId });
-      setArchiveDialog(null);
+      await LocationService.deleteLocation(deleteDialog.location.id, { transfer_to_location_id: transferToLocationId });
+      setDeleteDialog(null);
       await refresh();
       onDataChange();
     } catch (err: unknown) {
@@ -160,10 +168,10 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     }
   };
 
-  const archiveDestinations = useMemo(() => {
-    if (!archiveDialog) return [];
-    return items.filter((loc) => loc.is_active && loc.id !== archiveDialog.location.id);
-  }, [archiveDialog, items]);
+  const deleteDestinations = useMemo(() => {
+    if (!deleteDialog) return [];
+    return items.filter((loc) => loc.id !== deleteDialog.location.id);
+  }, [deleteDialog, items]);
 
   const exportCsv = () => {
     exportRowsToCsv(
@@ -195,8 +203,6 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
         onExport={exportCsv}
         onRefresh={() => void refresh()}
         loading={loading || actionLoading}
-        includeArchived={includeArchived}
-        onIncludeArchivedChange={(v) => { setIncludeArchived(v); setPage(1); }}
       />
 
       <div className="cat-filters">
@@ -231,7 +237,7 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
                 <tr key={i}>{Array.from({ length: 6 }).map((__, j) => <td key={j}><div className="skeleton cat-table__skeleton" /></td>)}</tr>
               ))}
               {!loading && pageItems.length === 0 && (
-                <tr><td colSpan={6}><CatalogueEmptyState title="No locations found" description="Add a location or adjust filters." onClearFilters={() => { setSearch(''); setTypeFilter(''); setIncludeArchived(false); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add location" /></td></tr>
+                <tr><td colSpan={6}><CatalogueEmptyState title="No locations found" description="Add a location or adjust filters." onClearFilters={() => { setSearch(''); setTypeFilter(''); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add location" /></td></tr>
               )}
               {!loading && pageItems.map((location) => {
                 const stock = stockByLocationId.get(String(location.id));
@@ -262,7 +268,6 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
         <CatalogueRowActionsMenu
           label={menu.location.name}
           canWrite={canWrite}
-          isArchived={!menu.location.is_active}
           anchorRect={menu.rect}
           onClose={() => setMenu(null)}
           onAction={(action) => void handleRowAction(action, menu.location)}
@@ -270,14 +275,15 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
       )}
 
       <LocationFormDialog open={dialogOpen} location={editing} loading={actionLoading} onClose={() => setDialogOpen(false)} onConfirm={handleSave} />
-      <LocationArchiveDialog
-        open={archiveDialog != null}
-        location={archiveDialog?.location ?? null}
-        movableCount={archiveDialog?.movableCount ?? 0}
-        destinations={archiveDestinations}
+      <LocationDeleteDialog
+        open={deleteDialog != null}
+        location={deleteDialog?.location ?? null}
+        inventoryCount={deleteDialog?.inventoryCount ?? 0}
+        movableCount={deleteDialog?.movableCount ?? 0}
+        destinations={deleteDestinations}
         loading={actionLoading}
-        onClose={() => setArchiveDialog(null)}
-        onConfirm={handleArchiveWithTransfer}
+        onClose={() => setDeleteDialog(null)}
+        onConfirm={handleDeleteWithTransfer}
       />
     </div>
   );

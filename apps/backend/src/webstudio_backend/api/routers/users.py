@@ -390,7 +390,17 @@ async def unlock_user(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     extras = await UserAdminService(db_session).extras_for_user(user)
-    return _envelope(request, _serialize_detail(user, extras))
+    role_names = await _custom_role_name_map(db_session, [user])
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return _envelope(
+        request,
+        _serialize_detail(
+            user,
+            extras,
+            permissions=permissions,
+            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+        ),
+    )
 
 
 @router.post("/{user_id}/logout-all")
@@ -427,7 +437,17 @@ async def archive_user(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     extras = await UserAdminService(db_session).extras_for_user(user)
-    return _envelope(request, _serialize_detail(user, extras))
+    role_names = await _custom_role_name_map(db_session, [user])
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return _envelope(
+        request,
+        _serialize_detail(
+            user,
+            extras,
+            permissions=permissions,
+            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+        ),
+    )
 
 
 @router.post("/{user_id}/restore")
@@ -445,4 +465,14 @@ async def restore_user(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     extras = await UserAdminService(db_session).extras_for_user(user)
-    return _envelope(request, _serialize_detail(user, extras))
+    role_names = await _custom_role_name_map(db_session, [user])
+    permissions = await PermissionResolver(db_session).resolve_for_user(user)
+    return _envelope(
+        request,
+        _serialize_detail(
+            user,
+            extras,
+            permissions=permissions,
+            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+        ),
+    )

@@ -38,7 +38,7 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "tally_host": ("127.0.0.1", SettingValueType.STRING),
     "tally_port": ("9000", SettingValueType.STRING),
     "tally_company_name": ("WEBSTUDIO", SettingValueType.STRING),
-    "tally_sync_interval_seconds": ("1800", SettingValueType.INTEGER),
+    "tally_sync_interval_seconds": ("300", SettingValueType.INTEGER),
     "gemini_api_key": ("", SettingValueType.STRING),
     "gemini_model": ("gemini-2.5-flash", SettingValueType.STRING),
     "ai_primary_provider": ("gemini", SettingValueType.STRING),
@@ -65,4 +65,9 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "backup_retention_policy": ("last_30", SettingValueType.STRING),
     "backup_storage_backend": ("local", SettingValueType.STRING),
     "last_backup_at": ("", SettingValueType.STRING),
+    "mobile_latest_version": ("0.1.0", SettingValueType.STRING),
+    "mobile_release_date": ("", SettingValueType.STRING),
+    "mobile_release_notes": ("", SettingValueType.STRING),
+    "mobile_apk_download_url": ("", SettingValueType.STRING),
+    "mobile_release_channel": ("stable", SettingValueType.STRING),
 }

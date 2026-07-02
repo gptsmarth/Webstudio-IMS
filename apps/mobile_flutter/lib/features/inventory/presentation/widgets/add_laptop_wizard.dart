@@ -8,7 +8,7 @@ import '../../../media/presentation/product_image_sheet.dart';
 import '../../domain/inventory_models.dart';
 import '../../domain/inventory_permissions.dart' as inv_perms;
 import '../../domain/product_spec_lookup.dart';
-import '../barcode_scanner_screen.dart';
+import '../../../../core/device/barcode_scan_launcher.dart';
 import '../../domain/barcode_field_resolver.dart';
 import '../inventory_controller.dart';
 
@@ -384,9 +384,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   Future<void> _scanModelNumber() async {
-    final scan = await Navigator.of(context).push<BarcodeScanResult>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
+    final scan = await openBarcodeScanner(context, ref);
     if (scan == null || !mounted) return;
     if (scan.targetField == BarcodeFieldTarget.serialNumber) {
       setState(() => _error = 'That looks like a serial number. Scan a model or part number barcode, or type it manually.');
@@ -399,9 +397,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   Future<void> _scanSerial(int index) async {
-    final scan = await Navigator.of(context).push<BarcodeScanResult>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
+    final scan = await openBarcodeScanner(context, ref);
     if (scan == null || !mounted) return;
     setState(() {
       _units[index].serial.text = scan.rawValue;

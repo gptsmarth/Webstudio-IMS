@@ -38,77 +38,138 @@ class _OfflineBannerState extends ConsumerState<OfflineBanner> {
 
     final online = ref.watch(connectivityProvider).maybeWhen(data: (value) => value, orElse: () => true);
     final sync = ref.watch(backgroundSyncCoordinatorProvider);
+    final banner = _buildBanner(context, online: online, sync: sync);
 
     return Column(
       children: [
-        if (!online)
-          Material(
-            color: Theme.of(context).colorScheme.errorContainer,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Icon(Icons.cloud_off_outlined, size: 18, color: Theme.of(context).colorScheme.error),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'Offline mode — dashboard and inventory lookup use cached data.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else if (sync.syncing)
-          Material(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text('Syncing…', style: Theme.of(context).textTheme.bodySmall)),
-                ],
-              ),
-            ),
-          )
-        else if (sync.pendingCount > 0 || sync.conflictCount > 0)
-          Material(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Icon(Icons.cloud_queue_outlined, size: 18, color: Theme.of(context).colorScheme.onSecondaryContainer),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text(_syncMessage(sync), style: Theme.of(context).textTheme.bodySmall)),
-                  TextButton(
-                    onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(),
-                    child: const Text('Sync'),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        if (banner != null) banner,
         Expanded(child: widget.child),
       ],
     );
   }
 
-  String _syncMessage(SyncWorkspaceState sync) {
-    if (sync.conflictCount > 0) {
-      return '${sync.conflictCount} sync conflict(s) need review. ${sync.pendingCount} pending operation(s).';
+  Widget? _buildBanner(BuildContext context, {required bool online, required SyncWorkspaceState sync}) {
+    final theme = Theme.of(context);
+    final pendingLabel = _pendingLabel(sync.pendingCount);
+
+    if (!online && sync.pendingCount > 0) {
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.errorContainer,
+        icon: Icons.cloud_off_outlined,
+        iconColor: theme.colorScheme.error,
+        title: 'Offline',
+        subtitle: pendingLabel,
+      );
     }
-    if (sync.pendingCount > 0) {
-      return '${sync.pendingCount} operation(s) queued — will sync automatically.';
+
+    if (!online) {
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.errorContainer,
+        icon: Icons.cloud_off_outlined,
+        iconColor: theme.colorScheme.error,
+        title: 'Offline',
+        subtitle: 'Dashboard and inventory lookup use cached data.',
+      );
     }
-    if (sync.isStale) return 'Cached data may be out of date. Tap Sync to refresh.';
-    return 'Synchronizing…';
+
+    if (sync.lastError != null && !sync.syncing) {
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.errorContainer,
+        icon: Icons.sync_problem_outlined,
+        iconColor: theme.colorScheme.error,
+        title: 'Unable to synchronize.',
+        trailing: TextButton(
+          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(),
+          child: const Text('Retry'),
+        ),
+      );
+    }
+
+    if (sync.syncing) {
+      final progress = sync.syncTotal > 0 ? '${sync.syncCompleted}/${sync.syncTotal}' : null;
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.secondaryContainer,
+        iconWidget: const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+        title: 'Syncing…',
+        subtitle: progress,
+      );
+    }
+
+    if (sync.syncSuccessVisible && sync.syncTotal > 0) {
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.tertiaryContainer,
+        icon: Icons.check_circle_outline,
+        iconColor: theme.colorScheme.tertiary,
+        title: '${sync.syncCompleted}/${sync.syncTotal} synchronized',
+      );
+    }
+
+    if (sync.pendingCount > 0 || sync.conflictCount > 0) {
+      return _bannerShell(
+        context,
+        color: theme.colorScheme.secondaryContainer,
+        icon: Icons.cloud_queue_outlined,
+        iconColor: theme.colorScheme.onSecondaryContainer,
+        title: sync.conflictCount > 0
+            ? '${sync.conflictCount} sync conflict(s) need review'
+            : pendingLabel,
+        subtitle: sync.conflictCount > 0 ? pendingLabel : 'Will sync automatically when online',
+        trailing: TextButton(
+          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(),
+          child: const Text('Sync'),
+        ),
+      );
+    }
+
+    return null;
+  }
+
+  String _pendingLabel(int count) {
+    final noun = count == 1 ? 'change' : 'changes';
+    return '$count pending $noun';
+  }
+
+  Widget _bannerShell(
+    BuildContext context, {
+    required Color color,
+    IconData? icon,
+    Color? iconColor,
+    Widget? iconWidget,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+  }) {
+    return Material(
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (iconWidget != null)
+              iconWidget
+            else if (icon != null)
+              Icon(icon, size: 18, color: iconColor),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                  if (subtitle != null && subtitle.isNotEmpty)
+                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            if (trailing != null) trailing,
+          ],
+        ),
+      ),
+    );
   }
 }

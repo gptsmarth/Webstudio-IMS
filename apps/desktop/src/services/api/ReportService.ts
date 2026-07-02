@@ -1,7 +1,6 @@
 import { ApiClientProvider } from './ApiClientProvider';
-import { ConfigService } from '../ConfigService';
-import { AuthTokenStore } from '../AuthTokenStore';
 import { LoggingService } from '../LoggingService';
+import { triggerBlobDownload } from '../../lib/downloadBlob';
 
 export type BuilderReportType = 'inventory' | 'sales' | 'audit' | 'tally';
 export type ExportFormat = 'xlsx' | 'pdf';
@@ -141,37 +140,22 @@ export class ReportService {
 
   static async exportReport(reportType: BuilderReportType, format: ExportFormat, params: ReportQueryParams): Promise<void> {
     LoggingService.info('API', `Export ${reportType} report`, { format });
-    const env = await ConfigService.getEnvironment();
-    const token = await AuthTokenStore.getAccessToken();
-    const query = new URLSearchParams();
-    query.set('report_type', exportReportType(reportType));
-    query.set('format', format);
+    const client = await ApiClientProvider.getClient();
+    const queryParams: Record<string, unknown> = {
+      report_type: exportReportType(reportType),
+      format,
+    };
 
     Object.entries(params).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return;
       if (typeof value === 'boolean') {
-        query.set(key, value ? 'true' : 'false');
+        queryParams[key] = value ? 'true' : 'false';
         return;
       }
-      query.set(key, String(value));
+      queryParams[key] = value;
     });
 
-    const response = await fetch(`${env.apiBaseUrl}/api/v1/reports/export?${query.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) {
-      throw new Error(`Export failed (${response.status})`);
-    }
-
-    const blob = await response.blob();
-    const disposition = response.headers.get('Content-Disposition') ?? '';
-    const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match?.[1] ?? `report-${reportType}.${format}`;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const blob = await client.getBlob('/api/v1/reports/export', queryParams);
+    triggerBlobDownload(blob, `report-${reportType}.${format}`);
   }
 }

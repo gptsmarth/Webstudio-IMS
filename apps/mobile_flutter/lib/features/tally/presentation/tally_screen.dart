@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../shared/widgets/placeholders.dart';
 import '../../settings/data/settings_repository.dart';
 import '../data/tally_repository.dart';
+import 'widgets/tally_operational_widgets.dart';
 
 class TallyScreen extends ConsumerStatefulWidget {
   const TallyScreen({super.key});
@@ -40,27 +42,37 @@ class _TallyScreenState extends ConsumerState<TallyScreen> {
     }
   }
 
+  Future<void> _refresh() async {
+    ref.invalidate(tallyStatusProvider);
+    ref.invalidate(tallyDashboardProvider);
+    ref.invalidate(settingsWorkspaceProvider);
+    await Future.wait([
+      ref.read(tallyDashboardProvider.future),
+      ref.read(tallyStatusProvider.future),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = ref.watch(tallyStatusProvider);
     final dashboard = ref.watch(tallyDashboardProvider);
     final settings = ref.watch(settingsWorkspaceProvider);
     final repo = ref.read(tallyRepositoryProvider);
 
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(tallyStatusProvider);
-        ref.invalidate(tallyDashboardProvider);
-        ref.invalidate(settingsWorkspaceProvider);
-        await Future.wait([
-          ref.read(tallyStatusProvider.future),
-          ref.read(tallyDashboardProvider.future),
-        ]);
-      },
+      onRefresh: _refresh,
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          if (_actionMessage != null) SuccessBanner(message: _actionMessage!),
+          if (_actionMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: MaterialBanner(
+                content: Text(_actionMessage!),
+                actions: [
+                  TextButton(onPressed: () => setState(() => _actionMessage = null), child: const Text('Dismiss')),
+                ],
+              ),
+            ),
           if (_actionInProgress) const LinearProgressIndicator(minHeight: 2),
           Wrap(
             spacing: AppSpacing.sm,
@@ -69,101 +81,68 @@ class _TallyScreenState extends ConsumerState<TallyScreen> {
               FilledButton.icon(
                 onPressed: _actionInProgress ? null : () => _runAction('Sync', repo.triggerSync),
                 icon: const Icon(Icons.sync, size: 18),
-                label: const Text('Manual sync'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _actionInProgress ? null : () => _runAction('Retry', repo.retrySync),
-                icon: const Icon(Icons.replay, size: 18),
-                label: const Text('Retry sync'),
+                label: const Text('Sync now'),
               ),
               OutlinedButton.icon(
                 onPressed: _actionInProgress ? null : () => _runAction('Connection test', repo.testConnection),
                 icon: const Icon(Icons.link, size: 18),
                 label: const Text('Test connection'),
               ),
+              OutlinedButton.icon(
+                onPressed: () => context.push(AppRoutes.tallyHistory),
+                icon: const Icon(Icons.history, size: 18),
+                label: const Text('View sync history'),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Tally status', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          status.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (e, _) => Text(e.toString()),
-            data: (data) => _StatusCard(
-              title: data.connectionHealth,
-              lines: [
-                'Connection: ${data.connectionStatus}',
-                'Available: ${data.available ? 'Yes' : 'No'}',
-                'Companies: ${data.connectedCompanies}',
-                'Pending issues: ${data.pendingIssues}',
-                'Last sync: ${data.lastSync?.split('T').first ?? '—'}',
-                'Next sync: ${data.nextScheduledSync?.split('T').first ?? '—'}',
-                if (data.lastError != null) 'Last error: ${data.lastError}',
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          settings.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (workspace) => _StatusCard(
-              title: workspace.tally.connectionStatus,
-              lines: [
-                'Host: ${workspace.tally.tallyHost}:${workspace.tally.tallyPort}',
-                'Company: ${workspace.tally.tallyCompanyName ?? '—'}',
-                'Enabled: ${workspace.tally.enabled ? 'Yes' : 'No'}',
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Recent synchronizations', style: Theme.of(context).textTheme.titleMedium),
+          Text('Synchronization status', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           dashboard.when(
             loading: () => const LinearProgressIndicator(),
-            error: (e, _) => Text(e.toString()),
+            error: (error, _) => Text(error.toString()),
             data: (data) {
-              final recent = data['recent_synchronizations'];
-              if (recent is! List || recent.isEmpty) {
-                return const Text('No recent synchronizations');
-              }
               return Column(
-                children: recent.take(10).map((entry) {
-                  final map = Map<String, dynamic>.from(entry as Map);
-                  return ListTile(
-                    title: Text(map['printed_invoice_number']?.toString() ?? map['sync_run_id']?.toString() ?? 'Sync'),
-                    subtitle: Text(
-                      '${map['status'] ?? '—'} · ${(map['started_at'] as String?)?.split('T').first ?? '—'}',
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TallyOperationalMetricsGrid(operational: data.operational),
+                  if (data.lastError != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      data.lastError!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
-                  );
-                }).toList(),
+                  ],
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Connection settings', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          settings.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (workspace) {
+              final tally = workspace.tally;
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Workstation: ${tally.tallyHost}:${tally.tallyPort}'),
+                      const SizedBox(height: 4),
+                      Text('Company: ${tally.tallyCompanyName ?? '—'}'),
+                      const SizedBox(height: 4),
+                      Text('Auto sync: ${tally.enabled ? 'Enabled' : 'Disabled'}'),
+                    ],
+                  ),
+                ),
               );
             },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.title, required this.lines});
-
-  final String title;
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Chip(label: Text(title)),
-            const SizedBox(height: AppSpacing.sm),
-            for (final line in lines) Text(line),
-          ],
-        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/startup_shell.dart';
 import '../presentation/connection_controller.dart';
+import '../domain/server_models.dart';
 
 class ConnectionScreen extends ConsumerStatefulWidget {
   const ConnectionScreen({super.key, this.onConnected});
@@ -93,12 +94,38 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
           ],
           const SizedBox(height: AppSpacing.xl),
           _StatusCard(connection: connection),
+          if (connection.discoveredServers.isNotEmpty &&
+              (connection.phase == ConnectionPhase.manual || connection.phase == ConnectionPhase.testing)) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text('Discovered on your network', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.sm),
+            ...connection.discoveredServers.map(
+              (server) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.wifi_find),
+                  title: Text(server.companyName),
+                  subtitle: Text(
+                    '${server.serverName} · v${server.backendVersion} · ${server.status} · '
+                    'Last seen ${_formatLastSeen(server.lastSeen)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: ElevatedButton(
+                    onPressed: connection.phase == ConnectionPhase.testing
+                        ? null
+                        : () => ref.read(connectionControllerProvider.notifier).connectToUrl(server.url),
+                    child: const Text('Connect'),
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (connection.phase == ConnectionPhase.manual || connection.phase == ConnectionPhase.testing)
             _ManualForm(
               controller: _urlController,
               focusNode: _urlFocus,
               busy: connection.phase == ConnectionPhase.testing,
               errorMessage: connection.errorMessage,
+              diagnosticStages: connection.diagnosticStages,
               onSubmit: () => ref.read(connectionControllerProvider.notifier).connectToUrl(_urlController.text.trim()),
               onRetryDiscovery: () => ref.read(connectionControllerProvider.notifier).startAutoDiscovery(),
             ),
@@ -111,7 +138,10 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.history),
                   title: Text(server.displayLabel),
-                  subtitle: Text(server.url, style: Theme.of(context).textTheme.bodySmall),
+                  subtitle: Text(
+                    '${server.url}${server.backendVersion != null ? ' · v${server.backendVersion}' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: connection.phase == ConnectionPhase.testing
@@ -140,6 +170,10 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
       ),
     );
   }
+}
+
+String _formatLastSeen(DateTime dateTime) {
+  return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
 }
 
 class _StatusCard extends StatelessWidget {
@@ -226,12 +260,14 @@ class _ManualForm extends StatelessWidget {
     required this.onSubmit,
     required this.onRetryDiscovery,
     this.errorMessage,
+    this.diagnosticStages,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
   final String? errorMessage;
+  final List<ConnectionStageResult>? diagnosticStages;
   final VoidCallback onSubmit;
   final VoidCallback onRetryDiscovery;
 
@@ -258,13 +294,31 @@ class _ManualForm extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
+        if (diagnosticStages != null && diagnosticStages!.isNotEmpty) ...[
+          ...diagnosticStages!.map(
+            (stage) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                stage.success ? Icons.check_circle_outline : Icons.cancel_outlined,
+                size: 18,
+                color: stage.success
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
+              ),
+              title: Text(stage.label, style: Theme.of(context).textTheme.bodySmall),
+              subtitle: stage.success ? null : Text(stage.message, style: Theme.of(context).textTheme.labelSmall),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         TextField(
           controller: controller,
           focusNode: focusNode,
           decoration: const InputDecoration(
             labelText: 'Server address',
-            hintText: 'http://192.168.1.x:8000',
-            helperText: 'Ask your system administrator for the server URL.',
+            hintText: '192.168.1.10 or WEBSTUDIO-SERVER.local',
+            helperText: 'IPv4, hostname, or .local mDNS name.',
           ),
           keyboardType: TextInputType.url,
           enabled: !busy,

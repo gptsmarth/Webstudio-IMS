@@ -155,7 +155,7 @@ export function DashboardPage(): JSX.Element {
             )}
 
             {showTallyStatus && (
-              <DashboardWidget title="Tally Status" subtitle="Synchronization readiness">
+              <DashboardWidget title="Tally ERP" subtitle="Sales synchronization from Tally">
                 <TallyReadinessPanel tally={data.tally} loading={loading} onSync={triggerTallySync} syncing={syncingTally} />
               </DashboardWidget>
             )}

@@ -36,8 +36,8 @@ describe('stockModelCard', () => {
       'Processor',
       'Graphics',
       'Memory',
-      'Display',
       'Storage',
+      'Display',
       'Colors',
       'Operating system',
       'Battery',
@@ -45,7 +45,8 @@ describe('stockModelCard', () => {
       'Connectivity',
     ]);
     expect(lines[0].value).toContain('Snapdragon');
-    expect(lines[3].value).toBe('14" WUXGA OLED 60Hz');
+    expect(lines[3].value).toContain('512');
+    expect(lines[4].value).toBe('14" WUXGA OLED 60Hz');
     expect(lines.find((l) => l.label === 'Operating system')?.value).toBe('Windows 11 Home');
   });
 

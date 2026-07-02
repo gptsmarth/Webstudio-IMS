@@ -1,5 +1,5 @@
 import { ApiClientProvider } from './ApiClientProvider';
-import { ConfigService } from '../ConfigService';
+import { triggerBlobDownload } from '../../lib/downloadBlob';
 import { AuthTokenStore } from '../AuthTokenStore';
 import { LoggingService } from '../LoggingService';
 import type { AuthUserSummary } from '../../store/useAuthStore';
@@ -138,25 +138,9 @@ export class AuthenticationService {
   }
 
   static async exportSecurityEvents(format: 'pdf' | 'xlsx'): Promise<void> {
-    const env = await ConfigService.getEnvironment();
-    const token = await AuthTokenStore.getAccessToken();
-    const query = new URLSearchParams({ format });
-    const response = await fetch(`${env.apiBaseUrl}/api/v1/security/export?${query.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) {
-      throw new Error(`Security export failed (${response.status})`);
-    }
-    const blob = await response.blob();
-    const disposition = response.headers.get('Content-Disposition') ?? '';
-    const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match?.[1] ?? `security-events.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const client = await ApiClientProvider.getClient();
+    const blob = await client.getBlob('/api/v1/security/export', { format });
+    triggerBlobDownload(blob, `security-events.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
   }
 
   static async logout(): Promise<void> {

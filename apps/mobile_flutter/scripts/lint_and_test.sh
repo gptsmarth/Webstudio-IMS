@@ -11,4 +11,5 @@ fi
 flutter pub get
 flutter analyze
 flutter test
+flutter test test/integration
 echo "Lint and tests passed."

@@ -4,18 +4,23 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Body, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
+from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
-    LocationsArchiveDep,
     LocationsCreateDep,
+    LocationsDeleteDep,
     LocationsEditDep,
     LocationsViewDep,
 )
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
+from webstudio_backend.api.schemas.catalogue_deletion import (
+    DeleteLocationRequest,
+    LocationDeletePreviewResponse,
+)
 from webstudio_backend.api.schemas.location import (
     CreateLocationRequest,
     LocationResponse,
@@ -29,6 +34,7 @@ from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
+from webstudio_backend.services.location_deletion_service import LocationDeletionService
 
 router = APIRouter(prefix="/api/v1/locations", tags=["locations"])
 
@@ -124,6 +130,27 @@ async def get_location(
     return _envelope(request, LocationResponse.from_model(location).model_dump())
 
 
+@router.get("/{location_id}/delete-preview")
+async def location_delete_preview(
+    request: Request,
+    location_id: int,
+    current: LocationsDeleteDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    del current
+    repo = LocationRepository(db_session)
+    location = await repo.get_by_id(location_id)
+    if not location:
+        raise AppError(
+            "NOT_FOUND",
+            f"Location with ID {location_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    preview = await LocationDeletionService(db_session).preview(location)
+    return _envelope(request, LocationDeletePreviewResponse.model_validate(preview).model_dump())
+
+
 @router.patch("/{location_id}")
 async def update_location(
     request: Request,
@@ -157,13 +184,13 @@ async def update_location(
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
 
 
-@router.post("/{location_id}/archive")
-async def archive_location(
-    request: Request,
+@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_location(
     location_id: int,
-    current: LocationsArchiveDep,
+    current: LocationsDeleteDep,
     db_session: AsyncSession = DbSessionDep,
-) -> dict:
+    body: DeleteLocationRequest = Body(default_factory=DeleteLocationRequest),
+) -> None:
     repo = LocationRepository(db_session)
     location = await repo.get_by_id(location_id)
     if not location:
@@ -173,35 +200,12 @@ async def archive_location(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    updated = await repo.update(
-        location,
-        is_active=False,
-        actor=_actor(current),
-    )
-    await db_session.commit()
-    return _envelope(request, LocationResponse.from_model(updated).model_dump())
-
-
-@router.post("/{location_id}/restore")
-async def restore_location(
-    request: Request,
-    location_id: int,
-    current: LocationsArchiveDep,
-    db_session: AsyncSession = DbSessionDep,
-) -> dict:
-    repo = LocationRepository(db_session)
-    location = await repo.get_by_id(location_id)
-    if not location:
-        raise AppError(
-            "NOT_FOUND",
-            f"Location with ID {location_id} not found",
-            status_code=status.HTTP_404_NOT_FOUND,
+    try:
+        await LocationDeletionService(db_session).delete_location(
+            location,
+            transfer_to_location_id=body.transfer_to_location_id,
+            actor=_actor(current),
         )
-
-    updated = await repo.update(
-        location,
-        is_active=True,
-        actor=_actor(current),
-    )
-    await db_session.commit()
-    return _envelope(request, LocationResponse.from_model(updated).model_dump())
+        await db_session.commit()
+    except Exception as exc:
+        raise_catalogue_deletion_error(exc)

@@ -31,7 +31,11 @@ class ServerPreferences {
     final existing = listSavedServers();
     final normalized = server.url.trim().replaceAll(RegExp(r'/+$'), '');
     final updated = [
-      server.copyWith(url: normalized, lastConnectedAt: DateTime.now()),
+      server.copyWith(
+        url: normalized,
+        lastConnectedAt: server.lastConnectedAt ?? DateTime.now(),
+        lastSeenAt: DateTime.now(),
+      ),
       ...existing.where((entry) => entry.url != normalized),
     ].take(8).toList();
     await _prefs.setString(

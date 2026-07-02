@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree as ET
 
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
@@ -81,6 +82,23 @@ def _parse_inventory_line(line: ET.Element, index: int) -> TallyInventoryLine:
     )
 
 
+def _voucher_amount(voucher: ET.Element) -> str | None:
+    amounts: list[Decimal] = []
+    for child in voucher.iter():
+        if _local_name(child.tag).upper() != "AMOUNT":
+            continue
+        text = (child.text or "").strip().replace(",", "")
+        if not text:
+            continue
+        try:
+            amounts.append(abs(Decimal(text)))
+        except InvalidOperation:
+            continue
+    if not amounts:
+        return None
+    return str(max(amounts).quantize(Decimal("0.01")))
+
+
 def _printed_invoice_number(voucher: ET.Element, voucher_number: str) -> str:
     for candidate in (
         "REFERENCE",
@@ -129,6 +147,7 @@ def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
         narration=_child_text(voucher, "NARRATION"),
         inventory_lines=inventory_lines,
         payment_mode=_child_text(voucher, "BASICPAYMENTTYPE") or _child_text(voucher, "PAYMENTMODE"),
+        amount=_voucher_amount(voucher),
     )
 
 

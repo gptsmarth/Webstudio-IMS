@@ -82,18 +82,17 @@ class CatalogueRepository {
     );
   }
 
-  Future<void> archiveLocation(int id, {int? transferToLocationId}) async {
-    await _api.post<Object?>(
-      '${ApiPaths.locations}/$id/archive',
-      data: transferToLocationId != null ? {'transfer_to_location_id': transferToLocationId} : const {},
-      parser: (_) => null,
+  Future<LocationDeletePreview> getLocationDeletePreview(int id) async {
+    return _api.get(
+      '${ApiPaths.locations}/$id/delete-preview',
+      parser: (json) => LocationDeletePreview.fromJson(json! as Map<String, dynamic>),
     );
   }
 
-  Future<void> restoreLocation(int id) async {
-    await _api.post<Object?>(
-      '${ApiPaths.locations}/$id/restore',
-      data: const {},
+  Future<void> deleteLocation(int id, {int? transferToLocationId}) async {
+    await _api.delete<Object?>(
+      '${ApiPaths.locations}/$id',
+      data: transferToLocationId != null ? {'transfer_to_location_id': transferToLocationId} : const {},
       parser: (_) => null,
     );
   }
@@ -144,10 +143,6 @@ class CatalogueRepository {
 
   Future<void> deleteProductModel(String id) async {
     await _api.delete('${ApiPaths.productModels}/$id', parser: (_) => null);
-  }
-
-  Future<void> archiveProductModel(String id) async {
-    await deleteProductModel(id);
   }
 
   Future<ProductModel> updateSellingPrice(String id, double? price) async {

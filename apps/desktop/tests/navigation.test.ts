@@ -14,6 +14,8 @@ const MAIN_ADMIN_PERMS = [
   'audit:view', 'notifications:view', 'settings:view',
 ];
 
+const STOCK_ONLY_PERMS = ['inventory:view', 'dashboard:view'];
+
 const SALESPERSON_PERMS = [
   'inventory:view', 'inventory:transfer', 'sales:view', 'dashboard:view',
   'brands:view', 'product_models:view', 'locations:view', 'notifications:view',
@@ -24,8 +26,8 @@ describe('navigation config', () => {
     expect(navItemsForPermissions(MAIN_ADMIN_PERMS)).toHaveLength(NAV_ITEMS.length);
   });
 
-  it('shows stock and dashboard for salesperson permissions', () => {
-    const ids = navItemsForPermissions(SALESPERSON_PERMS).map((item) => item.id);
+  it('shows stock and dashboard for stock-only permissions', () => {
+    const ids = navItemsForPermissions(STOCK_ONLY_PERMS).map((item) => item.id);
     expect(ids).toContain('stock');
     expect(ids).toContain('dashboard');
     expect(ids).not.toContain('sales');
@@ -34,6 +36,14 @@ describe('navigation config', () => {
     expect(ids).not.toContain('inventory');
     expect(ids).not.toContain('users');
     expect(ids).not.toContain('settings');
+    expect(isStockOnlyUser(STOCK_ONLY_PERMS)).toBe(true);
+  });
+
+  it('shows sales and catalogue when salesperson permissions include them', () => {
+    const ids = navItemsForPermissions(SALESPERSON_PERMS).map((item) => item.id);
+    expect(ids).toContain('sales');
+    expect(ids).toContain('catalogue');
+    expect(ids).toContain('notifications');
     expect(isStockOnlyUser(SALESPERSON_PERMS)).toBe(true);
   });
 

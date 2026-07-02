@@ -210,10 +210,13 @@ async def update_tally_settings(
     db_session: AsyncSession = DbSessionDep,
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
-    updated = await SettingsService(db_session, app_settings).update_tally(
-        body,
-        actor_id=current.user.id,
-    )
+    try:
+        updated = await SettingsService(db_session, app_settings).update_tally(
+            body,
+            actor_id=current.user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return _envelope(request, updated.model_dump())
 
 

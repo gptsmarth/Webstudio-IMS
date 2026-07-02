@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/offline/offline_providers.dart';
 import '../../../core/rbac/dashboard_permissions.dart';
 import '../../../core/rbac/role_permissions.dart';
+import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/placeholders.dart';
@@ -11,8 +13,9 @@ import '../../../shared/widgets/workspace_layout.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../notifications/data/notification_repository.dart';
-import '../../settings/data/settings_repository.dart';
 import '../../inventory/presentation/inventory_controller.dart';
+import '../../tally/data/tally_repository.dart';
+import '../../tally/presentation/widgets/tally_operational_widgets.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -42,7 +45,7 @@ class DashboardScreen extends ConsumerWidget {
         final user = ref.watch(authControllerProvider).user;
         final welcomeName = _dashboardWelcomeName(user);
 
-        final tally = ref.watch(tallyStatusProvider);
+        final tally = ref.watch(tallyDashboardProvider);
         final notifications = ref.watch(_notificationSummaryProvider);
 
         return RefreshIndicator(
@@ -87,12 +90,9 @@ class DashboardScreen extends ConsumerWidget {
                 tally.when(
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
-                  data: (status) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.sync_alt_outlined),
-                      title: const Text('Tally'),
-                      subtitle: Text('${status.connectionHealth} · Last sync ${status.lastSync?.split('T').first ?? '—'}'),
-                    ),
+                  data: (dashboard) => TallyDashboardSummaryCard(
+                    operational: dashboard.operational,
+                    onTap: () => context.push(AppRoutes.tally),
                   ),
                 ),
               ],

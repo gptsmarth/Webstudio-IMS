@@ -1,5 +1,5 @@
 import type { AuditAction, AuditListEntry, AuditSource } from '../services/api/AuditService';
-import { canReadAudit as canReadAuditPermission } from '../services/PermissionService';
+import { canReadAudit as canReadAuditPermission, canExportAudit as canExportAuditPermission } from '../services/PermissionService';
 import { formatRoleLabel } from '../store/useAuthStore';
 
 export type AuditViewMode = 'table' | 'timeline';
@@ -60,6 +60,10 @@ export const SECURITY_ENTITY_TYPES = new Set([
 
 export function canReadAudit(permissions: string[]): boolean {
   return canReadAuditPermission(permissions);
+}
+
+export function canExportAudit(permissions: string[]): boolean {
+  return canExportAuditPermission(permissions);
 }
 
 export function auditResultBadgeClass(result: string): string {

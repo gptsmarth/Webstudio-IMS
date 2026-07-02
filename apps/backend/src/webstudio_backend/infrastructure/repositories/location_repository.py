@@ -140,6 +140,9 @@ class LocationRepository(SqlAlchemyRepository[Location]):
         await self._session.refresh(location)
         return location
 
+    async def force_delete(self, location: Location) -> None:
+        await super().delete(location)
+
     async def update_name(
         self,
         location: Location,

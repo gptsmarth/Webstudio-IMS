@@ -9,7 +9,7 @@ import {
   AuditToolbar,
 } from '../../components/audit';
 import { useAuditWorkspace } from '../../hooks/useAuditWorkspace';
-import { canReadAudit } from '../../lib/audit';
+import { canReadAudit, canExportAudit } from '../../lib/audit';
 import { hasActiveAuditFilters } from '../../lib/auditExport';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
@@ -26,7 +26,12 @@ export function AuditPage(): JSX.Element {
     return null;
   }, [session]);
 
-  const canExport = hasActiveAuditFilters(workspace.filters, workspace.search);
+  const canExport = useMemo(() => {
+    if (!session || !canExportAudit(session.permissions)) return false;
+    return hasActiveAuditFilters(workspace.filters, workspace.search);
+  }, [session, workspace.filters, workspace.search]);
+
+  const hasExportPermission = Boolean(session && canExportAudit(session.permissions));
 
   if (permissionDenied) {
     return (
@@ -52,8 +57,12 @@ export function AuditPage(): JSX.Element {
       <div className="aud-page__panel">
         <AuditToolbar workspace={workspace} canExport={canExport} />
 
-        {!canExport && (
+        {!canExport && hasExportPermission && (
           <p className="aud-page__hint">Apply search or filters to enable filtered Excel/PDF exports.</p>
+        )}
+
+        {!hasExportPermission && (
+          <p className="aud-page__hint">Your account does not have permission to export audit logs.</p>
         )}
 
         <AuditFiltersPanel

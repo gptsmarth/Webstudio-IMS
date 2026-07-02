@@ -1,4 +1,6 @@
 import { RefreshCw } from 'lucide-react';
+import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
+import { tallyHealthLabel } from '../../lib/tallyDisplay';
 import type { TallyStatusSummary } from '../../services/api/TallyService';
 
 interface TallyReadinessPanelProps {
@@ -14,80 +16,69 @@ export function TallyReadinessPanel({
   loading,
   onSync,
   syncing,
-  fullPage = false,
 }: TallyReadinessPanelProps): JSX.Element {
   if (loading) {
     return <div className="skeleton tally-panel__skeleton" />;
   }
 
+  const operational = tally.operational;
+  const connected = operational?.is_connected ?? tally.is_connected;
+  const health = operational?.sync_health ?? tally.connection_health;
+  const todaysImports = operational?.imported_today ?? tally.todays_imports;
+  const pendingRetry = operational?.pending_retry ?? tally.pending_retry;
+  const retryLabel = operational?.retry_countdown_label;
+
   return (
-    <div className={`tally-panel ${fullPage ? 'tally-panel--full' : ''}`}>
-      <div className="tally-panel__grid">
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Connection</span>
-          <span className="tally-panel__value">{tally.connection_status}</span>
+    <div className="tally-dashboard-widget">
+      <div className="tally-dashboard-widget__grid">
+        <div className="tally-dashboard-widget__metric">
+          <span className="tally-dashboard-widget__label">Tally connected</span>
+          <span className={`tally-dashboard-widget__value ${connected ? 'is-ok' : 'is-warn'}`}>
+            {connected ? 'Yes' : 'No'}
+          </span>
         </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Health</span>
-          <span className="tally-panel__value">{tally.connection_health}</span>
+        <div className="tally-dashboard-widget__metric">
+          <span className="tally-dashboard-widget__label">Last sync</span>
+          <span className="tally-dashboard-widget__value" title={tally.last_sync ?? undefined}>
+            {tally.last_sync ? formatRelativeTime(tally.last_sync) : '—'}
+          </span>
         </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Last sync</span>
-          <span className="tally-panel__value">{tally.last_sync ?? '—'}</span>
+        <div className="tally-dashboard-widget__metric">
+          <span className="tally-dashboard-widget__label">Pending retry</span>
+          <span className={`tally-dashboard-widget__value ${pendingRetry ? 'is-warn' : ''}`}>
+            {pendingRetry ? retryLabel ?? 'Waiting' : 'No'}
+          </span>
         </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Next scheduled sync</span>
-          <span className="tally-panel__value">{tally.next_scheduled_sync ?? '—'}</span>
+        <div className="tally-dashboard-widget__metric">
+          <span className="tally-dashboard-widget__label">Today&apos;s imports</span>
+          <span className="tally-dashboard-widget__value">{todaysImports}</span>
         </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Connected companies</span>
-          <span className="tally-panel__value">{tally.connected_companies}</span>
-        </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Processed invoices</span>
-          <span className="tally-panel__value">{tally.invoices_processed}</span>
-        </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Pending issues</span>
-          <span className="tally-panel__value">{tally.pending_issues}</span>
-        </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Inventory entries</span>
-          <span className="tally-panel__value">{tally.inventory_entries_processed}</span>
-        </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Sync failures</span>
-          <span className="tally-panel__value">{tally.sync_failures}</span>
-        </div>
-        <div className="tally-panel__metric">
-          <span className="tally-panel__label">Voucher types</span>
-          <span className="tally-panel__value">
-            {tally.voucher_types.length ? tally.voucher_types.join(' · ') : 'Sales · NEW SALE'}
+        <div className="tally-dashboard-widget__metric">
+          <span className="tally-dashboard-widget__label">Sync health</span>
+          <span className={`tally-dashboard-widget__value tally-dashboard-widget__value--${health}`}>
+            {tallyHealthLabel(health)}
           </span>
         </div>
       </div>
 
-      {fullPage && (
-        <dl className="tally-panel__details">
-          <div><dt>Skipped invoices</dt><dd>{tally.skipped_invoices || '—'}</dd></div>
-          <div><dt>Duplicate invoices</dt><dd>{tally.duplicate_invoices || '—'}</dd></div>
-          <div><dt>Model mismatches</dt><dd>{tally.model_mismatches || '—'}</dd></div>
-          <div><dt>Missing serials</dt><dd>{tally.missing_serials || '—'}</dd></div>
-        </dl>
-      )}
-
-      {!tally.available && (
-        <p className="tally-panel__hint">
-          Enable Tally integration and set the host, port, and company name in the configuration panel above or under System Settings → Tally.
+      {tally.last_sync && (
+        <p className="tally-dashboard-widget__meta">
+          Last successful sync: {formatDateTime(tally.last_sync)}
         </p>
       )}
 
       {tally.last_error && <p className="tally-panel__error">{tally.last_error}</p>}
 
-      {onSync && (
+      {!tally.available && (
+        <p className="tally-panel__hint">
+          Enable Tally synchronization under Settings → Tally to import sales automatically.
+        </p>
+      )}
+
+      {onSync && tally.available && (
         <button type="button" className="btn btn-secondary btn-sm tally-panel__sync" onClick={onSync} disabled={syncing}>
           <RefreshCw size={14} aria-hidden className={syncing ? 'sales-spin' : undefined} />
-          {syncing ? 'Syncing…' : 'Trigger sync'}
+          {syncing ? 'Syncing…' : 'Sync now'}
         </button>
       )}
     </div>

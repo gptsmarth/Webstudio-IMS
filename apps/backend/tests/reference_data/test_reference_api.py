@@ -90,9 +90,6 @@ async def test_brands_rbac_and_crud(
     resp = await api_client.get(f"/api/v1/brands/{brand_id}", headers=salesperson_headers)
     assert resp.status_code == 404
 
-    resp = await api_client.post(f"/api/v1/brands/{brand_id}/restore", headers=admin_headers)
-    assert resp.status_code == 410
-
 
 @pytest.mark.asyncio
 async def test_locations_rbac_and_crud(
@@ -153,113 +150,9 @@ async def test_locations_rbac_and_crud(
     assert updated["name"] == "Yamunanagar Store"
     assert updated["sort_order"] == 5
 
-    # 6. Archive / Restore
-    # Archive
-    resp = await api_client.post(f"/api/v1/locations/{loc_id}/archive", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["is_active"] is False
-
-    # Restore
-    resp = await api_client.post(f"/api/v1/locations/{loc_id}/restore", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["is_active"] is True
-
-
-@pytest.mark.asyncio
-async def test_location_archive_preview_and_transfer(
-    api_client: AsyncClient,
-    admin_headers: dict[str, str],
-    db_session: AsyncSession,
-) -> None:
-    from decimal import Decimal
-
-    from webstudio_backend.infrastructure.database.enums import (
-        InventoryStatus,
-        LocationType,
-        StorageType,
-        StorageUnit,
-    )
-    from webstudio_backend.infrastructure.repositories import (
-        BrandRepository,
-        InventoryItemRepository,
-        LocationRepository,
-        ProductModelRepository,
-    )
-
-    brand = await BrandRepository(db_session).create("Transfer Brand")
-    source = await LocationRepository(db_session).create("Source Loc", location_type=LocationType.WAREHOUSE)
-    destination = await LocationRepository(db_session).create("Dest Loc", location_type=LocationType.RETAIL_FLOOR)
-    product_model = await ProductModelRepository(db_session).create(
-        brand_id=brand.id,
-        model_number="TR-01",
-        model_name="Transfer Model",
-        cpu="Intel i5",
-        ram_gb=16,
-        storage_value=Decimal("512"),
-        storage_unit=StorageUnit.GB,
-        storage_type=StorageType.SSD,
-    )
-    item = await InventoryItemRepository(db_session).create(
-        serial_number="SN-TRANSFER-001",
-        product_model_id=product_model.id,
-        color="Black",
-        current_location_id=source.id,
-        status=InventoryStatus.AVAILABLE,
-    )
-    await db_session.commit()
-
-    preview = await api_client.get(f"/api/v1/locations/{source.id}/archive-preview", headers=admin_headers)
-    assert preview.status_code == 200
-    preview_data = preview.json()["data"]
-    assert preview_data["movable_inventory_count"] == 1
-    assert preview_data["requires_transfer"] is True
-
-    blocked = await api_client.post(f"/api/v1/locations/{source.id}/archive", headers=admin_headers, json={})
-    assert blocked.status_code == 409
-
-    archived = await api_client.post(
-        f"/api/v1/locations/{source.id}/archive",
-        headers=admin_headers,
-        json={"transfer_to_location_id": destination.id},
-    )
-    assert archived.status_code == 200
-    assert archived.json()["data"]["is_active"] is False
-
-    await db_session.refresh(item)
-    assert item.current_location_id == destination.id
-
-
-@pytest.mark.asyncio
-async def test_brand_delete_cascades_product_models(
-    api_client: AsyncClient,
-    admin_headers: dict[str, str],
-    db_session: AsyncSession,
-) -> None:
-    from decimal import Decimal
-
-    from webstudio_backend.infrastructure.database.enums import StorageType, StorageUnit
-    from webstudio_backend.infrastructure.repositories import BrandRepository, ProductModelRepository
-
-    brand = await BrandRepository(db_session).create("Cascade Brand")
-    product_model = await ProductModelRepository(db_session).create(
-        brand_id=brand.id,
-        model_number="CAS-01",
-        model_name="Cascade Model",
-        cpu="Intel i5",
-        ram_gb=16,
-        storage_value=Decimal("512"),
-        storage_unit=StorageUnit.GB,
-        storage_type=StorageType.SSD,
-    )
-    await db_session.commit()
-
-    resp = await api_client.delete(f"/api/v1/brands/{brand.id}", headers=admin_headers)
+    # 6. Delete empty location
+    resp = await api_client.delete(f"/api/v1/locations/{loc_id}", headers=admin_headers)
     assert resp.status_code == 204
 
-    product_model_repo = ProductModelRepository(db_session)
-    deleted = await product_model_repo.get_by_id(product_model.id)
-    assert deleted is None
-
-    brand_repo = BrandRepository(db_session)
-    assert await brand_repo.get_by_id(brand.id) is None
-
+    resp = await api_client.get(f"/api/v1/locations/{loc_id}", headers=salesperson_headers)
+    assert resp.status_code == 404

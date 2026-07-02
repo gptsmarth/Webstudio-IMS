@@ -16,7 +16,7 @@ import '../domain/inventory_permissions.dart' as inv_perms;
 import '../domain/inventory_models.dart';
 import '../domain/stock_model_card_utils.dart';
 import 'inventory_controller.dart';
-import 'barcode_scanner_screen.dart';
+import '../../../core/device/barcode_scan_launcher.dart';
 import 'widgets/add_laptop_wizard.dart';
 import 'widgets/inventory_detail_sheet.dart';
 import 'widgets/inventory_filters_sheet.dart';
@@ -108,9 +108,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    final scan = await Navigator.of(context).push<BarcodeScanResult>(
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
+    final scan = await openBarcodeScanner(context, ref);
     if (scan == null || !mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(

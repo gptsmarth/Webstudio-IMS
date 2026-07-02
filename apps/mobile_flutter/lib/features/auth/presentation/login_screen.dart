@@ -9,6 +9,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../shared/widgets/webstudio_logo.dart';
+import '../../../core/version/version_check_controller.dart';
 import 'auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -91,6 +92,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (ok) {
+      await ref.read(versionCheckControllerProvider.notifier).check(
+            trigger: VersionCheckTrigger.login,
+            context: context,
+          );
+      if (!mounted) return;
+      if (ref.read(versionCheckControllerProvider).mandatoryBlocked) return;
       await Future<void>.delayed(const Duration(milliseconds: 400));
       if (mounted) context.go(AppRoutes.dashboard);
     } else {

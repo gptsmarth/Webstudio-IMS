@@ -22,5 +22,7 @@ abstract final class AppRoutes {
   static const users = settingsUsers;
   static const backup = '/more/backup';
   static const tally = '/more/tally';
+  static const tallyHistory = '/more/tally/history';
+  static const settingsTallyHistory = '/settings/tally/history';
   static const audit = '/more/audit';
 }

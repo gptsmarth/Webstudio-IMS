@@ -42,6 +42,9 @@ from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 from webstudio_backend.services.security_alert_service import SecurityAlertService
 from webstudio_backend.services.system_info_service import SystemInfoService
+from webstudio_backend.integrations.tally.connectivity import normalize_tally_host, validate_tally_port
+from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS
+from webstudio_backend.integrations.tally.incremental_sync import clamp_sync_interval_seconds
 
 _SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key", "groq_api_key", "openrouter_api_key"})
 
@@ -252,11 +255,17 @@ class SettingsService:
         return workspace.sales
 
     async def update_tally(self, payload: TallySettingsGroup, *, actor_id: int) -> TallySettingsGroup:
+        normalized_host = normalize_tally_host(payload.tally_host)
+        normalized_port = validate_tally_port(payload.tally_port)
         await self._set_bool("tally_enabled", payload.enabled, actor_id=actor_id)
-        await self._set_str("tally_host", payload.tally_host, actor_id=actor_id)
-        await self._set_str("tally_port", payload.tally_port, actor_id=actor_id)
+        await self._set_str("tally_host", normalized_host, actor_id=actor_id)
+        await self._set_str("tally_port", normalized_port, actor_id=actor_id)
         await self._set_str("tally_company_name", payload.tally_company_name, actor_id=actor_id)
-        await self._set_int("tally_sync_interval_seconds", payload.sync_interval_seconds, actor_id=actor_id)
+        await self._set_int(
+            "tally_sync_interval_seconds",
+            clamp_sync_interval_seconds(payload.sync_interval_seconds),
+            actor_id=actor_id,
+        )
         workspace = await self.get_workspace()
         return workspace.tally
 
@@ -352,7 +361,9 @@ class SettingsService:
 
     async def _tally_group(self) -> TallySettingsGroup:
         enabled = await self._get_bool("tally_enabled", False)
-        interval = await self._get_int("tally_sync_interval_seconds", 1800)
+        interval = clamp_sync_interval_seconds(
+            await self._get_int("tally_sync_interval_seconds", DEFAULT_SYNC_INTERVAL_SECONDS),
+        )
         now = datetime.now(UTC)
         return TallySettingsGroup(
             connection_status="connected" if enabled else "disconnected",

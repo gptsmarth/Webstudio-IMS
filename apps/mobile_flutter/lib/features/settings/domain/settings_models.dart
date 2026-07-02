@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../tally/domain/tally_models.dart';
+
 class AIProviderHealth extends Equatable {
   const AIProviderHealth({
     required this.provider,
@@ -246,6 +248,8 @@ class BackupAdminDashboardSummary extends Equatable {
 class TallyStatusSummary extends Equatable {
   const TallyStatusSummary({
     required this.available,
+    required this.isConnected,
+    required this.connectionLabel,
     required this.connectionStatus,
     this.lastSync,
     this.nextScheduledSync,
@@ -253,9 +257,14 @@ class TallyStatusSummary extends Equatable {
     required this.pendingIssues,
     required this.connectionHealth,
     this.lastError,
+    this.operational,
+    required this.pendingRetry,
+    required this.todaysImports,
   });
 
   final bool available;
+  final bool isConnected;
+  final String connectionLabel;
   final String connectionStatus;
   final String? lastSync;
   final String? nextScheduledSync;
@@ -263,20 +272,33 @@ class TallyStatusSummary extends Equatable {
   final int pendingIssues;
   final String connectionHealth;
   final String? lastError;
+  final TallyOperationalSummary? operational;
+  final bool pendingRetry;
+  final int todaysImports;
 
-  factory TallyStatusSummary.fromJson(Map<String, dynamic> json) => TallyStatusSummary(
-        available: json['available'] as bool? ?? false,
-        connectionStatus: json['connection_status'] as String? ?? 'unavailable',
-        lastSync: json['last_sync'] as String?,
-        nextScheduledSync: json['next_scheduled_sync'] as String?,
-        connectedCompanies: json['connected_companies'] as int? ?? 0,
-        pendingIssues: json['pending_issues'] as int? ?? 0,
-        connectionHealth: json['connection_health'] as String? ?? 'offline',
-        lastError: json['last_error'] as String?,
-      );
+  factory TallyStatusSummary.fromJson(Map<String, dynamic> json) {
+    final operationalRaw = json['operational'];
+    return TallyStatusSummary(
+      available: json['available'] as bool? ?? json['is_healthy'] as bool? ?? false,
+      isConnected: json['is_connected'] as bool? ?? false,
+      connectionLabel: json['connection_label'] as String? ?? 'Disconnected',
+      connectionStatus: json['connection_status'] as String? ?? 'unavailable',
+      lastSync: json['last_sync'] as String?,
+      nextScheduledSync: json['next_scheduled_sync'] as String?,
+      connectedCompanies: json['connected_companies'] as int? ?? 0,
+      pendingIssues: json['pending_issues'] as int? ?? 0,
+      connectionHealth: json['connection_health'] as String? ?? 'offline',
+      lastError: json['last_error'] as String?,
+      operational: operationalRaw is Map<String, dynamic>
+          ? TallyOperationalSummary.fromJson(operationalRaw)
+          : null,
+      pendingRetry: json['pending_retry'] as bool? ?? false,
+      todaysImports: json['todays_imports'] as int? ?? 0,
+    );
+  }
 
   @override
-  List<Object?> get props => [connectionStatus, connectionHealth];
+  List<Object?> get props => [connectionStatus, connectionHealth, isConnected];
 }
 
 String formatBytes(int bytes) {

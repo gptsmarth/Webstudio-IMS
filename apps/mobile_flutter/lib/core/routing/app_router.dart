@@ -20,6 +20,7 @@ import '../../features/sales/presentation/sales_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/shell/presentation/more_hub_screen.dart';
+import '../../features/tally/presentation/tally_history_screen.dart';
 import '../../features/tally/presentation/tally_screen.dart';
 import '../../features/users/presentation/access_roles_screen.dart';
 import '../../features/users/presentation/users_screen.dart';
@@ -117,7 +118,9 @@ StatefulShellBranch _settingsBranch() {
         routes: [
           GoRoute(path: 'users', builder: (_, __) => const UsersScreen()),
           GoRoute(path: 'access-roles', builder: (_, __) => const AccessRolesScreen()),
-          GoRoute(path: 'tally', builder: (_, __) => const TallyScreen()),
+          GoRoute(path: 'tally', builder: (_, __) => const TallyScreen(), routes: [
+            GoRoute(path: 'history', builder: (_, __) => const TallyHistoryScreen()),
+          ]),
           GoRoute(path: 'audit', builder: (_, __) => const AuditCenterScreen()),
           GoRoute(path: 'backup', builder: (_, __) => const BackupScreen()),
         ],
@@ -136,7 +139,9 @@ StatefulShellBranch _moreBranch() {
           GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: 'notifications', builder: (_, __) => const NotificationsScreen()),
           GoRoute(path: 'backup', builder: (_, __) => const BackupScreen()),
-          GoRoute(path: 'tally', builder: (_, __) => const TallyScreen()),
+          GoRoute(path: 'tally', builder: (_, __) => const TallyScreen(), routes: [
+            GoRoute(path: 'history', builder: (_, __) => const TallyHistoryScreen()),
+          ]),
           GoRoute(path: 'audit', builder: (_, __) => const AuditCenterScreen()),
         ],
       ),

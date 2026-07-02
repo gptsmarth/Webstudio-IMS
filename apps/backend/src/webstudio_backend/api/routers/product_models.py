@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
-    ProductModelsArchiveDep,
+    ProductModelsDeleteDep,
     ProductModelsCreateDep,
     ProductModelsEditDep,
     ProductModelsOrInventoryViewDep,
@@ -26,7 +26,9 @@ from webstudio_backend.api.schemas.product_model import (
     UpdateProductModelRequest,
     UpdateSellingPriceRequest,
 )
+from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
+from webstudio_backend.api.schemas.catalogue_deletion import ProductModelDeletePreviewResponse
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
@@ -396,7 +398,7 @@ async def update_product_model_selling_price(
 @router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product_model(
     model_id: uuid.UUID,
-    current: ProductModelsArchiveDep,
+    current: ProductModelsDeleteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> None:
     repo = ProductModelRepository(db_session)
@@ -408,33 +410,32 @@ async def delete_product_model(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    await ProductModelDeletionService(db_session).delete_product_model(pm, actor=_actor(current))
-    await db_session.commit()
+    try:
+        await ProductModelDeletionService(db_session).delete_product_model(pm, actor=_actor(current))
+        await db_session.commit()
+    except Exception as exc:
+        raise_catalogue_deletion_error(exc)
 
 
-@router.post("/{model_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
-async def archive_product_model(
-    model_id: uuid.UUID,
-    current: ProductModelsArchiveDep,
-    db_session: AsyncSession = DbSessionDep,
-) -> None:
-    """Deprecated alias — permanently deletes the model and its inventory units."""
-    await delete_product_model(model_id, current, db_session)
-
-
-@router.post("/{model_id}/restore", status_code=status.HTTP_410_GONE)
-async def restore_product_model(
+@router.get("/{model_id}/delete-preview")
+async def product_model_delete_preview(
     request: Request,
     model_id: uuid.UUID,
-    current: ProductModelsArchiveDep,
+    current: ProductModelsDeleteDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    del model_id, current, db_session
-    raise AppError(
-        "GONE",
-        "Product model restore is no longer supported. Deleted models cannot be recovered.",
-        status_code=status.HTTP_410_GONE,
-    )
+    del current
+    repo = ProductModelRepository(db_session)
+    pm = await repo.get_by_id(model_id)
+    if not pm:
+        raise AppError(
+            "NOT_FOUND",
+            f"Product model with ID {model_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    preview = await ProductModelDeletionService(db_session).preview(pm)
+    return _envelope(request, ProductModelDeletePreviewResponse.model_validate(preview).model_dump())
 
 
 @router.post("/spec-lookup")

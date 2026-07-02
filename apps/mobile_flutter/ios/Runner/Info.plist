@@ -53,6 +53,10 @@
 	<string>Photo library access lets you choose product images for upload.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Photo library access lets you save exported reports and images.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>WEBSTUDIO IMS sends operational alerts such as sync failures and inventory notifications.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>WEBSTUDIO IMS connects to your local WEBSTUDIO server on the same network.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

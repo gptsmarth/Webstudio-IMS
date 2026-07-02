@@ -145,6 +145,40 @@ class AuditRecorder:
             description=self._field_change_description(field_name, old_value, new_value),
         )
 
+    async def record_location_delete(
+        self,
+        location: Location,
+        *,
+        actor: AuditActor,
+        transferred_count: int,
+        transfer_to_location_id: int | None,
+    ) -> None:
+        await self.record(
+            entity_type="location",
+            entity_id=str(location.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            field_name="deleted",
+            old_value={
+                "location": entity_ref(entity_id=location.id, name=location.name),
+                "location_type": location.location_type.value,
+                "is_active": location.is_active,
+            },
+            new_value={
+                "deleted": True,
+                "transferred_count": transferred_count,
+                "transfer_to_location_id": transfer_to_location_id,
+            },
+            description=(
+                f"Location '{location.name}' permanently deleted"
+                + (
+                    f" after transferring {transferred_count} inventory item(s)"
+                    if transferred_count
+                    else ""
+                )
+            ),
+        )
+
     async def record_product_model_create(
         self,
         product_model: ProductModel,
@@ -754,6 +788,29 @@ class AuditRecorder:
                 "username": user.username,
             },
             description=f"Refresh token reuse detected for user '{user.username}'",
+            source=AuditSource.SYSTEM,
+        )
+
+    async def record_session_idle_timeout(
+        self,
+        user: User,
+        *,
+        session_id: int,
+        idle_minutes: int,
+    ) -> None:
+        await self.record(
+            entity_type="user",
+            entity_id=str(user.id),
+            action=AuditAction.SYSTEM_ACTION,
+            actor=AuditActor.system(display_name="System", role="system"),
+            new_value={
+                "security_event": "session_idle_timeout",
+                "severity": "medium",
+                "username": user.username,
+                "session_id": session_id,
+                "idle_minutes": idle_minutes,
+            },
+            description=f"Session expired due to inactivity for user '{user.username}'",
             source=AuditSource.SYSTEM,
         )
 

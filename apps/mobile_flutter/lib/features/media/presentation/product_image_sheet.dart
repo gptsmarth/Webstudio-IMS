@@ -14,17 +14,19 @@ class ProductImageActions {
   final Ref _ref;
   final _picker = ImagePicker();
 
-  Future<Uint8List?> captureFromCamera() async {
+  Future<Uint8List?> captureFromCamera(BuildContext context) async {
     final permissions = _ref.read(devicePermissionsProvider);
-    if (!await permissions.ensure(DevicePermissionKind.camera)) return null;
+    final outcome = await permissions.requestWithContext(context, DevicePermissionKind.camera);
+    if (!outcome.granted) return null;
     final image = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
     if (image == null) return null;
     return image.readAsBytes();
   }
 
-  Future<Uint8List?> pickFromGallery() async {
+  Future<Uint8List?> pickFromGallery(BuildContext context) async {
     final permissions = _ref.read(devicePermissionsProvider);
-    if (!await permissions.ensure(DevicePermissionKind.storage)) return null;
+    final outcome = await permissions.requestWithContext(context, DevicePermissionKind.storage);
+    if (!outcome.granted) return null;
     final image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (image == null) return null;
     return image.readAsBytes();
@@ -80,7 +82,7 @@ Future<void> showProductImageSheet(
         title: const Text('Capture photo'),
         onTap: () async {
           Navigator.pop(context);
-          final bytes = await actions.captureFromCamera();
+          final bytes = await actions.captureFromCamera(context);
           if (bytes == null || !context.mounted) return;
           await _uploadAndPreview(context, ref, productModelId, bytes, 'capture.jpg');
         },
@@ -134,7 +136,7 @@ Future<void> showProductImageSheet(
         title: const Text('Choose from gallery'),
         onTap: () async {
           Navigator.pop(context);
-          final bytes = await actions.pickFromGallery();
+          final bytes = await actions.pickFromGallery(context);
           if (bytes == null || !context.mounted) return;
           await _uploadAndPreview(context, ref, productModelId, bytes, 'gallery.jpg');
         },

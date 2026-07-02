@@ -48,18 +48,18 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     "brands:view",
     "brands:create",
     "brands:edit",
-    "brands:archive",
+    "brands:delete",
     # Catalogue — product models
     "product_models:view",
     "product_models:create",
     "product_models:edit",
-    "product_models:archive",
+    "product_models:delete",
     "product_models:selling_price:edit",
     # Catalogue — locations
     "locations:view",
     "locations:create",
     "locations:edit",
-    "locations:archive",
+    "locations:delete",
     # Audit
     "audit:view",
     "audit:export",
@@ -134,16 +134,16 @@ _ADMIN: frozenset[str] = frozenset(
         "brands:view",
         "brands:create",
         "brands:edit",
-        "brands:archive",
+        "brands:delete",
         "product_models:view",
         "product_models:create",
         "product_models:edit",
-        "product_models:archive",
+        "product_models:delete",
         "product_models:selling_price:edit",
         "locations:view",
         "locations:create",
         "locations:edit",
-        "locations:archive",
+        "locations:delete",
         "audit:lifecycle",
         "notifications:view",
         "notifications:manage",
@@ -235,14 +235,14 @@ PERMISSION_REQUIRES: dict[str, str] = {
     "reports:export": "reports:view",
     "brands:create": "brands:view",
     "brands:edit": "brands:view",
-    "brands:archive": "brands:view",
+    "brands:delete": "brands:view",
     "product_models:create": "product_models:view",
     "product_models:edit": "product_models:view",
-    "product_models:archive": "product_models:view",
+    "product_models:delete": "product_models:view",
     "product_models:selling_price:edit": "product_models:view",
     "locations:create": "locations:view",
     "locations:edit": "locations:view",
-    "locations:archive": "locations:view",
+    "locations:delete": "locations:view",
     "audit:export": "audit:view",
     "audit:lifecycle": "audit:view",
     "notifications:manage": "notifications:view",
@@ -254,10 +254,25 @@ PERMISSION_REQUIRES: dict[str, str] = {
 for _widget in DASHBOARD_WIDGET_PERMISSIONS:
     PERMISSION_REQUIRES[_widget] = "dashboard:view"
 
+# Legacy catalogue archive permissions map to delete for custom roles created before M12.
+LEGACY_PERMISSION_ALIASES: dict[str, str] = {
+    "brands:archive": "brands:delete",
+    "product_models:archive": "product_models:delete",
+    "locations:archive": "locations:delete",
+}
+
+
+def expand_legacy_permissions(permissions: set[str] | frozenset[str]) -> set[str]:
+    expanded = set(permissions)
+    for legacy, current in LEGACY_PERMISSION_ALIASES.items():
+        if legacy in expanded:
+            expanded.add(current)
+    return expanded
+
 
 def normalize_permission_set(permissions: set[str] | frozenset[str]) -> set[str]:
     """Ensure implied view permissions are included."""
-    normalized = set(permissions)
+    normalized = expand_legacy_permissions(permissions)
     for permission in list(normalized):
         required = PERMISSION_REQUIRES.get(permission)
         if required:
@@ -280,7 +295,13 @@ def validate_assignable_permissions(permissions: set[str]) -> None:
 
 
 def user_has_permission(granted: set[str] | frozenset[str], permission: str) -> bool:
-    return permission in granted
+    if permission in granted:
+        return True
+    legacy = next(
+        (legacy for legacy, current in LEGACY_PERMISSION_ALIASES.items() if current == permission),
+        None,
+    )
+    return legacy is not None and legacy in granted
 
 
 def user_has_any_permission(granted: set[str] | frozenset[str], *permissions: str) -> bool:

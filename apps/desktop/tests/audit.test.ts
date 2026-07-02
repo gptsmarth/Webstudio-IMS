@@ -3,6 +3,7 @@ import {
   auditSeverityBadgeClass,
   auditSeverityLabel,
   buildAuditTimeline,
+  canExportAudit,
   canReadAudit,
   formatActorRole,
   timelineLabel,
@@ -42,6 +43,11 @@ describe('audit helpers', () => {
   it('checks audit:view permission', () => {
     expect(canReadAudit(['audit:view'])).toBe(true);
     expect(canReadAudit(['audit:lifecycle'])).toBe(false);
+  });
+
+  it('checks audit:export permission', () => {
+    expect(canExportAudit(['audit:export', 'audit:view'])).toBe(true);
+    expect(canExportAudit(['audit:view'])).toBe(false);
   });
 
   it('formats actor roles', () => {
