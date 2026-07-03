@@ -528,7 +528,9 @@ class BackupEngine:
         cmd.append(db_name)
         try:
             with path.open("r", encoding="utf-8") as handle:
-                subprocess.run(cmd, check=True, stdin=handle, env=env, stderr=subprocess.PIPE, text=True)
+                subprocess.run(
+                    cmd, check=True, stdin=handle, env=env, stderr=subprocess.PIPE, text=True
+                )
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or str(exc)).strip()
             raise RepositoryError(
