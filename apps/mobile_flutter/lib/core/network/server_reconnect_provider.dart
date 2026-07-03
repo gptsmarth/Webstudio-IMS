@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/connection/data/server_repository.dart';
+import '../../features/connection/presentation/connection_controller.dart';
 import '../config/app_config_provider.dart';
 import 'api_client.dart';
 
