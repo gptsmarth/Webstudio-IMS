@@ -20,7 +20,11 @@ import {
 export type { ReportBuilderFilters };
 export { DEFAULT_REPORT_FILTERS };
 
-export type PreviewRow = InventoryReportRow | SalesReportRow | AuditReportRow | NotificationReportRow;
+export type PreviewRow =
+  | InventoryReportRow
+  | SalesReportRow
+  | AuditReportRow
+  | NotificationReportRow;
 
 export function useReportBuilder() {
   const [reportType, setReportType] = useState<BuilderReportType>('inventory');
@@ -29,7 +33,10 @@ export function useReportBuilder() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [productModels, setProductModels] = useState<ProductModel[]>([]);
   const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [summary, setSummary] = useState<{ total_rows: number; by_status: Record<string, number> } | null>(null);
+  const [summary, setSummary] = useState<{
+    total_rows: number;
+    by_status: Record<string, number>;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,19 +106,22 @@ export function useReportBuilder() {
     }
   }, [queryParams, reportType]);
 
-  const exportReport = useCallback(async (format: ExportFormat) => {
-    if (!hasPreviewed) return;
-    setExporting(true);
-    setError(null);
-    try {
-      await ReportService.exportReport(reportType, format, queryParams);
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setError(message.message ?? 'Export failed.');
-    } finally {
-      setExporting(false);
-    }
-  }, [hasPreviewed, queryParams, reportType]);
+  const exportReport = useCallback(
+    async (format: ExportFormat) => {
+      if (!hasPreviewed) return;
+      setExporting(true);
+      setError(null);
+      try {
+        await ReportService.exportReport(reportType, format, queryParams);
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setError(message.message ?? 'Export failed.');
+      } finally {
+        setExporting(false);
+      }
+    },
+    [hasPreviewed, queryParams, reportType],
+  );
 
   const toggleSort = useCallback((field: string) => {
     setSortField((current) => {

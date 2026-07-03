@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from webstudio_backend.core.version_catalog import find_repo_root, load_version_catalog
 
 

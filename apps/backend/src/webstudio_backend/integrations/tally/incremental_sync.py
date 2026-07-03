@@ -17,7 +17,9 @@ def clamp_sync_interval_seconds(raw: int) -> int:
     return max(SYNC_INTERVAL_MIN_SECONDS, min(SYNC_INTERVAL_MAX_SECONDS, raw))
 
 
-def resolve_incremental_from_date(company_sync: TallyCompanySync, *, today: date | None = None) -> date:
+def resolve_incremental_from_date(
+    company_sync: TallyCompanySync, *, today: date | None = None
+) -> date:
     """Request Tally exports starting from the last successful sync date (never full history)."""
     reference = today or datetime.now(UTC).date()
     if company_sync.last_successful_sync_at is not None:

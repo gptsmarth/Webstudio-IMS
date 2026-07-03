@@ -97,7 +97,9 @@ describe('password strength', () => {
 
 describe('permission viewer grouping', () => {
   it('marks granted permissions from backend payload', () => {
-    const modules = buildPermissionModules(['inventory:view', 'sales:view'], { roleLabel: 'Salesperson' });
+    const modules = buildPermissionModules(['inventory:view', 'sales:view'], {
+      roleLabel: 'Salesperson',
+    });
     const stock = modules.find((group) => group.moduleId === 'stock');
     const inventory = modules.find((group) => group.moduleId === 'inventory');
     const sales = modules.find((group) => group.moduleId === 'sales');

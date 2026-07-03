@@ -1,9 +1,6 @@
 import Bonjour, { type Browser, type Service } from 'bonjour-service';
 
-import {
-  DISCOVERY_SERVICE_TYPE,
-  type DiscoveredServer,
-} from '@webstudio/shared-kernel';
+import { DISCOVERY_SERVICE_TYPE, type DiscoveredServer } from '@webstudio/shared-kernel';
 
 const TXT_KEYS = {
   serverName: 'server_name',

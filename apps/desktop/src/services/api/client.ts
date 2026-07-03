@@ -40,7 +40,13 @@ export class RetryingApiClient {
       try {
         return await fn();
       } catch (err: unknown) {
-        const error = err as { response?: { status?: number; data?: unknown }; code?: string; status?: number; message?: string; config?: { url?: string } };
+        const error = err as {
+          response?: { status?: number; data?: unknown };
+          code?: string;
+          status?: number;
+          message?: string;
+          config?: { url?: string };
+        };
         lastError = error;
         const status = error.response?.status ?? error.status ?? 0;
         const url = error.config?.url ?? operationName;
@@ -56,18 +62,26 @@ export class RetryingApiClient {
           }
         }
 
-        const isNetworkError = !error.response || error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || status >= 500;
-        
+        const isNetworkError =
+          !error.response ||
+          error.code === 'ECONNREFUSED' ||
+          error.code === 'ERR_NETWORK' ||
+          status >= 500;
+
         if (isNetworkError && attempt < this.maxRetries) {
-          LoggingService.warn('API', `Network error during ${operationName} (Attempt ${attempt}/${this.maxRetries}). Retrying...`, {
-            message: error.message ?? 'Unknown network error',
-            code: error.code ?? 'UNKNOWN',
-          });
+          LoggingService.warn(
+            'API',
+            `Network error during ${operationName} (Attempt ${attempt}/${this.maxRetries}). Retrying...`,
+            {
+              message: error.message ?? 'Unknown network error',
+              code: error.code ?? 'UNKNOWN',
+            },
+          );
           // Exponential backoff delay (600ms, 1200ms)
           await new Promise((resolve) => setTimeout(resolve, attempt * 600));
           continue;
         }
-        
+
         if (isSetupRequiredApiError(error)) {
           LoggingService.warn('API', 'System requires setup — clearing session and redirecting', {
             operation: operationName,
@@ -103,7 +117,9 @@ export class RetryingApiClient {
   }
 
   async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-    const res = await this.executeWithRetry(`GET ${path}`, () => this.inner.get<unknown>(path, params));
+    const res = await this.executeWithRetry(`GET ${path}`, () =>
+      this.inner.get<unknown>(path, params),
+    );
     return this.unwrap<T>(res);
   }
 
@@ -112,32 +128,47 @@ export class RetryingApiClient {
   }
 
   async post<T>(path: string, data?: unknown): Promise<T> {
-    const res = await this.executeWithRetry(`POST ${path}`, () => this.inner.post<unknown>(path, data));
+    const res = await this.executeWithRetry(`POST ${path}`, () =>
+      this.inner.post<unknown>(path, data),
+    );
     return this.unwrap<T>(res);
   }
 
   async postForm<T>(path: string, formData: FormData): Promise<T> {
-    const res = await this.executeWithRetry(`POST ${path}`, () => this.inner.postForm<unknown>(path, formData));
+    const res = await this.executeWithRetry(`POST ${path}`, () =>
+      this.inner.postForm<unknown>(path, formData),
+    );
     return this.unwrap<T>(res);
   }
 
   async put<T>(path: string, data?: unknown): Promise<T> {
-    const res = await this.executeWithRetry(`PUT ${path}`, () => this.inner.put<unknown>(path, data));
+    const res = await this.executeWithRetry(`PUT ${path}`, () =>
+      this.inner.put<unknown>(path, data),
+    );
     return this.unwrap<T>(res);
   }
 
   async delete<T>(path: string, data?: unknown): Promise<T> {
-    const res = await this.executeWithRetry(`DELETE ${path}`, () => this.inner.delete<unknown>(path, data));
+    const res = await this.executeWithRetry(`DELETE ${path}`, () =>
+      this.inner.delete<unknown>(path, data),
+    );
     return this.unwrap<T>(res);
   }
 
   async patch<T>(path: string, data?: unknown): Promise<T> {
-    const res = await this.executeWithRetry(`PATCH ${path}`, () => this.inner.patch<unknown>(path, data));
+    const res = await this.executeWithRetry(`PATCH ${path}`, () =>
+      this.inner.patch<unknown>(path, data),
+    );
     return this.unwrap<T>(res);
   }
 
-  async getRaw<T, M = unknown>(path: string, params?: Record<string, unknown>): Promise<{ data: T; meta?: M }> {
-    const res = await this.executeWithRetry(`GET ${path}`, () => this.inner.get<unknown>(path, params));
+  async getRaw<T, M = unknown>(
+    path: string,
+    params?: Record<string, unknown>,
+  ): Promise<{ data: T; meta?: M }> {
+    const res = await this.executeWithRetry(`GET ${path}`, () =>
+      this.inner.get<unknown>(path, params),
+    );
     if (res && typeof res === 'object' && 'data' in res) {
       return {
         data: (res as { data: T }).data,

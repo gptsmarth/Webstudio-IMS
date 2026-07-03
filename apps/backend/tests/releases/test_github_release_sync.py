@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
@@ -19,7 +20,10 @@ from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
+from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
 from webstudio_backend.services.github_release_client import GitHubRelease, GitHubReleaseAsset
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
 
@@ -119,6 +123,9 @@ async def test_run_sync_cycle_enqueues_new_release(
     db_session: AsyncSession,
     test_settings: Settings,
 ) -> None:
+    await db_session.execute(delete(SoftwareRelease))
+    await db_session.commit()
+
     settings = test_settings.model_copy(update={"github_repo": "webstudio/ims"})
     service = GitHubReleaseSyncService(db_session, settings)
 
@@ -130,8 +137,8 @@ async def test_run_sync_cycle_enqueues_new_release(
                 return_value=[
                     GitHubRelease(
                         id=42,
-                        tag_name="v0.2.0",
-                        name="0.2.0",
+                        tag_name="v1.1.0",
+                        name="1.1.0",
                         draft=False,
                         prerelease=False,
                         published_at="2026-07-02T00:00:00Z",
@@ -158,8 +165,8 @@ async def test_run_sync_cycle_enqueues_new_release(
     assert result["discovered"] == 1
     job = await ReleaseDownloadRepository(db_session).find_job_by_github_release(
         github_release_id=42,
-        channel=ReleaseChannel.DEVELOPMENT,
+        channel=ReleaseChannel(settings.release_channel),
     )
     assert job is not None
-    assert job.tag_name == "v0.2.0"
+    assert job.tag_name == "v1.1.0"
     assert job.status == ReleaseDownloadStatus.QUEUED

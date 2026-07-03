@@ -488,14 +488,18 @@ export class SettingsService {
     return client.patch<TallySettingsGroup>('/api/v1/settings/tally', payload);
   }
 
-  static async updateIntegrations(payload: IntegrationsSettingsUpdate): Promise<IntegrationsSettings> {
+  static async updateIntegrations(
+    payload: IntegrationsSettingsUpdate,
+  ): Promise<IntegrationsSettings> {
     const client = await ApiClientProvider.getClient();
     return client.patch<IntegrationsSettings>('/api/v1/settings/integrations', payload);
   }
 
   static async testAiProvider(provider: string): Promise<AIProviderTestResponse> {
     const client = await ApiClientProvider.getClient();
-    return client.post<AIProviderTestResponse>('/api/v1/settings/integrations/ai/test', { provider });
+    return client.post<AIProviderTestResponse>('/api/v1/settings/integrations/ai/test', {
+      provider,
+    });
   }
 
   static async updateExcel(payload: ExcelSettings): Promise<ExcelSettings> {
@@ -544,7 +548,10 @@ export class SettingsService {
     source: BackupSource = 'local',
   ): Promise<BackupValidateResult> {
     const client = await ApiClientProvider.getClient();
-    return client.post<BackupValidateResult>('/api/v1/settings/backups/validate', { filename, source });
+    return client.post<BackupValidateResult>('/api/v1/settings/backups/validate', {
+      filename,
+      source,
+    });
   }
 
   static async previewRestore(
@@ -581,7 +588,9 @@ export class SettingsService {
     return client.get<BackupAdminDashboard>('/api/v1/settings/backups/admin/dashboard');
   }
 
-  static async listBackupHistory(filters: BackupHistoryFilters = {}): Promise<BackupHistoryEntry[]> {
+  static async listBackupHistory(
+    filters: BackupHistoryFilters = {},
+  ): Promise<BackupHistoryEntry[]> {
     const client = await ApiClientProvider.getClient();
     return client.get<BackupHistoryEntry[]>(
       '/api/v1/settings/backups/admin/history',
@@ -591,7 +600,9 @@ export class SettingsService {
 
   static async getBackupDetails(filename: string): Promise<BackupDetailEntry> {
     const client = await ApiClientProvider.getClient();
-    return client.get<BackupDetailEntry>(`/api/v1/settings/backups/${encodeURIComponent(filename)}/details`);
+    return client.get<BackupDetailEntry>(
+      `/api/v1/settings/backups/${encodeURIComponent(filename)}/details`,
+    );
   }
 
   static async downloadBackup(filename: string): Promise<Blob> {
@@ -601,12 +612,16 @@ export class SettingsService {
 
   static async verifyBackup(filename: string): Promise<BackupVerifyResult> {
     const client = await ApiClientProvider.getClient();
-    return client.post<BackupVerifyResult>(`/api/v1/settings/backups/${encodeURIComponent(filename)}/verify`);
+    return client.post<BackupVerifyResult>(
+      `/api/v1/settings/backups/${encodeURIComponent(filename)}/verify`,
+    );
   }
 
   static async archiveBackup(filename: string): Promise<BackupHistoryEntry> {
     const client = await ApiClientProvider.getClient();
-    return client.post<BackupHistoryEntry>(`/api/v1/settings/backups/${encodeURIComponent(filename)}/archive`);
+    return client.post<BackupHistoryEntry>(
+      `/api/v1/settings/backups/${encodeURIComponent(filename)}/archive`,
+    );
   }
 
   static async deleteBackup(filename: string): Promise<{ filename: string; deleted: string }> {
@@ -614,7 +629,10 @@ export class SettingsService {
     return client.delete(`/api/v1/settings/backups/${encodeURIComponent(filename)}`);
   }
 
-  static async exportBackupHistory(format: 'xlsx' | 'pdf', filters: BackupHistoryFilters = {}): Promise<Blob> {
+  static async exportBackupHistory(
+    format: 'xlsx' | 'pdf',
+    filters: BackupHistoryFilters = {},
+  ): Promise<Blob> {
     const client = await ApiClientProvider.getClient();
     return client.getBlob('/api/v1/settings/backups/admin/history/export', { format, ...filters });
   }

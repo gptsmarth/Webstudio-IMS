@@ -123,10 +123,10 @@ export class ReportService {
   ): Promise<ReportPreviewResult<T>> {
     LoggingService.debug('API', `Preview ${reportType} report`, params as Record<string, unknown>);
     const client = await ApiClientProvider.getClient();
-    const response = await client.getRaw<{ rows: T[]; summary?: ReportPreviewResult<T>['summary'] }, ListMeta>(
-      previewPath(reportType),
-      params as Record<string, unknown>,
-    );
+    const response = await client.getRaw<
+      { rows: T[]; summary?: ReportPreviewResult<T>['summary'] },
+      ListMeta
+    >(previewPath(reportType), params as Record<string, unknown>);
     const meta = response.meta ?? {};
     return {
       rows: response.data.rows,
@@ -138,7 +138,11 @@ export class ReportService {
     };
   }
 
-  static async exportReport(reportType: BuilderReportType, format: ExportFormat, params: ReportQueryParams): Promise<void> {
+  static async exportReport(
+    reportType: BuilderReportType,
+    format: ExportFormat,
+    params: ReportQueryParams,
+  ): Promise<void> {
     LoggingService.info('API', `Export ${reportType} report`, { format });
     const client = await ApiClientProvider.getClient();
     const queryParams: Record<string, unknown> = {

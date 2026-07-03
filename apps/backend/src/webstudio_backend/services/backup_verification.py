@@ -277,68 +277,70 @@ async def verify_post_restore(
     if not fk_valid:
         warnings.append(fk_message)
 
-    checks.extend([
-        VerificationCheck(
-            key="inventory_count",
-            name="Inventory count",
-            status="passed",
-            message=str(inventory),
-        ),
-        VerificationCheck(
-            key="serial_numbers",
-            name="Serial numbers",
-            status="passed",
-            message=f"{inventory} serial number(s)",
-        ),
-        VerificationCheck(
-            key="sales_count",
-            name="Sales count",
-            status="passed",
-            message=str(sales),
-        ),
-        VerificationCheck(
-            key="users_count",
-            name="Users count",
-            status="passed",
-            message=str(users),
-        ),
-        VerificationCheck(
-            key="audit_log_count",
-            name="Audit records",
-            status="passed",
-            message=str(audits),
-        ),
-        VerificationCheck(
-            key="notifications_count",
-            name="Notifications",
-            status="passed",
-            message=str(notifications),
-        ),
-        VerificationCheck(
-            key="brands_count",
-            name="Brands",
-            status="passed",
-            message=str(brands),
-        ),
-        VerificationCheck(
-            key="locations_count",
-            name="Locations",
-            status="passed",
-            message=str(locations),
-        ),
-        VerificationCheck(
-            key="product_models_count",
-            name="Product models",
-            status="passed",
-            message=str(product_models),
-        ),
-        VerificationCheck(
-            key="integration_api_keys",
-            name="Integration API keys",
-            status="passed",
-            message=f"{integration_keys} encrypted key(s)",
-        ),
-    ])
+    checks.extend(
+        [
+            VerificationCheck(
+                key="inventory_count",
+                name="Inventory count",
+                status="passed",
+                message=str(inventory),
+            ),
+            VerificationCheck(
+                key="serial_numbers",
+                name="Serial numbers",
+                status="passed",
+                message=f"{inventory} serial number(s)",
+            ),
+            VerificationCheck(
+                key="sales_count",
+                name="Sales count",
+                status="passed",
+                message=str(sales),
+            ),
+            VerificationCheck(
+                key="users_count",
+                name="Users count",
+                status="passed",
+                message=str(users),
+            ),
+            VerificationCheck(
+                key="audit_log_count",
+                name="Audit records",
+                status="passed",
+                message=str(audits),
+            ),
+            VerificationCheck(
+                key="notifications_count",
+                name="Notifications",
+                status="passed",
+                message=str(notifications),
+            ),
+            VerificationCheck(
+                key="brands_count",
+                name="Brands",
+                status="passed",
+                message=str(brands),
+            ),
+            VerificationCheck(
+                key="locations_count",
+                name="Locations",
+                status="passed",
+                message=str(locations),
+            ),
+            VerificationCheck(
+                key="product_models_count",
+                name="Product models",
+                status="passed",
+                message=str(product_models),
+            ),
+            VerificationCheck(
+                key="integration_api_keys",
+                name="Integration API keys",
+                status="passed",
+                message=f"{integration_keys} encrypted key(s)",
+            ),
+        ]
+    )
 
     company_name = await settings_repo.get_string("company_name") or ""
     checks.append(

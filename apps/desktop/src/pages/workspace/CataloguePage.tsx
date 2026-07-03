@@ -3,11 +3,7 @@ import type { CatalogueTab } from '../../lib/catalogue';
 import { useCatalogueDistribution } from '../../hooks/useCatalogueDistribution';
 import { ProductModelService } from '../../services/api/ProductModelService';
 import { useAuthStore } from '../../store';
-import {
-  BrandsTab,
-  CatalogueTabBar,
-  LocationsTab,
-} from '../../components/catalogue';
+import { BrandsTab, CatalogueTabBar, LocationsTab } from '../../components/catalogue';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { countModelsByBrand } from '../../components/catalogue/BrandsTab';
 
@@ -15,7 +11,9 @@ export function CataloguePage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const [activeTab, setActiveTab] = useState<CatalogueTab>('brands');
   const { distribution, refresh: refreshDistribution } = useCatalogueDistribution();
-  const [models, setModels] = useState<Awaited<ReturnType<typeof ProductModelService.listModels>>>([]);
+  const [models, setModels] = useState<Awaited<ReturnType<typeof ProductModelService.listModels>>>(
+    [],
+  );
 
   const loadReferenceData = useCallback(async () => {
     try {
@@ -39,7 +37,9 @@ export function CataloguePage(): JSX.Element {
   if (!session) {
     return (
       <div className="cat-page">
-        <div className="cat-empty"><p>Session unavailable</p></div>
+        <div className="cat-empty">
+          <p>Session unavailable</p>
+        </div>
       </div>
     );
   }
@@ -51,8 +51,9 @@ export function CataloguePage(): JSX.Element {
         <div>
           <h1 className="cat-page__title">Catalogue</h1>
           <p className="cat-page__subtitle">
-            Manage brands and store locations. Product models are created and maintained from Inventory.
-            Delete removes catalogue entries permanently when safe — sales, reports, audit history, and backups are preserved.
+            Manage brands and store locations. Product models are created and maintained from
+            Inventory. Delete removes catalogue entries permanently when safe — sales, reports,
+            audit history, and backups are preserved.
           </p>
         </div>
       </header>

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers.migrations import assert_at_least_migration
+from helpers.migrations import assert_at_least_migration
 
 
 @pytest.mark.asyncio
@@ -22,8 +22,7 @@ async def test_migration_0004_inventory_items_exist(db_session: AsyncSession) ->
         inspector = inspect(sync_connection)
         tables = inspector.get_table_names(schema="webstudio")
         indexes = {
-            index["name"]
-            for index in inspector.get_indexes("inventory_items", schema="webstudio")
+            index["name"] for index in inspector.get_indexes("inventory_items", schema="webstudio")
         }
         return tables, indexes
 

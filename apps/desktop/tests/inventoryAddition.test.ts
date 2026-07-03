@@ -38,9 +38,30 @@ describe('summarizeProductModelUnits', () => {
   };
 
   const items: InventoryItemDetail[] = [
-    { ...base, id: '1', serial_number: 'SN001', status: 'available', current_location_id: 1, current_location_name: 'Warehouse' },
-    { ...base, id: '2', serial_number: 'SN002', status: 'sold', current_location_id: 1, current_location_name: 'Warehouse' },
-    { ...base, id: '3', serial_number: 'SN003', status: 'available', current_location_id: 2, current_location_name: 'Store' },
+    {
+      ...base,
+      id: '1',
+      serial_number: 'SN001',
+      status: 'available',
+      current_location_id: 1,
+      current_location_name: 'Warehouse',
+    },
+    {
+      ...base,
+      id: '2',
+      serial_number: 'SN002',
+      status: 'sold',
+      current_location_id: 1,
+      current_location_name: 'Warehouse',
+    },
+    {
+      ...base,
+      id: '3',
+      serial_number: 'SN003',
+      status: 'available',
+      current_location_id: 2,
+      current_location_name: 'Store',
+    },
   ];
 
   it('aggregates totals and location counts for unsold units', () => {

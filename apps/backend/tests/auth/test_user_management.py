@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import UserRole
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.services.user_service import UserService
 
 

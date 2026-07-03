@@ -17,7 +17,9 @@ class RefreshToken(PrimaryKeyMixin, Base):
 
     user_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.users.id", name="fk_refresh_tokens_user", ondelete="CASCADE"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.users.id", name="fk_refresh_tokens_user", ondelete="CASCADE"
+        ),
         nullable=False,
     )
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)

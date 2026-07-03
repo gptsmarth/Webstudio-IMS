@@ -77,7 +77,9 @@ class MdnsAdvertisementService:
             return
 
         try:
-            resolved_name = (server_name or self._settings.mdns_server_name or socket.gethostname()).strip()
+            resolved_name = (
+                server_name or self._settings.mdns_server_name or socket.gethostname()
+            ).strip()
             if not resolved_name:
                 resolved_name = "WEBSTUDIO-SERVER"
             service_name = f"{resolved_name}.{DISCOVERY_SERVICE_TYPE}"

@@ -43,26 +43,30 @@ from webstudio_backend.services.backup_manifest import (
 from webstudio_backend.services.backup_verification import verify_post_restore
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 
-RESTORE_SCOPES = frozenset({
-    "entire_database",
-    "settings_only",
-    "company_config",
-    "users_only",
-    "reports_only",
-})
+RESTORE_SCOPES = frozenset(
+    {
+        "entire_database",
+        "settings_only",
+        "company_config",
+        "users_only",
+        "reports_only",
+    }
+)
 IMPLEMENTED_SCOPES = frozenset({"entire_database", "settings_only", "company_config"})
-COMPANY_CONFIG_KEYS = frozenset({
-    "company_name",
-    "company_logo",
-    "company_address",
-    "gst_number",
-    "company_phone",
-    "company_email",
-    "default_store_id",
-    "default_language",
-    "timezone",
-    "currency",
-})
+COMPANY_CONFIG_KEYS = frozenset(
+    {
+        "company_name",
+        "company_logo",
+        "company_address",
+        "gst_number",
+        "company_phone",
+        "company_email",
+        "default_store_id",
+        "default_language",
+        "timezone",
+        "currency",
+    }
+)
 SETTINGS_EXCLUDED_KEYS = frozenset({"gemini_api_key", "system_initialized"})
 
 

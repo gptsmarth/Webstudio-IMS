@@ -1,6 +1,9 @@
 """Tests for custom access role permission normalization."""
 
-from webstudio_backend.core.permissions import normalize_permission_set, validate_assignable_permissions
+from webstudio_backend.core.permissions import (
+    normalize_permission_set,
+    validate_assignable_permissions,
+)
 
 
 def test_normalize_adds_required_view_permission() -> None:

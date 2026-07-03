@@ -17,8 +17,12 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     NotificationNotFoundError,
     RequiredFieldError,
 )
-from webstudio_backend.infrastructure.repositories.notification_filters import NotificationSearchFilters
-from webstudio_backend.infrastructure.repositories.notification_repository import NotificationRepository
+from webstudio_backend.infrastructure.repositories.notification_filters import (
+    NotificationSearchFilters,
+)
+from webstudio_backend.infrastructure.repositories.notification_repository import (
+    NotificationRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.services.setup_service import SetupService
 

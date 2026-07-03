@@ -78,7 +78,9 @@ async def store(db_session: AsyncSession, admin_actor: AuditActor) -> Location:
 
 
 @pytest_asyncio.fixture
-async def product_model(db_session: AsyncSession, brand: Brand, admin_actor: AuditActor) -> ProductModel:
+async def product_model(
+    db_session: AsyncSession, brand: Brand, admin_actor: AuditActor
+) -> ProductModel:
     return await ProductModelRepository(db_session).create(
         brand_id=brand.id,
         model_number="X1502ZA-EJ541WS",

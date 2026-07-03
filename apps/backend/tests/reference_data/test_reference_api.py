@@ -4,11 +4,6 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from webstudio_backend.infrastructure.database.models.brand import Brand
-from webstudio_backend.infrastructure.database.models.location import Location
 
 
 @pytest.mark.asyncio
@@ -70,7 +65,9 @@ async def test_brands_rbac_and_crud(
         "short_name": "AAPL",
         "display_order": 2,
     }
-    resp = await api_client.patch(f"/api/v1/brands/{brand_id}", json=update_payload, headers=admin_headers)
+    resp = await api_client.patch(
+        f"/api/v1/brands/{brand_id}", json=update_payload, headers=admin_headers
+    )
     assert resp.status_code == 200
     updated = resp.json()["data"]
     assert updated["name"] == "Apple Inc."
@@ -80,7 +77,9 @@ async def test_brands_rbac_and_crud(
     # PATCH conflict name
     # Create another brand
     await api_client.post("/api/v1/brands", json={"name": "Dell"}, headers=admin_headers)
-    resp = await api_client.patch(f"/api/v1/brands/{brand_id}", json={"name": "Dell"}, headers=admin_headers)
+    resp = await api_client.patch(
+        f"/api/v1/brands/{brand_id}", json={"name": "Dell"}, headers=admin_headers
+    )
     assert resp.status_code == 409
 
     # 6. Delete brand (permanent)
@@ -126,7 +125,11 @@ async def test_locations_rbac_and_crud(
     loc_id = loc_data["id"]
 
     # 3. Prevent duplicate location name
-    resp = await api_client.post("/api/v1/locations", json={"name": "Yamunanagar Outlet", "location_type": "warehouse"}, headers=admin_headers)
+    resp = await api_client.post(
+        "/api/v1/locations",
+        json={"name": "Yamunanagar Outlet", "location_type": "warehouse"},
+        headers=admin_headers,
+    )
     assert resp.status_code == 409
 
     # 4. GET Detail
@@ -144,7 +147,9 @@ async def test_locations_rbac_and_crud(
         "location_type": "retail_floor",
         "sort_order": 5,
     }
-    resp = await api_client.patch(f"/api/v1/locations/{loc_id}", json=update_payload, headers=admin_headers)
+    resp = await api_client.patch(
+        f"/api/v1/locations/{loc_id}", json=update_payload, headers=admin_headers
+    )
     assert resp.status_code == 200
     updated = resp.json()["data"]
     assert updated["name"] == "Yamunanagar Store"

@@ -49,10 +49,20 @@ export function ChangeRoleDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog cat-dialog--wide animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="cat-dialog cat-dialog--wide animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">Change access</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} />
           </button>
         </header>
@@ -62,7 +72,11 @@ export function ChangeRoleDialog({
           </p>
           <label className="cat-field">
             <span>New role</span>
-            <select className="input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+            <select
+              className="input"
+              value={role}
+              onChange={(event) => setRole(event.target.value as UserRole)}
+            >
               {HUMAN_USER_ROLES.map((entry) => (
                 <option key={entry} value={entry}>
                   {apiRoleLabel(entry)}
@@ -77,10 +91,20 @@ export function ChangeRoleDialog({
           {error && <p className="cat-dialog__error">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : 'Change role'}
           </button>
         </footer>

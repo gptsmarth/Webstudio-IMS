@@ -44,10 +44,7 @@ export function TopToolbar({
   return (
     <header className="app-toolbar" role="banner">
       <div className="app-toolbar-start">
-        <Breadcrumb
-          items={crumbs}
-          onNavigate={(route: WorkspaceRoute) => setRoute(route)}
-        />
+        <Breadcrumb items={crumbs} onNavigate={(route: WorkspaceRoute) => setRoute(route)} />
       </div>
 
       <div className="app-toolbar-center">
@@ -67,10 +64,17 @@ export function TopToolbar({
           aria-label="Toggle theme"
           title="Toggle light/dark theme"
         >
-          {resolvedTheme === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
+          {resolvedTheme === 'dark' ? (
+            <Sun size={16} aria-hidden />
+          ) : (
+            <Moon size={16} aria-hidden />
+          )}
         </button>
         <UserMenu session={session} appVersion={appVersion} onLogout={onLogout} />
-        <span className="app-version-tag app-version-tag--hidden-sm" aria-label={`Application version ${appVersion}`}>
+        <span
+          className="app-version-tag app-version-tag--hidden-sm"
+          aria-label={`Application version ${appVersion}`}
+        >
           v{appVersion}
         </span>
       </div>

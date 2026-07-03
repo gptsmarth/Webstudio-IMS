@@ -123,7 +123,9 @@ async def collect_extended_backup_stats(session: AsyncSession) -> dict[str, int]
     product_images = int(
         (
             await session.execute(
-                select(func.count(ProductModel.id)).where(ProductModel.product_image_url.is_not(None)),
+                select(func.count(ProductModel.id)).where(
+                    ProductModel.product_image_url.is_not(None)
+                ),
             )
         ).scalar_one()
         or 0,
@@ -152,10 +154,14 @@ async def collect_business_snapshot(
 ) -> BusinessSnapshot:
     stats = await collect_extended_backup_stats(session)
     serials = (
-        await session.execute(
-            select(InventoryItem.serial_number).order_by(InventoryItem.serial_number),
+        (
+            await session.execute(
+                select(InventoryItem.serial_number).order_by(InventoryItem.serial_number),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return BusinessSnapshot(
         company_name=await settings_repo.get_string("company_name") or "",
         inventory_count=stats["inventory_count"],

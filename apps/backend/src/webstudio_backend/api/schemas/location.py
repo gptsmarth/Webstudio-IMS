@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from webstudio_backend.infrastructure.database.enums import LocationType

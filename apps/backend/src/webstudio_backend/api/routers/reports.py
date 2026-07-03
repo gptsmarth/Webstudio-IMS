@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, date, datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import ReportsExportDep, ReportsViewDep
+from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.report import (
     AuditReportResponse,
     AuditReportRowResponse,
@@ -24,7 +24,6 @@ from webstudio_backend.api.schemas.report import (
     page_meta,
     summary_response,
 )
-from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
@@ -40,7 +39,11 @@ from webstudio_backend.infrastructure.database.enums import (
     SaleSource,
 )
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
-from webstudio_backend.infrastructure.repositories.report_filters import ExportFormat, ReportFilters, ReportType
+from webstudio_backend.infrastructure.repositories.report_filters import (
+    ExportFormat,
+    ReportFilters,
+    ReportType,
+)
 from webstudio_backend.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
@@ -228,7 +231,9 @@ async def sales_report(
         sort_field=sort_field,
         sort_direction=sort_direction,
     )
-    rows = await ReportService(db_session).sales_report(filters, PageParams(page=page, page_size=page_size))
+    rows = await ReportService(db_session).sales_report(
+        filters, PageParams(page=page, page_size=page_size)
+    )
     response = SalesReportResponse(
         generated_at=datetime.now(UTC),
         filters=ReportFiltersApplied.from_filters(filters),
@@ -275,7 +280,9 @@ async def audit_report(
         sort_field=sort_field,
         sort_direction=sort_direction,
     )
-    rows = await ReportService(db_session).audit_report(filters, PageParams(page=page, page_size=page_size))
+    rows = await ReportService(db_session).audit_report(
+        filters, PageParams(page=page, page_size=page_size)
+    )
     response = AuditReportResponse(
         generated_at=datetime.now(UTC),
         filters=ReportFiltersApplied.from_filters(filters),

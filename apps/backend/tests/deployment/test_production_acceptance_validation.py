@@ -10,7 +10,6 @@ from webstudio_backend.services.production_acceptance_validation_service import 
     ProductionAcceptanceValidationService,
 )
 
-
 ROLE_CHECK_KEYS = {
     "role_administrator",
     "role_salesperson",

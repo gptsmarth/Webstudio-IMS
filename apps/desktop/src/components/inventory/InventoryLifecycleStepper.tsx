@@ -10,11 +10,15 @@ export function InventoryLifecycleStepper({ steps }: InventoryLifecycleStepperPr
       {steps.map((step, index) => (
         <li
           key={step.id}
-          className={[
-            'inv-lifecycle__step',
-            step.complete ? 'inv-lifecycle__step--complete' : '',
-            step.current ? 'inv-lifecycle__step--current' : '',
-          ].filter(Boolean).join(' ') || undefined}
+          className={
+            [
+              'inv-lifecycle__step',
+              step.complete ? 'inv-lifecycle__step--complete' : '',
+              step.current ? 'inv-lifecycle__step--current' : '',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
         >
           <span className="inv-lifecycle__marker" aria-hidden />
           <div className="inv-lifecycle__content">

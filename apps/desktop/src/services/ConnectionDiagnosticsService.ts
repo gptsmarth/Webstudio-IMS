@@ -90,7 +90,9 @@ export class ConnectionDiagnosticsService {
 
     const healthStage = await runStage('backend_health', async () => {
       const response = await fetch(`${normalized}/health/ready`);
-      const body = await response.json() as { data?: { status?: string; checks?: Record<string, string> } };
+      const body = (await response.json()) as {
+        data?: { status?: string; checks?: Record<string, string> };
+      };
       if (!response.ok && response.status !== 503) {
         throw new Error(`Health check failed (${response.status}).`);
       }
@@ -109,7 +111,9 @@ export class ConnectionDiagnosticsService {
       if (!response.ok) {
         throw new Error(`Version endpoint failed (${response.status}).`);
       }
-      const body = await response.json() as { data?: { backend_version?: string; api_version?: string } };
+      const body = (await response.json()) as {
+        data?: { backend_version?: string; api_version?: string };
+      };
       backendVersion = body.data?.backend_version;
       if (!body.data?.api_version) {
         throw new Error('API version metadata missing.');
@@ -125,7 +129,7 @@ export class ConnectionDiagnosticsService {
       if (!response.ok) {
         throw new Error(`Setup status failed (${response.status}).`);
       }
-      const body = await response.json() as { data?: { company_name?: string } };
+      const body = (await response.json()) as { data?: { company_name?: string } };
       companyName = body.data?.company_name ?? undefined;
     });
     stages.push(authStage);

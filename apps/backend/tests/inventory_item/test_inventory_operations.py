@@ -6,13 +6,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, LocationType
+from webstudio_backend.infrastructure.database.enums import LocationType
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories import LocationRepository
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 
 
 def _create_payload(product_model: ProductModel, location: Location, serial: str) -> dict:
@@ -60,7 +60,9 @@ async def test_mark_sold_success(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-001")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-001"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
@@ -83,7 +85,9 @@ async def test_mark_sold_requires_available_status(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-002")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-002"
+    )
     await api_client.patch(
         f"/api/v1/inventory/{item_id}",
         headers=main_admin_headers,
@@ -105,7 +109,9 @@ async def test_mark_sold_already_sold_rejected(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-003")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-003"
+    )
     first = await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
         headers=main_admin_headers,
@@ -128,7 +134,9 @@ async def test_mark_sold_archived_rejected(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-004")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-004"
+    )
     await api_client.post(f"/api/v1/inventory/{item_id}/archive", headers=main_admin_headers)
 
     response = await api_client.patch(
@@ -147,7 +155,9 @@ async def test_mark_sold_salesperson_forbidden(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-005")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-005"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
@@ -165,7 +175,9 @@ async def test_mark_sold_admin_allowed(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-006")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-006"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
@@ -184,7 +196,9 @@ async def test_mark_sold_creates_audit_entries(
     location: Location,
     db_session: AsyncSession,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-SOLD-007")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-SOLD-007"
+    )
     await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
         headers=main_admin_headers,
@@ -212,7 +226,9 @@ async def test_location_transfer_success(
         "Store Floor",
         location_type=LocationType.RETAIL_FLOOR,
     )
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-001")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-001"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/location",
@@ -236,7 +252,9 @@ async def test_location_transfer_archived_rejected(
         "Back Room",
         location_type=LocationType.WAREHOUSE,
     )
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-002")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-002"
+    )
     await api_client.post(f"/api/v1/inventory/{item_id}/archive", headers=main_admin_headers)
 
     response = await api_client.patch(
@@ -259,7 +277,9 @@ async def test_location_transfer_sold_rejected(
         "Showroom",
         location_type=LocationType.RETAIL_FLOOR,
     )
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-003")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-003"
+    )
     await api_client.patch(
         f"/api/v1/inventory/{item_id}/mark-sold",
         headers=main_admin_headers,
@@ -282,7 +302,9 @@ async def test_location_transfer_invalid_location(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-004")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-004"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/location",
@@ -299,7 +321,9 @@ async def test_location_transfer_same_location_rejected(
     product_model: ProductModel,
     location: Location,
 ) -> None:
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-005")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-005"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/location",
@@ -322,7 +346,9 @@ async def test_location_transfer_salesperson_allowed(
         "Sales Floor",
         location_type=LocationType.RETAIL_FLOOR,
     )
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-006")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-006"
+    )
 
     response = await api_client.patch(
         f"/api/v1/inventory/{item_id}/location",
@@ -344,7 +370,9 @@ async def test_location_transfer_creates_audit_entry(
         "Dispatch",
         location_type=LocationType.WAREHOUSE,
     )
-    item_id = await _create_item(api_client, main_admin_headers, product_model, location, "SN-MOVE-007")
+    item_id = await _create_item(
+        api_client, main_admin_headers, product_model, location, "SN-MOVE-007"
+    )
     await api_client.patch(
         f"/api/v1/inventory/{item_id}/location",
         headers=main_admin_headers,

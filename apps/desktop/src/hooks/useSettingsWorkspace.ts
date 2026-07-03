@@ -66,7 +66,10 @@ export function useSettingsWorkspace(canWrite: boolean): SettingsWorkspaceState 
   }, [refresh]);
 
   const runSave = useCallback(
-    async (action: () => Promise<SettingsWorkspace[keyof SettingsWorkspace]>, section: keyof SettingsWorkspace) => {
+    async (
+      action: () => Promise<SettingsWorkspace[keyof SettingsWorkspace]>,
+      section: keyof SettingsWorkspace,
+    ) => {
       if (!canWrite) return;
       setSaving(true);
       setActionError(null);

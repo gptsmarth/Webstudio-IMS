@@ -23,11 +23,23 @@ export function CataloguePagination({
         {totalItems > 0 ? `${pageStart}–${pageEnd} of ${totalItems}` : '0 items'}
       </span>
       <div className="cat-table-pagination__controls">
-        <button type="button" className="btn btn-ghost btn-sm" disabled={page <= 1 || loading} onClick={() => onPageChange(page - 1)}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={page <= 1 || loading}
+          onClick={() => onPageChange(page - 1)}
+        >
           Previous
         </button>
-        <span className="cat-table-pagination__page">Page {page} / {totalPages}</span>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={page >= totalPages || loading} onClick={() => onPageChange(page + 1)}>
+        <span className="cat-table-pagination__page">
+          Page {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled={page >= totalPages || loading}
+          onClick={() => onPageChange(page + 1)}
+        >
           Next
         </button>
       </div>

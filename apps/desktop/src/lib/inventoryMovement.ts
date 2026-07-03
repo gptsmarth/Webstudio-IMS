@@ -22,14 +22,14 @@ function locationFromValue(value: Record<string, unknown> | null, key: string): 
 
 function parseMovement(log: AuditLogEntry): MovementRecord {
   const fromLocation =
-    locationFromValue(log.old_value, 'current_location_name')
-    ?? locationFromValue(log.old_value, 'location_name')
-    ?? 'Unknown';
+    locationFromValue(log.old_value, 'current_location_name') ??
+    locationFromValue(log.old_value, 'location_name') ??
+    'Unknown';
   const toLocation =
-    locationFromValue(log.new_value, 'current_location_name')
-    ?? locationFromValue(log.new_value, 'location_name')
-    ?? extractToFromDescription(log.description)
-    ?? 'Unknown';
+    locationFromValue(log.new_value, 'current_location_name') ??
+    locationFromValue(log.new_value, 'location_name') ??
+    extractToFromDescription(log.description) ??
+    'Unknown';
 
   return {
     id: log.id,

@@ -9,7 +9,11 @@ from webstudio_backend.infrastructure.database.enums import LocationType, Storag
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
-from webstudio_backend.infrastructure.repositories import BrandRepository, LocationRepository, ProductModelRepository
+from webstudio_backend.infrastructure.repositories import (
+    BrandRepository,
+    LocationRepository,
+    ProductModelRepository,
+)
 
 
 @pytest_asyncio.fixture

@@ -61,12 +61,13 @@ export interface ProductModelListParams {
 }
 
 export class ProductModelService {
-  static async listModels(brandIdOrParams?: number | ProductModelListParams): Promise<ProductModel[]> {
+  static async listModels(
+    brandIdOrParams?: number | ProductModelListParams,
+  ): Promise<ProductModel[]> {
     LoggingService.debug('API', 'Fetching product models list');
     const client = await ApiClientProvider.getClient();
-    const params = typeof brandIdOrParams === 'number'
-      ? { brand_id: brandIdOrParams }
-      : brandIdOrParams;
+    const params =
+      typeof brandIdOrParams === 'number' ? { brand_id: brandIdOrParams } : brandIdOrParams;
     return client.get<ProductModel[]>('/api/v1/product-models', params as Record<string, unknown>);
   }
 
@@ -85,7 +86,10 @@ export class ProductModelService {
     return client.patch<ProductModel>(`/api/v1/product-models/${id}`, data);
   }
 
-  static async updateSellingPrice(id: string, data: UpdateSellingPriceRequest): Promise<ProductModel> {
+  static async updateSellingPrice(
+    id: string,
+    data: UpdateSellingPriceRequest,
+  ): Promise<ProductModel> {
     const client = await ApiClientProvider.getClient();
     return client.patch<ProductModel>(`/api/v1/product-models/${id}/selling-price`, data);
   }

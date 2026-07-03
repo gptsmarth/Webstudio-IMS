@@ -3,7 +3,10 @@ import { canRunBulkOperation, BULK_OPERATIONS } from '../src/lib/bulkOperations'
 import { buildInventoryLifecycle } from '../src/lib/inventoryLifecycle';
 import { extractMovementHistory, formatMovementChain } from '../src/lib/inventoryMovement';
 import { buildInventoryQrPayload, serializeInventoryQrPayload } from '../src/lib/inventoryQr';
-import { matchesNotificationSearch, notificationTypeLabel } from '../src/lib/notificationCategories';
+import {
+  matchesNotificationSearch,
+  notificationTypeLabel,
+} from '../src/lib/notificationCategories';
 import type { InventoryItemDetail } from '../src/services/api/InventoryService';
 import type { AuditLogEntry } from '../src/services/api/AuditService';
 

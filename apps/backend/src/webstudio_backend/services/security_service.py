@@ -12,9 +12,15 @@ from webstudio_backend.infrastructure.database.models.refresh_token import Refre
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.repositories.login_event_repository import LoginEventRepository
-from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.login_event_repository import (
+    LoginEventRepository,
+)
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.services.audit_log_presenter import audit_severity, extract_security_event
 from webstudio_backend.services.password_policy_service import PasswordPolicyService
@@ -129,7 +135,9 @@ class SecurityService:
         ]
 
         return {
-            "session_timeout_minutes": await self._settings.get_int("session_timeout_minutes", default=15),
+            "session_timeout_minutes": await self._settings.get_int(
+                "session_timeout_minutes", default=15
+            ),
             "active_session_count": len(active_sessions),
             "org_active_session_count": org_session_count,
             "active_sessions": [
@@ -139,7 +147,9 @@ class SecurityService:
                     "ip_address": session.ip_address,
                     "remember_me": session.remember_me,
                     "created_at": session.created_at.isoformat(),
-                    "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
+                    "last_used_at": (
+                        session.last_used_at.isoformat() if session.last_used_at else None
+                    ),
                     "expires_at": session.expires_at.isoformat(),
                 }
                 for session in active_sessions
@@ -189,7 +199,9 @@ class SecurityService:
 
         now = datetime.now(UTC)
         result = await self._session.execute(
-            select(func.count()).select_from(RefreshToken).where(
+            select(func.count())
+            .select_from(RefreshToken)
+            .where(
                 RefreshToken.revoked_at.is_(None),
                 RefreshToken.expires_at > now,
             ),

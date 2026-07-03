@@ -48,7 +48,10 @@ export function StartupBrandPanel({
 
       {(footerLeft || footerRight || appVersion) && (
         <div className="startup-brand__footer">
-          <span>{footerLeft}{appVersion ? ` v${appVersion}` : ''}</span>
+          <span>
+            {footerLeft}
+            {appVersion ? ` v${appVersion}` : ''}
+          </span>
           {footerRight && <span>{footerRight}</span>}
         </div>
       )}

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { History, RefreshCw } from 'lucide-react';
 import type { TallySettingsGroup } from '../../services/api/SettingsService';
-import { TallyService, type TallyConnectionTestResult, type TallyOperationalSummary } from '../../services/api/TallyService';
+import {
+  TallyService,
+  type TallyConnectionTestResult,
+  type TallyOperationalSummary,
+} from '../../services/api/TallyService';
 import { Field, SaveButton, Section } from './settingsShared';
 import { TallyOperationalMetrics, TallySyncHistoryPanel } from '../tally/TallySyncHistoryPanel';
 import { formatPollingInterval } from '../../lib/tallyDisplay';
@@ -57,7 +61,8 @@ export function TallySettingsForm({
     <>
       <Section title="Tally synchronization">
         <p className="stg-section__lead">
-          Connect WEBSTUDIO IMS to Tally for automatic sales import. Only business sync status is shown here.
+          Connect WEBSTUDIO IMS to Tally for automatic sales import. Only business sync status is
+          shown here.
         </p>
 
         {statusLoading && !operational ? (
@@ -109,7 +114,11 @@ export function TallySettingsForm({
               <RefreshCw size={14} className={syncing ? 'stg-spin' : undefined} /> Sync now
             </button>
           )}
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setHistoryOpen(true)}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setHistoryOpen(true)}
+          >
             <History size={14} /> View sync history
           </button>
         </div>
@@ -118,7 +127,8 @@ export function TallySettingsForm({
         {testResult && (
           <div className="tally-connection-result">
             <p className="tally-connection-result__summary">
-              {testResult.reachable ? 'Connection successful' : 'Connection failed'} — {testResult.message}
+              {testResult.reachable ? 'Connection successful' : 'Connection failed'} —{' '}
+              {testResult.message}
             </p>
             {testResult.company_name && (
               <p className="tally-connection-result__detail">Company: {testResult.company_name}</p>

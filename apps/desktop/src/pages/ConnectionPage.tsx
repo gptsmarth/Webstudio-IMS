@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, CheckCircle2, RefreshCw, Server, Wifi } from 'lucide-react';
-import type { ConnectionStageResult, DiscoveredServer, SavedServerRecord } from '@webstudio/shared-kernel';
+import type {
+  ConnectionStageResult,
+  DiscoveredServer,
+  SavedServerRecord,
+} from '@webstudio/shared-kernel';
 import { normalizeServerUrl } from '@webstudio/shared-kernel';
 import { StartupBrandPanel, StartupShellLayout } from '../components/startup';
 import { ConfigService } from '../services/ConfigService';
@@ -43,7 +47,9 @@ function DiagnosticsStages({ stages }: { stages: ConnectionStageResult[] }): JSX
         <li key={stage.stage} className={stage.success ? 'is-ok' : 'is-failed'}>
           <span>{stage.success ? '✓' : '✗'}</span>
           <span>{stage.label}</span>
-          {!stage.success && <span className="connection-card__diagnostic-detail">{stage.message}</span>}
+          {!stage.success && (
+            <span className="connection-card__diagnostic-detail">{stage.message}</span>
+          )}
         </li>
       ))}
     </ul>
@@ -180,19 +186,22 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
     }
   };
 
-  const footerStatus = state === 'found'
-    ? 'Connected'
-    : state === 'searching'
-      ? 'Scanning network'
-      : 'Manual configuration';
+  const footerStatus =
+    state === 'found'
+      ? 'Connected'
+      : state === 'searching'
+        ? 'Scanning network'
+        : 'Manual configuration';
 
   return (
     <StartupShellLayout
-      brand={(
+      brand={
         <StartupBrandPanel
-          footerRight={state === 'searching' ? 'CONNECTING' : state === 'found' ? 'CONNECTED' : 'SETUP'}
+          footerRight={
+            state === 'searching' ? 'CONNECTING' : state === 'found' ? 'CONNECTED' : 'SETUP'
+          }
         />
-      )}
+      }
     >
       <div className="connection-card animate-slide-in">
         <header className="connection-card__header">
@@ -211,7 +220,9 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
               </div>
               <div className="connection-card__status-copy">
                 <p className="connection-card__status-title">Connecting to server</p>
-                <p className="connection-card__status-detail">{DISCOVERY_MESSAGES[messageIndex]}…</p>
+                <p className="connection-card__status-detail">
+                  {DISCOVERY_MESSAGES[messageIndex]}…
+                </p>
               </div>
             </div>
           )}
@@ -234,7 +245,8 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
                   <div>
                     <p className="connection-card__discovered-company">{server.companyName}</p>
                     <p className="connection-card__discovered-meta">
-                      {server.serverName} · v{server.backendVersion} · {server.status} · Last seen {formatLastSeen(server.lastSeen)}
+                      {server.serverName} · v{server.backendVersion} · {server.status} · Last seen{' '}
+                      {formatLastSeen(server.lastSeen)}
                     </p>
                   </div>
                   <button
@@ -251,7 +263,10 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
           )}
 
           {(state === 'manual' || state === 'testing') && (
-            <form className="connection-card__form" onSubmit={(event) => void handleManualSubmit(event)}>
+            <form
+              className="connection-card__form"
+              onSubmit={(event) => void handleManualSubmit(event)}
+            >
               {discoveredServers.length === 0 && (
                 <div className="connection-card__status connection-card__status--manual">
                   <div className="connection-card__manual-icon" aria-hidden>
@@ -276,7 +291,9 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
               <DiagnosticsStages stages={diagnosticStages} />
 
               <div>
-                <label htmlFor="server-url" className="form-label">Server address</label>
+                <label htmlFor="server-url" className="form-label">
+                  Server address
+                </label>
                 <input
                   ref={inputRef}
                   id="server-url"
@@ -336,7 +353,9 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
                     <p className="connection-card__discovered-meta">
                       {server.url}
                       {server.backendVersion ? ` · v${server.backendVersion}` : ''}
-                      {server.lastConnectedAt ? ` · Last connected ${formatLastSeen(server.lastConnectedAt)}` : ''}
+                      {server.lastConnectedAt
+                        ? ` · Last connected ${formatLastSeen(server.lastConnectedAt)}`
+                        : ''}
                     </p>
                   </div>
                   <button
@@ -358,7 +377,11 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
             <Wifi size={12} aria-hidden />
             <span>{footerStatus}</span>
           </div>
-          <button type="button" className="connection-card__preview" onClick={() => onConnected(true)}>
+          <button
+            type="button"
+            className="connection-card__preview"
+            onClick={() => onConnected(true)}
+          >
             Preview mode
           </button>
         </footer>

@@ -120,7 +120,10 @@ export const DeploymentCenterService = {
     });
   },
 
-  async deletePackage(jobId: number, administratorApproved: boolean): Promise<Record<string, unknown>> {
+  async deletePackage(
+    jobId: number,
+    administratorApproved: boolean,
+  ): Promise<Record<string, unknown>> {
     const client = await ApiClientProvider.getClient();
     return client.post<Record<string, unknown>>('/api/v1/deployment/center/delete-package', {
       job_id: jobId,

@@ -1,5 +1,10 @@
 import type { UserRole } from '../config/navigation';
-import type { UserDetail, UserRole as ApiUserRole, UserStatus, UserSummary } from '../services/api/UserService';
+import type {
+  UserDetail,
+  UserRole as ApiUserRole,
+  UserStatus,
+  UserSummary,
+} from '../services/api/UserService';
 import { formatRoleLabel } from '../store/useAuthStore';
 
 export type UserSortField =
@@ -112,7 +117,10 @@ export function canChangeRole(
   activeMainAdminCount: number,
 ): { allowed: boolean; reason?: string } {
   if (target.role === 'main_admin' && currentUserId === target.id && activeMainAdminCount <= 1) {
-    return { allowed: false, reason: 'You cannot change role while you are the only Main Administrator.' };
+    return {
+      allowed: false,
+      reason: 'You cannot change role while you are the only Main Administrator.',
+    };
   }
   if (target.role === 'main_admin' && activeMainAdminCount <= 1) {
     return { allowed: false, reason: 'Cannot change role of the last active Main Administrator.' };

@@ -1,5 +1,9 @@
 import { X } from 'lucide-react';
-import { BULK_OPERATIONS, canRunBulkOperation, type BulkOperationType } from '../../lib/bulkOperations';
+import {
+  BULK_OPERATIONS,
+  canRunBulkOperation,
+  type BulkOperationType,
+} from '../../lib/bulkOperations';
 
 interface BulkOperationsDialogProps {
   open: boolean;
@@ -18,19 +22,33 @@ export function BulkOperationsDialog({
 
   return (
     <div className="inv-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="inv-dialog inv-dialog--wide animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="inv-dialog__header">
           <div>
             <h2 className="inv-dialog__title">Bulk operations</h2>
-            <p className="inv-dialog__lead">Reusable architecture for import, transfer, archive, restore, status, and export.</p>
+            <p className="inv-dialog__lead">
+              Reusable architecture for import, transfer, archive, restore, status, and export.
+            </p>
           </div>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
         <div className="inv-dialog__body bulk-ops">
           {selectedCount > 0 && (
-            <p className="bulk-ops__selection">{selectedCount} unit{selectedCount === 1 ? '' : 's'} selected</p>
+            <p className="bulk-ops__selection">
+              {selectedCount} unit{selectedCount === 1 ? '' : 's'} selected
+            </p>
           )}
           <ul className="bulk-ops__list">
             {BULK_OPERATIONS.map((operation) => {

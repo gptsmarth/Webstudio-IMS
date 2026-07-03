@@ -5,7 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import CurrentUserDep, SettingsModifyDep, SettingsViewDep
+from webstudio_backend.api.dependencies.auth import (
+    CurrentUserDep,
+    SettingsModifyDep,
+    SettingsViewDep,
+)
 from webstudio_backend.api.response_helpers import build_envelope
 from webstudio_backend.api.schemas.deployment_center import (
     DeploymentActionRequest,
@@ -16,8 +20,8 @@ from webstudio_backend.api.schemas.deployment_center import (
     RollbackHistoryResponse,
     RollbackRunResponse,
 )
-from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.config import Settings
+from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.services.deployment_center_service import DeploymentCenterService
 
 router = APIRouter(prefix="/api/v1/deployment/center", tags=["deployment"])
@@ -148,7 +152,9 @@ async def deployment_validate(
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
     if body.job_id is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required"
+        )
     try:
         payload = await DeploymentCenterService(db_session, app_settings).validate_package(
             user_id=current.user.id,
@@ -172,7 +178,9 @@ async def deployment_latest_run(
 ) -> dict:
     payload = await DeploymentCenterService(db_session, app_settings).get_latest_deployment_run()
     if payload is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No deployment runs found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No deployment runs found"
+        )
     return build_envelope(request, DeploymentRunResponse(**payload).model_dump())
 
 
@@ -207,7 +215,9 @@ async def deployment_deploy(
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
     if body.job_id is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required"
+        )
     try:
         payload = await DeploymentCenterService(db_session, app_settings).deploy_release(
             user_id=current.user.id,
@@ -293,7 +303,9 @@ async def deployment_delete_package(
     app_settings: Settings = AppSettingsDep,
 ) -> dict:
     if body.job_id is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="job_id is required"
+        )
     try:
         payload = await DeploymentCenterService(db_session, app_settings).delete_package(
             user_id=current.user.id,

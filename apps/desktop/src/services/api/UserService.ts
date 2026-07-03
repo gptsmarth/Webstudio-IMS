@@ -121,7 +121,11 @@ interface ListMeta {
 
 export class UserService {
   static async listUsers(params?: UsersListParams): Promise<UsersListResult> {
-    LoggingService.debug('API', 'Fetching users list', params as unknown as Record<string, unknown>);
+    LoggingService.debug(
+      'API',
+      'Fetching users list',
+      params as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
     const response = await client.getRaw<UserSummary[], ListMeta>('/api/v1/users', {
       page: 1,
@@ -161,8 +165,14 @@ export class UserService {
     return client.patch<UserDetail>(`/api/v1/users/${userId}/role`, payload);
   }
 
-  static async assignUserAccess(userId: number, payload: AssignUserAccessRequest): Promise<UserDetail> {
-    LoggingService.info('API', 'Assigning user access', { userId, access_type: payload.access_type });
+  static async assignUserAccess(
+    userId: number,
+    payload: AssignUserAccessRequest,
+  ): Promise<UserDetail> {
+    LoggingService.info('API', 'Assigning user access', {
+      userId,
+      access_type: payload.access_type,
+    });
     const client = await ApiClientProvider.getClient();
     return client.patch<UserDetail>(`/api/v1/users/${userId}/access`, payload);
   }
@@ -191,10 +201,14 @@ export class UserService {
     return client.post<UserDetail>(`/api/v1/users/${userId}/unlock`);
   }
 
-  static async forceLogoutUser(userId: number): Promise<{ success: boolean; sessions_revoked: number }> {
+  static async forceLogoutUser(
+    userId: number,
+  ): Promise<{ success: boolean; sessions_revoked: number }> {
     LoggingService.info('API', 'Force logout user', { userId });
     const client = await ApiClientProvider.getClient();
-    return client.post<{ success: boolean; sessions_revoked: number }>(`/api/v1/users/${userId}/logout-all`);
+    return client.post<{ success: boolean; sessions_revoked: number }>(
+      `/api/v1/users/${userId}/logout-all`,
+    );
   }
 
   static async archiveUser(userId: number): Promise<UserDetail> {

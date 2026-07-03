@@ -20,15 +20,20 @@ from webstudio_backend.core.permissions import (
     validate_assignable_permissions,
 )
 from webstudio_backend.infrastructure.database.enums import UserRole
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.infrastructure.security.jwt import create_access_token, decode_access_token
 from webstudio_backend.infrastructure.security.password import hash_password, verify_password
 from webstudio_backend.infrastructure.security.secret_encryption import encrypt_secret, mask_secret
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
 from webstudio_backend.integrations.tally.xml_client import TallyXmlClient
 from webstudio_backend.services.ai.config import resolve_ai_config
-from webstudio_backend.services.backup_encryption import NoOpBackupEncryption, get_backup_encryption_provider
-from webstudio_backend.services.password_policy_service import PasswordPolicy, PasswordPolicyService
+from webstudio_backend.services.backup_encryption import (
+    NoOpBackupEncryption,
+    get_backup_encryption_provider,
+)
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 INVENTORY_SCALE_TARGET = 10_000
@@ -195,7 +200,10 @@ class ProductionCertificationValidationService:
         # Authorization
         from webstudio_backend.api.dependencies.auth import require_permission
 
-        authz_ok = callable(require_permission) and "permission" in inspect.signature(require_permission).parameters
+        authz_ok = (
+            callable(require_permission)
+            and "permission" in inspect.signature(require_permission).parameters
+        )
         checks.append(
             CertificationCheck(
                 key="authorization",
@@ -236,7 +244,9 @@ class ProductionCertificationValidationService:
         if self._settings.is_production and secret_len < 32:
             jwt_status = "failed"
             jwt_message = "Production JWT_SECRET must be at least 32 bytes"
-            recommendations.append("Set JWT_SECRET to a 32+ byte random value before production cutover.")
+            recommendations.append(
+                "Set JWT_SECRET to a 32+ byte random value before production cutover."
+            )
         elif secret == "change-me-in-production":
             jwt_status = "warning"
             jwt_message = "JWT implementation verified; default development secret in use"
@@ -302,7 +312,9 @@ class ProductionCertificationValidationService:
 
         # Argon2
         sample_hash = hash_password("CertTest1Pass")
-        argon_ok = sample_hash.startswith("$argon2id$") and verify_password(sample_hash, "CertTest1Pass")
+        argon_ok = sample_hash.startswith("$argon2id$") and verify_password(
+            sample_hash, "CertTest1Pass"
+        )
         hasher = PasswordHasher()
         checks.append(
             CertificationCheck(
@@ -321,7 +333,9 @@ class ProductionCertificationValidationService:
         # Backup encryption
         provider = get_backup_encryption_provider()
         backup_enc_status = "passed"
-        backup_enc_message = "Backup encryption extension point registered (archives unencrypted by default)"
+        backup_enc_message = (
+            "Backup encryption extension point registered (archives unencrypted by default)"
+        )
         if isinstance(provider, NoOpBackupEncryption) and self._settings.is_production:
             backup_enc_status = "warning"
             backup_enc_message = "Backup archives are not encrypted; filesystem ACLs required"
@@ -349,7 +363,9 @@ class ProductionCertificationValidationService:
         if self._settings.is_production and env_gemini and not db_gemini:
             ai_status = "warning"
             ai_message = "AI provider key present only in environment; prefer database storage"
-            recommendations.append("Store AI provider keys via Settings → Integrations (not only .env).")
+            recommendations.append(
+                "Store AI provider keys via Settings → Integrations (not only .env)."
+            )
         elif not any(
             [
                 ai_config.gemini.api_key,
@@ -436,7 +452,7 @@ class ProductionCertificationValidationService:
                     name=f"Indexes ({table_name})",
                     status="failed" if missing else "passed",
                     message="Performance indexes present" if not missing else f"Missing: {missing}",
-                    detail=f"Migration 0012 + 0027 required",
+                    detail="Migration 0012 + 0027 required",
                     category="performance",
                 ),
             )
@@ -487,17 +503,13 @@ class ProductionCertificationValidationService:
         pool_size = self._settings.database_pool_size
         refresh_table = await self._table_exists("refresh_tokens")
         session_status = "passed"
-        session_message = (
-            f"Session infrastructure supports {CONCURRENT_SESSIONS_TARGET} concurrent users with pool tuning"
-        )
+        session_message = f"Session infrastructure supports {CONCURRENT_SESSIONS_TARGET} concurrent users with pool tuning"
         if not refresh_table:
             session_status = "failed"
             session_message = "refresh_tokens table missing"
         elif pool_size < 20:
             session_status = "warning"
-            session_message = (
-                f"database_pool_size={pool_size}; recommend ≥20 for {CONCURRENT_SESSIONS_TARGET} sessions"
-            )
+            session_message = f"database_pool_size={pool_size}; recommend ≥20 for {CONCURRENT_SESSIONS_TARGET} sessions"
             recommendations.append(
                 "Increase DATABASE_POOL_SIZE and PostgreSQL max_connections for 100 concurrent sessions.",
             )
@@ -548,7 +560,9 @@ class ProductionCertificationValidationService:
         else:
             https_status = "passed" if tls_files else "warning"
             https_message = (
-                "TLS materials present" if tls_files else "HTTPS readiness: TLS paths optional in development"
+                "TLS materials present"
+                if tls_files
+                else "HTTPS readiness: TLS paths optional in development"
             )
 
         checks.append(
@@ -580,15 +594,21 @@ class ProductionCertificationValidationService:
             ),
         )
         if not lan_ready:
-            recommendations.append("Set API_HOST=0.0.0.0 on the dedicated server for LAN client access.")
+            recommendations.append(
+                "Set API_HOST=0.0.0.0 on the dedicated server for LAN client access."
+            )
 
-        pg_local = "localhost" in self._settings.database_url or "127.0.0.1" in self._settings.database_url
+        pg_local = (
+            "localhost" in self._settings.database_url or "127.0.0.1" in self._settings.database_url
+        )
         checks.append(
             CertificationCheck(
                 key="postgresql_locality",
                 name="PostgreSQL Locality",
                 status="passed" if pg_local else "warning",
-                message="PostgreSQL on server localhost" if pg_local else "Remote database URL detected",
+                message=(
+                    "PostgreSQL on server localhost" if pg_local else "Remote database URL detected"
+                ),
                 detail="Dedicated-server deployment expects co-located PostgreSQL",
                 category="infrastructure",
             ),
@@ -635,7 +655,9 @@ class ProductionCertificationValidationService:
 
     async def _table_count(self, table_name: str) -> int:
         result = await self._session.execute(
-            text(f"SELECT COUNT(*) FROM webstudio.{table_name}"),  # noqa: S608 — schema-qualified static name
+            text(
+                f"SELECT COUNT(*) FROM webstudio.{table_name}"
+            ),  # noqa: S608 — schema-qualified static name
         )
         return int(result.scalar_one() or 0)
 
@@ -660,5 +682,8 @@ class ProductionCertificationValidationService:
         if current >= target:
             return "passed", f"{current:,} {label} meets target {target:,}"
         if current == 0:
-            return "warning", f"No {label} rows; architecture certified via indexes (load test on staging)"
+            return (
+                "warning",
+                f"No {label} rows; architecture certified via indexes (load test on staging)",
+            )
         return "warning", f"{current:,} {label} below target {target:,}; indexes verified"

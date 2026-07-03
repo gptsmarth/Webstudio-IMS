@@ -54,14 +54,18 @@ class DeploymentPlatformAdapter:
         service_dest = dest_dir / "service-config-snapshot"
         service_dest.mkdir(parents=True, exist_ok=True)
         if self.is_windows:
-            script = Path(__file__).resolve().parents[5] / "infra/windows/install-webstudio-service.ps1"
+            script = (
+                Path(__file__).resolve().parents[5] / "infra/windows/install-webstudio-service.ps1"
+            )
             if script.is_file():
                 shutil.copy2(script, service_dest / script.name)
         meta = {
             "platform": platform.system(),
             "service_name": os.getenv("WEBSTUDIO_SERVICE_NAME", "WEBSTUDIO Server"),
         }
-        (service_dest / "service-meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        (service_dest / "service-meta.json").write_text(
+            json.dumps(meta, indent=2), encoding="utf-8"
+        )
         return service_dest
 
     async def stop_backend_service(self) -> dict[str, str]:
@@ -72,7 +76,9 @@ class DeploymentPlatformAdapter:
             return {"mode": "dry_run", "success": "true"}
         from webstudio_backend.services.shutdown_orchestrator import run_graceful_shutdown
 
-        report = await run_graceful_shutdown(wait_for_sync_seconds=float(self._settings.graceful_shutdown_seconds))
+        report = await run_graceful_shutdown(
+            wait_for_sync_seconds=float(self._settings.graceful_shutdown_seconds)
+        )
         if self.is_windows:
             self._run_powershell("infra/windows/stop-business-day.ps1")
         return {"mode": "graceful_shutdown", "success": str(report.success)}
@@ -134,7 +140,9 @@ class DeploymentPlatformAdapter:
         ]
         env = os.environ.copy()
         env.setdefault("DATABASE_URL", self._settings.database_url.replace("+asyncpg", ""))
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=alembic_ini.parent, env=env, check=False)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=alembic_ini.parent, env=env, check=False
+        )
         if result.returncode != 0:
             raise RuntimeError(result.stderr or result.stdout or "Alembic upgrade failed")
         return {"stdout": result.stdout[-2000:] if result.stdout else ""}

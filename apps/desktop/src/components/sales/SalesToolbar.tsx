@@ -4,12 +4,7 @@ import type { SalesWorkspaceState } from '../../hooks/useSalesWorkspace';
 interface SalesToolbarProps {
   workspace: Pick<
     SalesWorkspaceState,
-    | 'search'
-    | 'setSearch'
-    | 'refresh'
-    | 'loading'
-    | 'exportSales'
-    | 'actionLoading'
+    'search' | 'setSearch' | 'refresh' | 'loading' | 'exportSales' | 'actionLoading'
   >;
   canExport: boolean;
 }
@@ -48,7 +43,11 @@ export function SalesToolbar({ workspace, canExport }: SalesToolbarProps): JSX.E
           disabled={workspace.loading}
           aria-label="Refresh sales"
         >
-          <RefreshCw size={14} aria-hidden className={workspace.loading ? 'sales-spin' : undefined} />
+          <RefreshCw
+            size={14}
+            aria-hidden
+            className={workspace.loading ? 'sales-spin' : undefined}
+          />
         </button>
       </div>
     </div>

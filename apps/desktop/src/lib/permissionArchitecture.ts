@@ -40,9 +40,7 @@ export function resolveEffectivePermissions(input: {
   licenseFiltered?: string[];
 }): EffectivePermissionGrant[] {
   const base = input.licenseFiltered ?? input.rolePermissions;
-  const overrideMap = new Map(
-    (input.overrides ?? []).map((entry) => [entry.permission, entry]),
-  );
+  const overrideMap = new Map((input.overrides ?? []).map((entry) => [entry.permission, entry]));
 
   const resolved = new Set(base);
   for (const override of overrideMap.values()) {

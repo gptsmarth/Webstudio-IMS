@@ -34,7 +34,9 @@ class AIProviderConfig:
     retry_count: int = 2
     gemini: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("gemini"))
     groq: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("groq"))
-    openrouter: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("openrouter"))
+    openrouter: ProviderCredentials = field(
+        default_factory=lambda: ProviderCredentials("openrouter")
+    )
 
 
 @dataclass
@@ -83,7 +85,9 @@ class EnrichmentResult:
 
 
 class AIProviderError(Exception):
-    def __init__(self, code: ProviderErrorCode, message: str, *, provider: ProviderId | None = None) -> None:
+    def __init__(
+        self, code: ProviderErrorCode, message: str, *, provider: ProviderId | None = None
+    ) -> None:
         self.code = code
         self.message = message
         self.provider = provider

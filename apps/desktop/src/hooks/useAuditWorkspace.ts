@@ -134,8 +134,11 @@ export function useAuditWorkspace(): AuditWorkspaceState {
         actor_user_id: filters.userId ?? undefined,
         actor_role: filters.role || undefined,
         action: filters.operation || undefined,
-        entity_type: filters.module && filters.module !== 'Security' ? mapModuleToEntityType(filters.module) : undefined,
-        security_only: (filters.securityOnly || filters.module === 'Security') ? true : undefined,
+        entity_type:
+          filters.module && filters.module !== 'Security'
+            ? mapModuleToEntityType(filters.module)
+            : undefined,
+        security_only: filters.securityOnly || filters.module === 'Security' ? true : undefined,
         severity: filters.severity || undefined,
         source: filters.source || undefined,
         location_id: filters.locationId ?? undefined,

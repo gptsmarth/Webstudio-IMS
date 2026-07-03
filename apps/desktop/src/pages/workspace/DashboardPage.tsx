@@ -19,7 +19,16 @@ import { canViewDashboardWidget, P } from '../../services/PermissionService';
 
 export function DashboardPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
-  const { data, loading, error, refresh, markNotificationRead, resolveNotification, triggerTallySync, syncingTally } = useDashboardPage();
+  const {
+    data,
+    loading,
+    error,
+    refresh,
+    markNotificationRead,
+    resolveNotification,
+    triggerTallySync,
+    syncingTally,
+  } = useDashboardPage();
 
   if (!session) {
     return (
@@ -34,7 +43,8 @@ export function DashboardPage(): JSX.Element {
 
   const permissions = session.permissions;
   const can = (widget: string) => canViewDashboardWidget(permissions, widget);
-  const totalAvailable = data.distribution?.total_available_inventory ?? data.snapshot?.total_available_inventory ?? 0;
+  const totalAvailable =
+    data.distribution?.total_available_inventory ?? data.snapshot?.total_available_inventory ?? 0;
 
   const showQuickActions = can(P.dashboard.quickActions);
   const showInventoryDistribution = can(P.dashboard.inventoryDistribution);
@@ -48,8 +58,14 @@ export function DashboardPage(): JSX.Element {
   const showStoreStatus = can(P.dashboard.storeStatus);
   const showTallyStatus = can(P.dashboard.tallyStatus);
   const showSystemStatus = can(P.dashboard.systemStatus);
-  const showSecondaryGrid = showRecentActivity || showNotifications || showStoreStatus || showTallyStatus || showSystemStatus;
-  const hasVisibleSections = showInventoryDistribution || showBrandDistribution || showActivityFeeds || showSecondaryGrid;
+  const showSecondaryGrid =
+    showRecentActivity ||
+    showNotifications ||
+    showStoreStatus ||
+    showTallyStatus ||
+    showSystemStatus;
+  const hasVisibleSections =
+    showInventoryDistribution || showBrandDistribution || showActivityFeeds || showSecondaryGrid;
 
   return (
     <PageContainer>
@@ -57,7 +73,11 @@ export function DashboardPage(): JSX.Element {
         <div className="dash-page__top">
           <DashboardGreeting session={session} />
           {showQuickActions && (
-            <DashboardQuickActions permissions={permissions} onTallySync={triggerTallySync} syncingTally={syncingTally} />
+            <DashboardQuickActions
+              permissions={permissions}
+              onTallySync={triggerTallySync}
+              syncingTally={syncingTally}
+            />
           )}
         </div>
 
@@ -75,14 +95,20 @@ export function DashboardPage(): JSX.Element {
           <div className="dash-empty dash-page__section">
             <p className="dash-empty__title">No dashboard sections assigned</p>
             <p className="dash-empty__text">
-              Your role can open the Dashboard tab but no widgets are enabled yet. Ask an administrator to update your access role.
+              Your role can open the Dashboard tab but no widgets are enabled yet. Ask an
+              administrator to update your access role.
             </p>
           </div>
         )}
 
         {showInventoryDistribution && (
-          <section className="dash-page__section dash-page__section--primary" aria-labelledby="dash-inventory-distribution">
-            <h2 id="dash-inventory-distribution" className="dash-section-title">Inventory Distribution</h2>
+          <section
+            className="dash-page__section dash-page__section--primary"
+            aria-labelledby="dash-inventory-distribution"
+          >
+            <h2 id="dash-inventory-distribution" className="dash-section-title">
+              Inventory Distribution
+            </h2>
             <DashboardWidget>
               <DashboardInventoryDistribution
                 totalAvailable={totalAvailable}
@@ -95,9 +121,14 @@ export function DashboardPage(): JSX.Element {
 
         {showBrandDistribution && (
           <section className="dash-page__section" aria-labelledby="dash-brand-distribution">
-            <h2 id="dash-brand-distribution" className="dash-section-title">Brand Distribution</h2>
+            <h2 id="dash-brand-distribution" className="dash-section-title">
+              Brand Distribution
+            </h2>
             <DashboardWidget>
-              <DashboardBrandDistribution brands={data.distribution?.by_brand ?? []} loading={loading} />
+              <DashboardBrandDistribution
+                brands={data.distribution?.by_brand ?? []}
+                loading={loading}
+              />
             </DashboardWidget>
           </section>
         )}
@@ -136,7 +167,9 @@ export function DashboardPage(): JSX.Element {
 
         {showSecondaryGrid && (
           <div className="dash-page__grid">
-            {showRecentActivity && <DashboardRecentActivity items={data.activity} loading={loading} />}
+            {showRecentActivity && (
+              <DashboardRecentActivity items={data.activity} loading={loading} />
+            )}
 
             {showNotifications && (
               <DashboardNotificationsPanel
@@ -150,19 +183,31 @@ export function DashboardPage(): JSX.Element {
 
             {showStoreStatus && (
               <DashboardWidget title="Store Status" subtitle="Operational stock by location">
-                <DashboardStoreStatus locations={data.distribution?.by_location ?? []} loading={loading} />
+                <DashboardStoreStatus
+                  locations={data.distribution?.by_location ?? []}
+                  loading={loading}
+                />
               </DashboardWidget>
             )}
 
             {showTallyStatus && (
               <DashboardWidget title="Tally ERP" subtitle="Sales synchronization from Tally">
-                <TallyReadinessPanel tally={data.tally} loading={loading} onSync={triggerTallySync} syncing={syncingTally} />
+                <TallyReadinessPanel
+                  tally={data.tally}
+                  loading={loading}
+                  onSync={triggerTallySync}
+                  syncing={syncingTally}
+                />
               </DashboardWidget>
             )}
 
             {showSystemStatus && (
               <DashboardWidget title="System Status" subtitle="API and database health">
-                <DashboardSystemStatus api={data.apiHealth} database={data.databaseHealth} loading={loading} />
+                <DashboardSystemStatus
+                  api={data.apiHealth}
+                  database={data.databaseHealth}
+                  loading={loading}
+                />
               </DashboardWidget>
             )}
           </div>

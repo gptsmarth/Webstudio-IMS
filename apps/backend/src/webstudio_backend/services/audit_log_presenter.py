@@ -7,7 +7,6 @@ from typing import Any
 from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 
-
 MODULE_BY_ENTITY_TYPE: dict[str, str] = {
     "inventory_item": "Inventory",
     "sale": "Sales",
@@ -159,7 +158,9 @@ def extract_invoice_number(
     return None
 
 
-def extract_request_id(old_value: dict[str, Any] | None, new_value: dict[str, Any] | None) -> str | None:
+def extract_request_id(
+    old_value: dict[str, Any] | None, new_value: dict[str, Any] | None
+) -> str | None:
     for payload in (new_value, old_value):
         if isinstance(payload, dict):
             value = payload.get("request_id")
@@ -168,7 +169,9 @@ def extract_request_id(old_value: dict[str, Any] | None, new_value: dict[str, An
     return None
 
 
-def extract_correlation_id(old_value: dict[str, Any] | None, new_value: dict[str, Any] | None) -> str | None:
+def extract_correlation_id(
+    old_value: dict[str, Any] | None, new_value: dict[str, Any] | None
+) -> str | None:
     for payload in (new_value, old_value):
         if isinstance(payload, dict):
             value = payload.get("correlation_id")

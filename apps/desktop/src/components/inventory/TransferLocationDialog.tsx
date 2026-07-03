@@ -56,7 +56,12 @@ export function TransferLocationDialog({
           <h2 id="transfer-dialog-title" className="inv-dialog__title">
             Transfer location
           </h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
@@ -80,10 +85,20 @@ export function TransferLocationDialog({
         </div>
 
         <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Transferring…' : 'Transfer'}
           </button>
         </footer>

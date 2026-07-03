@@ -7,7 +7,11 @@ import time
 
 from webstudio_backend.services.ai.prompts import default_image_search_query
 from webstudio_backend.services.ai.providers.base import AIProvider
-from webstudio_backend.services.ai.types import AIProviderConfig, EnrichmentResult, ProviderTestResult
+from webstudio_backend.services.ai.types import (
+    AIProviderConfig,
+    EnrichmentResult,
+    ProviderTestResult,
+)
 
 
 class MockProvider(AIProvider):
@@ -64,7 +68,9 @@ class MockProvider(AIProvider):
         brand_name: str | None = None,
         model_name: str | None = None,
     ) -> str:
-        return default_image_search_query(model_number, brand_name=brand_name, model_name=model_name)
+        return default_image_search_query(
+            model_number, brand_name=brand_name, model_name=model_name
+        )
 
     async def test_connection(self) -> ProviderTestResult:
         started = time.perf_counter()

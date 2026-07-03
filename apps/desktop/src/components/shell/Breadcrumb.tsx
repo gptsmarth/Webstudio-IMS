@@ -14,7 +14,11 @@ export function Breadcrumb({ items, onNavigate }: BreadcrumbProps): JSX.Element 
           const isLast = index === items.length - 1;
           return (
             <li key={`${item.label}-${index}`} className="app-breadcrumb-item">
-              {index > 0 && <span className="app-breadcrumb-separator" aria-hidden>/</span>}
+              {index > 0 && (
+                <span className="app-breadcrumb-separator" aria-hidden>
+                  /
+                </span>
+              )}
               {item.route && !isLast && onNavigate ? (
                 <button
                   type="button"
@@ -24,7 +28,10 @@ export function Breadcrumb({ items, onNavigate }: BreadcrumbProps): JSX.Element 
                   {item.label}
                 </button>
               ) : (
-                <span className={cn('app-breadcrumb-text', isLast && 'app-breadcrumb-current')} aria-current={isLast ? 'page' : undefined}>
+                <span
+                  className={cn('app-breadcrumb-text', isLast && 'app-breadcrumb-current')}
+                  aria-current={isLast ? 'page' : undefined}
+                >
                   {item.label}
                 </span>
               )}

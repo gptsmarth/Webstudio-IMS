@@ -107,7 +107,11 @@ export function RecoveryCenter({
               </button>
             )}
             {canExecuteRestore && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={onOpenOfficeDeploymentWizard}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={onOpenOfficeDeploymentWizard}
+              >
                 <Server size={14} aria-hidden />
                 Office deployment
               </button>
@@ -118,7 +122,9 @@ export function RecoveryCenter({
             <article className="stg-recovery-card">
               <Database size={16} aria-hidden />
               <span className="stg-recovery-card__label">Database status</span>
-              <strong className={statusClass(center.database_status)}>{center.database_status}</strong>
+              <strong className={statusClass(center.database_status)}>
+                {center.database_status}
+              </strong>
             </article>
             <article className="stg-recovery-card">
               <ShieldCheck size={16} aria-hidden />
@@ -128,7 +134,9 @@ export function RecoveryCenter({
             <article className="stg-recovery-card">
               <HardDrive size={16} aria-hidden />
               <span className="stg-recovery-card__label">Storage</span>
-              <strong className={statusClass(center.storage_status)}>{center.storage_status}</strong>
+              <strong className={statusClass(center.storage_status)}>
+                {center.storage_status}
+              </strong>
               <span className="stg-muted">{formatBytes(center.storage_free_bytes)} free</span>
             </article>
             <article className="stg-recovery-card">
@@ -183,8 +191,14 @@ export function RecoveryCenter({
 
           {center.storage_monitoring && (
             <div className="stg-readonly-grid">
-              <Readonly label="Estimated remaining backups" value={String(center.storage_monitoring.estimated_remaining_backups ?? '—')} />
-              <Readonly label="Retention used" value={String(center.storage_monitoring.retention_used ?? '—')} />
+              <Readonly
+                label="Estimated remaining backups"
+                value={String(center.storage_monitoring.estimated_remaining_backups ?? '—')}
+              />
+              <Readonly
+                label="Retention used"
+                value={String(center.storage_monitoring.retention_used ?? '—')}
+              />
             </div>
           )}
 
@@ -196,7 +210,10 @@ export function RecoveryCenter({
               </h4>
               <ul>
                 {center.health_issues.map((issue) => (
-                  <li key={issue.code} className={`stg-recovery-issue stg-recovery-issue--${issue.severity}`}>
+                  <li
+                    key={issue.code}
+                    className={`stg-recovery-issue stg-recovery-issue--${issue.severity}`}
+                  >
                     <strong>{issue.title}</strong>
                     <span>{issue.message}</span>
                   </li>
@@ -267,7 +284,11 @@ export function RecoveryCenter({
             Refresh
           </button>
           {canManageBackup && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void onRunBackup()}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => void onRunBackup()}
+            >
               Run backup
             </button>
           )}

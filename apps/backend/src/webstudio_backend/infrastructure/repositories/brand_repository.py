@@ -21,6 +21,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
 
     async def get_by_name(self, name: str) -> Brand | None:
         from sqlalchemy import func
+
         normalized = name.strip().lower()
         statement = select(Brand).where(func.lower(Brand.name) == normalized)
         result = await self._session.execute(statement)
@@ -127,6 +128,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
             if is_active != old_val:
                 brand.is_active = is_active
                 from webstudio_backend.infrastructure.database.enums import AuditAction
+
                 action = AuditAction.ARCHIVE if not is_active else AuditAction.RESTORE
                 await recorder.record(
                     entity_type="brand",
@@ -154,9 +156,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
 
     async def count_product_models(self, brand_id: int) -> int:
         statement = (
-            select(func.count())
-            .select_from(ProductModel)
-            .where(ProductModel.brand_id == brand_id)
+            select(func.count()).select_from(ProductModel).where(ProductModel.brand_id == brand_id)
         )
         result = await self._session.execute(statement)
         return int(result.scalar_one() or 0)

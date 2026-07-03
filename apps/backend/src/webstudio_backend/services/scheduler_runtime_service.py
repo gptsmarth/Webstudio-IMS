@@ -9,8 +9,12 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import SchedulerRuntimeState
-from webstudio_backend.infrastructure.repositories.scheduler_runtime_repository import SchedulerRuntimeRepository
+from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import (
+    SchedulerRuntimeState,
+)
+from webstudio_backend.infrastructure.repositories.scheduler_runtime_repository import (
+    SchedulerRuntimeRepository,
+)
 
 DEFAULT_INTERVALS: dict[str, int] = {
     "tally_sync": 300,
@@ -48,7 +52,9 @@ class SchedulerRuntimeService:
         interval_seconds: int | None = None,
     ) -> float:
         default_interval = interval_seconds or DEFAULT_INTERVALS.get(scheduler_key, 300)
-        row = await self._repo.get_or_create(scheduler_key, default_interval_seconds=default_interval)
+        row = await self._repo.get_or_create(
+            scheduler_key, default_interval_seconds=default_interval
+        )
         interval = row.interval_seconds or default_interval
         now = datetime.now(UTC)
         if row.next_run_at is not None:
@@ -71,7 +77,9 @@ class SchedulerRuntimeService:
         state_patch: dict[str, Any] | None = None,
     ) -> None:
         default_interval = interval_seconds or DEFAULT_INTERVALS.get(scheduler_key, 300)
-        row = await self._repo.get_or_create(scheduler_key, default_interval_seconds=default_interval)
+        row = await self._repo.get_or_create(
+            scheduler_key, default_interval_seconds=default_interval
+        )
         interval = interval_seconds or row.interval_seconds or default_interval
         now = datetime.now(UTC)
         next_run = now + timedelta(seconds=interval)

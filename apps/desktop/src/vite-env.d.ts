@@ -41,7 +41,12 @@ interface ConfigNamespace {
 
 interface SystemNamespace {
   getVersionInfo: () => Promise<VersionInfo>;
-  log: (channel: LogChannel, level: LogLevel, message: string, meta?: Record<string, unknown>) => Promise<void>;
+  log: (
+    channel: LogChannel,
+    level: LogLevel,
+    message: string,
+    meta?: Record<string, unknown>,
+  ) => Promise<void>;
   reportCrash: (errorDetails: Record<string, unknown>) => Promise<void>;
 }
 

@@ -10,19 +10,22 @@ interface DashboardRecentActivityProps {
   loading: boolean;
 }
 
-export function DashboardRecentActivity({ items, loading }: DashboardRecentActivityProps): JSX.Element {
+export function DashboardRecentActivity({
+  items,
+  loading,
+}: DashboardRecentActivityProps): JSX.Element {
   const { setRoute } = useNavigationStore();
 
   return (
     <DashboardWidget
       title="Recent Activity"
       subtitle="Latest operational events"
-      action={(
+      action={
         <button type="button" className="dash-link-btn" onClick={() => setRoute('audit')}>
           View all
           <ArrowRight size={14} aria-hidden />
         </button>
-      )}
+      }
     >
       {loading ? (
         <DashboardSkeleton rows={5} />
@@ -39,7 +42,9 @@ export function DashboardRecentActivity({ items, loading }: DashboardRecentActiv
                 <th scope="col">Actor</th>
                 <th scope="col">Action</th>
                 <th scope="col">Location</th>
-                <th scope="col" className="dash-table__time">When</th>
+                <th scope="col" className="dash-table__time">
+                  When
+                </th>
               </tr>
             </thead>
             <tbody>

@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.models.release_deployment_event import ReleaseDeploymentEvent
+from webstudio_backend.infrastructure.database.models.release_deployment_event import (
+    ReleaseDeploymentEvent,
+)
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 
 

@@ -72,6 +72,8 @@ async def test_production_certification_report_payload(db_session, test_settings
 async def test_performance_indexes_checked(db_session, test_settings) -> None:
     service = ProductionCertificationValidationService(db_session, test_settings)
     report = await service.run_certification()
-    index_checks = [check for check in report.performance.checks if check.key.startswith("indexes_")]
+    index_checks = [
+        check for check in report.performance.checks if check.key.startswith("indexes_")
+    ]
     assert index_checks
     assert all(check.status in {"passed", "failed"} for check in index_checks)

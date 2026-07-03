@@ -73,8 +73,12 @@ def upgrade() -> None:
         ),
         sa.Column("bundle_dir", sa.Text(), nullable=True),
         sa.Column("github_payload", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
-        sa.Column("manifest_validated", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("checksums_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "manifest_validated", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
+        sa.Column(
+            "checksums_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("attempt_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("max_attempts", sa.Integer(), nullable=False, server_default=sa.text("5")),
@@ -172,6 +176,8 @@ def downgrade() -> None:
         ),
     )
     op.drop_table("release_download_artifacts", schema=SCHEMA)
-    op.drop_index("ix_release_download_jobs_status_retry", table_name="release_download_jobs", schema=SCHEMA)
+    op.drop_index(
+        "ix_release_download_jobs_status_retry", table_name="release_download_jobs", schema=SCHEMA
+    )
     op.drop_table("release_download_jobs", schema=SCHEMA)
     op.execute(sa.text(f"DROP TYPE IF EXISTS {SCHEMA}.release_download_status"))

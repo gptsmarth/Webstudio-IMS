@@ -19,8 +19,12 @@ from webstudio_backend.infrastructure.database.enums import (
     NotificationType,
     ReleaseDownloadStatus,
 )
-from webstudio_backend.infrastructure.database.models.enterprise_rollback_run import EnterpriseRollbackRun
-from webstudio_backend.infrastructure.database.models.release_deployment_run import ReleaseDeploymentRun
+from webstudio_backend.infrastructure.database.models.enterprise_rollback_run import (
+    EnterpriseRollbackRun,
+)
+from webstudio_backend.infrastructure.database.models.release_deployment_run import (
+    ReleaseDeploymentRun,
+)
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
 from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
@@ -30,7 +34,9 @@ from webstudio_backend.infrastructure.repositories.enterprise_rollback_run_repos
 from webstudio_backend.infrastructure.repositories.release_deployment_run_repository import (
     ReleaseDeploymentRunRepository,
 )
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.client_update_service import ClientUpdateService
 from webstudio_backend.services.deployment_platform_adapter import DeploymentPlatformAdapter
@@ -144,7 +150,9 @@ class EnterpriseRollbackEngine:
 
     async def _resolve_context(self) -> RollbackContext:
         channel = self._enterprise.resolve_channel()
-        rows, _ = await self._release_repo.list_history(channel, page=PageParams(page=1, page_size=5))
+        rows, _ = await self._release_repo.list_history(
+            channel, page=PageParams(page=1, page_size=5)
+        )
         if len(rows) < 2:
             raise ValueError("No previous release available for rollback")
         current = next((row for row in rows if row.is_current), rows[0])
@@ -199,7 +207,9 @@ class EnterpriseRollbackEngine:
         if deployment_run and deployment_run.pre_backup_filename:
             return deployment_run.pre_backup_filename
 
-        from webstudio_backend.infrastructure.repositories.backup_run_repository import BackupRunRepository
+        from webstudio_backend.infrastructure.repositories.backup_run_repository import (
+            BackupRunRepository,
+        )
 
         for backup in await BackupRunRepository(self._session).list_recent(limit=20):
             if backup.trigger_type == "pre_deploy" and backup.status == "completed":
@@ -281,7 +291,9 @@ class EnterpriseRollbackEngine:
 
         if step == "restore_windows_service_config":
             if context.service_config_snapshot_path:
-                return self._platform.restore_service_configuration(context.service_config_snapshot_path)
+                return self._platform.restore_service_configuration(
+                    context.service_config_snapshot_path
+                )
             return {"mode": "skipped", "reason": "no_service_snapshot"}
 
         if step == "restore_backend":
@@ -320,8 +332,12 @@ class EnterpriseRollbackEngine:
             }
 
         if step == "sync_client_platform_settings":
-            payload = EnterpriseReleaseService._serialize_release(context.target_release)  # noqa: SLF001
-            await ClientUpdateService(self._session, self._settings).sync_platform_settings_from_release(payload)
+            payload = EnterpriseReleaseService._serialize_release(
+                context.target_release
+            )  # noqa: SLF001
+            await ClientUpdateService(
+                self._session, self._settings
+            ).sync_platform_settings_from_release(payload)
             return {"release_version": context.target_release.release_version}
 
         if step == "restart_windows_service":
@@ -371,7 +387,11 @@ class EnterpriseRollbackEngine:
         raise ValueError(f"Unknown rollback step: {step}")
 
     async def _run_health_checks(self) -> dict[str, str]:
-        checks: dict[str, str] = {"database": "unknown", "migrations": "unknown", "status": "unknown"}
+        checks: dict[str, str] = {
+            "database": "unknown",
+            "migrations": "unknown",
+            "status": "unknown",
+        }
         result = await self._session.execute(text("SELECT 1"))
         checks["database"] = "ok" if result.scalar_one() == 1 else "failed"
         migration_result = await self._session.execute(
@@ -379,7 +399,9 @@ class EnterpriseRollbackEngine:
         )
         version = migration_result.scalar_one_or_none()
         checks["migrations"] = "ok" if version else "failed"
-        checks["status"] = "ok" if checks["database"] == "ok" and checks["migrations"] == "ok" else "degraded"
+        checks["status"] = (
+            "ok" if checks["database"] == "ok" and checks["migrations"] == "ok" else "degraded"
+        )
         return checks
 
     async def get_run(self, run_id: int) -> dict[str, Any] | None:

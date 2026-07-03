@@ -5,7 +5,7 @@ from __future__ import annotations
 pytest_plugins = ["auth.conftest"]
 
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -19,16 +19,18 @@ from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import SaleSource
 from webstudio_backend.infrastructure.database.models.sale import Sale
 
-FORBIDDEN_PUBLIC_KEYS = frozenset({
-    "guid",
-    "master_id",
-    "alter_id",
-    "tally_voucher_guid",
-    "tally_master_id",
-    "last_processed_guid",
-    "last_processed_master_id",
-    "sync_run_id",
-})
+FORBIDDEN_PUBLIC_KEYS = frozenset(
+    {
+        "guid",
+        "master_id",
+        "alter_id",
+        "tally_voucher_guid",
+        "tally_master_id",
+        "last_processed_guid",
+        "last_processed_master_id",
+        "sync_run_id",
+    }
+)
 
 
 def _assert_no_forbidden_keys(payload: object, *, path: str = "root") -> None:
@@ -101,7 +103,7 @@ async def test_sale_detail_omits_tally_internal_identifiers(
     sale = Sale(
         inventory_item_id=None,
         sale_source=SaleSource.TALLY,
-        sold_at=datetime.now(timezone.utc),
+        sold_at=datetime.now(UTC),
         invoice_number="TALLY-INV-001",
         snapshot_serial_number="SN-HIDDEN-001",
         snapshot_brand_name="HP",

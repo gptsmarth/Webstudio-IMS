@@ -47,7 +47,9 @@ export function ReportFiltersForm({
         {reportType === 'tally' && <TallyReportFilters {...context} />}
       </div>
       <div className="report-builder__filters-actions">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>Reset filters</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>
+          Reset filters
+        </button>
       </div>
     </section>
   );

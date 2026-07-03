@@ -7,7 +7,10 @@ interface DashboardBrandDistributionProps {
   loading: boolean;
 }
 
-export function DashboardBrandDistribution({ brands, loading }: DashboardBrandDistributionProps): JSX.Element {
+export function DashboardBrandDistribution({
+  brands,
+  loading,
+}: DashboardBrandDistributionProps): JSX.Element {
   if (loading) {
     return (
       <div className="dash-brand-table-wrap">
@@ -15,7 +18,9 @@ export function DashboardBrandDistribution({ brands, loading }: DashboardBrandDi
           <tbody>
             {Array.from({ length: 4 }, (_, index) => (
               <tr key={index}>
-                <td colSpan={3}><div className="skeleton dash-brand-table__skeleton" /></td>
+                <td colSpan={3}>
+                  <div className="skeleton dash-brand-table__skeleton" />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -50,7 +55,11 @@ export function DashboardBrandDistribution({ brands, loading }: DashboardBrandDi
             <tr key={brand.id}>
               <td>
                 <span className="dash-brand-table__brand">
-                  <img src={BrandLogoRegistry.getLogo(brand.name)} alt="" className="dash-brand-table__logo" />
+                  <img
+                    src={BrandLogoRegistry.getLogo(brand.name)}
+                    alt=""
+                    className="dash-brand-table__logo"
+                  />
                   <span>{brand.name}</span>
                 </span>
               </td>

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import (
@@ -20,6 +19,7 @@ from webstudio_backend.api.dependencies.auth import (
     SalesCreateDep,
 )
 from webstudio_backend.api.inventory_errors import raise_inventory_error
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.inventory import (
     CreateInventoryItemRequest,
     InventoryItemDetail,
@@ -29,16 +29,16 @@ from webstudio_backend.api.schemas.inventory import (
     TransferLocationRequest,
     UpdateInventoryItemRequest,
 )
-from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
-from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import InventoryStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
-from webstudio_backend.infrastructure.repositories.inventory_item_filters import InventorySearchFilters
+from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
+    InventorySearchFilters,
+)
 from webstudio_backend.services.inventory_service import InventoryService
 
 router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])

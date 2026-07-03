@@ -22,7 +22,10 @@ const STATUS_OPTIONS = [
   { value: 'running', label: 'Running' },
 ];
 
-export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelProps): JSX.Element | null {
+export function TallySyncHistoryPanel({
+  open,
+  onClose,
+}: TallySyncHistoryPanelProps): JSX.Element | null {
   const [entries, setEntries] = useState<TallySyncHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +84,9 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
             <h2 id="tally-history-title" className="tally-history-panel__title">
               Tally Sync History
             </h2>
-            <p className="tally-history-panel__subtitle">Synchronization runs and invoice import activity</p>
+            <p className="tally-history-panel__subtitle">
+              Synchronization runs and invoice import activity
+            </p>
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
             Close
@@ -90,7 +95,11 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
 
         <div className="tally-history-panel__toolbar">
           <div className="tally-history-panel__filters">
-            <select className="input input-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select
+              className="input input-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value || 'all'} value={option.value}>
                   {option.label}
@@ -123,10 +132,19 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
             </label>
           </div>
           <div className="tally-history-panel__actions">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load()} disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
               Apply filters
             </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void exportCsv()}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void exportCsv()}
+            >
               <Download size={14} aria-hidden /> Export CSV
             </button>
           </div>
@@ -138,7 +156,9 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
           {loading ? (
             <div className="skeleton tally-history-panel__skeleton" />
           ) : entries.length === 0 ? (
-            <p className="tally-history-panel__empty">No synchronization runs match your filters.</p>
+            <p className="tally-history-panel__empty">
+              No synchronization runs match your filters.
+            </p>
           ) : (
             <table className="tally-history-table">
               <thead>
@@ -166,7 +186,9 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
                     <td>{entry.invoices_skipped}</td>
                     <td>{entry.errors_count}</td>
                     <td>
-                      <span className={tallyStatusBadgeClass(entry.status)}>{entry.status_label}</span>
+                      <span className={tallyStatusBadgeClass(entry.status)}>
+                        {entry.status_label}
+                      </span>
                       {entry.error_summary && (
                         <span className="tally-history-table__error" title={entry.error_summary}>
                           {entry.error_summary}
@@ -184,18 +206,26 @@ export function TallySyncHistoryPanel({ open, onClose }: TallySyncHistoryPanelPr
   );
 }
 
-export function TallyOperationalMetrics({ operational }: { operational: TallyOperationalSummary }): JSX.Element {
+export function TallyOperationalMetrics({
+  operational,
+}: {
+  operational: TallyOperationalSummary;
+}): JSX.Element {
   return (
     <div className="tally-ops-grid">
       <div className="tally-ops-card">
         <span className="tally-ops-card__label">Connection</span>
-        <span className={`tally-ops-card__value ${operational.is_connected ? 'tally-ops-card__value--ok' : 'tally-ops-card__value--warn'}`}>
+        <span
+          className={`tally-ops-card__value ${operational.is_connected ? 'tally-ops-card__value--ok' : 'tally-ops-card__value--warn'}`}
+        >
           {operational.connection_label}
         </span>
       </div>
       <div className="tally-ops-card">
         <span className="tally-ops-card__label">Auto sync</span>
-        <span className="tally-ops-card__value">{operational.auto_sync_enabled ? 'Enabled' : 'Disabled'}</span>
+        <span className="tally-ops-card__value">
+          {operational.auto_sync_enabled ? 'Enabled' : 'Disabled'}
+        </span>
       </div>
       <div className="tally-ops-card">
         <span className="tally-ops-card__label">Polling interval</span>
@@ -204,7 +234,9 @@ export function TallyOperationalMetrics({ operational }: { operational: TallyOpe
       <div className="tally-ops-card">
         <span className="tally-ops-card__label">Last successful sync</span>
         <span className="tally-ops-card__value">
-          {operational.last_successful_sync_at ? formatDateTime(operational.last_successful_sync_at) : '—'}
+          {operational.last_successful_sync_at
+            ? formatDateTime(operational.last_successful_sync_at)
+            : '—'}
         </span>
       </div>
       <div className="tally-ops-card">
@@ -218,7 +250,9 @@ export function TallyOperationalMetrics({ operational }: { operational: TallyOpe
       <div className="tally-ops-card">
         <span className="tally-ops-card__label">Next scheduled sync</span>
         <span className="tally-ops-card__value">
-          {operational.next_scheduled_sync_at ? formatDateTime(operational.next_scheduled_sync_at) : '—'}
+          {operational.next_scheduled_sync_at
+            ? formatDateTime(operational.next_scheduled_sync_at)
+            : '—'}
         </span>
       </div>
       <div className="tally-ops-card">
@@ -248,7 +282,9 @@ export function TallyOperationalMetrics({ operational }: { operational: TallyOpe
       {operational.pending_retry && operational.retry_countdown_label && (
         <div className="tally-ops-card">
           <span className="tally-ops-card__label">Retry countdown</span>
-          <span className="tally-ops-card__value tally-ops-card__value--warn">{operational.retry_countdown_label}</span>
+          <span className="tally-ops-card__value tally-ops-card__value--warn">
+            {operational.retry_countdown_label}
+          </span>
         </div>
       )}
     </div>

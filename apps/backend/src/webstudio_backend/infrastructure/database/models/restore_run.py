@@ -17,7 +17,9 @@ class RestoreRun(Base, PrimaryKeyMixin):
 
     filename: Mapped[str] = mapped_column(String(256), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="local")
-    restore_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="entire_database")
+    restore_scope: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="entire_database"
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
     verification_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     emergency_backup_filename: Mapped[str | None] = mapped_column(String(256), nullable=True)

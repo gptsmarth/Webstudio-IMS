@@ -6,15 +6,13 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-from webstudio_backend.infrastructure.database.models.user import User
+from webstudio_backend.infrastructure.database.enums import NotificationSeverity
 from webstudio_backend.infrastructure.repositories.exceptions import (
     InvalidRecoveryKeyError,
     MainAdminNotFoundError,
     SystemNotInitializedError,
 )
-from webstudio_backend.infrastructure.database.enums import NotificationSeverity
 from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
@@ -23,13 +21,13 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 )
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.security.password import hash_password
-from webstudio_backend.services.password_policy_service import PasswordPolicyService
-from webstudio_backend.services.security_alert_service import SecurityAlertService
 from webstudio_backend.infrastructure.security.recovery_key import (
     generate_recovery_key,
     hash_recovery_key,
     verify_recovery_key,
 )
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
+from webstudio_backend.services.security_alert_service import SecurityAlertService
 
 
 @dataclass(frozen=True, slots=True)

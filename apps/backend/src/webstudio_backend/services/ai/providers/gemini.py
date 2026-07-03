@@ -18,7 +18,10 @@ from webstudio_backend.services.ai.prompts import (
     default_image_search_query,
 )
 from webstudio_backend.services.ai.providers.base import AIProvider
-from webstudio_backend.services.ai.spec_normalization import normalize_spec, validate_enrichment_payload
+from webstudio_backend.services.ai.spec_normalization import (
+    normalize_spec,
+    validate_enrichment_payload,
+)
 from webstudio_backend.services.ai.types import (
     AIProviderConfig,
     AIProviderError,
@@ -102,7 +105,9 @@ class GeminiProvider(AIProvider):
             model_name=model_name,
             use_web_search=False,
         )
-        logger.info("Gemini web search did not validate for {}, trying knowledge-only fallback", sku)
+        logger.info(
+            "Gemini web search did not validate for {}, trying knowledge-only fallback", sku
+        )
         parsed_knowledge, knowledge_body, knowledge_error = await self._try_spec_lookup(
             sku,
             prompt=knowledge_prompt,
@@ -195,10 +200,14 @@ class GeminiProvider(AIProvider):
                     raise
 
         if rate_limited and use_grounding:
-            return None, last_body, AIProviderError(
-                "RATE_LIMITED",
-                "Gemini web search quota exhausted. Knowledge fallback also failed or was skipped.",
-                provider="gemini",
+            return (
+                None,
+                last_body,
+                AIProviderError(
+                    "RATE_LIMITED",
+                    "Gemini web search quota exhausted. Knowledge fallback also failed or was skipped.",
+                    provider="gemini",
+                ),
             )
         return None, last_body, last_error
 
@@ -295,7 +304,9 @@ class GeminiProvider(AIProvider):
             async with httpx.AsyncClient(timeout=self._timeout()) as client:
                 response = await client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
-            raise AIProviderError("TIMEOUT", "Gemini request timed out.", provider="gemini") from exc
+            raise AIProviderError(
+                "TIMEOUT", "Gemini request timed out.", provider="gemini"
+            ) from exc
         except httpx.HTTPError as exc:
             logger.warning("Gemini network error for {}: {}", gemini_model, type(exc).__name__)
             raise AIProviderError(
@@ -305,7 +316,9 @@ class GeminiProvider(AIProvider):
             ) from exc
 
         if response.status_code == 429:
-            raise AIProviderError("RATE_LIMITED", _parse_rate_limit_message(response), provider="gemini")
+            raise AIProviderError(
+                "RATE_LIMITED", _parse_rate_limit_message(response), provider="gemini"
+            )
         if response.status_code in {401, 403}:
             raise AIProviderError(
                 "API_ERROR",

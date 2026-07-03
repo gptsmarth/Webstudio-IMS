@@ -42,28 +42,33 @@ describe('sales utilities', () => {
   it('detects active sales filters', () => {
     expect(hasActiveSalesFilters(DEFAULT_SALES_FILTERS, '')).toBe(false);
     expect(hasActiveSalesFilters(DEFAULT_SALES_FILTERS, 'invoice')).toBe(true);
-    expect(hasActiveSalesFilters({ ...DEFAULT_SALES_FILTERS, customerName: 'Acme' }, '')).toBe(true);
+    expect(hasActiveSalesFilters({ ...DEFAULT_SALES_FILTERS, customerName: 'Acme' }, '')).toBe(
+      true,
+    );
   });
 
   it('builds timeline events from audit logs', () => {
-    const events = buildSalesTimelineEvents([
-      {
-        id: '1',
-        entity_type: 'sale',
-        entity_id: '1',
-        inventory_item_id: 'abc',
-        actor_user_id: 1,
-        actor_display_name: 'Admin',
-        actor_role: 'admin',
-        action: 'CREATE',
-        source: 'MANUAL',
-        field_name: null,
-        old_value: null,
-        new_value: null,
-        description: 'Sale recorded',
-        created_at: '2025-06-01T10:00:00Z',
-      },
-    ], 'Main Store');
+    const events = buildSalesTimelineEvents(
+      [
+        {
+          id: '1',
+          entity_type: 'sale',
+          entity_id: '1',
+          inventory_item_id: 'abc',
+          actor_user_id: 1,
+          actor_display_name: 'Admin',
+          actor_role: 'admin',
+          action: 'CREATE',
+          source: 'MANUAL',
+          field_name: null,
+          old_value: null,
+          new_value: null,
+          description: 'Sale recorded',
+          created_at: '2025-06-01T10:00:00Z',
+        },
+      ],
+      'Main Store',
+    );
     expect(events).toHaveLength(1);
     expect(events[0].label).toBe('Sold');
     expect(events[0].location).toBe('Main Store');

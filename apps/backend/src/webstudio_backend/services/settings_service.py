@@ -15,13 +15,13 @@ from webstudio_backend.api.schemas.settings import (
     BackupHistoryEntry,
     BackupSettings,
     BackupSettingsUpdate,
-    RestoreHistoryEntry,
     ExcelSettings,
     GeneralSettings,
     IntegrationsSettings,
     IntegrationsSettingsUpdate,
     InventorySettings,
     NotificationSettings,
+    RestoreHistoryEntry,
     SalesSettings,
     SecuritySettings,
     SettingsWorkspace,
@@ -32,20 +32,30 @@ from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import NotificationSeverity, SettingValueType
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.restore_run_repository import (
+    RestoreRunRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
-from webstudio_backend.infrastructure.repositories.restore_run_repository import RestoreRunRepository
-from webstudio_backend.services.backup_engine import BackupEngine
-from webstudio_backend.services.backup_schedule import backup_health_status, compute_next_scheduled_backup
-from webstudio_backend.services.ai.config import mask_api_key, resolve_ai_config
-from webstudio_backend.services.ai.health import AIProviderHealthTracker
-from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
-from webstudio_backend.services.security_alert_service import SecurityAlertService
-from webstudio_backend.services.system_info_service import SystemInfoService
-from webstudio_backend.integrations.tally.connectivity import normalize_tally_host, validate_tally_port
+from webstudio_backend.integrations.tally.connectivity import (
+    normalize_tally_host,
+    validate_tally_port,
+)
 from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS
 from webstudio_backend.integrations.tally.incremental_sync import clamp_sync_interval_seconds
+from webstudio_backend.services.ai.config import mask_api_key, resolve_ai_config
+from webstudio_backend.services.ai.health import AIProviderHealthTracker
+from webstudio_backend.services.backup_engine import BackupEngine
+from webstudio_backend.services.backup_schedule import (
+    backup_health_status,
+    compute_next_scheduled_backup,
+)
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
+from webstudio_backend.services.security_alert_service import SecurityAlertService
+from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
+from webstudio_backend.services.system_info_service import SystemInfoService
 
 _SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key", "groq_api_key", "openrouter_api_key"})
 
@@ -74,13 +84,17 @@ class SettingsService:
         self._app_settings = app_settings
         self._recorder = AuditRecorder(session)
 
-    async def get_workspace(self, *, api_health: str = "ok", database_health: str = "ok") -> SettingsWorkspace:
+    async def get_workspace(
+        self, *, api_health: str = "ok", database_health: str = "ok"
+    ) -> SettingsWorkspace:
         await self._ensure_defaults()
         system_info = await SystemInfoService(self._session, self._app_settings).build()
         backup_engine = BackupEngine(
             self._session,
             self._app_settings,
-            backup_dir=self._resolve_backup_folder(await self._get_str("backup_folder") or "backups"),
+            backup_dir=self._resolve_backup_folder(
+                await self._get_str("backup_folder") or "backups"
+            ),
         )
         history_rows = await backup_engine.list_dashboard_entries(limit=25)
         restore_rows = await self._restore_history_entries()
@@ -89,9 +103,7 @@ class SettingsService:
         retention_policy = await self._get_str("backup_retention_policy") or "last_30"
         storage_backend = await self._get_str("backup_storage_backend") or "local"
         last_backup_raw = await self._get_str("last_backup_at")
-        last_backup_dt = (
-            datetime.fromisoformat(last_backup_raw) if last_backup_raw else None
-        )
+        last_backup_dt = datetime.fromisoformat(last_backup_raw) if last_backup_raw else None
         next_scheduled = compute_next_scheduled_backup(schedule, last_backup_at=last_backup_dt)
         last_verification = history_rows[0]["verification_status"] if history_rows else None
         health_status = backup_health_status(
@@ -141,7 +153,8 @@ class SettingsService:
                 https_certificate_status=system_info["https_certificate_status"],
             ),
             inventory=InventorySettings(
-                default_inventory_status=await self._get_str("default_inventory_status") or "received",
+                default_inventory_status=await self._get_str("default_inventory_status")
+                or "received",
                 default_store_id=self._parse_optional_int(await self._get_str("default_store_id")),
                 qr_code_enabled=await self._get_bool("qr_code_enabled", True),
                 auto_generate_labels=await self._get_bool("auto_generate_labels", False),
@@ -219,29 +232,51 @@ class SettingsService:
         workspace = await self.get_workspace()
         return workspace.general
 
-    async def update_security(self, payload: SecuritySettings, *, actor_id: int) -> SecuritySettings:
-        await self._set_int("session_timeout_minutes", payload.session_timeout_minutes, actor_id=actor_id)
+    async def update_security(
+        self, payload: SecuritySettings, *, actor_id: int
+    ) -> SecuritySettings:
+        await self._set_int(
+            "session_timeout_minutes", payload.session_timeout_minutes, actor_id=actor_id
+        )
         await self._set_int("password_min_length", payload.password_min_length, actor_id=actor_id)
-        await self._set_bool("password_require_uppercase", payload.password_require_uppercase, actor_id=actor_id)
-        await self._set_bool("password_require_lowercase", payload.password_require_lowercase, actor_id=actor_id)
-        await self._set_bool("password_require_number", payload.password_require_number, actor_id=actor_id)
-        await self._set_bool("password_require_symbol", payload.password_require_symbol, actor_id=actor_id)
-        await self._set_int("password_history_count", payload.password_history_count, actor_id=actor_id)
+        await self._set_bool(
+            "password_require_uppercase", payload.password_require_uppercase, actor_id=actor_id
+        )
+        await self._set_bool(
+            "password_require_lowercase", payload.password_require_lowercase, actor_id=actor_id
+        )
+        await self._set_bool(
+            "password_require_number", payload.password_require_number, actor_id=actor_id
+        )
+        await self._set_bool(
+            "password_require_symbol", payload.password_require_symbol, actor_id=actor_id
+        )
+        await self._set_int(
+            "password_history_count", payload.password_history_count, actor_id=actor_id
+        )
         await self._set_int("remember_me_ttl_days", payload.remember_me_ttl_days, actor_id=actor_id)
         await self._set_int("lockout_threshold", payload.lockout_threshold, actor_id=actor_id)
-        await self._set_int("lockout_duration_minutes", payload.lockout_duration_minutes, actor_id=actor_id)
+        await self._set_int(
+            "lockout_duration_minutes", payload.lockout_duration_minutes, actor_id=actor_id
+        )
         workspace = await self.get_workspace()
         return workspace.security
 
-    async def update_inventory(self, payload: InventorySettings, *, actor_id: int) -> InventorySettings:
-        await self._set_str("default_inventory_status", payload.default_inventory_status, actor_id=actor_id)
+    async def update_inventory(
+        self, payload: InventorySettings, *, actor_id: int
+    ) -> InventorySettings:
+        await self._set_str(
+            "default_inventory_status", payload.default_inventory_status, actor_id=actor_id
+        )
         await self._set_str(
             "default_store_id",
             "" if payload.default_store_id is None else str(payload.default_store_id),
             actor_id=actor_id,
         )
         await self._set_bool("qr_code_enabled", payload.qr_code_enabled, actor_id=actor_id)
-        await self._set_bool("auto_generate_labels", payload.auto_generate_labels, actor_id=actor_id)
+        await self._set_bool(
+            "auto_generate_labels", payload.auto_generate_labels, actor_id=actor_id
+        )
         await self._set_str("serial_number_prefix", payload.serial_number_prefix, actor_id=actor_id)
         await self._set_str("serial_number_suffix", payload.serial_number_suffix, actor_id=actor_id)
         await self._set_json("inventory_colors", payload.inventory_colors, actor_id=actor_id)
@@ -249,13 +284,17 @@ class SettingsService:
         return workspace.inventory
 
     async def update_sales(self, payload: SalesSettings, *, actor_id: int) -> SalesSettings:
-        await self._set_json("default_payment_modes", payload.default_payment_modes, actor_id=actor_id)
+        await self._set_json(
+            "default_payment_modes", payload.default_payment_modes, actor_id=actor_id
+        )
         await self._set_str("invoice_prefix", payload.invoice_prefix, actor_id=actor_id)
         await self._set_bool("manual_sale_enabled", payload.manual_sale_enabled, actor_id=actor_id)
         workspace = await self.get_workspace()
         return workspace.sales
 
-    async def update_tally(self, payload: TallySettingsGroup, *, actor_id: int) -> TallySettingsGroup:
+    async def update_tally(
+        self, payload: TallySettingsGroup, *, actor_id: int
+    ) -> TallySettingsGroup:
         normalized_host = normalize_tally_host(payload.tally_host)
         normalized_port = validate_tally_port(payload.tally_port)
         await self._set_bool("tally_enabled", payload.enabled, actor_id=actor_id)
@@ -285,9 +324,13 @@ class SettingsService:
         elif payload.gemini_api_key is not None and payload.gemini_api_key.strip():
             await self._set_str("gemini_api_key", payload.gemini_api_key.strip(), actor_id=actor_id)
 
-        await self._set_str("ai_primary_provider", payload.ai_primary_provider.strip().lower(), actor_id=actor_id)
+        await self._set_str(
+            "ai_primary_provider", payload.ai_primary_provider.strip().lower(), actor_id=actor_id
+        )
         await self._set_json("ai_fallback_chain", payload.ai_fallback_chain, actor_id=actor_id)
-        await self._set_bool("ai_enrichment_enabled", payload.ai_enrichment_enabled, actor_id=actor_id)
+        await self._set_bool(
+            "ai_enrichment_enabled", payload.ai_enrichment_enabled, actor_id=actor_id
+        )
         await self._set_int("ai_timeout_seconds", payload.ai_timeout_seconds, actor_id=actor_id)
         await self._set_int("ai_retry_count", payload.ai_retry_count, actor_id=actor_id)
 
@@ -301,7 +344,9 @@ class SettingsService:
         if payload.clear_openrouter_api_key:
             await self._set_str("openrouter_api_key", "", actor_id=actor_id)
         elif payload.openrouter_api_key is not None and payload.openrouter_api_key.strip():
-            await self._set_str("openrouter_api_key", payload.openrouter_api_key.strip(), actor_id=actor_id)
+            await self._set_str(
+                "openrouter_api_key", payload.openrouter_api_key.strip(), actor_id=actor_id
+            )
 
         workspace = await self.get_workspace()
         return workspace.integrations
@@ -318,17 +363,33 @@ class SettingsService:
         *,
         actor_id: int,
     ) -> NotificationSettings:
-        await self._set_bool("notifications_enabled", payload.notifications_enabled, actor_id=actor_id)
-        await self._set_bool("desktop_notifications", payload.desktop_notifications, actor_id=actor_id)
-        await self._set_bool("system_alerts_enabled", payload.system_alerts_enabled, actor_id=actor_id)
-        await self._set_bool("tally_alerts_enabled", payload.tally_alerts_enabled, actor_id=actor_id)
-        await self._set_bool("inventory_alerts_enabled", payload.inventory_alerts_enabled, actor_id=actor_id)
-        await self._set_bool("audit_alerts_enabled", payload.audit_alerts_enabled, actor_id=actor_id)
-        await self._set_bool("backup_alerts_enabled", payload.backup_alerts_enabled, actor_id=actor_id)
+        await self._set_bool(
+            "notifications_enabled", payload.notifications_enabled, actor_id=actor_id
+        )
+        await self._set_bool(
+            "desktop_notifications", payload.desktop_notifications, actor_id=actor_id
+        )
+        await self._set_bool(
+            "system_alerts_enabled", payload.system_alerts_enabled, actor_id=actor_id
+        )
+        await self._set_bool(
+            "tally_alerts_enabled", payload.tally_alerts_enabled, actor_id=actor_id
+        )
+        await self._set_bool(
+            "inventory_alerts_enabled", payload.inventory_alerts_enabled, actor_id=actor_id
+        )
+        await self._set_bool(
+            "audit_alerts_enabled", payload.audit_alerts_enabled, actor_id=actor_id
+        )
+        await self._set_bool(
+            "backup_alerts_enabled", payload.backup_alerts_enabled, actor_id=actor_id
+        )
         workspace = await self.get_workspace()
         return workspace.notifications
 
-    async def update_backup(self, payload: BackupSettingsUpdate, *, actor_id: int) -> BackupSettings:
+    async def update_backup(
+        self, payload: BackupSettingsUpdate, *, actor_id: int
+    ) -> BackupSettings:
         await self._set_str("backup_folder", payload.backup_folder, actor_id=actor_id)
         await self._set_str("backup_schedule", payload.schedule, actor_id=actor_id)
         await self._set_str("backup_retention_policy", payload.retention_policy, actor_id=actor_id)
@@ -398,7 +459,11 @@ class SettingsService:
             "mock": True,
         }
         health = [
-            AIProviderHealthEntry(**AIProviderHealthTracker.snapshot(provider, configured=configured_map[provider]).to_dict())
+            AIProviderHealthEntry(
+                **AIProviderHealthTracker.snapshot(
+                    provider, configured=configured_map[provider]
+                ).to_dict()
+            )
             for provider in ("gemini", "groq", "openrouter", "mock")
         ]
         return IntegrationsSettings(
@@ -425,7 +490,10 @@ class SettingsService:
                 await self._settings.set_value(key, value, value_type=value_type)
 
     async def _get_str(self, key: str) -> str:
-        return await self._settings.get_string(key) or SETTING_DEFAULTS.get(key, ("", SettingValueType.STRING))[0]
+        return (
+            await self._settings.get_string(key)
+            or SETTING_DEFAULTS.get(key, ("", SettingValueType.STRING))[0]
+        )
 
     async def _get_int(self, key: str, default: int) -> int:
         return await self._settings.get_int(key, default=default)
@@ -493,11 +561,15 @@ class SettingsService:
         if old_raw != new_raw:
             await self._audit_setting_change(key, old_raw, new_raw, actor_id)
 
-    async def _audit_setting_change(self, key: str, old_value: str, new_value: str, actor_id: int) -> None:
+    async def _audit_setting_change(
+        self, key: str, old_value: str, new_value: str, actor_id: int
+    ) -> None:
         actor_user = await self._users.get_by_id(actor_id)
         actor = AuditActor(
             user_id=actor_id,
-            display_name=(actor_user.display_name or actor_user.username) if actor_user else "System",
+            display_name=(
+                (actor_user.display_name or actor_user.username) if actor_user else "System"
+            ),
             role=actor_user.role.value if actor_user else "system",
         )
         category = _setting_category(key)

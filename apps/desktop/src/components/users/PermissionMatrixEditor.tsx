@@ -49,7 +49,8 @@ export function PermissionMatrixEditor({
     <div className="usr-permission-matrix">
       <div className="usr-permission-matrix__toolbar">
         <p className="usr-permission-matrix__hint">
-          Choose which app sections this role can access. Dashboard permissions control individual widgets on the operations center.
+          Choose which app sections this role can access. Dashboard permissions control individual
+          widgets on the operations center.
         </p>
         <button type="button" className="btn btn-ghost btn-sm" onClick={toggleAll}>
           {allCatalogSelected ? 'Clear all' : 'Select all'}
@@ -57,12 +58,14 @@ export function PermissionMatrixEditor({
       </div>
       <div className="usr-permission-matrix__modules">
         {modules.map((module) => {
-          const moduleCapabilities = module.capabilities.filter((capability) => (
-            catalog.includes(capability.permission)
-          ));
+          const moduleCapabilities = module.capabilities.filter((capability) =>
+            catalog.includes(capability.permission),
+          );
           if (moduleCapabilities.length === 0) return null;
           const modulePermissions = moduleCapabilities.map((capability) => capability.permission);
-          const moduleAllSelected = modulePermissions.every((permission) => selectedSet.has(permission));
+          const moduleAllSelected = modulePermissions.every((permission) =>
+            selectedSet.has(permission),
+          );
           return (
             <section key={module.moduleId} className="usr-permission-matrix__module">
               <div className="usr-permission-matrix__module-head">
@@ -90,8 +93,12 @@ export function PermissionMatrixEditor({
                           {checked ? '✓' : ''}
                         </span>
                         <span className="usr-permission-matrix__row-body">
-                          <span className="usr-permission-matrix__row-label">{capability.label}</span>
-                          <span className="usr-permission-matrix__row-desc">{capability.description}</span>
+                          <span className="usr-permission-matrix__row-label">
+                            {capability.label}
+                          </span>
+                          <span className="usr-permission-matrix__row-desc">
+                            {capability.description}
+                          </span>
                         </span>
                       </button>
                     </li>

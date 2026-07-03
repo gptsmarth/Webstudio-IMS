@@ -1,7 +1,12 @@
 export class LoggingService {
-  private static async dispatch(channel: LogChannel, level: LogLevel, message: string, meta?: Record<string, unknown>): Promise<void> {
+  private static async dispatch(
+    channel: LogChannel,
+    level: LogLevel,
+    message: string,
+    meta?: Record<string, unknown>,
+  ): Promise<void> {
     const formatted = `[${channel}] [${level.toUpperCase()}] ${message}`;
-    
+
     if (level === 'error') {
       console.error(formatted, meta ?? '');
     } else if (level === 'warn') {

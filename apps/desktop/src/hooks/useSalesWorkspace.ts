@@ -85,7 +85,10 @@ function parseApiError(err: unknown): string {
   return message.response?.data?.detail ?? message.message ?? 'Request failed.';
 }
 
-function mergeSalespeople(current: SalespersonOption[], items: SaleListItem[]): SalespersonOption[] {
+function mergeSalespeople(
+  current: SalespersonOption[],
+  items: SaleListItem[],
+): SalespersonOption[] {
   const map = new Map(current.map((entry) => [entry.id, entry]));
   for (const item of items) {
     if (item.recorded_by_user_id && item.recorded_by_display_name) {
@@ -167,12 +170,15 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     }
   }, []);
 
-  const selectItem = useCallback((id: number | null) => {
-    setSelectedId(id);
-    setSaleDetail(null);
-    setAuditLogs([]);
-    if (id) void loadDrawerData(id);
-  }, [loadDrawerData]);
+  const selectItem = useCallback(
+    (id: number | null) => {
+      setSelectedId(id);
+      setSaleDetail(null);
+      setAuditLogs([]);
+      if (id) void loadDrawerData(id);
+    },
+    [loadDrawerData],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -207,23 +213,26 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     }
   }, [debouncedSearch, filters, page, pageSize, sortDirection, sortField]);
 
-  const exportSales = useCallback(async (format: 'xlsx' | 'pdf') => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await ReportService.exportReport(
-        'sales',
-        format,
-        salesFiltersToExportParams(filters, debouncedSearch, sortField, sortDirection),
-      );
-    } catch (err: unknown) {
-      const message = parseApiError(err);
-      setActionError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(false);
-    }
-  }, [debouncedSearch, filters, sortDirection, sortField]);
+  const exportSales = useCallback(
+    async (format: 'xlsx' | 'pdf') => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await ReportService.exportReport(
+          'sales',
+          format,
+          salesFiltersToExportParams(filters, debouncedSearch, sortField, sortDirection),
+        );
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [debouncedSearch, filters, sortDirection, sortField],
+  );
 
   useEffect(() => {
     void Promise.all([BrandService.listBrands(), LocationService.listLocations()])

@@ -84,7 +84,9 @@ export function ReferenceFields({
           <select
             className="input"
             value={filters.locationType}
-            onChange={(e) => setFilters({ locationType: e.target.value as ReportBuilderFilters['locationType'] })}
+            onChange={(e) =>
+              setFilters({ locationType: e.target.value as ReportBuilderFilters['locationType'] })
+            }
           >
             <option value="">All stores</option>
             <option value="warehouse">Warehouse</option>
@@ -98,11 +100,15 @@ export function ReferenceFields({
         <select
           className="input"
           value={filters.locationId ?? ''}
-          onChange={(e) => setFilters({ locationId: e.target.value ? Number(e.target.value) : null })}
+          onChange={(e) =>
+            setFilters({ locationId: e.target.value ? Number(e.target.value) : null })
+          }
         >
           <option value="">All locations</option>
           {locations.map((location) => (
-            <option key={location.id} value={location.id}>{location.name}</option>
+            <option key={location.id} value={location.id}>
+              {location.name}
+            </option>
           ))}
         </select>
       </label>
@@ -111,14 +117,18 @@ export function ReferenceFields({
         <select
           className="input"
           value={filters.brandId ?? ''}
-          onChange={(e) => setFilters({
-            brandId: e.target.value ? Number(e.target.value) : null,
-            productModelId: null,
-          })}
+          onChange={(e) =>
+            setFilters({
+              brandId: e.target.value ? Number(e.target.value) : null,
+              productModelId: null,
+            })
+          }
         >
           <option value="">All brands</option>
           {brands.map((brand) => (
-            <option key={brand.id} value={brand.id}>{brand.name}</option>
+            <option key={brand.id} value={brand.id}>
+              {brand.name}
+            </option>
           ))}
         </select>
       </label>
@@ -131,7 +141,9 @@ export function ReferenceFields({
         >
           <option value="">All models</option>
           {productModels.map((model) => (
-            <option key={model.id} value={model.id}>{model.model_number} — {model.model_name}</option>
+            <option key={model.id} value={model.id}>
+              {model.model_number} — {model.model_name}
+            </option>
           ))}
         </select>
       </label>

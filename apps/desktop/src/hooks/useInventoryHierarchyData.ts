@@ -28,9 +28,22 @@ export interface InventoryHierarchyData {
     inStock: ModelInventoryRow[];
     zeroStock: ModelInventoryRow[];
   };
-  filterModels: (brandId: number, search: string, includeZeroStock: boolean, searchField?: HierarchySearchField) => ModelInventoryRow[];
-  filterStockModels: (brandId: number, search: string, searchField?: HierarchySearchField) => ModelInventoryRow[];
-  filterInventoryModels: (brandId: number, search: string, searchField?: HierarchySearchField) => ModelInventoryRow[];
+  filterModels: (
+    brandId: number,
+    search: string,
+    includeZeroStock: boolean,
+    searchField?: HierarchySearchField,
+  ) => ModelInventoryRow[];
+  filterStockModels: (
+    brandId: number,
+    search: string,
+    searchField?: HierarchySearchField,
+  ) => ModelInventoryRow[];
+  filterInventoryModels: (
+    brandId: number,
+    search: string,
+    searchField?: HierarchySearchField,
+  ) => ModelInventoryRow[];
   unitsForModel: (modelId: string, availableOnly?: boolean) => InventoryItemDetail[];
   sampleItemForModel: (modelId: string) => InventoryItemDetail | null;
 }
@@ -106,60 +119,66 @@ export function useInventoryHierarchyData(): InventoryHierarchyData {
     return map;
   }, [items]);
 
-  const modelsForBrand = useCallback((brandId: number) => (
-    buildModelRows(models, distribution?.by_product_model ?? [], brandId)
-  ), [distribution?.by_product_model, models]);
+  const modelsForBrand = useCallback(
+    (brandId: number) => buildModelRows(models, distribution?.by_product_model ?? [], brandId),
+    [distribution?.by_product_model, models],
+  );
 
-  const filterModels = useCallback((
-    brandId: number,
-    search: string,
-    includeZeroStock: boolean,
-    searchField: HierarchySearchField = 'all',
-  ) => {
-    const { inStock, zeroStock } = modelsForBrand(brandId);
-    const pool = includeZeroStock ? [...inStock, ...zeroStock] : inStock;
-    if (!search.trim()) return pool;
-    return pool.filter((row) => {
-      const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-      return matchesModelSearch(row.model, sample, search, searchField);
-    });
-  }, [itemsByModel, modelsForBrand]);
+  const filterModels = useCallback(
+    (
+      brandId: number,
+      search: string,
+      includeZeroStock: boolean,
+      searchField: HierarchySearchField = 'all',
+    ) => {
+      const { inStock, zeroStock } = modelsForBrand(brandId);
+      const pool = includeZeroStock ? [...inStock, ...zeroStock] : inStock;
+      if (!search.trim()) return pool;
+      return pool.filter((row) => {
+        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
+        return matchesModelSearch(row.model, sample, search, searchField);
+      });
+    },
+    [itemsByModel, modelsForBrand],
+  );
 
-  const filterInventoryModels = useCallback((
-    brandId: number,
-    search: string,
-    searchField: HierarchySearchField = 'all',
-  ) => {
-    const { all } = modelsForBrand(brandId);
-    if (!search.trim()) return all;
-    return all.filter((row) => {
-      const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-      return matchesModelSearch(row.model, sample, search, searchField);
-    });
-  }, [itemsByModel, modelsForBrand]);
+  const filterInventoryModels = useCallback(
+    (brandId: number, search: string, searchField: HierarchySearchField = 'all') => {
+      const { all } = modelsForBrand(brandId);
+      if (!search.trim()) return all;
+      return all.filter((row) => {
+        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
+        return matchesModelSearch(row.model, sample, search, searchField);
+      });
+    },
+    [itemsByModel, modelsForBrand],
+  );
 
-  const filterStockModels = useCallback((
-    brandId: number,
-    search: string,
-    searchField: HierarchySearchField = 'all',
-  ) => {
-    const { inStock } = modelsForBrand(brandId);
-    if (!search.trim()) return inStock;
-    return inStock.filter((row) => {
-      const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-      return matchesModelSearch(row.model, sample, search, searchField);
-    });
-  }, [itemsByModel, modelsForBrand]);
+  const filterStockModels = useCallback(
+    (brandId: number, search: string, searchField: HierarchySearchField = 'all') => {
+      const { inStock } = modelsForBrand(brandId);
+      if (!search.trim()) return inStock;
+      return inStock.filter((row) => {
+        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
+        return matchesModelSearch(row.model, sample, search, searchField);
+      });
+    },
+    [itemsByModel, modelsForBrand],
+  );
 
-  const unitsForModel = useCallback((modelId: string, availableOnly = false) => {
-    const modelItems = itemsByModel.get(modelId) ?? [];
-    if (!availableOnly) return modelItems;
-    return modelItems.filter((item) => item.status !== 'sold' && !item.is_archived);
-  }, [itemsByModel]);
+  const unitsForModel = useCallback(
+    (modelId: string, availableOnly = false) => {
+      const modelItems = itemsByModel.get(modelId) ?? [];
+      if (!availableOnly) return modelItems;
+      return modelItems.filter((item) => item.status !== 'sold' && !item.is_archived);
+    },
+    [itemsByModel],
+  );
 
-  const sampleItemForModel = useCallback((modelId: string) => (
-    itemsByModel.get(modelId)?.[0] ?? null
-  ), [itemsByModel]);
+  const sampleItemForModel = useCallback(
+    (modelId: string) => itemsByModel.get(modelId)?.[0] ?? null,
+    [itemsByModel],
+  );
 
   return {
     brands,

@@ -13,9 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.database.session import get_engine
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.ai.config import resolve_ai_config
-from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService, reset_shutdown_flag
+from webstudio_backend.services.scheduler_runtime_service import (
+    SchedulerRuntimeService,
+    reset_shutdown_flag,
+)
 
 
 @dataclass(slots=True)
@@ -70,7 +75,9 @@ async def verify_storage(settings: Settings) -> StartupCheckResult:
 async def verify_configuration(session: AsyncSession, settings: Settings) -> StartupCheckResult:
     repo = SystemSettingRepository(session)
     if settings.is_production and len(settings.jwt_secret.encode("utf-8")) < 32:
-        return StartupCheckResult(name="configuration", status="failed", detail="JWT_SECRET too short")
+        return StartupCheckResult(
+            name="configuration", status="failed", detail="JWT_SECRET too short"
+        )
     initialized = await repo.is_system_initialized()
     if not initialized and settings.is_production:
         return StartupCheckResult(

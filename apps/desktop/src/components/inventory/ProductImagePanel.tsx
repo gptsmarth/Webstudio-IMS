@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Upload } from 'lucide-react';
-import { ProductImageService, type ProductImageResult } from '../../services/images/ProductImageService';
+import {
+  ProductImageService,
+  type ProductImageResult,
+} from '../../services/images/ProductImageService';
 
 interface ProductImagePanelProps {
   productModelId: string;
@@ -62,9 +65,16 @@ export function ProductImagePanel({
           <label className="btn btn-secondary btn-sm inv-product-image__upload">
             <Upload size={14} aria-hidden />
             {uploading ? 'Uploading…' : 'Upload image'}
-            <input type="file" accept="image/*" className="inv-product-image__file" onChange={(event) => void onUpload(event)} />
+            <input
+              type="file"
+              accept="image/*"
+              className="inv-product-image__file"
+              onChange={(event) => void onUpload(event)}
+            />
           </label>
-          <p className="inv-product-image__hint">Local cache only. Remote fetching will be enabled in a future release.</p>
+          <p className="inv-product-image__hint">
+            Local cache only. Remote fetching will be enabled in a future release.
+          </p>
         </>
       )}
     </div>

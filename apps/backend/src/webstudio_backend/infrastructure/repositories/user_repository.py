@@ -18,7 +18,6 @@ from webstudio_backend.infrastructure.database.repositories.pagination import (
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateUsernameError
 from webstudio_backend.infrastructure.repositories.user_validation import normalize_username
 
-
 _USER_SORT_COLUMNS = {
     "username": User.username,
     "display_name": User.display_name,
@@ -42,8 +41,7 @@ class UserRepository(SqlAlchemyRepository[User]):
         statement = select(User.id, User.display_name, User.username).where(User.id.in_(user_ids))
         result = await self._session.execute(statement)
         return {
-            user_id: (display_name or username)
-            for user_id, display_name, username in result.all()
+            user_id: (display_name or username) for user_id, display_name, username in result.all()
         }
 
     async def get_by_username(self, username: str) -> User | None:
@@ -182,7 +180,9 @@ class UserRepository(SqlAlchemyRepository[User]):
         await self._session.refresh(user)
         return user
 
-    async def record_failed_login(self, user: User, *, lockout_threshold: int, lockout_minutes: int) -> User:
+    async def record_failed_login(
+        self, user: User, *, lockout_threshold: int, lockout_minutes: int
+    ) -> User:
         user.failed_login_count += 1
         if user.failed_login_count >= lockout_threshold:
             user.locked_until = datetime.now(UTC) + timedelta_from_minutes(lockout_minutes)

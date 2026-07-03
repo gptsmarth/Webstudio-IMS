@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
 from fastapi import APIRouter, Body, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select
 from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
@@ -67,7 +65,9 @@ async def list_locations(
         statement = statement.where(Location.name.ilike(f"{search.strip()}%"))
 
     if page is not None:
-        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        page_result = await paginate(
+            db_session, statement, PageParams(page=page, page_size=page_size)
+        )
         data = [LocationResponse.from_model(item).model_dump() for item in page_result.items]
         return _envelope(
             request,
@@ -108,7 +108,7 @@ async def create_location(
         await db_session.commit()
         return _envelope(request, LocationResponse.from_model(location).model_dump())
     except DuplicateNameError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.get("/{location_id}")
@@ -181,7 +181,7 @@ async def update_location(
         await db_session.commit()
         return _envelope(request, LocationResponse.from_model(updated).model_dump())
     except DuplicateNameError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)

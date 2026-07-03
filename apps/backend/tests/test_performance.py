@@ -56,15 +56,25 @@ async def test_tally_aggregate_stats_uses_sql_sum(
 
     async def fake_execute(statement):
         captured["statement"] = statement
-        return type("Result", (), {"one": lambda self: type("Row", (), {
-            "invoices_processed": 0,
-            "successfully_updated": 0,
-            "already_sold": 0,
-            "missing_serial": 0,
-            "missing_model": 0,
-            "model_mismatches": 0,
-            "ignored_items": 0,
-        })()})()
+        return type(
+            "Result",
+            (),
+            {
+                "one": lambda self: type(
+                    "Row",
+                    (),
+                    {
+                        "invoices_processed": 0,
+                        "successfully_updated": 0,
+                        "already_sold": 0,
+                        "missing_serial": 0,
+                        "missing_model": 0,
+                        "model_mismatches": 0,
+                        "ignored_items": 0,
+                    },
+                )()
+            },
+        )()
 
     monkeypatch.setattr(db_session, "execute", fake_execute)
     stats = await repo.aggregate_stats(company_sync_id=1)

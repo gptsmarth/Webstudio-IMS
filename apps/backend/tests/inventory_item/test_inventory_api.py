@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from inventory_item.conftest import TEST_PASSWORD, login_headers
-from webstudio_backend.infrastructure.database.enums import InventoryStatus
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
+from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 
 
 def _create_payload(product_model: ProductModel, location: Location, serial: str) -> dict:
@@ -63,7 +59,9 @@ async def test_duplicate_serial_rejected(
     location: Location,
 ) -> None:
     payload = _create_payload(product_model, location, "SN-DUP-001")
-    assert (await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)).status_code == 201
+    assert (
+        await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)
+    ).status_code == 201
     duplicate = await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)
     assert duplicate.status_code == 409
 
@@ -180,8 +178,8 @@ async def test_list_filters_and_pagination(
     location: Location,
     db_session: AsyncSession,
 ) -> None:
-    from webstudio_backend.infrastructure.repositories import LocationRepository
     from webstudio_backend.infrastructure.database.enums import LocationType
+    from webstudio_backend.infrastructure.repositories import LocationRepository
 
     store = await LocationRepository(db_session).create(
         "Store Floor",

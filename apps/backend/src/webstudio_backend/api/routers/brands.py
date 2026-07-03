@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select
 from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
@@ -18,7 +16,11 @@ from webstudio_backend.api.dependencies.auth import (
     BrandsViewDep,
 )
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
-from webstudio_backend.api.schemas.brand import BrandResponse, CreateBrandRequest, UpdateBrandRequest
+from webstudio_backend.api.schemas.brand import (
+    BrandResponse,
+    CreateBrandRequest,
+    UpdateBrandRequest,
+)
 from webstudio_backend.api.schemas.catalogue_deletion import BrandDeletePreviewResponse
 from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
@@ -61,7 +63,9 @@ async def list_brands(
         statement = statement.where(Brand.name.ilike(f"{search.strip()}%"))
 
     if page is not None:
-        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        page_result = await paginate(
+            db_session, statement, PageParams(page=page, page_size=page_size)
+        )
         data = [BrandResponse.from_model(b).model_dump() for b in page_result.items]
         return _envelope(
             request,
@@ -102,7 +106,7 @@ async def create_brand(
         await db_session.commit()
         return _envelope(request, BrandResponse.from_model(brand).model_dump())
     except DuplicateNameError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.get("/{brand_id}")
@@ -116,7 +120,11 @@ async def get_brand(
     repo = BrandRepository(db_session)
     brand = await repo.get_by_id(brand_id)
     if not brand:
-        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppError(
+            "NOT_FOUND",
+            f"Brand with ID {brand_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
     return _envelope(request, BrandResponse.from_model(brand).model_dump())
 
 
@@ -131,7 +139,11 @@ async def brand_delete_preview(
     repo = BrandRepository(db_session)
     brand = await repo.get_by_id(brand_id)
     if not brand:
-        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppError(
+            "NOT_FOUND",
+            f"Brand with ID {brand_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
     preview = await BrandDeletionService(db_session).preview(brand)
     return _envelope(request, BrandDeletePreviewResponse.model_validate(preview).model_dump())
@@ -148,7 +160,11 @@ async def update_brand(
     repo = BrandRepository(db_session)
     brand = await repo.get_by_id(brand_id)
     if not brand:
-        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppError(
+            "NOT_FOUND",
+            f"Brand with ID {brand_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
     try:
         updated = await repo.update(
@@ -163,7 +179,7 @@ async def update_brand(
         await db_session.commit()
         return _envelope(request, BrandResponse.from_model(updated).model_dump())
     except DuplicateNameError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -175,7 +191,11 @@ async def delete_brand(
     repo = BrandRepository(db_session)
     brand = await repo.get_by_id(brand_id)
     if not brand:
-        raise AppError("NOT_FOUND", f"Brand with ID {brand_id} not found", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppError(
+            "NOT_FOUND",
+            f"Brand with ID {brand_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
     try:
         await BrandDeletionService(db_session).delete_brand(brand, actor=_actor(current))

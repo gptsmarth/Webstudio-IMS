@@ -18,7 +18,9 @@ SCHEMA = "webstudio"
 def upgrade() -> None:
     op.add_column(
         "tally_company_sync",
-        sa.Column("connectivity_status", sa.String(length=32), nullable=False, server_default="offline"),
+        sa.Column(
+            "connectivity_status", sa.String(length=32), nullable=False, server_default="offline"
+        ),
         schema=SCHEMA,
     )
     op.add_column(

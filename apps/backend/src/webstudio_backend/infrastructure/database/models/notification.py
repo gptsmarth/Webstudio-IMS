@@ -95,8 +95,12 @@ class Notification(Base, PrimaryKeyMixin):
     customer_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     product_model_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    is_resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_read: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    is_resolved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

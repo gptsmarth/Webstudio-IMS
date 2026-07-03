@@ -7,7 +7,9 @@ export function SavedReportsPlaceholder(): JSX.Element {
   return (
     <aside className="report-saved" aria-label="Saved reports (coming soon)">
       <h2 className="report-saved__title">Saved reports</h2>
-      <p className="report-saved__hint">Architecture prepared for saved, favourite, and recently used report definitions.</p>
+      <p className="report-saved__hint">
+        Architecture prepared for saved, favourite, and recently used report definitions.
+      </p>
       <ul className="report-saved__list">
         <li className="report-saved__item report-saved__item--disabled">
           <Bookmark size={14} aria-hidden />

@@ -10,14 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-
 from webstudio_backend.infrastructure.database.enums import (
     ProductModelStatus,
     StorageType,
     StorageUnit,
 )
-from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
+from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 from webstudio_backend.infrastructure.database.repositories.pagination import (
     PageParams,
@@ -27,7 +26,6 @@ from webstudio_backend.infrastructure.database.repositories.pagination import (
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
 from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateModelNumberError,
-    ProductModelHasHistoryError,
 )
 from webstudio_backend.infrastructure.repositories.product_model_validation import (
     validate_cpu,
@@ -94,15 +92,17 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             storage_type=storage_type,
             status=status,
         )
-        payload.update({
-            "display": display.strip() if display else None,
-            "color_options": color_options.strip() if color_options else None,
-            "product_image_url": product_image_url.strip() if product_image_url else None,
-            "search_aliases": search_aliases.strip() if search_aliases else None,
-            "notes": notes.strip() if notes else None,
-            "purchase_price": purchase_price,
-            "selling_price": selling_price,
-        })
+        payload.update(
+            {
+                "display": display.strip() if display else None,
+                "color_options": color_options.strip() if color_options else None,
+                "product_image_url": product_image_url.strip() if product_image_url else None,
+                "search_aliases": search_aliases.strip() if search_aliases else None,
+                "notes": notes.strip() if notes else None,
+                "purchase_price": purchase_price,
+                "selling_price": selling_price,
+            }
+        )
         if await self.exists(payload["brand_id"], payload["model_number"]):
             raise DuplicateModelNumberError(payload["brand_id"], payload["model_number"])
         product_model = await self.add(ProductModel(**payload))
@@ -210,9 +210,11 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
                     field_name="purchase_price",
                     old_value={"purchase_price": float(old_val) if old_val is not None else None},
                     new_value={
-                        "purchase_price": float(product_model.purchase_price)
-                        if product_model.purchase_price is not None
-                        else None
+                        "purchase_price": (
+                            float(product_model.purchase_price)
+                            if product_model.purchase_price is not None
+                            else None
+                        )
                     },
                     actor=audit_actor,
                 )
@@ -225,9 +227,11 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
                     field_name="selling_price",
                     old_value={"selling_price": float(old_val) if old_val is not None else None},
                     new_value={
-                        "selling_price": float(product_model.selling_price)
-                        if product_model.selling_price is not None
-                        else None
+                        "selling_price": (
+                            float(product_model.selling_price)
+                            if product_model.selling_price is not None
+                            else None
+                        )
                     },
                     actor=audit_actor,
                 )

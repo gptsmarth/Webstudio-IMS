@@ -8,7 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import SchedulerRuntimeState
+from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import (
+    SchedulerRuntimeState,
+)
 
 
 class SchedulerRuntimeRepository:
@@ -17,11 +19,15 @@ class SchedulerRuntimeRepository:
 
     async def get(self, scheduler_key: str) -> SchedulerRuntimeState | None:
         result = await self._session.execute(
-            select(SchedulerRuntimeState).where(SchedulerRuntimeState.scheduler_key == scheduler_key),
+            select(SchedulerRuntimeState).where(
+                SchedulerRuntimeState.scheduler_key == scheduler_key
+            ),
         )
         return result.scalar_one_or_none()
 
-    async def get_or_create(self, scheduler_key: str, *, default_interval_seconds: int) -> SchedulerRuntimeState:
+    async def get_or_create(
+        self, scheduler_key: str, *, default_interval_seconds: int
+    ) -> SchedulerRuntimeState:
         row = await self.get(scheduler_key)
         if row is not None:
             return row
@@ -57,7 +63,9 @@ class SchedulerRuntimeRepository:
         await self._session.refresh(row)
         return row
 
-    async def merge_state_json(self, scheduler_key: str, patch: dict[str, Any]) -> SchedulerRuntimeState:
+    async def merge_state_json(
+        self, scheduler_key: str, patch: dict[str, Any]
+    ) -> SchedulerRuntimeState:
         row = await self.get(scheduler_key)
         if row is None:
             raise KeyError(f"Unknown scheduler key: {scheduler_key}")

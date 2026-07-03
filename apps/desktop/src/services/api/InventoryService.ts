@@ -114,7 +114,11 @@ export interface MarkSoldResponse {
 
 export class InventoryService {
   static async listItems(params?: InventoryListParams): Promise<InventoryListResult> {
-    LoggingService.debug('API', 'Fetching inventory items list', params as unknown as Record<string, unknown>);
+    LoggingService.debug(
+      'API',
+      'Fetching inventory items list',
+      params as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
     const response = await client.getRaw<InventoryItemDetail[], ListMeta>('/api/v1/inventory', {
       page: 1,
@@ -139,19 +143,38 @@ export class InventoryService {
 
   static async getBySerial(serial: string): Promise<InventoryItemDetail> {
     const client = await ApiClientProvider.getClient();
-    return client.get<InventoryItemDetail>(`/api/v1/inventory/by-serial/${encodeURIComponent(serial)}`);
+    return client.get<InventoryItemDetail>(
+      `/api/v1/inventory/by-serial/${encodeURIComponent(serial)}`,
+    );
   }
 
   static async createItem(data: CreateInventoryItemRequest): Promise<InventoryItemDetail> {
-    LoggingService.info('API', 'Creating inventory item', data as unknown as Record<string, unknown>);
+    LoggingService.info(
+      'API',
+      'Creating inventory item',
+      data as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
-    return client.post<InventoryItemDetail>('/api/v1/inventory', data as unknown as Record<string, unknown>);
+    return client.post<InventoryItemDetail>(
+      '/api/v1/inventory',
+      data as unknown as Record<string, unknown>,
+    );
   }
 
-  static async updateItem(id: string, data: UpdateInventoryItemRequest): Promise<InventoryItemDetail> {
-    LoggingService.info('API', `Updating inventory item ${id}`, data as unknown as Record<string, unknown>);
+  static async updateItem(
+    id: string,
+    data: UpdateInventoryItemRequest,
+  ): Promise<InventoryItemDetail> {
+    LoggingService.info(
+      'API',
+      `Updating inventory item ${id}`,
+      data as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
-    return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}`, data as unknown as Record<string, unknown>);
+    return client.patch<InventoryItemDetail>(
+      `/api/v1/inventory/${id}`,
+      data as unknown as Record<string, unknown>,
+    );
   }
 
   static async archiveItem(id: string): Promise<InventoryItemDetail> {
@@ -166,7 +189,9 @@ export class InventoryService {
 
   static async transferLocation(id: string, locationId: number): Promise<InventoryItemDetail> {
     const client = await ApiClientProvider.getClient();
-    return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}/location`, { location_id: locationId });
+    return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}/location`, {
+      location_id: locationId,
+    });
   }
 
   static async markSold(id: string, data: MarkSoldRequest): Promise<MarkSoldResponse> {

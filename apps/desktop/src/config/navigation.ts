@@ -141,7 +141,9 @@ export function isStockOnlyUser(permissions: string[]): boolean {
 export function navItemsForRole(role: UserRole): NavItemConfig[] {
   const rolePermissions: Record<UserRole, string[]> = {
     main_admin: NAV_ITEMS.map((item) => item.permission),
-    admin: NAV_ITEMS.filter((item) => item.id !== 'users' && item.id !== 'audit' && item.id !== 'settings').map((item) => item.permission),
+    admin: NAV_ITEMS.filter(
+      (item) => item.id !== 'users' && item.id !== 'audit' && item.id !== 'settings',
+    ).map((item) => item.permission),
     salesperson: [ROUTE_PERMISSIONS.stock],
   };
   return navItemsForPermissions(rolePermissions[role] ?? []);
@@ -159,12 +161,13 @@ export function defaultRouteForPermissions(permissions: string[]): WorkspaceRout
 }
 
 export function defaultRouteForRole(role: UserRole): WorkspaceRoute {
-  return defaultRouteForPermissions(
-    navItemsForRole(role).map((item) => item.permission),
-  );
+  return defaultRouteForPermissions(navItemsForRole(role).map((item) => item.permission));
 }
 
-export function isRouteAllowedForPermissions(route: WorkspaceRoute, permissions: string[]): boolean {
+export function isRouteAllowedForPermissions(
+  route: WorkspaceRoute,
+  permissions: string[],
+): boolean {
   const required = ROUTE_PERMISSIONS[route];
   return required ? new Set(permissions).has(required) : false;
 }
@@ -177,10 +180,9 @@ export function navItemByRoute(route: WorkspaceRoute): NavItemConfig | undefined
   return NAV_ITEMS.find((item) => item.id === route);
 }
 
-export function breadcrumbTrail(route: WorkspaceRoute): { label: string; route?: WorkspaceRoute }[] {
+export function breadcrumbTrail(
+  route: WorkspaceRoute,
+): { label: string; route?: WorkspaceRoute }[] {
   const current = navItemByRoute(route);
-  return [
-    { label: 'WEBSTUDIO IMS' },
-    { label: current?.label ?? 'Page', route },
-  ];
+  return [{ label: 'WEBSTUDIO IMS' }, { label: current?.label ?? 'Page', route }];
 }

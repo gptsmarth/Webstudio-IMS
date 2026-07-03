@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseNotificationDescription,
-  structuredRowsFromObject,
-} from '../src/lib/structuredData';
+import { parseNotificationDescription, structuredRowsFromObject } from '../src/lib/structuredData';
 
 describe('structuredData', () => {
   it('flattens nested location objects into readable rows', () => {

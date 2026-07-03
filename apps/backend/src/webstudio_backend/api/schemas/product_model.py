@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from decimal import Decimal
-import uuid
+
 from pydantic import BaseModel, Field
 
 from webstudio_backend.infrastructure.database.enums import (
@@ -137,7 +138,11 @@ class ProductModelResponse(BaseModel):
             product_image_url=pm.product_image_url,
             search_aliases=pm.search_aliases,
             notes=pm.notes,
-            purchase_price=float(pm.purchase_price) if include_purchase_price and pm.purchase_price is not None else None,
+            purchase_price=(
+                float(pm.purchase_price)
+                if include_purchase_price and pm.purchase_price is not None
+                else None
+            ),
             selling_price=float(pm.selling_price) if pm.selling_price is not None else None,
             created_at=pm.created_at,
             updated_at=pm.updated_at,

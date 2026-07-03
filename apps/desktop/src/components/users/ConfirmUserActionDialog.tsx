@@ -38,10 +38,20 @@ export function ConfirmUserActionDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">{title}</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} />
           </button>
         </header>
@@ -54,7 +64,12 @@ export function ConfirmUserActionDialog({
           </div>
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
           <button

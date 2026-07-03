@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.database.session import session_scope
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.scheduler_runtime_service import (
     SchedulerRuntimeService,
     is_shutdown_requested,

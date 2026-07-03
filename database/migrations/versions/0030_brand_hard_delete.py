@@ -16,8 +16,7 @@ SCHEMA = "webstudio"
 
 
 def upgrade() -> None:
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.sales AS sale
             SET
                 snapshot_serial_number = COALESCE(sale.snapshot_serial_number, item.serial_number),
@@ -40,11 +39,9 @@ def upgrade() -> None:
             INNER JOIN {SCHEMA}.locations AS location ON location.id = item.current_location_id
             WHERE sale.inventory_item_id = item.id
               AND brand.is_active = false
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.sales AS sale
             SET inventory_item_id = NULL
             FROM {SCHEMA}.inventory_items AS item
@@ -52,11 +49,9 @@ def upgrade() -> None:
             INNER JOIN {SCHEMA}.brands AS brand ON brand.id = model.brand_id
             WHERE sale.inventory_item_id = item.id
               AND brand.is_active = false
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.audit_logs AS log
             SET inventory_item_id = NULL
             FROM {SCHEMA}.inventory_items AS item
@@ -64,27 +59,22 @@ def upgrade() -> None:
             INNER JOIN {SCHEMA}.brands AS brand ON brand.id = model.brand_id
             WHERE log.inventory_item_id = item.id
               AND brand.is_active = false
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             DELETE FROM {SCHEMA}.inventory_items AS item
             USING {SCHEMA}.product_models AS model, {SCHEMA}.brands AS brand
             WHERE item.product_model_id = model.id
               AND model.brand_id = brand.id
               AND brand.is_active = false
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             DELETE FROM {SCHEMA}.product_models AS model
             USING {SCHEMA}.brands AS brand
             WHERE model.brand_id = brand.id
               AND brand.is_active = false
-            """)
-    )
+            """))
 
     op.execute(sa.text(f"DELETE FROM {SCHEMA}.brands WHERE is_active = false"))
 

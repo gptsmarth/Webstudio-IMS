@@ -6,13 +6,19 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel
 from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
-from webstudio_backend.services.enterprise_rollback_engine import ROLLBACK_STEPS, EnterpriseRollbackEngine
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
+from webstudio_backend.services.enterprise_rollback_engine import (
+    ROLLBACK_STEPS,
+    EnterpriseRollbackEngine,
+)
 
 
 @pytest.mark.asyncio
@@ -27,13 +33,17 @@ async def test_rollback_steps_order() -> None:
 async def test_execute_rollback_completes_in_test_mode(db_session: AsyncSession) -> None:
     settings = get_settings()
     settings.app_env = "test"
+    channel = ReleaseChannel(settings.release_channel)
+
+    await db_session.execute(delete(SoftwareRelease))
+    await db_session.commit()
 
     repo = SoftwareReleaseRepository(db_session)
     await repo.upsert_release(
         SoftwareRelease(
             release_version="0.2.0",
             build_number=2,
-            release_channel=ReleaseChannel.DEVELOPMENT,
+            release_channel=channel,
             git_commit="abc",
             git_short="abc",
             build_timestamp=datetime.now(UTC),
@@ -45,7 +55,7 @@ async def test_execute_rollback_completes_in_test_mode(db_session: AsyncSession)
         SoftwareRelease(
             release_version="0.1.0",
             build_number=1,
-            release_channel=ReleaseChannel.DEVELOPMENT,
+            release_channel=channel,
             git_commit="def",
             git_short="def",
             build_timestamp=datetime.now(UTC),
@@ -70,14 +80,18 @@ async def test_execute_rollback_completes_in_test_mode(db_session: AsyncSession)
 async def test_rollback_history_is_permanent(db_session: AsyncSession) -> None:
     settings = get_settings()
     settings.app_env = "test"
+    channel = ReleaseChannel(settings.release_channel)
     engine = EnterpriseRollbackEngine(db_session, settings)
+
+    await db_session.execute(delete(SoftwareRelease))
+    await db_session.commit()
 
     repo = SoftwareReleaseRepository(db_session)
     await repo.upsert_release(
         SoftwareRelease(
             release_version="0.2.0",
             build_number=2,
-            release_channel=ReleaseChannel.DEVELOPMENT,
+            release_channel=channel,
             git_commit="abc",
             git_short="abc",
             build_timestamp=datetime.now(UTC),
@@ -89,7 +103,7 @@ async def test_rollback_history_is_permanent(db_session: AsyncSession) -> None:
         SoftwareRelease(
             release_version="0.1.0",
             build_number=1,
-            release_channel=ReleaseChannel.DEVELOPMENT,
+            release_channel=channel,
             git_commit="def",
             git_short="def",
             build_timestamp=datetime.now(UTC),

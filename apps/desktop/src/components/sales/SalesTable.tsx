@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
-import { formatInvoiceDate, formatSaleAmount, saleSourceLabel, saleStatusBadgeClass, saleStatusLabel } from '../../lib/sales';
+import {
+  formatInvoiceDate,
+  formatSaleAmount,
+  saleSourceLabel,
+  saleStatusBadgeClass,
+  saleStatusLabel,
+} from '../../lib/sales';
 import { hasActiveSalesFilters } from '../../lib/salesExport';
 import type { SalesSortField, SalesWorkspaceState } from '../../hooks/useSalesWorkspace';
 import type { SaleListItem } from '../../services/api/SalesService';
@@ -17,15 +23,45 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { id: 'invoice', label: 'Invoice Number', sortField: 'invoice_number', minWidth: 130, defaultWidth: 150 },
+  {
+    id: 'invoice',
+    label: 'Invoice Number',
+    sortField: 'invoice_number',
+    minWidth: 130,
+    defaultWidth: 150,
+  },
   { id: 'date', label: 'Invoice Date', sortField: 'sold_at', minWidth: 120, defaultWidth: 130 },
-  { id: 'customer', label: 'Customer', sortField: 'customer_name', minWidth: 140, defaultWidth: 160 },
+  {
+    id: 'customer',
+    label: 'Customer',
+    sortField: 'customer_name',
+    minWidth: 140,
+    defaultWidth: 160,
+  },
   { id: 'brand', label: 'Brand', sortField: 'brand_name', minWidth: 120, defaultWidth: 130 },
   { id: 'model', label: 'Model', sortField: 'model_name', minWidth: 140, defaultWidth: 160 },
-  { id: 'serial', label: 'Serial Number', sortField: 'serial_number', minWidth: 140, defaultWidth: 160 },
+  {
+    id: 'serial',
+    label: 'Serial Number',
+    sortField: 'serial_number',
+    minWidth: 140,
+    defaultWidth: 160,
+  },
   { id: 'store', label: 'Store', sortField: 'location_name', minWidth: 120, defaultWidth: 140 },
-  { id: 'payment', label: 'Payment Mode', sortField: 'payment_mode', minWidth: 110, defaultWidth: 120 },
-  { id: 'source', label: 'Sale Source', sortField: 'sale_source', minWidth: 100, defaultWidth: 110 },
+  {
+    id: 'payment',
+    label: 'Payment Mode',
+    sortField: 'payment_mode',
+    minWidth: 110,
+    defaultWidth: 120,
+  },
+  {
+    id: 'source',
+    label: 'Sale Source',
+    sortField: 'sale_source',
+    minWidth: 100,
+    defaultWidth: 110,
+  },
   { id: 'soldBy', label: 'Sold By', minWidth: 120, defaultWidth: 140 },
   { id: 'amount', label: 'Amount', minWidth: 90, defaultWidth: 100 },
   { id: 'status', label: 'Status', minWidth: 100, defaultWidth: 110 },
@@ -77,7 +113,9 @@ interface SalesTableProps {
 export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element {
   const [widths, setWidths] = useState<Record<string, number>>(() => {
     const saved = loadWidths();
-    return Object.fromEntries(COLUMNS.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]));
+    return Object.fromEntries(
+      COLUMNS.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]),
+    );
   });
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [menuState, setMenuState] = useState<{ item: SaleListItem; rect: DOMRect } | null>(null);
@@ -125,11 +163,15 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
   const renderSortIcon = (field?: SalesSortField) => {
     if (!field) return null;
     if (workspace.sortField !== field) {
-      return <ArrowUpDown size={12} aria-hidden className="sales-sort-icon sales-sort-icon--idle" />;
+      return (
+        <ArrowUpDown size={12} aria-hidden className="sales-sort-icon sales-sort-icon--idle" />
+      );
     }
-    return workspace.sortDirection === 'asc'
-      ? <ArrowUp size={12} aria-hidden className="sales-sort-icon" />
-      : <ArrowDown size={12} aria-hidden className="sales-sort-icon" />;
+    return workspace.sortDirection === 'asc' ? (
+      <ArrowUp size={12} aria-hidden className="sales-sort-icon" />
+    ) : (
+      <ArrowDown size={12} aria-hidden className="sales-sort-icon" />
+    );
   };
 
   const onTableKeyDown = (event: React.KeyboardEvent) => {
@@ -171,7 +213,9 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
                   key={column.id}
                   style={{ width: widths[column.id], minWidth: column.minWidth }}
                   className={column.sortField ? 'sales-table__th-sortable' : undefined}
-                  onClick={column.sortField ? () => workspace.toggleSort(column.sortField!) : undefined}
+                  onClick={
+                    column.sortField ? () => workspace.toggleSort(column.sortField!) : undefined
+                  }
                 >
                   <span className="sales-table__th-content">
                     {column.label}
@@ -205,7 +249,10 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
             {!workspace.loading && workspace.items.length === 0 && (
               <tr className="sales-table__empty-row">
                 <td colSpan={COLUMNS.length}>
-                  <SalesEmptyState hasFilters={hasFilters} onClearFilters={workspace.resetFilters} />
+                  <SalesEmptyState
+                    hasFilters={hasFilters}
+                    onClearFilters={workspace.resetFilters}
+                  />
                 </td>
               </tr>
             )}
@@ -218,17 +265,23 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
                     if (node) rowRefs.current.set(index, node);
                     else rowRefs.current.delete(index);
                   }}
-                  className={[
-                    workspace.selectedId === sale.id ? 'selected' : '',
-                    focusedIndex === index ? 'sales-table__row--focused' : '',
-                  ].filter(Boolean).join(' ') || undefined}
+                  className={
+                    [
+                      workspace.selectedId === sale.id ? 'selected' : '',
+                      focusedIndex === index ? 'sales-table__row--focused' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                   onClick={() => workspace.selectItem(sale.id)}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
                   <td>{sale.invoice_number}</td>
                   <td>{formatInvoiceDate(sale.sold_at)}</td>
                   <td>{sale.customer_name ?? '—'}</td>
-                  <td><InventoryBrandCell brandName={sale.brand_name} /></td>
+                  <td>
+                    <InventoryBrandCell brandName={sale.brand_name} />
+                  </td>
                   <td>
                     <span className="sales-model-cell">
                       <span className="sales-model-number">{sale.model_number}</span>
@@ -254,7 +307,10 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
                       aria-haspopup="menu"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setMenuState({ item: sale, rect: event.currentTarget.getBoundingClientRect() });
+                        setMenuState({
+                          item: sale,
+                          rect: event.currentTarget.getBoundingClientRect(),
+                        });
                       }}
                     >
                       <MoreHorizontal size={14} aria-hidden />
@@ -280,7 +336,9 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
 
       <div className="sales-table-pagination">
         <span className="sales-table-pagination__meta">
-          {workspace.totalItems > 0 ? `${pageStart}–${pageEnd} of ${workspace.totalItems}` : '0 sales'}
+          {workspace.totalItems > 0
+            ? `${pageStart}–${pageEnd} of ${workspace.totalItems}`
+            : '0 sales'}
         </span>
         <div className="sales-table-pagination__controls">
           <button

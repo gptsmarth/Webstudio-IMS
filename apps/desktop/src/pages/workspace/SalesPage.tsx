@@ -53,7 +53,11 @@ export function SalesPage(): JSX.Element {
         <div className="alert alert-danger sales-page__alert">
           <AlertCircle size={14} aria-hidden />
           <span>{workspace.error}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void workspace.refresh()}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => void workspace.refresh()}
+          >
             Retry
           </button>
         </div>
@@ -63,17 +67,20 @@ export function SalesPage(): JSX.Element {
         <div className="alert alert-danger sales-page__alert">
           <AlertCircle size={14} aria-hidden />
           <span>{workspace.actionError}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={workspace.clearActionError}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={workspace.clearActionError}
+          >
             Dismiss
           </button>
         </div>
       )}
 
-      <div className={`sales-page__body ${workspace.selectedId ? 'sales-page__body--drawer-open' : ''}`}>
-        <SalesTable
-          workspace={workspace}
-          onView={(item) => workspace.selectItem(item.id)}
-        />
+      <div
+        className={`sales-page__body ${workspace.selectedId ? 'sales-page__body--drawer-open' : ''}`}
+      >
+        <SalesTable workspace={workspace} onView={(item) => workspace.selectItem(item.id)} />
         <SalesDetailDrawer workspace={workspace} />
       </div>
 

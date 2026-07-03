@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { AdminBrandSummary, AdminModelTable, AdminSerialTable, InvModelSerialHero } from '../../components/inventory/admin';
+import {
+  AdminBrandSummary,
+  AdminModelTable,
+  AdminSerialTable,
+  InvModelSerialHero,
+} from '../../components/inventory/admin';
 import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
 import { AddLaptopWizard } from '../../components/inventory/AddLaptopWizard';
 import { InventoryDetailDrawer } from '../../components/inventory/InventoryDetailDrawer';
 import { MarkSoldDialog } from '../../components/inventory/MarkSoldDialog';
+import { HierarchyBreadcrumb, HierarchyToolbar, StockBrandGrid } from '../../components/stock';
 import {
-  HierarchyBreadcrumb,
-  HierarchyToolbar,
-  StockBrandGrid,
-} from '../../components/stock';
-import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../hooks/useInventoryHierarchyData';
+  useDebouncedHierarchySearch,
+  useInventoryHierarchyData,
+} from '../../hooks/useInventoryHierarchyData';
 import { useInventoryWorkspace } from '../../hooks/useInventoryWorkspace';
 import { canArchiveProductModels, canWriteInventory } from '../../lib/inventory';
 import { InventoryService } from '../../services/api/InventoryService';
@@ -41,9 +45,12 @@ export function InventoryPage(): JSX.Element {
     }
   }, [canWrite, session, setRoute]);
 
-  useEffect(() => () => {
-    useInventoryNavStore.getState().reset();
-  }, []);
+  useEffect(
+    () => () => {
+      useInventoryNavStore.getState().reset();
+    },
+    [],
+  );
 
   const brandSummary = useMemo(
     () => hierarchy.brandSummaries.find((row) => row.brandId === nav.brandId) ?? null,
@@ -70,7 +77,8 @@ export function InventoryPage(): JSX.Element {
   );
 
   const editModel = useMemo(
-    () => (editModelId ? hierarchy.models.find((model) => model.id === editModelId) ?? null : null),
+    () =>
+      editModelId ? (hierarchy.models.find((model) => model.id === editModelId) ?? null) : null,
     [editModelId, hierarchy.models],
   );
 
@@ -79,37 +87,44 @@ export function InventoryPage(): JSX.Element {
     [markSoldItemId, serialUnits, workspace.selectedItem],
   );
 
-  const handleTransfer = useCallback(async (itemId: string, locationId: number) => {
-    await InventoryService.transferLocation(itemId, locationId);
-    if (workspace.selectedId === itemId) {
-      await workspace.refreshSelected();
-    }
-    await hierarchy.refresh();
-    await workspace.refresh();
-  }, [hierarchy, workspace]);
-
-  const handleMarkSold = useCallback((itemId: string) => {
-    workspace.selectItem(itemId);
-    setMarkSoldItemId(itemId);
-    setMarkSoldOpen(true);
-  }, [workspace]);
-
-  const handleUpdateModel = useCallback(async (
-    patch: Parameters<typeof ProductModelService.updateModel>[1],
-  ) => {
-    if (!editModel) return;
-    setModelActionLoading(true);
-    try {
-      await ProductModelService.updateModel(editModel.id, patch);
-      await hierarchy.refresh();
-      await workspace.refresh();
-      if (workspace.selectedItem?.product_model_id === editModel.id) {
+  const handleTransfer = useCallback(
+    async (itemId: string, locationId: number) => {
+      await InventoryService.transferLocation(itemId, locationId);
+      if (workspace.selectedId === itemId) {
         await workspace.refreshSelected();
       }
-    } finally {
-      setModelActionLoading(false);
-    }
-  }, [editModel, hierarchy, workspace]);
+      await hierarchy.refresh();
+      await workspace.refresh();
+    },
+    [hierarchy, workspace],
+  );
+
+  const handleMarkSold = useCallback(
+    (itemId: string) => {
+      workspace.selectItem(itemId);
+      setMarkSoldItemId(itemId);
+      setMarkSoldOpen(true);
+    },
+    [workspace],
+  );
+
+  const handleUpdateModel = useCallback(
+    async (patch: Parameters<typeof ProductModelService.updateModel>[1]) => {
+      if (!editModel) return;
+      setModelActionLoading(true);
+      try {
+        await ProductModelService.updateModel(editModel.id, patch);
+        await hierarchy.refresh();
+        await workspace.refresh();
+        if (workspace.selectedItem?.product_model_id === editModel.id) {
+          await workspace.refreshSelected();
+        }
+      } finally {
+        setModelActionLoading(false);
+      }
+    },
+    [editModel, hierarchy, workspace],
+  );
 
   const handleDeleteModel = useCallback(async () => {
     if (!editModel) return;
@@ -127,10 +142,13 @@ export function InventoryPage(): JSX.Element {
     }
   }, [editModel, hierarchy, nav, workspace]);
 
-  const handleAddComplete = useCallback(async (payload: Parameters<typeof workspace.addLaptopWizard>[0]) => {
-    await workspace.addLaptopWizard(payload);
-    await hierarchy.refresh();
-  }, [hierarchy, workspace]);
+  const handleAddComplete = useCallback(
+    async (payload: Parameters<typeof workspace.addLaptopWizard>[0]) => {
+      await workspace.addLaptopWizard(payload);
+      await hierarchy.refresh();
+    },
+    [hierarchy, workspace],
+  );
 
   if (!session) {
     return (
@@ -175,7 +193,9 @@ export function InventoryPage(): JSX.Element {
         backLabel={nav.level === 'serials' ? 'Back to models' : 'Back to brands'}
       />
 
-      {nav.level === 'models' && <AdminBrandSummary summary={brandSummary} brandName={nav.brandName} />}
+      {nav.level === 'models' && (
+        <AdminBrandSummary summary={brandSummary} brandName={nav.brandName} />
+      )}
 
       {nav.level !== 'serials' && (
         <HierarchyToolbar
@@ -220,13 +240,17 @@ export function InventoryPage(): JSX.Element {
         <InvModelSerialHero
           model={selectedModel}
           unitCount={serialUnits.length}
-          availableCount={serialUnits.filter((unit) => unit.status === 'available' && !unit.is_archived).length}
+          availableCount={
+            serialUnits.filter((unit) => unit.status === 'available' && !unit.is_archived).length
+          }
           onEditModel={() => setEditModelId(selectedModel.id)}
         />
       )}
 
       {nav.level === 'serials' && nav.modelId && (
-        <div className={`inv-page__body ${workspace.selectedId ? 'inv-page__body--drawer-open' : ''}`}>
+        <div
+          className={`inv-page__body ${workspace.selectedId ? 'inv-page__body--drawer-open' : ''}`}
+        >
           <AdminSerialTable
             units={serialUnits}
             locations={hierarchy.locations}

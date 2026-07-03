@@ -121,7 +121,11 @@ async def resolve_tally_host(host: str, *, port: str) -> TallyHostResolution:
         ipaddress.ip_address(configured)
         logger.info(
             "tally.host.resolved",
-            extra={"event": "tally.host.resolved", "configured_host": configured, "resolved_ip": configured},
+            extra={
+                "event": "tally.host.resolved",
+                "configured_host": configured,
+                "resolved_ip": configured,
+            },
         )
         return TallyHostResolution(
             configured_host=configured,
@@ -148,7 +152,11 @@ async def resolve_tally_host(host: str, *, port: str) -> TallyHostResolution:
         message = map_resolution_error(configured, exc)
         logger.warning(
             "tally.host.resolve_failed",
-            extra={"event": "tally.host.resolve_failed", "configured_host": configured, "error": str(exc)},
+            extra={
+                "event": "tally.host.resolve_failed",
+                "configured_host": configured,
+                "error": str(exc),
+            },
         )
         return TallyHostResolution(
             configured_host=configured,
@@ -203,7 +211,12 @@ async def probe_tcp(resolved_ip: str, port: str, *, timeout: float = 5.0) -> tup
     except OSError as exc:
         logger.warning(
             "tally.connection.failed",
-            extra={"event": "tally.connection.failed", "resolved_ip": resolved_ip, "port": port, "error": str(exc)},
+            extra={
+                "event": "tally.connection.failed",
+                "resolved_ip": resolved_ip,
+                "port": port,
+                "error": str(exc),
+            },
         )
         return False, map_tcp_error(exc)
     logger.info(
@@ -213,7 +226,9 @@ async def probe_tcp(resolved_ip: str, port: str, *, timeout: float = 5.0) -> tup
     return True, "TCP connection established."
 
 
-async def probe_xml_server(resolved_ip: str, port: str, *, timeout: float = 15.0) -> tuple[bool, str, str | None, str | None]:
+async def probe_xml_server(
+    resolved_ip: str, port: str, *, timeout: float = 15.0
+) -> tuple[bool, str, str | None, str | None]:
     url = f"http://{resolved_ip}:{port}"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -228,7 +243,10 @@ async def probe_xml_server(resolved_ip: str, port: str, *, timeout: float = 15.0
         logger.warning("tally.xml.timeout", extra={"event": "tally.xml.timeout", "url": url})
         return False, "Tally XML Server did not respond in time.", None, None
     except httpx.HTTPError as exc:
-        logger.warning("tally.xml.unavailable", extra={"event": "tally.xml.unavailable", "url": url, "error": str(exc)})
+        logger.warning(
+            "tally.xml.unavailable",
+            extra={"event": "tally.xml.unavailable", "url": url, "error": str(exc)},
+        )
         return False, map_http_error(exc), None, None
 
     if not body:
@@ -316,7 +334,9 @@ async def run_connection_diagnostics(
             status=TallyConnectivityStatus.OFFLINE,
         )
 
-    xml_ok, xml_message, version, company = await probe_xml_server(resolution.resolved_ip, normalized_port)
+    xml_ok, xml_message, version, company = await probe_xml_server(
+        resolution.resolved_ip, normalized_port
+    )
     stages.append(
         TallyConnectionStageResult(
             stage=TallyConnectionStage.XML_SERVER,

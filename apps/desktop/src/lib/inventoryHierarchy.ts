@@ -36,7 +36,10 @@ export function buildBrandSummaries(
     .map((brand) => {
       const dist = distMap.get(String(brand.id));
       const brandItems = items.filter((item) => item.brand_id === brand.id && !item.is_archived);
-      const locationMap = new Map<number, { locationId: number; locationName: string; count: number }>();
+      const locationMap = new Map<
+        number,
+        { locationId: number; locationName: string; count: number }
+      >();
 
       for (const item of brandItems.filter((entry) => entry.status !== 'sold')) {
         const existing = locationMap.get(item.current_location_id);
@@ -56,9 +59,12 @@ export function buildBrandSummaries(
         brandName: brand.name,
         logoFilename: brand.logo_filename,
         totalUnits: dist?.total ?? brandItems.length,
-        availableUnits: dist?.available ?? brandItems.filter((entry) => entry.status !== 'sold').length,
+        availableUnits:
+          dist?.available ?? brandItems.filter((entry) => entry.status !== 'sold').length,
         soldUnits: dist?.sold ?? brandItems.filter((entry) => entry.status === 'sold').length,
-        byLocation: [...locationMap.values()].sort((a, b) => a.locationName.localeCompare(b.locationName)),
+        byLocation: [...locationMap.values()].sort((a, b) =>
+          a.locationName.localeCompare(b.locationName),
+        ),
       };
     })
     .sort((a, b) => a.brandName.localeCompare(b.brandName));
@@ -70,7 +76,9 @@ export function buildModelRows(
   brandId: number,
 ): { all: ModelInventoryRow[]; inStock: ModelInventoryRow[]; zeroStock: ModelInventoryRow[] } {
   const distMap = new Map(distributionByModel.map((row) => [row.id, row]));
-  const brandModels = models.filter((model) => model.brand_id === brandId && model.status !== 'archived');
+  const brandModels = models.filter(
+    (model) => model.brand_id === brandId && model.status !== 'archived',
+  );
 
   const rows: ModelInventoryRow[] = brandModels.map((model) => {
     const dist = distMap.get(model.id);

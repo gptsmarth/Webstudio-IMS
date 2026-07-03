@@ -25,15 +25,15 @@ export function salesFiltersToExportParams(
 
 export function hasActiveSalesFilters(filters: SalesFilters, search: string): boolean {
   return Boolean(
-    search.trim()
-    || filters.brandId
-    || filters.locationId
-    || filters.userId
-    || filters.invoiceNumber.trim()
-    || filters.customerName.trim()
-    || filters.paymentMode.trim()
-    || filters.saleSource
-    || filters.dateFrom
-    || filters.dateTo,
+    search.trim() ||
+    filters.brandId ||
+    filters.locationId ||
+    filters.userId ||
+    filters.invoiceNumber.trim() ||
+    filters.customerName.trim() ||
+    filters.paymentMode.trim() ||
+    filters.saleSource ||
+    filters.dateFrom ||
+    filters.dateTo,
   );
 }

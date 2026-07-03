@@ -34,13 +34,17 @@ def upgrade() -> None:
         sa.Column("release_version", sa.String(length=32), nullable=False),
         sa.Column("build_number", sa.Integer(), nullable=False),
         sa.Column("release_channel", release_channel_enum, nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default=sa.text("'pending'")
+        ),
         sa.Column("current_step", sa.String(length=64), nullable=True),
         sa.Column("steps_json", JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("pre_backup_run_id", sa.BigInteger(), nullable=True),
         sa.Column("pre_backup_filename", sa.String(length=256), nullable=True),
         sa.Column("rollback_backup_run_id", sa.BigInteger(), nullable=True),
-        sa.Column("scheduler_snapshot", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "scheduler_snapshot", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("config_snapshot_path", sa.Text(), nullable=True),
         sa.Column("service_config_snapshot_path", sa.Text(), nullable=True),
         sa.Column("previous_release_id", sa.BigInteger(), nullable=True),
@@ -80,6 +84,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_release_deployment_runs_status", table_name="release_deployment_runs", schema=SCHEMA)
-    op.drop_index("ix_release_deployment_runs_created", table_name="release_deployment_runs", schema=SCHEMA)
+    op.drop_index(
+        "ix_release_deployment_runs_status", table_name="release_deployment_runs", schema=SCHEMA
+    )
+    op.drop_index(
+        "ix_release_deployment_runs_created", table_name="release_deployment_runs", schema=SCHEMA
+    )
     op.drop_table("release_deployment_runs", schema=SCHEMA)

@@ -52,12 +52,7 @@ function formatPrimitive(value: unknown): string {
   return String(value);
 }
 
-function pushRow(
-  rows: StructuredDataRow[],
-  key: string,
-  label: string,
-  value: string,
-): void {
+function pushRow(rows: StructuredDataRow[], key: string, label: string, value: string): void {
   if (!value || value === '—') return;
   rows.push({ key, label, value });
 }

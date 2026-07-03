@@ -61,7 +61,13 @@ def upgrade() -> None:
     op.create_index(
         "ix_tally_processed_invoice_fallback_fingerprint",
         "tally_processed_invoice",
-        ["tally_company_sync_id", "voucher_date", "tally_voucher_number", "voucher_amount", "party_name"],
+        [
+            "tally_company_sync_id",
+            "voucher_date",
+            "tally_voucher_number",
+            "voucher_amount",
+            "party_name",
+        ],
         unique=False,
         schema=SCHEMA,
     )
@@ -72,7 +78,9 @@ def upgrade() -> None:
         sa.Column(
             "tally_company_sync_id",
             sa.BigInteger(),
-            sa.ForeignKey(f"{SCHEMA}.tally_company_sync.id", name="fk_tally_sync_history_company_sync"),
+            sa.ForeignKey(
+                f"{SCHEMA}.tally_company_sync.id", name="fk_tally_sync_history_company_sync"
+            ),
             nullable=False,
         ),
         sa.Column("sync_run_id", sa.Uuid(), nullable=False),
@@ -86,7 +94,12 @@ def upgrade() -> None:
         sa.Column("error_summary", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="running"),
         sa.Column("correlation_id", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_tally_sync_history"),
         schema=SCHEMA,
     )
@@ -107,8 +120,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_tally_sync_history_sync_run_id", table_name="tally_sync_history", schema=SCHEMA)
-    op.drop_index("ix_tally_sync_history_company_started", table_name="tally_sync_history", schema=SCHEMA)
+    op.drop_index(
+        "ix_tally_sync_history_sync_run_id", table_name="tally_sync_history", schema=SCHEMA
+    )
+    op.drop_index(
+        "ix_tally_sync_history_company_started", table_name="tally_sync_history", schema=SCHEMA
+    )
     op.drop_table("tally_sync_history", schema=SCHEMA)
     op.drop_index(
         "ix_tally_processed_invoice_fallback_fingerprint",

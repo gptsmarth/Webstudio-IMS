@@ -18,7 +18,12 @@ interface UsersTableProps {
   onMenu: (user: UserSummary, rect: DOMRect) => void;
 }
 
-export function UsersTable({ workspace, currentUserId, onView, onMenu }: UsersTableProps): JSX.Element {
+export function UsersTable({
+  workspace,
+  currentUserId,
+  onView,
+  onMenu,
+}: UsersTableProps): JSX.Element {
   const sortIcon = (field: UserSortField) => {
     if (workspace.sortField !== field) {
       return <ArrowUpDown size={12} className="usr-sort-icon usr-sort-icon--idle" />;
@@ -32,7 +37,11 @@ export function UsersTable({ workspace, currentUserId, onView, onMenu }: UsersTa
 
   const header = (label: string, field: UserSortField) => (
     <th>
-      <button type="button" className="usr-table__th-sortable" onClick={() => workspace.toggleSort(field)}>
+      <button
+        type="button"
+        className="usr-table__th-sortable"
+        onClick={() => workspace.toggleSort(field)}
+      >
         {label} {sortIcon(field)}
       </button>
     </th>
@@ -80,10 +89,14 @@ export function UsersTable({ workspace, currentUserId, onView, onMenu }: UsersTa
                 return (
                   <tr
                     key={user.id}
-                    className={[
-                      'usr-table__row',
-                      workspace.selectedId === user.id ? 'usr-table__row--selected' : '',
-                    ].filter(Boolean).join(' ') || undefined}
+                    className={
+                      [
+                        'usr-table__row',
+                        workspace.selectedId === user.id ? 'usr-table__row--selected' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                    }
                     onClick={() => onView(user)}
                   >
                     <td>

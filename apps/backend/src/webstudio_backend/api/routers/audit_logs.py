@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep
-from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
 from webstudio_backend.api.response_helpers import build_page_meta
+from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
@@ -19,7 +20,6 @@ from webstudio_backend.infrastructure.database.models.inventory_item import Inve
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from sqlalchemy import select
 
 router = APIRouter(prefix="/api/v1/audit_logs", tags=["audit"])
 
@@ -39,11 +39,11 @@ def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) ->
 
 
 def _parse_date_start(value: date) -> datetime:
-    return datetime.combine(value, time.min, tzinfo=timezone.utc)
+    return datetime.combine(value, time.min, tzinfo=UTC)
 
 
 def _parse_date_end(value: date) -> datetime:
-    return datetime.combine(value, time.max, tzinfo=timezone.utc)
+    return datetime.combine(value, time.max, tzinfo=UTC)
 
 
 def _build_filters(
@@ -68,7 +68,9 @@ def _build_filters(
     created_at_from: datetime | date | None,
     created_at_to: datetime | date | None,
 ) -> AuditLogSearchFilters:
-    parsed_from = _parse_date_start(created_at_from) if type(created_at_from) is date else created_at_from
+    parsed_from = (
+        _parse_date_start(created_at_from) if type(created_at_from) is date else created_at_from
+    )
     parsed_to = _parse_date_end(created_at_to) if type(created_at_to) is date else created_at_to
     return AuditLogSearchFilters(
         entity_type=entity_type,
@@ -143,7 +145,9 @@ async def search_audit_logs(
         created_at_from=created_at_from,
         created_at_to=created_at_to,
     )
-    page_result = await repository.search_enriched(filters, PageParams(page=page, page_size=page_size))
+    page_result = await repository.search_enriched(
+        filters, PageParams(page=page, page_size=page_size)
+    )
     return _envelope(
         request,
         [AuditLogListEntry.from_enriched(row).model_dump() for row in page_result.items],
@@ -171,7 +175,9 @@ async def audit_lifecycle_by_serial(
         select(InventoryItem.id).where(InventoryItem.serial_number == serial_number.strip()),
     )
     if item_exists is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found"
+        )
     enriched = await repository.search_enriched(
         AuditLogSearchFilters(serial_number=serial_number),
         PageParams(page=page, page_size=page_size),

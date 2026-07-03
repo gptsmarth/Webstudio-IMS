@@ -33,7 +33,9 @@ export function AdminSerialTable({
   return (
     <section className="admin-serial-panel" aria-labelledby="admin-serial-panel-title">
       <header className="admin-serial-panel__header">
-        <h2 id="admin-serial-panel-title" className="admin-serial-panel__title">Serial numbers</h2>
+        <h2 id="admin-serial-panel-title" className="admin-serial-panel__title">
+          Serial numbers
+        </h2>
         <p className="admin-serial-panel__meta">{activeLabel}</p>
       </header>
 
@@ -45,13 +47,17 @@ export function AdminSerialTable({
               <th scope="col">Status</th>
               <th scope="col">Color</th>
               <th scope="col">Location</th>
-              <th scope="col" className="admin-serial-table__actions-col">Actions</th>
+              <th scope="col" className="admin-serial-table__actions-col">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {activeUnits.length === 0 && (
               <tr>
-                <td colSpan={5} className="admin-serial-table__empty">No serial numbers for this model.</td>
+                <td colSpan={5} className="admin-serial-table__empty">
+                  No serial numbers for this model.
+                </td>
               </tr>
             )}
             {activeUnits.map((item) => {
@@ -82,7 +88,9 @@ export function AdminSerialTable({
                         onChange={(event) => void onTransfer(item.id, Number(event.target.value))}
                       >
                         {locations.map((location) => (
-                          <option key={location.id} value={location.id}>{location.name}</option>
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
                         ))}
                       </select>
                     ) : (

@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ASSET_MANIFEST } from '../../registries/AssetManifest';
-import type { Brand, CreateBrandRequest, UpdateBrandRequest } from '../../services/api/BrandService';
+import type {
+  Brand,
+  CreateBrandRequest,
+  UpdateBrandRequest,
+} from '../../services/api/BrandService';
 
 interface BrandFormDialogProps {
   open: boolean;
@@ -13,7 +17,13 @@ interface BrandFormDialogProps {
 
 const LOGO_OPTIONS = Object.keys(ASSET_MANIFEST.brandLogos).filter((key) => key !== 'default');
 
-export function BrandFormDialog({ open, brand, loading, onClose, onConfirm }: BrandFormDialogProps): JSX.Element | null {
+export function BrandFormDialog({
+  open,
+  brand,
+  loading,
+  onClose,
+  onConfirm,
+}: BrandFormDialogProps): JSX.Element | null {
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [logoFilename, setLogoFilename] = useState('');
@@ -56,31 +66,93 @@ export function BrandFormDialog({ open, brand, loading, onClose, onConfirm }: Br
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">{brand ? 'Edit brand' : 'Add brand'}</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
         </header>
         <div className="cat-dialog__body cat-dialog__grid">
-          <label className="cat-field"><span>Name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></label>
-          <label className="cat-field"><span>Short name</span><input className="input" value={shortName} onChange={(e) => setShortName(e.target.value)} /></label>
+          <label className="cat-field">
+            <span>Name</span>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </label>
+          <label className="cat-field">
+            <span>Short name</span>
+            <input
+              className="input"
+              value={shortName}
+              onChange={(e) => setShortName(e.target.value)}
+            />
+          </label>
           <label className="cat-field">
             <span>Logo</span>
-            <select className="input" value={logoFilename} onChange={(e) => setLogoFilename(e.target.value)}>
+            <select
+              className="input"
+              value={logoFilename}
+              onChange={(e) => setLogoFilename(e.target.value)}
+            >
               <option value="">Default</option>
-              {LOGO_OPTIONS.map((key) => <option key={key} value={`${key}.svg`}>{key}</option>)}
+              {LOGO_OPTIONS.map((key) => (
+                <option key={key} value={`${key}.svg`}>
+                  {key}
+                </option>
+              ))}
             </select>
           </label>
-          <label className="cat-field"><span>Display order</span><input className="input" type="number" min={0} value={displayOrder} onChange={(e) => setDisplayOrder(e.target.value)} /></label>
+          <label className="cat-field">
+            <span>Display order</span>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              value={displayOrder}
+              onChange={(e) => setDisplayOrder(e.target.value)}
+            />
+          </label>
           <label className="cat-field cat-field--checkbox">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+            />
             <span>Active</span>
           </label>
           {error && <p className="cat-dialog__error cat-dialog__error--full">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>Cancel</button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>{loading ? 'Saving…' : 'Save'}</button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
+            {loading ? 'Saving…' : 'Save'}
+          </button>
         </footer>
       </div>
     </div>

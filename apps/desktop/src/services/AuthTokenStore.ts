@@ -54,7 +54,11 @@ export class AuthTokenStore {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  static async setTokens(accessToken: string, refreshToken: string, expiresInSeconds?: number): Promise<void> {
+  static async setTokens(
+    accessToken: string,
+    refreshToken: string,
+    expiresInSeconds?: number,
+  ): Promise<void> {
     await writeItem(ACCESS_TOKEN_KEY, accessToken);
     await writeItem(REFRESH_TOKEN_KEY, refreshToken);
     if (expiresInSeconds) {

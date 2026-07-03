@@ -24,7 +24,9 @@ class TallyCompanySyncRepository(SqlAlchemyRepository[TallyCompanySync]):
         existing = await self.get_by_company_name(company_name)
         if existing is not None:
             return existing
-        return await self.add(TallyCompanySync(company_name=company_name, connection_status="disconnected"))
+        return await self.add(
+            TallyCompanySync(company_name=company_name, connection_status="disconnected")
+        )
 
     async def list_active(self) -> list[TallyCompanySync]:
         statement = (

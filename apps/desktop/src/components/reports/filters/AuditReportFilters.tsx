@@ -17,7 +17,11 @@ export function AuditReportFilters(props: ReportFilterContext): JSX.Element {
       </label>
       <label className="report-builder__field">
         <span>Role</span>
-        <select className="input" value={filters.actorRole} onChange={(e) => setFilters({ actorRole: e.target.value })}>
+        <select
+          className="input"
+          value={filters.actorRole}
+          onChange={(e) => setFilters({ actorRole: e.target.value })}
+        >
           <option value="">All roles</option>
           <option value="main_admin">Main admin</option>
           <option value="admin">Admin</option>
@@ -26,7 +30,11 @@ export function AuditReportFilters(props: ReportFilterContext): JSX.Element {
       </label>
       <label className="report-builder__field">
         <span>Operation</span>
-        <select className="input" value={filters.auditAction} onChange={(e) => setFilters({ auditAction: e.target.value })}>
+        <select
+          className="input"
+          value={filters.auditAction}
+          onChange={(e) => setFilters({ auditAction: e.target.value })}
+        >
           <option value="">All operations</option>
           <option value="CREATE">Create</option>
           <option value="UPDATE">Update</option>
@@ -40,12 +48,20 @@ export function AuditReportFilters(props: ReportFilterContext): JSX.Element {
       <DatePresetFields {...props} showPresets={false} dateLabel="Date" />
       <label className="report-builder__field">
         <span>Serial number</span>
-        <input className="input col-mono" value={filters.serialNumber} onChange={(e) => setFilters({ serialNumber: e.target.value })} />
+        <input
+          className="input col-mono"
+          value={filters.serialNumber}
+          onChange={(e) => setFilters({ serialNumber: e.target.value })}
+        />
       </label>
       <ReferenceFields {...props} includeStore={false} />
       <label className="report-builder__field">
         <span>Action source</span>
-        <select className="input" value={filters.auditSource} onChange={(e) => setFilters({ auditSource: e.target.value })}>
+        <select
+          className="input"
+          value={filters.auditSource}
+          onChange={(e) => setFilters({ auditSource: e.target.value })}
+        >
           <option value="">All sources</option>
           <option value="MANUAL">Manual</option>
           <option value="TALLY_SYNC">Tally sync</option>

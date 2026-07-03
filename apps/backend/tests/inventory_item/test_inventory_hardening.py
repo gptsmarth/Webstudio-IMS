@@ -9,10 +9,10 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.infrastructure.database.enums import LocationType
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.repositories import LocationRepository
-from webstudio_backend.infrastructure.database.enums import LocationType
 
 
 def _payload(product_model: ProductModel, location: Location, serial: str) -> dict:
@@ -60,7 +60,9 @@ async def test_duplicate_serial_returns_standard_error_envelope(
     location: Location,
 ) -> None:
     payload = _payload(product_model, location, "SN-ERR-001")
-    assert (await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)).status_code == 201
+    assert (
+        await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)
+    ).status_code == 201
     duplicate = await api_client.post("/api/v1/inventory", headers=main_admin_headers, json=payload)
     _assert_error_envelope(duplicate, status=409, code="SERIAL_NUMBER_DUPLICATE")
 
@@ -135,8 +137,18 @@ async def test_success_response_includes_request_metadata(
         ("PATCH", "/api/v1/inventory/{id}", {"color": "Silver"}, ("main_admin", "admin")),
         ("POST", "/api/v1/inventory/{id}/archive", None, ("main_admin", "admin")),
         ("POST", "/api/v1/inventory/{id}/restore", None, ("main_admin", "admin")),
-        ("PATCH", "/api/v1/inventory/{id}/location", {"location_id": 0}, ("main_admin", "admin", "salesperson")),
-        ("PATCH", "/api/v1/inventory/{id}/mark-sold", {"needs_sale": True}, ("main_admin", "admin")),
+        (
+            "PATCH",
+            "/api/v1/inventory/{id}/location",
+            {"location_id": 0},
+            ("main_admin", "admin", "salesperson"),
+        ),
+        (
+            "PATCH",
+            "/api/v1/inventory/{id}/mark-sold",
+            {"needs_sale": True},
+            ("main_admin", "admin"),
+        ),
     ],
 )
 async def test_rbac_matrix(
@@ -156,7 +168,9 @@ async def test_rbac_matrix(
         "RBAC Store",
         location_type=LocationType.RETAIL_FLOOR,
     )
-    item_id = await _create(api_client, main_admin_headers, product_model, location, f"SN-RBAC-{uuid.uuid4().hex[:8]}")
+    item_id = await _create(
+        api_client, main_admin_headers, product_model, location, f"SN-RBAC-{uuid.uuid4().hex[:8]}"
+    )
 
     headers_by_role = {
         "main_admin": main_admin_headers,

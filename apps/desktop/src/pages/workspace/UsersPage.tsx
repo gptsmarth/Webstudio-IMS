@@ -15,10 +15,7 @@ import {
   UsersToolbar,
 } from '../../components/users';
 import { useUsersWorkspace } from '../../hooks/useUsersWorkspace';
-import {
-  canCreateUsers,
-  canManageUsers,
-} from '../../lib/users';
+import { canCreateUsers, canManageUsers } from '../../lib/users';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import type { UserDetail, UserSummary } from '../../services/api/UserService';
@@ -86,7 +83,9 @@ export function UsersPage(): JSX.Element {
         <WorkspacePageBack />
         <div>
           <h1 className="usr-page__title">Administration</h1>
-          <p className="usr-page__subtitle">User accounts, access control, sessions, and security operations.</p>
+          <p className="usr-page__subtitle">
+            User accounts, access control, sessions, and security operations.
+          </p>
         </div>
       </header>
 
@@ -108,7 +107,11 @@ export function UsersPage(): JSX.Element {
           <div className="alert alert-danger usr-page__alert">
             <AlertCircle size={14} aria-hidden />
             <span>{workspace.error}</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void workspace.refresh()}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => void workspace.refresh()}
+            >
               Retry
             </button>
           </div>
@@ -118,13 +121,19 @@ export function UsersPage(): JSX.Element {
           <div className="alert alert-danger usr-page__alert">
             <AlertCircle size={14} aria-hidden />
             <span>{workspace.actionError}</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={workspace.clearActionError}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={workspace.clearActionError}
+            >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className={`usr-page__body ${workspace.selectedId ? 'usr-page__body--drawer-open' : ''}`}>
+        <div
+          className={`usr-page__body ${workspace.selectedId ? 'usr-page__body--drawer-open' : ''}`}
+        >
           <UsersTable
             workspace={workspace}
             currentUserId={session?.id ?? null}

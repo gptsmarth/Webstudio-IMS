@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +57,9 @@ async def test_product_model_rbac_and_crud(
     }
 
     # Salesperson forbidden
-    resp = await api_client.post("/api/v1/product-models", json=payload, headers=salesperson_headers)
+    resp = await api_client.post(
+        "/api/v1/product-models", json=payload, headers=salesperson_headers
+    )
     assert resp.status_code == 403
 
     # Admin allowed
@@ -89,7 +91,9 @@ async def test_product_model_rbac_and_crud(
     assert detail["brand_name"] == "ASUS"
 
     # GET detail not found
-    resp = await api_client.get(f"/api/v1/product-models/{uuid.uuid4()}", headers=salesperson_headers)
+    resp = await api_client.get(
+        f"/api/v1/product-models/{uuid.uuid4()}", headers=salesperson_headers
+    )
     assert resp.status_code == 404
 
     # 6. PATCH Product Model
@@ -97,7 +101,9 @@ async def test_product_model_rbac_and_crud(
         "model_name": "Vivobook 15 Pro",
         "display": "15.6 OLED",
     }
-    resp = await api_client.patch(f"/api/v1/product-models/{pm_id}", json=update_payload, headers=admin_headers)
+    resp = await api_client.patch(
+        f"/api/v1/product-models/{pm_id}", json=update_payload, headers=admin_headers
+    )
     assert resp.status_code == 200
     updated = resp.json()["data"]
     assert updated["model_name"] == "Vivobook 15 Pro"
@@ -110,7 +116,9 @@ async def test_product_model_rbac_and_crud(
     assert len(resp.json()["data"]) == 2
 
     # Filtering by brand
-    resp = await api_client.get(f"/api/v1/product-models?brand_id={brand_id_dell}", headers=salesperson_headers)
+    resp = await api_client.get(
+        f"/api/v1/product-models?brand_id={brand_id_dell}", headers=salesperson_headers
+    )
     assert resp.status_code == 200
     assert len(resp.json()["data"]) == 1
     assert resp.json()["data"][0]["brand_name"] == "Dell"

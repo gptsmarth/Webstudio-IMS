@@ -8,8 +8,13 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import SettingValueType
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.services.ai.spec_normalization import normalize_brand_name, normalize_model_number
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.services.ai.spec_normalization import (
+    normalize_brand_name,
+    normalize_model_number,
+)
 
 _CACHE_KEY = "ai_enrichment_cache"
 _MAX_ENTRIES = 500

@@ -17,7 +17,9 @@ class PasswordHistory(PrimaryKeyMixin, Base):
 
     user_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.users.id", name="fk_password_history_user", ondelete="CASCADE"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.users.id", name="fk_password_history_user", ondelete="CASCADE"
+        ),
         nullable=False,
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)

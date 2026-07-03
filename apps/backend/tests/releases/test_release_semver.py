@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from webstudio_backend.services.release_semver import (
     compare_semver,
     is_valid_semver,

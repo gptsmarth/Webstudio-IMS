@@ -27,10 +27,10 @@ export class SavedServerStore {
       lastSeenAt: new Date().toISOString(),
     };
     const existing = await this.list();
-    const merged = [
-      updated,
-      ...existing.filter((entry) => entry.url !== normalizedUrl),
-    ].slice(0, 8);
+    const merged = [updated, ...existing.filter((entry) => entry.url !== normalizedUrl)].slice(
+      0,
+      8,
+    );
     await window.storage?.setItem(SAVED_SERVERS_KEY, merged);
   }
 

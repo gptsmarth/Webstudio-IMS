@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
@@ -25,7 +25,6 @@ from webstudio_backend.infrastructure.repositories import (
 )
 from webstudio_backend.infrastructure.repositories.dashboard_repository import DashboardRepository
 from webstudio_backend.services.dashboard_service import DashboardService
-from decimal import Decimal
 
 
 async def _seed_inventory(db_session: AsyncSession) -> tuple[Brand, ProductModel, Location]:
@@ -154,7 +153,11 @@ async def test_dashboard_rbac_admin_roles(
         "admin_headers": admin_headers,
     }
     headers = headers_map[headers_fixture]
-    for path in ("/api/v1/dashboard", "/api/v1/dashboard/distribution", "/api/v1/dashboard/recent-activity"):
+    for path in (
+        "/api/v1/dashboard",
+        "/api/v1/dashboard/distribution",
+        "/api/v1/dashboard/recent-activity",
+    ):
         assert (await api_client.get(path, headers=headers)).status_code == 200
 
 
@@ -165,7 +168,11 @@ async def test_salesperson_can_read_dashboard_endpoints(
     db_session: AsyncSession,
 ) -> None:
     await _seed_inventory(db_session)
-    for path in ("/api/v1/dashboard", "/api/v1/dashboard/distribution", "/api/v1/dashboard/recent-activity"):
+    for path in (
+        "/api/v1/dashboard",
+        "/api/v1/dashboard/distribution",
+        "/api/v1/dashboard/recent-activity",
+    ):
         assert (await api_client.get(path, headers=salesperson_headers)).status_code == 200
 
 
@@ -246,4 +253,3 @@ async def test_distribution_excludes_archived_brands_and_locations(
     assert "AggLoc" not in location_names
     assert "ASUS" in brand_names
     assert "Warehouse" in location_names
-

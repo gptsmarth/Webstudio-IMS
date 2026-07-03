@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.models.enterprise_rollback_run import EnterpriseRollbackRun
+from webstudio_backend.infrastructure.database.models.enterprise_rollback_run import (
+    EnterpriseRollbackRun,
+)
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
 
 

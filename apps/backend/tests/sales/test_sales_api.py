@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.enums import SaleSource
-from datetime import datetime, timezone
+from webstudio_backend.infrastructure.database.models.sale import Sale
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_list_sales_allows_null_inventory_item_id(
     sale = Sale(
         inventory_item_id=None,
         sale_source=SaleSource.MANUAL,
-        sold_at=datetime.now(timezone.utc),
+        sold_at=datetime.now(UTC),
         invoice_number="INV-SNAPSHOT-001",
         snapshot_serial_number="SN-OLD-001",
         snapshot_brand_name="HP",
@@ -52,7 +52,7 @@ async def test_get_sale_detail_with_snapshot_only(
     sale = Sale(
         inventory_item_id=None,
         sale_source=SaleSource.MANUAL,
-        sold_at=datetime.now(timezone.utc),
+        sold_at=datetime.now(UTC),
         invoice_number="INV-SNAPSHOT-002",
         snapshot_serial_number="SN-OLD-002",
         snapshot_brand_id=7,

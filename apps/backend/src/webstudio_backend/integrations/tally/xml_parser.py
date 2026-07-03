@@ -132,7 +132,10 @@ def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
     if not inventory_lines:
         for child in voucher.iter():
             tag = _local_name(child.tag).upper()
-            if tag in {"ALLINVENTORYENTRIES.LIST", "INVENTORYENTRIES.LIST"} and child is not voucher:
+            if (
+                tag in {"ALLINVENTORYENTRIES.LIST", "INVENTORYENTRIES.LIST"}
+                and child is not voucher
+            ):
                 inventory_lines.append(_parse_inventory_line(child, line_index))
                 line_index += 1
 
@@ -146,7 +149,8 @@ def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
         party_name=_child_text(voucher, "PARTYLEDGERNAME"),
         narration=_child_text(voucher, "NARRATION"),
         inventory_lines=inventory_lines,
-        payment_mode=_child_text(voucher, "BASICPAYMENTTYPE") or _child_text(voucher, "PAYMENTMODE"),
+        payment_mode=_child_text(voucher, "BASICPAYMENTTYPE")
+        or _child_text(voucher, "PAYMENTMODE"),
         amount=_voucher_amount(voucher),
     )
 

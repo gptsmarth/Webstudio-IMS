@@ -8,7 +8,11 @@ interface UsersToolbarProps {
   canCreate?: boolean;
 }
 
-export function UsersToolbar({ workspace, onCreate, canCreate = true }: UsersToolbarProps): JSX.Element {
+export function UsersToolbar({
+  workspace,
+  onCreate,
+  canCreate = true,
+}: UsersToolbarProps): JSX.Element {
   return (
     <div className="usr-toolbar">
       <div className="usr-toolbar__search">

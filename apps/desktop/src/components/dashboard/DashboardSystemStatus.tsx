@@ -12,7 +12,11 @@ function statusClass(value: string): string {
   return 'dash-status-warn';
 }
 
-export function DashboardSystemStatus({ api, database, loading }: DashboardSystemStatusProps): JSX.Element {
+export function DashboardSystemStatus({
+  api,
+  database,
+  loading,
+}: DashboardSystemStatusProps): JSX.Element {
   if (loading) return <div className="skeleton dash-system__skeleton" />;
 
   return (
@@ -23,15 +27,21 @@ export function DashboardSystemStatus({ api, database, loading }: DashboardSyste
       </div>
       <div>
         <dt>Database</dt>
-        <dd className={statusClass(database?.checks.database ?? 'unknown')}>{database?.checks.database ?? 'unknown'}</dd>
+        <dd className={statusClass(database?.checks.database ?? 'unknown')}>
+          {database?.checks.database ?? 'unknown'}
+        </dd>
       </div>
       <div>
         <dt>Migrations</dt>
-        <dd className={statusClass(database?.checks.migrations ?? 'unknown')}>{database?.checks.migrations ?? 'unknown'}</dd>
+        <dd className={statusClass(database?.checks.migrations ?? 'unknown')}>
+          {database?.checks.migrations ?? 'unknown'}
+        </dd>
       </div>
       <div>
         <dt>Disk space</dt>
-        <dd className={statusClass(database?.checks.disk_space ?? 'unknown')}>{database?.checks.disk_space ?? 'unknown'}</dd>
+        <dd className={statusClass(database?.checks.disk_space ?? 'unknown')}>
+          {database?.checks.disk_space ?? 'unknown'}
+        </dd>
       </div>
     </dl>
   );

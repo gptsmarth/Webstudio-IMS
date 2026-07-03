@@ -7,7 +7,10 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from webstudio_backend.infrastructure.repositories.report_repository import SaleDetailRow, SalesReportRow
+from webstudio_backend.infrastructure.repositories.report_repository import (
+    SaleDetailRow,
+    SalesReportRow,
+)
 
 
 class SaleListItem(BaseModel):

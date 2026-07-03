@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { defaultRouteForPermissions, isRouteAllowedForPermissions } from './config/navigation';
 import { useThemeStore, useAuthStore, useNavigationStore, type AuthSession } from './store';
-import { VersionService, LoggingService, ConfigService, SetupService, AuthenticationService } from './services';
+import {
+  VersionService,
+  LoggingService,
+  ConfigService,
+  SetupService,
+  AuthenticationService,
+} from './services';
 import { AuthTokenStore } from './services/AuthTokenStore';
 import { sessionFromUser } from './store/useAuthStore';
 import { SplashScreen, type StartupStage } from './components';
@@ -125,7 +131,8 @@ export function App(): JSX.Element {
       } catch {
         if (!cancelled) {
           setConnectionStatus('offline');
-          const { attemptAutomaticReconnect } = await import('./services/ConnectionReconnectService');
+          const { attemptAutomaticReconnect } =
+            await import('./services/ConnectionReconnectService');
           const restored = await attemptAutomaticReconnect();
           if (restored && !cancelled) {
             setConnectionStatus('online');
@@ -153,13 +160,15 @@ export function App(): JSX.Element {
 
     let cancelled = false;
     void (async () => {
-      const { startClientUpdatePolling, stopClientUpdatePolling } = await import('./services/UpdateCheckLifecycle');
+      const { startClientUpdatePolling } = await import('./services/UpdateCheckLifecycle');
       if (!cancelled) startClientUpdatePolling();
     })();
 
     return () => {
       cancelled = true;
-      void import('./services/UpdateCheckLifecycle').then(({ stopClientUpdatePolling }) => stopClientUpdatePolling());
+      void import('./services/UpdateCheckLifecycle').then(({ stopClientUpdatePolling }) =>
+        stopClientUpdatePolling(),
+      );
     };
   }, [activeView]);
 
@@ -218,7 +227,11 @@ export function App(): JSX.Element {
       try {
         if (window.api?.checkHealth) {
           const response = await window.api.checkHealth();
-          setConnectionStatus(response.data?.status === 'online' || response.data?.status === 'ok' ? 'online' : 'offline');
+          setConnectionStatus(
+            response.data?.status === 'online' || response.data?.status === 'ok'
+              ? 'online'
+              : 'offline',
+          );
         } else {
           setConnectionStatus('offline');
         }
@@ -285,7 +298,13 @@ export function App(): JSX.Element {
   }
 
   if (activeView === 'setup') {
-    return <SetupWizardPage isDemoMode={isDemoMode} appVersion={meta.appVersion} onSetupComplete={handleSetupComplete} />;
+    return (
+      <SetupWizardPage
+        isDemoMode={isDemoMode}
+        appVersion={meta.appVersion}
+        onSetupComplete={handleSetupComplete}
+      />
+    );
   }
 
   if (activeView === 'login') {

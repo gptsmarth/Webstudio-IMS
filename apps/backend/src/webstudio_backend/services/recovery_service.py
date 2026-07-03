@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -327,8 +327,7 @@ class RecoveryService:
             .group_by(BackupRun.verification_status),
         )
         failure_analysis = [
-            {"reason": row[0] or "unknown", "count": int(row[1])}
-            for row in failure_rows.all()
+            {"reason": row[0] or "unknown", "count": int(row[1])} for row in failure_rows.all()
         ]
         if failed and not failure_analysis:
             failure_analysis.append({"reason": "backup_run_failed", "count": failed})
@@ -523,9 +522,10 @@ class RecoveryService:
         return int(result.scalar_one() or 0)
 
     def _has_recent_backup(self, last_backup_raw: str | None) -> bool:
-        return self._backup_age_days(last_backup_raw) is not None and (
-            self._backup_age_days(last_backup_raw) or 999
-        ) <= OLD_BACKUP_THRESHOLD_DAYS
+        return (
+            self._backup_age_days(last_backup_raw) is not None
+            and (self._backup_age_days(last_backup_raw) or 999) <= OLD_BACKUP_THRESHOLD_DAYS
+        )
 
     def _backup_age_days(self, last_backup_raw: str | None) -> float | None:
         if not last_backup_raw:

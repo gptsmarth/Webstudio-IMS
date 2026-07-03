@@ -45,7 +45,10 @@ async def maybe_run_scheduled_backup() -> None:
                 "backup",
                 status="waiting",
                 interval_seconds=BACKUP_POLL_INTERVAL_SECONDS,
-                state_patch={"schedule": schedule, "next_scheduled_at": next_at.isoformat() if next_at else None},
+                state_patch={
+                    "schedule": schedule,
+                    "next_scheduled_at": next_at.isoformat() if next_at else None,
+                },
             )
             await session.commit()
             return

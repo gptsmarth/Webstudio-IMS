@@ -8,9 +8,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
+from webstudio_backend.infrastructure.database.enums import NotificationSeverity
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.repositories.exceptions import (
     AccountDisabledError,
@@ -21,15 +20,24 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     SessionIdleTimeoutError,
     SystemNotInitializedError,
 )
-from webstudio_backend.infrastructure.database.enums import NotificationSeverity
-from webstudio_backend.infrastructure.repositories.login_event_repository import LoginEventRepository
-from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.login_event_repository import (
+    LoginEventRepository,
+)
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.security.jwt import create_access_token
 from webstudio_backend.infrastructure.security.password import hash_password, verify_password
-from webstudio_backend.infrastructure.security.tokens import generate_refresh_token, hash_refresh_token
+from webstudio_backend.infrastructure.security.tokens import (
+    generate_refresh_token,
+    hash_refresh_token,
+)
 from webstudio_backend.services.password_policy_service import PasswordPolicyService
+from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.services.security_alert_service import SecurityAlertService
 
 
@@ -69,7 +77,9 @@ class AuthenticationService:
 
         user = await self._users.get_by_username(username)
         if user is None or user.password_hash is None:
-            await self._record_login_failure(username, "invalid_credentials", ip_address, user_agent, device_label)
+            await self._record_login_failure(
+                username, "invalid_credentials", ip_address, user_agent, device_label
+            )
             raise InvalidCredentialsError()
 
         if user.status.value == "disabled" or user.archived_at is not None:
@@ -239,7 +249,9 @@ class AuthenticationService:
         new_password: str,
     ) -> None:
         await self._password_policy.validate(new_password)
-        await self._password_policy.ensure_not_reused(user.id, new_password, current_hash=user.password_hash)
+        await self._password_policy.ensure_not_reused(
+            user.id, new_password, current_hash=user.password_hash
+        )
         if not user.must_change_password:
             if current_password is None or user.password_hash is None:
                 raise InvalidCredentialsError()
@@ -262,7 +274,11 @@ class AuthenticationService:
             field_name="password",
             old_value={"password_changed": False},
             new_value={"password_changed": True},
-            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            actor=AuditActor(
+                user_id=user.id,
+                display_name=user.display_name or user.username,
+                role=user.role.value,
+            ),
             description="Password changed",
         )
 

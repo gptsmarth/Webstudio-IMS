@@ -11,25 +11,24 @@ from sqlalchemy import Select, String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import (
-    AuditAction,
-    AuditSource,
     InventoryStatus,
-    LocationType,
-    NotificationCategory,
     NotificationStatus,
-    NotificationType,
-    SaleSource,
 )
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
-from webstudio_backend.infrastructure.database.models.notification import Notification
+from webstudio_backend.infrastructure.database.models.notification import (
+    Notification,
+    notification_status,
+)
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.user import User
-from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult, paginate
-from webstudio_backend.infrastructure.database.models.notification import notification_status
+from webstudio_backend.infrastructure.database.repositories.pagination import (
+    PageParams,
+    PageResult,
+)
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters
 
 STREAM_BATCH_SIZE = 500
@@ -97,7 +96,9 @@ def _sales_from_clause():
     return (
         Sale.__table__.outerjoin(InventoryItem, Sale.inventory_item_id == InventoryItem.id)
         .outerjoin(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-        .outerjoin(Brand, or_(ProductModel.brand_id == Brand.id, Sale.snapshot_brand_id == Brand.id))
+        .outerjoin(
+            Brand, or_(ProductModel.brand_id == Brand.id, Sale.snapshot_brand_id == Brand.id)
+        )
         .outerjoin(Location, InventoryItem.current_location_id == Location.id)
     )
 
@@ -357,22 +358,28 @@ class ReportRepository:
         return self._apply_inventory_filters(statement, filters)
 
     def _inventory_select(self, filters: ReportFilters):
-        return select(
-            InventoryItem.serial_number,
-            Brand.name,
-            ProductModel.model_number,
-            ProductModel.model_name,
-            InventoryItem.color,
-            Location.name,
-            InventoryItem.status,
-            InventoryItem.is_archived,
-            InventoryItem.purchase_date,
-            InventoryItem.created_at,
-        ).select_from(
-            InventoryItem.__table__.join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .join(Location, InventoryItem.current_location_id == Location.id),
-        ).where(*self._inventory_where_clauses(filters))
+        return (
+            select(
+                InventoryItem.serial_number,
+                Brand.name,
+                ProductModel.model_number,
+                ProductModel.model_name,
+                InventoryItem.color,
+                Location.name,
+                InventoryItem.status,
+                InventoryItem.is_archived,
+                InventoryItem.purchase_date,
+                InventoryItem.created_at,
+            )
+            .select_from(
+                InventoryItem.__table__.join(
+                    ProductModel, InventoryItem.product_model_id == ProductModel.id
+                )
+                .join(Brand, ProductModel.brand_id == Brand.id)
+                .join(Location, InventoryItem.current_location_id == Location.id),
+            )
+            .where(*self._inventory_where_clauses(filters))
+        )
 
     def _inventory_where_clauses(self, filters: ReportFilters) -> list:
         clauses = []
@@ -442,25 +449,29 @@ class ReportRepository:
         return self._apply_sales_filters(statement, filters)
 
     def _sales_select(self, filters: ReportFilters):
-        return select(
-            Sale.id,
-            Sale.inventory_item_id,
-            _coalesce_serial(),
-            _coalesce_brand_name(),
-            _coalesce_model_number(),
-            _coalesce_model_name(),
-            _coalesce_location_name(),
-            Sale.invoice_number,
-            Sale.customer_name,
-            Sale.payment_mode,
-            Sale.sale_amount,
-            Sale.sale_source,
-            Sale.sold_at,
-            Sale.recorded_by_user_id,
-            User.display_name,
-        ).select_from(
-            _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
-        ).where(*self._sales_where_clauses(filters))
+        return (
+            select(
+                Sale.id,
+                Sale.inventory_item_id,
+                _coalesce_serial(),
+                _coalesce_brand_name(),
+                _coalesce_model_number(),
+                _coalesce_model_name(),
+                _coalesce_location_name(),
+                Sale.invoice_number,
+                Sale.customer_name,
+                Sale.payment_mode,
+                Sale.sale_amount,
+                Sale.sale_source,
+                Sale.sold_at,
+                Sale.recorded_by_user_id,
+                User.display_name,
+            )
+            .select_from(
+                _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
+            )
+            .where(*self._sales_where_clauses(filters))
+        )
 
     def _sales_detail_select(self):
         return select(
@@ -593,23 +604,27 @@ class ReportRepository:
         return self._apply_audit_filters(statement, filters)
 
     def _audit_select(self, filters: ReportFilters):
-        return select(
-            AuditLog.id,
-            AuditLog.entity_type,
-            AuditLog.entity_id,
-            AuditLog.action,
-            AuditLog.source,
-            AuditLog.actor_display_name,
-            AuditLog.actor_user_id,
-            AuditLog.description,
-            InventoryItem.serial_number,
-            AuditLog.created_at,
-        ).select_from(
-            AuditLog.__table__.outerjoin(
-                InventoryItem,
-                AuditLog.inventory_item_id == InventoryItem.id,
-            ),
-        ).where(*self._audit_where_clauses(filters))
+        return (
+            select(
+                AuditLog.id,
+                AuditLog.entity_type,
+                AuditLog.entity_id,
+                AuditLog.action,
+                AuditLog.source,
+                AuditLog.actor_display_name,
+                AuditLog.actor_user_id,
+                AuditLog.description,
+                InventoryItem.serial_number,
+                AuditLog.created_at,
+            )
+            .select_from(
+                AuditLog.__table__.outerjoin(
+                    InventoryItem,
+                    AuditLog.inventory_item_id == InventoryItem.id,
+                ),
+            )
+            .where(*self._audit_where_clauses(filters))
+        )
 
     def _audit_where_clauses(self, filters: ReportFilters) -> list:
         clauses = []
@@ -786,7 +801,9 @@ class ReportRepository:
                 total,
             )
             .select_from(
-                InventoryItem.__table__.join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
+                InventoryItem.__table__.join(
+                    ProductModel, InventoryItem.product_model_id == ProductModel.id
+                )
                 .join(Brand, ProductModel.brand_id == Brand.id)
                 .join(Location, InventoryItem.current_location_id == Location.id),
             )
@@ -827,7 +844,9 @@ class ReportRepository:
             page_size=page_params.page_size,
         )
 
-    async def _paginate_sales(self, statement, page_params: PageParams) -> PageResult[SalesReportRow]:
+    async def _paginate_sales(
+        self, statement, page_params: PageParams
+    ) -> PageResult[SalesReportRow]:
         count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
         total_result = await self._session.execute(count_statement)
         total_items = int(total_result.scalar_one())
@@ -841,7 +860,9 @@ class ReportRepository:
             page_size=page_params.page_size,
         )
 
-    async def _paginate_audit(self, statement, page_params: PageParams) -> PageResult[AuditReportRow]:
+    async def _paginate_audit(
+        self, statement, page_params: PageParams
+    ) -> PageResult[AuditReportRow]:
         count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
         total_result = await self._session.execute(count_statement)
         total_items = int(total_result.scalar_one())

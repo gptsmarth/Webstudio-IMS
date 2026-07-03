@@ -15,8 +15,8 @@ from webstudio_backend.api.schemas.releases import (
     ReleaseMetadataResponse,
     ReleaseSyncStatusResponse,
 )
-from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.config import Settings
+from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel
 from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService

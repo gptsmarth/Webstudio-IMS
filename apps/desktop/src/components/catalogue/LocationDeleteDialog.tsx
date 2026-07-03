@@ -52,32 +52,59 @@ export function LocationDeleteDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">Delete location permanently</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
         </header>
         <div className="cat-dialog__body">
           <p>
-            <strong>{location.name}</strong> has {inventoryCount} inventory item{inventoryCount === 1 ? '' : 's'}
-            {movableCount !== inventoryCount ? ` (${movableCount} movable)` : ''}.
-            All items will be transferred to the destination you choose, then this location will be permanently deleted.
-            This action cannot be undone.
+            <strong>{location.name}</strong> has {inventoryCount} inventory item
+            {inventoryCount === 1 ? '' : 's'}
+            {movableCount !== inventoryCount ? ` (${movableCount} movable)` : ''}. All items will be
+            transferred to the destination you choose, then this location will be permanently
+            deleted. This action cannot be undone.
           </p>
           <label className="cat-dialog__field">
             <span>Transfer to</span>
-            <select className="input" value={transferToId} onChange={(e) => setTransferToId(e.target.value)} disabled={loading || destinations.length === 0}>
+            <select
+              className="input"
+              value={transferToId}
+              onChange={(e) => setTransferToId(e.target.value)}
+              disabled={loading || destinations.length === 0}
+            >
               {destinations.length === 0 && <option value="">No other locations available</option>}
               {destinations.map((dest) => (
-                <option key={dest.id} value={dest.id}>{dest.name}</option>
+                <option key={dest.id} value={dest.id}>
+                  {dest.name}
+                </option>
               ))}
             </select>
           </label>
           {error && <div className="alert alert-danger">{error}</div>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-          <button type="button" className="btn btn-danger" onClick={() => void submit()} disabled={loading || destinations.length === 0}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void submit()}
+            disabled={loading || destinations.length === 0}
+          >
             {loading ? 'Deleting…' : 'Transfer and delete'}
           </button>
         </footer>

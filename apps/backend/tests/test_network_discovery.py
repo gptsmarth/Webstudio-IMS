@@ -31,12 +31,12 @@ def test_normalize_rejects_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_discovery_health(api_client: AsyncClient) -> None:
+async def test_discovery_health(api_client: AsyncClient, test_settings: Settings) -> None:
     response = await api_client.get("/api/v1/discovery/health")
     assert response.status_code == 200
     data = response.json()["data"]
     assert "online" in data
-    assert data["backend_version"] == "0.1.0"
+    assert data["backend_version"] == test_settings.app_version
     assert data["api_version"] == "1.0"
     assert data["database_status"] in {"ok", "failed", "unknown"}
     assert "jwt" not in response.text.lower()

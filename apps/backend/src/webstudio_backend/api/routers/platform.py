@@ -6,8 +6,8 @@ from fastapi import APIRouter, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.response_helpers import build_envelope
-from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.config import Settings
+from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.services.client_update_service import ClientUpdateService
 from webstudio_backend.services.platform_info_service import (
     build_capabilities_payload,

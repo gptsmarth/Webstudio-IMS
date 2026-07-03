@@ -49,7 +49,9 @@ class BackupRunRepository(SqlAlchemyRepository[BackupRun]):
             ),
         )
 
-    async def list_recent(self, *, limit: int = 50, include_archived: bool = True) -> list[BackupRun]:
+    async def list_recent(
+        self, *, limit: int = 50, include_archived: bool = True
+    ) -> list[BackupRun]:
         statement = select(BackupRun).order_by(BackupRun.created_at.desc()).limit(limit)
         if not include_archived:
             statement = statement.where(BackupRun.is_archived.is_(False))

@@ -61,7 +61,7 @@ async def checkpoint_tally_sync() -> None:
 
 
 def flush_logs() -> None:
-    for handler_id, handler in logger._core.handlers.items():  # noqa: SLF001
+    for _handler_id, handler in logger._core.handlers.items():  # noqa: SLF001
         sink = getattr(handler, "_sink", None)
         flush = getattr(sink, "flush", None)
         if callable(flush):

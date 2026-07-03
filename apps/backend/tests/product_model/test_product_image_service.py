@@ -2,11 +2,11 @@
 
 from webstudio_backend.services.product_image_service import (
     _content_looks_like_image,
+    _dedupe_urls,
     extract_grounding_page_urls,
     extract_image_urls_from_html,
     is_safe_public_https_url,
     is_suspicious_placeholder_image_url,
-    _dedupe_urls,
 )
 
 
@@ -50,19 +50,13 @@ def test_dedupe_urls_normalizes_protocol_relative() -> None:
 
 
 def test_is_suspicious_placeholder_image_url_rejects_hallucinated_asus_cdn() -> None:
-    fake = (
-        "https://dlcdnwebimgs.asus.com/gain/"
-        "88888888-8888-8888-8888-888888888888/w800/h600"
-    )
+    fake = "https://dlcdnwebimgs.asus.com/gain/" "88888888-8888-8888-8888-888888888888/w800/h600"
     assert is_suspicious_placeholder_image_url(fake) is True
     assert is_suspicious_placeholder_image_url("https://cdn.asus.com/real-product.jpg") is False
 
 
 def test_dedupe_urls_skips_placeholder_images() -> None:
-    fake = (
-        "https://dlcdnwebimgs.asus.com/gain/"
-        "88888888-8888-8888-8888-888888888888/w800/h600"
-    )
+    fake = "https://dlcdnwebimgs.asus.com/gain/" "88888888-8888-8888-8888-888888888888/w800/h600"
     real = "https://cdn.asus.com/laptop.jpg"
     assert _dedupe_urls([fake, real]) == [real]
 

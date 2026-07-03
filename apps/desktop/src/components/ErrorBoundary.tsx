@@ -54,9 +54,12 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div className="space-y-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-100">Application Encountered an Error</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-100">
+                Application Encountered an Error
+              </h1>
               <p className="text-xs text-slate-400 leading-relaxed">
-                An unexpected runtime error occurred. Diagnostic information has been captured by the structured logging system.
+                An unexpected runtime error occurred. Diagnostic information has been captured by
+                the structured logging system.
               </p>
             </div>
 

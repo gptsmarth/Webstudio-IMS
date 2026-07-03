@@ -10,7 +10,10 @@ import {
   type AppearancePreferences,
 } from '../../lib/settingsUi';
 import type { SettingsWorkspaceState } from '../../hooks/useSettingsWorkspace';
-import { AuthenticationService, type SecurityDashboard } from '../../services/api/AuthenticationService';
+import {
+  AuthenticationService,
+  type SecurityDashboard,
+} from '../../services/api/AuthenticationService';
 import { ApiClientProvider } from '../../services/api/ApiClientProvider';
 import {
   INTEGRATION_SERVICE_TYPES,
@@ -152,7 +155,11 @@ export function GeneralPanel({ workspace, data, locations }: PanelProps): JSX.El
             onChange={(e) => setForm({ ...form, currency: e.target.value })}
           />
         </Field>
-        <SaveButton label="Save general settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        <SaveButton
+          label="Save general settings"
+          saving={workspace.saving}
+          canWrite={workspace.canWrite}
+        />
       </form>
     </Section>
   );
@@ -208,13 +215,21 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
     <>
       <Section title="Security dashboard">
         <div className="stg-security-dashboard">
-          {dashboardLoading && <p className="stg-security-dashboard__hint">Loading security status…</p>}
+          {dashboardLoading && (
+            <p className="stg-security-dashboard__hint">Loading security status…</p>
+          )}
           {dashboardError && <p className="stg-security-dashboard__error">{dashboardError}</p>}
           {dashboard && (
             <>
               <div className="stg-readonly-grid">
-                <Readonly label="Your active sessions" value={String(dashboard.active_session_count)} />
-                <Readonly label="Org-wide sessions" value={String(dashboard.org_active_session_count)} />
+                <Readonly
+                  label="Your active sessions"
+                  value={String(dashboard.active_session_count)}
+                />
+                <Readonly
+                  label="Org-wide sessions"
+                  value={String(dashboard.org_active_session_count)}
+                />
                 <Readonly label="Failed logins (24h)" value={String(dashboard.failed_logins_24h)} />
                 <Readonly label="Locked accounts" value={String(dashboard.locked_users.length)} />
                 <Readonly
@@ -231,12 +246,17 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                       <li key={alert.id} className="stg-security-dashboard__alert-row">
                         <AlertTriangle size={16} aria-hidden />
                         <div>
-                          <strong>{alert.description ?? alert.security_event ?? 'Security alert'}</strong>
+                          <strong>
+                            {alert.description ?? alert.security_event ?? 'Security alert'}
+                          </strong>
                           <div className="stg-security-dashboard__meta">
-                            {alert.actor_display_name ?? 'System'} · {formatRelativeTime(alert.created_at)}
+                            {alert.actor_display_name ?? 'System'} ·{' '}
+                            {formatRelativeTime(alert.created_at)}
                           </div>
                         </div>
-                        <span className={auditSeverityBadgeClass(alert.severity)}>{auditSeverityLabel(alert.severity)}</span>
+                        <span className={auditSeverityBadgeClass(alert.severity)}>
+                          {auditSeverityLabel(alert.severity)}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -262,7 +282,11 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                         <span className="stg-security-dashboard__meta">
                           until {user.locked_until ? formatDateTime(user.locked_until) : '—'}
                         </span>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void unlockUser(user.id)}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => void unlockUser(user.id)}
+                        >
                           Unlock
                         </button>
                       </li>
@@ -279,10 +303,19 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                   <ul className="stg-security-dashboard__sessions">
                     {dashboard.active_sessions.map((session) => (
                       <li key={session.id} className="stg-security-dashboard__session-row">
-                        <span>{session.device_label || 'Unknown device'}{session.is_current ? ' (current)' : ''}</span>
-                        <span className="stg-security-dashboard__meta">{session.ip_address ?? '—'}</span>
+                        <span>
+                          {session.device_label || 'Unknown device'}
+                          {session.is_current ? ' (current)' : ''}
+                        </span>
+                        <span className="stg-security-dashboard__meta">
+                          {session.ip_address ?? '—'}
+                        </span>
                         {!session.is_current && (
-                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void revokeSession(session.id)}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => void revokeSession(session.id)}
+                          >
                             Revoke
                           </button>
                         )}
@@ -290,7 +323,13 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                     ))}
                   </ul>
                 )}
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void AuthenticationService.logoutAll().then(() => refreshDashboard())}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    void AuthenticationService.logoutAll().then(() => refreshDashboard())
+                  }
+                >
                   Sign out all devices
                 </button>
               </div>
@@ -304,9 +343,12 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                     {dashboard.recent_security_events.slice(0, 12).map((event) => (
                       <li key={event.id} className="stg-security-dashboard__session-row">
                         <span>{event.description ?? event.security_event ?? 'Security event'}</span>
-                        <span className={auditSeverityBadgeClass(event.severity)}>{auditSeverityLabel(event.severity)}</span>
+                        <span className={auditSeverityBadgeClass(event.severity)}>
+                          {auditSeverityLabel(event.severity)}
+                        </span>
                         <span className="stg-security-dashboard__meta">
-                          {event.actor_display_name ?? 'System'} · {formatRelativeTime(event.created_at)}
+                          {event.actor_display_name ?? 'System'} ·{' '}
+                          {formatRelativeTime(event.created_at)}
                         </span>
                       </li>
                     ))}
@@ -323,7 +365,9 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
                       <span className={`badge ${event.success ? 'badge-success' : 'badge-danger'}`}>
                         {event.success ? 'Success' : 'Failed'}
                       </span>
-                      <span className="stg-security-dashboard__meta">{formatRelativeTime(event.created_at)}</span>
+                      <span className="stg-security-dashboard__meta">
+                        {formatRelativeTime(event.created_at)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -351,7 +395,12 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
               </div>
             </>
           )}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void refreshDashboard()} disabled={dashboardLoading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => void refreshDashboard()}
+            disabled={dashboardLoading}
+          >
             <RefreshCw size={14} aria-hidden />
             Refresh
           </button>
@@ -359,128 +408,146 @@ export function SecurityPanel({ workspace, data }: PanelProps): JSX.Element {
       </Section>
 
       <Section title="Security policy">
-      <form
-        className="stg-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void workspace.saveSecurity(form);
-        }}
-      >
-        <Field label="Session timeout (minutes)">
-          <input
-            className="input"
-            type="number"
-            min={5}
-            value={form.session_timeout_minutes}
-            onChange={(e) => setForm({ ...form, session_timeout_minutes: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
+        <form
+          className="stg-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void workspace.saveSecurity(form);
+          }}
+        >
+          <Field label="Session timeout (minutes)">
+            <input
+              className="input"
+              type="number"
+              min={5}
+              value={form.session_timeout_minutes}
+              onChange={(e) =>
+                setForm({ ...form, session_timeout_minutes: Number(e.target.value) })
+              }
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <Field label="Remember me session (days)">
+            <input
+              className="input"
+              type="number"
+              min={7}
+              value={form.remember_me_ttl_days}
+              onChange={(e) => setForm({ ...form, remember_me_ttl_days: Number(e.target.value) })}
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <Field label="Minimum password length">
+            <input
+              className="input"
+              type="number"
+              min={8}
+              value={form.password_min_length}
+              onChange={(e) => setForm({ ...form, password_min_length: Number(e.target.value) })}
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <Field label="Password history count">
+            <input
+              className="input"
+              type="number"
+              min={0}
+              max={24}
+              value={form.password_history_count}
+              onChange={(e) => setForm({ ...form, password_history_count: Number(e.target.value) })}
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <label className="stg-check">
+            <input
+              type="checkbox"
+              checked={form.password_require_uppercase}
+              onChange={(e) => setForm({ ...form, password_require_uppercase: e.target.checked })}
+              disabled={!workspace.canWrite}
+            />
+            Require uppercase
+          </label>
+          <label className="stg-check">
+            <input
+              type="checkbox"
+              checked={form.password_require_lowercase}
+              onChange={(e) => setForm({ ...form, password_require_lowercase: e.target.checked })}
+              disabled={!workspace.canWrite}
+            />
+            Require lowercase
+          </label>
+          <label className="stg-check">
+            <input
+              type="checkbox"
+              checked={form.password_require_number}
+              onChange={(e) => setForm({ ...form, password_require_number: e.target.checked })}
+              disabled={!workspace.canWrite}
+            />
+            Require number
+          </label>
+          <label className="stg-check">
+            <input
+              type="checkbox"
+              checked={form.password_require_symbol}
+              onChange={(e) => setForm({ ...form, password_require_symbol: e.target.checked })}
+              disabled={!workspace.canWrite}
+            />
+            Require symbol
+          </label>
+          <Field label="Login attempts before lockout">
+            <input
+              className="input"
+              type="number"
+              min={3}
+              value={form.lockout_threshold}
+              onChange={(e) => setForm({ ...form, lockout_threshold: Number(e.target.value) })}
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <Field label="Lockout duration (minutes)">
+            <input
+              className="input"
+              type="number"
+              min={1}
+              value={form.lockout_duration_minutes}
+              onChange={(e) =>
+                setForm({ ...form, lockout_duration_minutes: Number(e.target.value) })
+              }
+              disabled={!workspace.canWrite}
+            />
+          </Field>
+          <div className="stg-readonly-grid">
+            <Readonly
+              label="JWT access TTL"
+              value={`${form.jwt_access_token_ttl_minutes} minutes`}
+            />
+            <Readonly label="JWT refresh TTL" value={`${form.jwt_refresh_token_ttl_days} days`} />
+            <Readonly label="JWT issuer" value={form.jwt_issuer} />
+            <Readonly label="JWT audience" value={form.jwt_audience} />
+            <Readonly
+              label="Recovery key"
+              value={form.recovery_key_configured ? 'Configured' : 'Not configured'}
+            />
+            <Readonly
+              label="Recovery key last used"
+              value={
+                form.recovery_key_last_used_at
+                  ? formatDateTime(form.recovery_key_last_used_at)
+                  : '—'
+              }
+            />
+            <Readonly
+              label="HTTPS certificate"
+              value={form.https_certificate_status.replaceAll('_', ' ')}
+            />
+          </div>
+          <SaveButton
+            label="Save security settings"
+            saving={workspace.saving}
+            canWrite={workspace.canWrite}
           />
-        </Field>
-        <Field label="Remember me session (days)">
-          <input
-            className="input"
-            type="number"
-            min={7}
-            value={form.remember_me_ttl_days}
-            onChange={(e) => setForm({ ...form, remember_me_ttl_days: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
-          />
-        </Field>
-        <Field label="Minimum password length">
-          <input
-            className="input"
-            type="number"
-            min={8}
-            value={form.password_min_length}
-            onChange={(e) => setForm({ ...form, password_min_length: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
-          />
-        </Field>
-        <Field label="Password history count">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={24}
-            value={form.password_history_count}
-            onChange={(e) => setForm({ ...form, password_history_count: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
-          />
-        </Field>
-        <label className="stg-check">
-          <input
-            type="checkbox"
-            checked={form.password_require_uppercase}
-            onChange={(e) => setForm({ ...form, password_require_uppercase: e.target.checked })}
-            disabled={!workspace.canWrite}
-          />
-          Require uppercase
-        </label>
-        <label className="stg-check">
-          <input
-            type="checkbox"
-            checked={form.password_require_lowercase}
-            onChange={(e) => setForm({ ...form, password_require_lowercase: e.target.checked })}
-            disabled={!workspace.canWrite}
-          />
-          Require lowercase
-        </label>
-        <label className="stg-check">
-          <input
-            type="checkbox"
-            checked={form.password_require_number}
-            onChange={(e) => setForm({ ...form, password_require_number: e.target.checked })}
-            disabled={!workspace.canWrite}
-          />
-          Require number
-        </label>
-        <label className="stg-check">
-          <input
-            type="checkbox"
-            checked={form.password_require_symbol}
-            onChange={(e) => setForm({ ...form, password_require_symbol: e.target.checked })}
-            disabled={!workspace.canWrite}
-          />
-          Require symbol
-        </label>
-        <Field label="Login attempts before lockout">
-          <input
-            className="input"
-            type="number"
-            min={3}
-            value={form.lockout_threshold}
-            onChange={(e) => setForm({ ...form, lockout_threshold: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
-          />
-        </Field>
-        <Field label="Lockout duration (minutes)">
-          <input
-            className="input"
-            type="number"
-            min={1}
-            value={form.lockout_duration_minutes}
-            onChange={(e) => setForm({ ...form, lockout_duration_minutes: Number(e.target.value) })}
-            disabled={!workspace.canWrite}
-          />
-        </Field>
-        <div className="stg-readonly-grid">
-          <Readonly label="JWT access TTL" value={`${form.jwt_access_token_ttl_minutes} minutes`} />
-          <Readonly label="JWT refresh TTL" value={`${form.jwt_refresh_token_ttl_days} days`} />
-          <Readonly label="JWT issuer" value={form.jwt_issuer} />
-          <Readonly label="JWT audience" value={form.jwt_audience} />
-          <Readonly
-            label="Recovery key"
-            value={form.recovery_key_configured ? 'Configured' : 'Not configured'}
-          />
-          <Readonly
-            label="Recovery key last used"
-            value={form.recovery_key_last_used_at ? formatDateTime(form.recovery_key_last_used_at) : '—'}
-          />
-          <Readonly label="HTTPS certificate" value={form.https_certificate_status.replaceAll('_', ' ')} />
-        </div>
-        <SaveButton label="Save security settings" saving={workspace.saving} canWrite={workspace.canWrite} />
-      </form>
-    </Section>
+        </form>
+      </Section>
     </>
   );
 }
@@ -560,7 +627,11 @@ export function InventoryPanel({ workspace, data, locations }: PanelProps): JSX.
             }
           />
         </Field>
-        <SaveButton label="Save inventory settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        <SaveButton
+          label="Save inventory settings"
+          saving={workspace.saving}
+          canWrite={workspace.canWrite}
+        />
       </form>
     </Section>
   );
@@ -610,7 +681,11 @@ export function SalesPanel({ workspace, data }: PanelProps): JSX.Element {
           Allow manual sales
         </label>
         <Readonly label="Default salesperson" value="Not configured (future-ready)" />
-        <SaveButton label="Save sales settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        <SaveButton
+          label="Save sales settings"
+          saving={workspace.saving}
+          canWrite={workspace.canWrite}
+        />
       </form>
     </Section>
   );
@@ -737,7 +812,9 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               max={300}
               value={form.ai_timeout_seconds}
               disabled={!workspace.canWrite}
-              onChange={(e) => setForm({ ...form, ai_timeout_seconds: Number(e.target.value) || 90 })}
+              onChange={(e) =>
+                setForm({ ...form, ai_timeout_seconds: Number(e.target.value) || 90 })
+              }
             />
           </Field>
           <Field
@@ -758,28 +835,72 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
           <h3 className="stg-subheading">Google Gemini API</h3>
           <Readonly
             label="Gemini API key status"
-            value={integrations.gemini_configured ? `Configured (${integrations.gemini_api_key_hint ?? '••••'})` : 'Not configured'}
+            value={
+              integrations.gemini_configured
+                ? `Configured (${integrations.gemini_api_key_hint ?? '••••'})`
+                : 'Not configured'
+            }
           />
           <Field label="Gemini model" hint="flash-lite is tried first when rate-limited.">
-            <select className="input" value={form.gemini_model} onChange={(e) => setForm({ ...form, gemini_model: e.target.value })} disabled={!workspace.canWrite}>
-              {GEMINI_MODELS.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
+            <select
+              className="input"
+              value={form.gemini_model}
+              onChange={(e) => setForm({ ...form, gemini_model: e.target.value })}
+              disabled={!workspace.canWrite}
+            >
+              {GEMINI_MODELS.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="Gemini API key" hint={integrations.gemini_configured ? 'Leave blank to keep the current key.' : 'Get a key at aistudio.google.com/apikey'}>
-            <input className="input" type="password" autoComplete="off" placeholder={integrations.gemini_configured ? '••••••••••••' : 'AIza…'} value={geminiApiKey} disabled={!workspace.canWrite || clearGeminiKey} onChange={(e) => setGeminiApiKey(e.target.value)} />
+          <Field
+            label="Gemini API key"
+            hint={
+              integrations.gemini_configured
+                ? 'Leave blank to keep the current key.'
+                : 'Get a key at aistudio.google.com/apikey'
+            }
+          >
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder={integrations.gemini_configured ? '••••••••••••' : 'AIza…'}
+              value={geminiApiKey}
+              disabled={!workspace.canWrite || clearGeminiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+            />
           </Field>
           {integrations.gemini_configured && workspace.canWrite && (
             <label className="stg-check">
-              <input type="checkbox" checked={clearGeminiKey} onChange={(e) => { setClearGeminiKey(e.target.checked); if (e.target.checked) setGeminiApiKey(''); }} />
+              <input
+                type="checkbox"
+                checked={clearGeminiKey}
+                onChange={(e) => {
+                  setClearGeminiKey(e.target.checked);
+                  if (e.target.checked) setGeminiApiKey('');
+                }}
+              />
               Remove stored Gemini API key
             </label>
           )}
-          <button type="button" className="btn btn-secondary btn-sm" disabled={!workspace.canWrite || testingProvider} onClick={() => void handleTestGemini()}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!workspace.canWrite || testingProvider}
+            onClick={() => void handleTestGemini()}
+          >
             {testingProvider ? 'Testing Gemini…' : 'Test Gemini connection'}
           </button>
 
           {testMessage && <p className="stg-muted">{testMessage}</p>}
-          <SaveButton label="Save AI settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+          <SaveButton
+            label="Save AI settings"
+            saving={workspace.saving}
+            canWrite={workspace.canWrite}
+          />
         </form>
       </Section>
     </>
@@ -822,7 +943,8 @@ function IntegrationApiKeysSection(): JSX.Element | null {
     return (
       <Section title="Integration API keys">
         <p className="stg-section__lead">
-          Encrypted API keys for email, SMS, WhatsApp, and future services are managed by the Main Administrator.
+          Encrypted API keys for email, SMS, WhatsApp, and future services are managed by the Main
+          Administrator.
         </p>
       </Section>
     );
@@ -831,7 +953,8 @@ function IntegrationApiKeysSection(): JSX.Element | null {
   return (
     <Section title="Integration API keys">
       <p className="stg-section__lead">
-        Store encrypted credentials for outbound integrations. Keys are never shown in full after saving.
+        Store encrypted credentials for outbound integrations. Keys are never shown in full after
+        saving.
       </p>
       {error && <p className="stg-error">{error}</p>}
       <form
@@ -860,14 +983,25 @@ function IntegrationApiKeysSection(): JSX.Element | null {
         }}
       >
         <Field label="Service">
-          <select className="input" value={serviceType} onChange={(e) => setServiceType(e.target.value as IntegrationServiceType)}>
+          <select
+            className="input"
+            value={serviceType}
+            onChange={(e) => setServiceType(e.target.value as IntegrationServiceType)}
+          >
             {INTEGRATION_SERVICE_TYPES.map((entry) => (
-              <option key={entry.id} value={entry.id}>{entry.label}</option>
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
             ))}
           </select>
         </Field>
         <Field label="Label">
-          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Production SMTP" />
+          <input
+            className="input"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Production SMTP"
+          />
         </Field>
         <Field label="API key">
           <input
@@ -884,7 +1018,11 @@ function IntegrationApiKeysSection(): JSX.Element | null {
         </button>
       </form>
       <label className="stg-check">
-        <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={includeArchived}
+          onChange={(e) => setIncludeArchived(e.target.checked)}
+        />
         <span>Show archived keys</span>
       </label>
       {loading ? (
@@ -908,7 +1046,9 @@ function IntegrationApiKeysSection(): JSX.Element | null {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => void IntegrationKeyService.archiveKey(entry.id).then(() => loadKeys())}
+                    onClick={() =>
+                      void IntegrationKeyService.archiveKey(entry.id).then(() => loadKeys())
+                    }
                   >
                     Archive
                   </button>
@@ -916,7 +1056,9 @@ function IntegrationApiKeysSection(): JSX.Element | null {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => void IntegrationKeyService.restoreKey(entry.id).then(() => loadKeys())}
+                    onClick={() =>
+                      void IntegrationKeyService.restoreKey(entry.id).then(() => loadKeys())
+                    }
                   >
                     Restore
                   </button>
@@ -958,7 +1100,11 @@ export function ExcelPanel({ workspace, data }: PanelProps): JSX.Element {
           />
         </Field>
         <Readonly label="Auto export schedule" value="Not configured (future-ready)" />
-        <SaveButton label="Save Excel settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        <SaveButton
+          label="Save Excel settings"
+          saving={workspace.saving}
+          canWrite={workspace.canWrite}
+        />
       </form>
     </Section>
   );
@@ -1033,7 +1179,11 @@ export function NotificationsPanel({ workspace, data }: PanelProps): JSX.Element
           />
           Backup &amp; recovery alerts
         </label>
-        <SaveButton label="Save notification settings" saving={workspace.saving} canWrite={workspace.canWrite} />
+        <SaveButton
+          label="Save notification settings"
+          saving={workspace.saving}
+          canWrite={workspace.canWrite}
+        />
       </form>
     </Section>
   );
@@ -1049,7 +1199,8 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
     backup_folder: backup.backup_folder,
     storage_backend: (backup.storage_backend as BackupSettingsUpdate['storage_backend']) || 'local',
     schedule: (backup.schedule as BackupSettingsUpdate['schedule']) || 'manual',
-    retention_policy: (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
+    retention_policy:
+      (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
     retention_count: backup.retention_count,
   });
   const [lastResult, setLastResult] = useState<string | null>(null);
@@ -1062,9 +1213,11 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
   useEffect(() => {
     setForm({
       backup_folder: backup.backup_folder,
-      storage_backend: (backup.storage_backend as BackupSettingsUpdate['storage_backend']) || 'local',
+      storage_backend:
+        (backup.storage_backend as BackupSettingsUpdate['storage_backend']) || 'local',
       schedule: (backup.schedule as BackupSettingsUpdate['schedule']) || 'manual',
-      retention_policy: (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
+      retention_policy:
+        (backup.retention_policy as BackupSettingsUpdate['retention_policy']) || 'last_30',
       retention_count: backup.retention_count,
     });
   }, [backup]);
@@ -1079,11 +1232,14 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
   const runBackup = async () => {
     setLastResult(null);
     try {
-      const result = await SettingsService.createBackup({ backup_type: 'full', trigger_type: 'manual' });
+      const result = await SettingsService.createBackup({
+        backup_type: 'full',
+        trigger_type: 'manual',
+      });
       const status = result.verification_status ?? 'success';
       setLastResult(
-        `${status === 'success' ? 'Backup completed' : `Backup ${status}`}: ${result.filename} `
-        + `(${formatBytes(result.size_bytes)}, ${result.duration_ms ?? 0} ms)`,
+        `${status === 'success' ? 'Backup completed' : `Backup ${status}`}: ${result.filename} ` +
+          `(${formatBytes(result.size_bytes)}, ${result.duration_ms ?? 0} ms)`,
       );
       await workspace.refresh();
     } catch (err) {
@@ -1098,14 +1254,16 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
           <Shield size={16} aria-hidden />
           <div>
             <strong>Health: {backup.health_status}</strong>
-            <p className="stg-muted">Protects database, settings, users, integrations, and brand assets.</p>
+            <p className="stg-muted">
+              Protects database, settings, users, integrations, and brand assets.
+            </p>
           </div>
         </div>
 
         <p className="stg-backup-warning" role="note">
-          Although automatic backups are maintained internally, it is recommended to create and safely store
-          an external manual backup (weekly or monthly) so your business can be fully recovered even if the
-          primary system or storage device fails.
+          Although automatic backups are maintained internally, it is recommended to create and
+          safely store an external manual backup (weekly or monthly) so your business can be fully
+          recovered even if the primary system or storage device fails.
         </p>
 
         <div className="stg-readonly-grid">
@@ -1180,10 +1338,12 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
             <select
               className="input"
               value={form.schedule}
-              onChange={(e) => setForm({
-                ...form,
-                schedule: e.target.value as BackupSettingsUpdate['schedule'],
-              })}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  schedule: e.target.value as BackupSettingsUpdate['schedule'],
+                })
+              }
               disabled={!canRunBackup}
             >
               <option value="manual">Manual</option>
@@ -1196,10 +1356,12 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
             <select
               className="input"
               value={form.retention_policy}
-              onChange={(e) => setForm({
-                ...form,
-                retention_policy: e.target.value as BackupSettingsUpdate['retention_policy'],
-              })}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  retention_policy: e.target.value as BackupSettingsUpdate['retention_policy'],
+                })
+              }
               disabled={!canRunBackup}
             >
               <option value="last_7">Keep last 7</option>
@@ -1226,10 +1388,12 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
             <select
               className="input"
               value={form.storage_backend}
-              onChange={(e) => setForm({
-                ...form,
-                storage_backend: e.target.value as BackupSettingsUpdate['storage_backend'],
-              })}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  storage_backend: e.target.value as BackupSettingsUpdate['storage_backend'],
+                })
+              }
               disabled={!canRunBackup}
             >
               <option value="local">Local folder</option>
@@ -1238,7 +1402,11 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
               <option value="cloud">Cloud storage (future-ready)</option>
             </select>
           </Field>
-          <SaveButton label="Save backup policy" saving={workspace.saving} canWrite={canRunBackup} />
+          <SaveButton
+            label="Save backup policy"
+            saving={workspace.saving}
+            canWrite={canRunBackup}
+          />
         </form>
       </Section>
 
@@ -1281,7 +1449,9 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
                     <span className="stg-muted">
                       {item.restore_scope} · {item.source} · {formatDateTime(item.created_at)}
                     </span>
-                    <span className={`stg-backup-verify stg-backup-verify--${item.verification_status}`}>
+                    <span
+                      className={`stg-backup-verify stg-backup-verify--${item.verification_status}`}
+                    >
                       {item.verification_status}
                     </span>
                     {item.emergency_backup_filename && (
@@ -1315,10 +1485,7 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
         onRunBackup={runBackup}
         onComplete={workspace.refresh}
       />
-      <NetworkAdminWizard
-        open={networkWizardOpen}
-        onClose={() => setNetworkWizardOpen(false)}
-      />
+      <NetworkAdminWizard open={networkWizardOpen} onClose={() => setNetworkWizardOpen(false)} />
       <OfficeDeploymentWizard
         open={officeDeploymentOpen}
         onClose={() => setOfficeDeploymentOpen(false)}
@@ -1411,13 +1578,17 @@ export function SystemPanel({ workspace, data }: PanelProps): JSX.Element {
   > | null>(null);
 
   useEffect(() => {
-    void VersionService.getVersionInfo().then(setClientMeta).catch(() => setClientMeta(null));
+    void VersionService.getVersionInfo()
+      .then(setClientMeta)
+      .catch(() => setClientMeta(null));
   }, []);
 
   return (
     <Section title="System information">
       <div className="stg-health">
-        <div className={`stg-health__card stg-health__card--${sys.api_health === 'ok' ? 'ok' : 'bad'}`}>
+        <div
+          className={`stg-health__card stg-health__card--${sys.api_health === 'ok' ? 'ok' : 'bad'}`}
+        >
           <span>API health</span>
           <strong>{sys.api_health}</strong>
         </div>
@@ -1441,7 +1612,11 @@ export function SystemPanel({ workspace, data }: PanelProps): JSX.Element {
         <Readonly label="Storage free" value={formatBytes(sys.storage_free_bytes)} />
         <Readonly label="Logs folder" value={sys.logs_folder} />
       </div>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void workspace.refresh()}>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => void workspace.refresh()}
+      >
         <RefreshCw size={14} /> Refresh health
       </button>
     </Section>
@@ -1462,8 +1637,12 @@ export function AboutPanel({ data }: { data: SettingsWorkspace }): JSX.Element {
   const [serverVersion, setServerVersion] = useState<PlatformVersionInfo | null>(null);
 
   useEffect(() => {
-    void VersionService.getVersionInfo().then(setClientMeta).catch(() => setClientMeta(null));
-    void PlatformService.getVersion().then(setServerVersion).catch(() => setServerVersion(null));
+    void VersionService.getVersionInfo()
+      .then(setClientMeta)
+      .catch(() => setClientMeta(null));
+    void PlatformService.getVersion()
+      .then(setServerVersion)
+      .catch(() => setServerVersion(null));
   }, []);
 
   const version = clientMeta?.appVersion ?? serverVersion?.version ?? data.system.app_version;

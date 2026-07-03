@@ -10,17 +10,29 @@ _LAYER = "ai"
 
 
 def _bind(**context: Any):
-    return logger.bind(layer=_LAYER, **{key: value for key, value in context.items() if value is not None})
+    return logger.bind(
+        layer=_LAYER, **{key: value for key, value in context.items() if value is not None}
+    )
 
 
-def log_enrichment_start(*, sku: str, attempt: int, max_attempts: int, providers: list[str]) -> None:
-    _bind(event="enrichment_start", sku=sku, attempt=attempt, max_attempts=max_attempts, providers=providers).info(
+def log_enrichment_start(
+    *, sku: str, attempt: int, max_attempts: int, providers: list[str]
+) -> None:
+    _bind(
+        event="enrichment_start",
+        sku=sku,
+        attempt=attempt,
+        max_attempts=max_attempts,
+        providers=providers,
+    ).info(
         "AI enrichment started for {}",
         sku,
     )
 
 
-def log_enrichment_retry(*, sku: str, attempt: int, max_attempts: int, delay_seconds: float) -> None:
+def log_enrichment_retry(
+    *, sku: str, attempt: int, max_attempts: int, delay_seconds: float
+) -> None:
     _bind(
         event="enrichment_retry",
         sku=sku,
@@ -68,7 +80,9 @@ def log_provider_success(
     )
 
 
-def log_provider_failure(*, provider: str, sku: str, duration_ms: int, code: str, message: str) -> None:
+def log_provider_failure(
+    *, provider: str, sku: str, duration_ms: int, code: str, message: str
+) -> None:
     _bind(
         event="provider_failure",
         provider=provider,
@@ -90,14 +104,20 @@ def log_cache_hit(*, sku: str, provider: str) -> None:
 
 
 def log_cache_stale(*, sku: str) -> None:
-    _bind(event="cache_stale", sku=sku).info("Stale AI enrichment cache rejected for {}, refreshing", sku)
+    _bind(event="cache_stale", sku=sku).info(
+        "Stale AI enrichment cache rejected for {}, refreshing", sku
+    )
 
 
 def log_database_reuse(*, sku: str) -> None:
-    _bind(event="database_reuse", sku=sku).info("Reusing existing product model enrichment for {}", sku)
+    _bind(event="database_reuse", sku=sku).info(
+        "Reusing existing product model enrichment for {}", sku
+    )
 
 
-def log_provider_test(*, provider: str, success: bool, latency_ms: int | None, message: str) -> None:
+def log_provider_test(
+    *, provider: str, success: bool, latency_ms: int | None, message: str
+) -> None:
     _bind(
         event="provider_test",
         provider=provider,

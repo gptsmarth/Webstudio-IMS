@@ -1,16 +1,24 @@
 import type { InventoryWorkspaceState } from '../../hooks/useInventoryWorkspace';
 
 interface InventoryStatusBarProps {
-  workspace: Pick<InventoryWorkspaceState, 'totalItems' | 'items' | 'loading' | 'selectedId' | 'page' | 'pageSize'>;
+  workspace: Pick<
+    InventoryWorkspaceState,
+    'totalItems' | 'items' | 'loading' | 'selectedId' | 'page' | 'pageSize'
+  >;
   connectionLabel?: string;
 }
 
-export function InventoryStatusBar({ workspace, connectionLabel = 'Connected' }: InventoryStatusBarProps): JSX.Element {
+export function InventoryStatusBar({
+  workspace,
+  connectionLabel = 'Connected',
+}: InventoryStatusBarProps): JSX.Element {
   const selected = workspace.items.find((item) => item.id === workspace.selectedId);
 
   return (
     <footer className="inv-status-bar" aria-label="Inventory status">
-      <span>{workspace.loading ? 'Loading inventory…' : `${workspace.totalItems} total items`}</span>
+      <span>
+        {workspace.loading ? 'Loading inventory…' : `${workspace.totalItems} total items`}
+      </span>
       <span className="inv-status-bar__divider" aria-hidden>
         ·
       </span>

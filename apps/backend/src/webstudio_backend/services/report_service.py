@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
-from webstudio_backend.infrastructure.repositories.report_filters import ExportFormat, ReportFilters, ReportType
+from webstudio_backend.infrastructure.repositories.report_filters import (
+    ExportFormat,
+    ReportFilters,
+    ReportType,
+)
 from webstudio_backend.infrastructure.repositories.report_repository import (
     AggregateReportRow,
     AuditReportRow,

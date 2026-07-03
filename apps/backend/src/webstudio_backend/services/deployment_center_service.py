@@ -4,31 +4,35 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus
-from webstudio_backend.infrastructure.database.models.release_deployment_event import ReleaseDeploymentEvent
+from webstudio_backend.infrastructure.database.models.release_deployment_event import (
+    ReleaseDeploymentEvent,
+)
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.release_deployment_repository import (
     ReleaseDeploymentRepository,
 )
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
+from webstudio_backend.services.enterprise_deployment_engine import EnterpriseDeploymentEngine
 from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
+from webstudio_backend.services.enterprise_rollback_engine import EnterpriseRollbackEngine
 from webstudio_backend.services.github_release_client import GitHubReleaseClient
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
 from webstudio_backend.services.release_download_service import ReleaseDownloadService
 from webstudio_backend.services.release_manifest_validator import validate_release_manifest
 from webstudio_backend.services.release_semver import compare_semver, is_valid_semver, normalize_tag
-from webstudio_backend.services.enterprise_deployment_engine import EnterpriseDeploymentEngine
-from webstudio_backend.services.enterprise_rollback_engine import EnterpriseRollbackEngine
 from webstudio_backend.services.release_storage_paths import resolve_release_updates_root
 
 
@@ -82,7 +86,6 @@ class DeploymentCenterService:
                 raise ValueError("GitHub repository is not configured")
             client = GitHubReleaseClient(token=self._settings.github_token)
             releases = await client.list_releases(repo)
-            channel = self._enterprise.resolve_channel()
             current = await self._enterprise.get_current_release()
             available = []
             for release in releases:
@@ -108,10 +111,14 @@ class DeploymentCenterService:
             )
             return {"updates_found": len(available), "releases": available}
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
-    async def download_updates(self, *, user_id: int | None, job_id: int | None = None) -> dict[str, Any]:
+    async def download_updates(
+        self, *, user_id: int | None, job_id: int | None = None
+    ) -> dict[str, Any]:
         event = await self._start_event("download", user_id=user_id)
         try:
             await self._sync.run_sync_cycle(force=True)
@@ -124,7 +131,9 @@ class DeploymentCenterService:
                     jobs = [job]
             if not jobs:
                 result = await self._sync.run_sync_cycle()
-                await self._deployment_repo.complete_event(event, status="completed", detail_patch=result)
+                await self._deployment_repo.complete_event(
+                    event, status="completed", detail_patch=result
+                )
                 return result
             downloader = ReleaseDownloadService(github_token=self._settings.github_token)
             outcomes = []
@@ -138,7 +147,9 @@ class DeploymentCenterService:
             )
             return {"outcomes": outcomes}
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
     async def validate_package(self, *, user_id: int | None, job_id: int) -> dict[str, Any]:
@@ -165,14 +176,18 @@ class DeploymentCenterService:
             job.manifest_validated = True
             checksums_path = bundle_dir / "checksums.sha256"
             if checksums_path.is_file():
-                from webstudio_backend.services.release_manifest_validator import parse_checksums_file
+                from webstudio_backend.services.release_manifest_validator import (
+                    parse_checksums_file,
+                )
 
                 checksums = parse_checksums_file(checksums_path.read_text(encoding="utf-8"))
                 downloader = ReleaseDownloadService()
                 verified = True
                 for artifact in job.artifacts:
                     if artifact.local_path and artifact.artifact_name in checksums:
-                        if not downloader.verify_sha256(Path(artifact.local_path), checksums[artifact.artifact_name]):
+                        if not downloader.verify_sha256(
+                            Path(artifact.local_path), checksums[artifact.artifact_name]
+                        ):
                             verified = False
                 job.checksums_verified = verified
             await self._download_repo.save_job(job)
@@ -190,7 +205,9 @@ class DeploymentCenterService:
                 "checksums_verified": job.checksums_verified,
             }
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
     async def deploy_release(
@@ -251,7 +268,9 @@ class DeploymentCenterService:
                 "steps": outcome.get("steps", []),
             }
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
     async def get_deployment_run(self, run_id: int) -> dict[str, Any]:
@@ -265,11 +284,15 @@ class DeploymentCenterService:
         engine = EnterpriseDeploymentEngine(self._session, self._settings)
         return await engine.get_latest_run()
 
-    async def rollback_release(self, *, user_id: int, administrator_approved: bool) -> dict[str, Any]:
+    async def rollback_release(
+        self, *, user_id: int, administrator_approved: bool
+    ) -> dict[str, Any]:
         if not administrator_approved:
             raise ValueError("Administrator approval is required before rollback")
         channel = self._enterprise.resolve_channel()
-        rows, total = await self._release_repo.list_history(channel, page=PageParams(page=1, page_size=5))
+        rows, total = await self._release_repo.list_history(
+            channel, page=PageParams(page=1, page_size=5)
+        )
         if len(rows) < 2:
             raise ValueError("No previous release available for rollback")
         current = next((row for row in rows if row.is_current), rows[0])
@@ -310,7 +333,9 @@ class DeploymentCenterService:
                 "steps": outcome.get("steps", []),
             }
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
     async def get_rollback_history(self, *, page: int = 1, page_size: int = 20) -> dict[str, Any]:
@@ -356,19 +381,27 @@ class DeploymentCenterService:
             await self._deployment_repo.complete_event(event, status="completed")
             return {"job_id": job.id, "deleted": True}
         except Exception as exc:
-            await self._deployment_repo.complete_event(event, status="failed", error_message=str(exc))
+            await self._deployment_repo.complete_event(
+                event, status="failed", error_message=str(exc)
+            )
             raise
 
     async def get_deployment_history(self, *, page: int = 1, page_size: int = 20) -> dict[str, Any]:
-        rows, total = await self._deployment_repo.list_events(page=PageParams(page=page, page_size=page_size))
+        rows, total = await self._deployment_repo.list_events(
+            page=PageParams(page=page, page_size=page_size)
+        )
         return self._paginate_events(rows, total, page, page_size)
 
     async def get_deployment_logs(self, *, page: int = 1, page_size: int = 50) -> dict[str, Any]:
-        rows, total = await self._deployment_repo.list_events(page=PageParams(page=page, page_size=page_size))
+        rows, total = await self._deployment_repo.list_events(
+            page=PageParams(page=page, page_size=page_size)
+        )
         return self._paginate_events(rows, total, page, page_size)
 
     async def get_analytics(self) -> dict[str, Any]:
-        from webstudio_backend.services.deployment_monitoring_service import DeploymentMonitoringService
+        from webstudio_backend.services.deployment_monitoring_service import (
+            DeploymentMonitoringService,
+        )
 
         return await DeploymentMonitoringService(self._session, self._settings).get_analytics()
 

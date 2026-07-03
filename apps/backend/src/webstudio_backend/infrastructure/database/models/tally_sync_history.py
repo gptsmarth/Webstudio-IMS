@@ -18,7 +18,9 @@ class TallySyncHistory(Base, PrimaryKeyMixin):
 
     tally_company_sync_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.tally_company_sync.id", name="fk_tally_sync_history_company_sync"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.tally_company_sync.id", name="fk_tally_sync_history_company_sync"
+        ),
         nullable=False,
     )
     sync_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
@@ -32,4 +34,6 @@ class TallySyncHistory(Base, PrimaryKeyMixin):
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="running")
     correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

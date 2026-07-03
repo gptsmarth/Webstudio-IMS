@@ -23,6 +23,7 @@ def create_provider(provider_id: ProviderId, config: AIProviderConfig) -> AIProv
         raise ValueError(f"Unknown AI provider: {provider_id}")
     return provider_cls(config)
 
+
 def build_provider_chain(config: AIProviderConfig) -> list[AIProvider]:
     chain: list[AIProvider] = []
     seen: set[ProviderId] = set()

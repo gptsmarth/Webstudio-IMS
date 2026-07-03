@@ -40,7 +40,9 @@ export function DashboardInventoryDistribution({
     <div className="dash-inventory-distribution">
       <div className="dash-inventory-distribution__total">
         <span className="dash-inventory-distribution__total-label">Total available inventory</span>
-        <span className="dash-inventory-distribution__total-value">{totalAvailable.toLocaleString()}</span>
+        <span className="dash-inventory-distribution__total-value">
+          {totalAvailable.toLocaleString()}
+        </span>
       </div>
 
       <div className="dash-distribution">

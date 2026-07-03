@@ -17,8 +17,9 @@ export interface ProductModelUnitSummary {
 export function summarizeProductModelUnits(items: InventoryItemDetail[]): ProductModelUnitSummary {
   const active = items.filter((item) => !item.is_archived);
   const soldUnits = active.filter((item) => item.status === 'sold').length;
-  const availableUnits = active.filter((item) =>
-    item.status === 'available' || item.status === 'received' || item.status === 'reserved',
+  const availableUnits = active.filter(
+    (item) =>
+      item.status === 'available' || item.status === 'received' || item.status === 'reserved',
   ).length;
 
   const locationMap = new Map<number, LocationUnitCount>();
@@ -47,7 +48,9 @@ export function summarizeProductModelUnits(items: InventoryItemDetail[]): Produc
   };
 }
 
-export async function fetchAllInventoryForModel(productModelId: string): Promise<InventoryItemDetail[]> {
+export async function fetchAllInventoryForModel(
+  productModelId: string,
+): Promise<InventoryItemDetail[]> {
   const items: InventoryItemDetail[] = [];
   let page = 1;
   let totalPages = 1;

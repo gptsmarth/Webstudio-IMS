@@ -18,7 +18,9 @@ class CustomAccessRoleSummary(BaseModel):
     assigned_user_count: int = 0
 
     @classmethod
-    def from_model(cls, role: CustomAccessRole, *, assigned_user_count: int = 0) -> CustomAccessRoleSummary:
+    def from_model(
+        cls, role: CustomAccessRole, *, assigned_user_count: int = 0
+    ) -> CustomAccessRoleSummary:
         return cls(
             id=role.id,
             name=role.name,
@@ -35,7 +37,9 @@ class CustomAccessRoleDetail(CustomAccessRoleSummary):
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, role: CustomAccessRole, *, assigned_user_count: int = 0) -> CustomAccessRoleDetail:
+    def from_model(
+        cls, role: CustomAccessRole, *, assigned_user_count: int = 0
+    ) -> CustomAccessRoleDetail:
         base = CustomAccessRoleSummary.from_model(role, assigned_user_count=assigned_user_count)
         return cls(
             **base.model_dump(),

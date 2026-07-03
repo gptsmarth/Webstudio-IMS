@@ -1,0 +1,15 @@
+# Build outputs and generated artifacts
+**/node_modules/**
+**/dist/**
+**/dist-electron/**
+**/build/**
+**/.gradle/**
+**/Pods/**
+**/.dart_tool/**
+apps/desktop/release/**
+apps/mobile_flutter/build/**
+apps/backend/updates/**
+
+# Lockfiles and platform bundles
+pnpm-lock.yaml
+**/pubspec.lock

@@ -39,7 +39,9 @@ async def maybe_run_maintenance_checks() -> None:
 
 async def maintenance_scheduler_loop() -> None:
     while not is_shutdown_requested():
-        if not await sleep_until_next_run("maintenance", interval_seconds=MAINTENANCE_INTERVAL_SECONDS):
+        if not await sleep_until_next_run(
+            "maintenance", interval_seconds=MAINTENANCE_INTERVAL_SECONDS
+        ):
             break
         try:
             await maybe_run_maintenance_checks()

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import DashboardViewDep, InventoryViewDep
@@ -71,4 +70,6 @@ async def get_distribution(
 ) -> dict:
     del current
     distribution = await DashboardService(db_session).get_distribution()
-    return _envelope(request, DashboardDistributionResponse.from_distribution(distribution).model_dump())
+    return _envelope(
+        request, DashboardDistributionResponse.from_distribution(distribution).model_dump()
+    )

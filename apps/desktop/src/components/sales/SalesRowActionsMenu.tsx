@@ -31,16 +31,36 @@ export function SalesRowActionsMenu({
       role="menu"
       aria-label={`Actions for ${item.invoice_number}`}
     >
-      <button type="button" className="sales-row-menu__item" role="menuitem" onClick={() => onView(item)}>
+      <button
+        type="button"
+        className="sales-row-menu__item"
+        role="menuitem"
+        onClick={() => onView(item)}
+      >
         <Eye size={14} aria-hidden /> View
       </button>
-      <button type="button" className="sales-row-menu__item sales-row-menu__item--disabled" disabled title="Coming soon">
+      <button
+        type="button"
+        className="sales-row-menu__item sales-row-menu__item--disabled"
+        disabled
+        title="Coming soon"
+      >
         <Printer size={14} aria-hidden /> Print invoice
       </button>
-      <button type="button" className="sales-row-menu__item sales-row-menu__item--disabled" disabled title="Coming soon">
+      <button
+        type="button"
+        className="sales-row-menu__item sales-row-menu__item--disabled"
+        disabled
+        title="Coming soon"
+      >
         <FileDown size={14} aria-hidden /> Re-export
       </button>
-      <button type="button" className="sales-row-menu__item sales-row-menu__item--disabled" disabled title="Coming soon">
+      <button
+        type="button"
+        className="sales-row-menu__item sales-row-menu__item--disabled"
+        disabled
+        title="Coming soon"
+      >
         <FileText size={14} aria-hidden /> Preview PDF
       </button>
     </div>,

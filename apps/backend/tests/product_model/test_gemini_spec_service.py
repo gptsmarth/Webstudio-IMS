@@ -55,11 +55,16 @@ def test_parse_json_object_extracts_embedded_object() -> None:
 
 
 def test_normalize_cpu_extracts_chip_name() -> None:
-    assert _normalize_cpu("Intel® Core™ i5-1335U Processor 1.2 GHz (10MB Cache)") == "Intel Core i5-1335U"
+    assert (
+        _normalize_cpu("Intel® Core™ i5-1335U Processor 1.2 GHz (10MB Cache)")
+        == "Intel Core i5-1335U"
+    )
 
 
 def test_normalize_spec_does_not_invent_ram_or_storage() -> None:
-    result = _normalize_spec({"cpu": "Intel Core i5-1335U", "model_name": "X1502ZA-EJ541WS"}, fallback_name="X1502ZA")
+    result = _normalize_spec(
+        {"cpu": "Intel Core i5-1335U", "model_name": "X1502ZA-EJ541WS"}, fallback_name="X1502ZA"
+    )
     assert result["ram_gb"] is None
     assert result["storage_value"] == ""
 
@@ -79,4 +84,3 @@ def test_response_anchors_model_number() -> None:
     }
     assert _response_anchors_model_number("FA401EA-RG020WS", anchored) is True
     assert _response_anchors_model_number("FA401EA-RG020WS", wrong) is False
-

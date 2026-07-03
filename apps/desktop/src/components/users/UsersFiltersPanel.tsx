@@ -7,8 +7,14 @@ interface UsersFiltersPanelProps {
   resetFilters: UsersWorkspaceState['resetFilters'];
 }
 
-export function UsersFiltersPanel({ filters, setFilters, resetFilters }: UsersFiltersPanelProps): JSX.Element {
-  const hasFilters = Boolean(filters.role || filters.status || filters.createdFrom || filters.createdTo);
+export function UsersFiltersPanel({
+  filters,
+  setFilters,
+  resetFilters,
+}: UsersFiltersPanelProps): JSX.Element {
+  const hasFilters = Boolean(
+    filters.role || filters.status || filters.createdFrom || filters.createdTo,
+  );
 
   return (
     <div className="usr-filters">
@@ -58,7 +64,11 @@ export function UsersFiltersPanel({ filters, setFilters, resetFilters }: UsersFi
         />
       </label>
       {hasFilters && (
-        <button type="button" className="btn btn-ghost btn-sm usr-filters__reset" onClick={resetFilters}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm usr-filters__reset"
+          onClick={resetFilters}
+        >
           Clear filters
         </button>
       )}

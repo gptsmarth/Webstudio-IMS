@@ -5,7 +5,6 @@ from __future__ import annotations
 pytest_plugins = ["auth.conftest"]
 
 import random
-
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
@@ -19,7 +18,9 @@ from webstudio_backend.app import create_app
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus
-from webstudio_backend.infrastructure.database.models.release_deployment_run import ReleaseDeploymentRun
+from webstudio_backend.infrastructure.database.models.release_deployment_run import (
+    ReleaseDeploymentRun,
+)
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
 from webstudio_backend.infrastructure.repositories.client_version_observation_repository import (
     ClientVersionObservationRepository,
@@ -27,7 +28,9 @@ from webstudio_backend.infrastructure.repositories.client_version_observation_re
 from webstudio_backend.infrastructure.repositories.release_deployment_run_repository import (
     ReleaseDeploymentRunRepository,
 )
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
 from webstudio_backend.services.deployment_monitoring_service import DeploymentMonitoringService
 
 

@@ -7,8 +7,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
 from webstudio_backend.integrations.tally.connectivity import (
     TallyConnectionDiagnostics,
     TallyConnectivityStatus,
@@ -40,11 +44,15 @@ class TallyConnectivityService:
 
     async def test_connection(self) -> TallyConnectionDiagnostics:
         host, port, company = await self.get_config()
-        diagnostics = await run_connection_diagnostics(host=host, port=port, expected_company=company)
+        diagnostics = await run_connection_diagnostics(
+            host=host, port=port, expected_company=company
+        )
         await self._persist_diagnostics(company, diagnostics)
         return diagnostics
 
-    async def ensure_workstation_reachable(self, *, company_name: str) -> TallyConnectionDiagnostics:
+    async def ensure_workstation_reachable(
+        self, *, company_name: str
+    ) -> TallyConnectionDiagnostics:
         host, port, configured_company = await self.get_config()
         resolved_company = company_name or configured_company
         diagnostics = await run_connection_diagnostics(
@@ -65,7 +73,9 @@ class TallyConnectivityService:
             )
         return diagnostics
 
-    async def build_client_for_sync(self, diagnostics: TallyConnectionDiagnostics) -> TallyXmlClient:
+    async def build_client_for_sync(
+        self, diagnostics: TallyConnectionDiagnostics
+    ) -> TallyXmlClient:
         if not diagnostics.reachable or diagnostics.resolved_ip is None:
             raise TallyHostValidationError(diagnostics.user_message)
         return TallyXmlClient(diagnostics.resolved_ip, diagnostics.port)
@@ -104,7 +114,8 @@ class TallyConnectivityService:
                 else None
             ),
             "last_failure_reason": company_sync.last_error,
-            "waiting_for_workstation": status in {
+            "waiting_for_workstation": status
+            in {
                 TallyConnectivityStatus.OFFLINE.value,
                 TallyConnectivityStatus.XML_ERROR.value,
             }
@@ -112,7 +123,9 @@ class TallyConnectivityService:
             "user_message": company_sync.last_error or _status_message(status, enabled),
         }
 
-    async def _persist_diagnostics(self, company_name: str, diagnostics: TallyConnectionDiagnostics) -> None:
+    async def _persist_diagnostics(
+        self, company_name: str, diagnostics: TallyConnectionDiagnostics
+    ) -> None:
         company_sync = await self._company_sync.get_or_create(company_name)
         now = datetime.now(UTC)
         if diagnostics.reachable:

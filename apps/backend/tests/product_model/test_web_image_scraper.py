@@ -27,7 +27,9 @@ def test_build_brand_direct_image_candidates_asus() -> None:
 def test_score_image_candidate_url_prefers_manufacturer_cdn() -> None:
     asus = "https://dlcdnwebimgs.asus.com/pub/ASUS/notebook/X1502ZA.jpg"
     random = "https://cdn.random-cdn.net/thumb/icon.png"
-    assert score_image_candidate_url(asus, brand_name="ASUS", model_number="X1502ZA") > score_image_candidate_url(
+    assert score_image_candidate_url(
+        asus, brand_name="ASUS", model_number="X1502ZA"
+    ) > score_image_candidate_url(
         random,
         brand_name="ASUS",
         model_number="X1502ZA",

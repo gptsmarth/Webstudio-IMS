@@ -9,7 +9,10 @@ import {
 } from '../../components/stock';
 import { EditSellingPriceDialog } from '../../components/inventory/EditSellingPriceDialog';
 import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
-import { useDebouncedHierarchySearch, useInventoryHierarchyData } from '../../hooks/useInventoryHierarchyData';
+import {
+  useDebouncedHierarchySearch,
+  useInventoryHierarchyData,
+} from '../../hooks/useInventoryHierarchyData';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
 import { useStockNavStore } from '../../store/useHierarchyNavStore';
@@ -54,60 +57,68 @@ export function StockPage(): JSX.Element {
     [hierarchy.brandSummaries, nav.brandId],
   );
 
-  const modelUnits = useMemo(() => (
-    nav.modelId ? hierarchy.unitsForModel(nav.modelId, true) : []
-  ), [hierarchy, nav.modelId]);
+  const modelUnits = useMemo(
+    () => (nav.modelId ? hierarchy.unitsForModel(nav.modelId, true) : []),
+    [hierarchy, nav.modelId],
+  );
 
   const permissionService = PermissionService.from(session?.permissions);
   const canEditFromStock = session ? canEditStockProductModel(session.permissions) : false;
 
-  const handleTransfer = useCallback(async (itemId: string, locationId: number) => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await InventoryService.transferLocation(itemId, locationId);
-      await hierarchy.refresh();
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setActionError(message.message ?? 'Transfer failed.');
-    } finally {
-      setActionLoading(false);
-    }
-  }, [hierarchy]);
+  const handleTransfer = useCallback(
+    async (itemId: string, locationId: number) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await InventoryService.transferLocation(itemId, locationId);
+        await hierarchy.refresh();
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setActionError(message.message ?? 'Transfer failed.');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [hierarchy],
+  );
 
-  const handleUpdateModelSellingPrice = useCallback(async (sellingPrice: number | null) => {
-    if (!priceModelId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await ProductModelService.updateSellingPrice(priceModelId, { selling_price: sellingPrice });
-      await hierarchy.refresh();
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setActionError(message.message ?? 'Could not update selling price.');
-      throw err;
-    } finally {
-      setActionLoading(false);
-    }
-  }, [hierarchy, priceModelId]);
+  const handleUpdateModelSellingPrice = useCallback(
+    async (sellingPrice: number | null) => {
+      if (!priceModelId) return;
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await ProductModelService.updateSellingPrice(priceModelId, { selling_price: sellingPrice });
+        await hierarchy.refresh();
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setActionError(message.message ?? 'Could not update selling price.');
+        throw err;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [hierarchy, priceModelId],
+  );
 
-  const handleUpdateModel = useCallback(async (
-    patch: Parameters<typeof ProductModelService.updateModel>[1],
-  ) => {
-    if (!editModelId) return;
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await ProductModelService.updateModel(editModelId, patch);
-      await hierarchy.refresh();
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setActionError(message.message ?? 'Could not update model.');
-      throw err;
-    } finally {
-      setActionLoading(false);
-    }
-  }, [editModelId, hierarchy]);
+  const handleUpdateModel = useCallback(
+    async (patch: Parameters<typeof ProductModelService.updateModel>[1]) => {
+      if (!editModelId) return;
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await ProductModelService.updateModel(editModelId, patch);
+        await hierarchy.refresh();
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setActionError(message.message ?? 'Could not update model.');
+        throw err;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [editModelId, hierarchy],
+  );
 
   if (!session) {
     return (
@@ -120,7 +131,9 @@ export function StockPage(): JSX.Element {
   return (
     <div className="stock-page animate-fade-in">
       <header className="stock-page__header">
-        {nav.level === 'brands' && permissionService.has(P.inventory.create) && <WorkspacePageBack />}
+        {nav.level === 'brands' && permissionService.has(P.inventory.create) && (
+          <WorkspacePageBack />
+        )}
         <div>
           <h1 className="stock-page__title">Stock</h1>
           <p className="stock-page__subtitle">
@@ -155,10 +168,7 @@ export function StockPage(): JSX.Element {
             onSearchFieldChange={nav.setSearchField}
           />
           {nav.level === 'models' && nav.brandName && (
-            <div
-              className="stock-page__brand-logo"
-              data-brand={nav.brandName.trim().toLowerCase()}
-            >
+            <div className="stock-page__brand-logo" data-brand={nav.brandName.trim().toLowerCase()}>
               <img
                 src={brandLogoSrc(nav.brandName, brandSummary?.logoFilename ?? null)}
                 alt=""
@@ -193,7 +203,13 @@ export function StockPage(): JSX.Element {
         <div className="alert alert-danger stock-page__alert">
           <AlertCircle size={14} aria-hidden />
           <span>{actionError}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActionError(null)}>Dismiss</button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setActionError(null)}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

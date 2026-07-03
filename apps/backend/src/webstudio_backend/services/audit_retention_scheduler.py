@@ -35,7 +35,9 @@ async def maybe_purge_audit_logs() -> None:
 
 async def audit_retention_loop() -> None:
     while not is_shutdown_requested():
-        if not await sleep_until_next_run("audit_retention", interval_seconds=AUDIT_RETENTION_INTERVAL_SECONDS):
+        if not await sleep_until_next_run(
+            "audit_retention", interval_seconds=AUDIT_RETENTION_INTERVAL_SECONDS
+        ):
             break
         try:
             await maybe_purge_audit_logs()

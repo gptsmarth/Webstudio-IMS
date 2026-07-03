@@ -33,7 +33,9 @@ export function saleStatusBadgeClass(source: string): string {
   return source === 'tally' ? 'badge-primary' : 'badge-success';
 }
 
-export function formatSaleSpecs(item: Pick<SaleDetail, 'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'>): string {
+export function formatSaleSpecs(
+  item: Pick<SaleDetail, 'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'>,
+): string {
   const storage = formatStorage(
     item.storage_value,
     item.storage_unit as StorageUnit,

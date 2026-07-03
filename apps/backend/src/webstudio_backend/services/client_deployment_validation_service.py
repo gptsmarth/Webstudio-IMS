@@ -11,7 +11,9 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.discovery_health_service import build_discovery_health_payload
 
 
@@ -50,15 +52,35 @@ CLIENT_ACCEPTANCE_CHECKLIST: list[dict[str, str]] = [
     {"id": "CLI-01", "item": "Windows desktop EXE installs and launches", "owner": "Store admin"},
     {"id": "CLI-02", "item": "macOS desktop DMG installs to Applications", "owner": "Store admin"},
     {"id": "CLI-03", "item": "Desktop discovers server or uses saved URL", "owner": "Store admin"},
-    {"id": "CLI-04", "item": "Desktop auto-reconnects after server restart", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "CLI-04",
+        "item": "Desktop auto-reconnects after server restart",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "CLI-05", "item": "Desktop login and role permissions verified", "owner": "Store admin"},
     {"id": "CLI-06", "item": "Android APK sideloaded on store Wi‑Fi", "owner": "Store admin"},
     {"id": "CLI-07", "item": "Android session restores after app restart", "owner": "Store admin"},
-    {"id": "CLI-08", "item": "Android offline banner and cache drill", "owner": "WEBSTUDIO engineer"},
-    {"id": "CLI-09", "item": "Android camera + barcode scan on physical device", "owner": "Store admin"},
+    {
+        "id": "CLI-08",
+        "item": "Android offline banner and cache drill",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "CLI-09",
+        "item": "Android camera + barcode scan on physical device",
+        "owner": "Store admin",
+    },
     {"id": "CLI-10", "item": "iOS build architecture and signing validated", "owner": "IT"},
-    {"id": "CLI-11", "item": "iOS install (TestFlight or Ad Hoc) and LAN connect", "owner": "Store admin"},
-    {"id": "CLI-12", "item": "All clients on current stable channel from server", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "CLI-11",
+        "item": "iOS install (TestFlight or Ad Hoc) and LAN connect",
+        "owner": "Store admin",
+    },
+    {
+        "id": "CLI-12",
+        "item": "All clients on current stable channel from server",
+        "owner": "WEBSTUDIO engineer",
+    },
 ]
 
 RELEASE_ARTIFACT_PATHS: dict[str, str] = {
@@ -157,8 +179,12 @@ class ClientDeploymentValidationService:
 
         # Desktop — discover server
         discovery_payload = await build_discovery_health_payload(self._session, self._settings)
-        discovery_ok, discovery_detail = await _http_probe(urljoin(base, "/api/v1/discovery/health"))
-        discovery_status = "passed" if discovery_ok and discovery_payload.get("online") else "warning"
+        discovery_ok, discovery_detail = await _http_probe(
+            urljoin(base, "/api/v1/discovery/health")
+        )
+        discovery_status = (
+            "passed" if discovery_ok and discovery_payload.get("online") else "warning"
+        )
         checks.append(
             ClientDeploymentCheck(
                 key="desktop_discover_server",
@@ -199,8 +225,7 @@ class ClientDeploymentValidationService:
 
         # Flutter Android — install APK
         android_update = (
-            f"{base}/api/v1/client-updates/check"
-            "?platform=mobile_android&current_version=0.0.0"
+            f"{base}/api/v1/client-updates/check" "?platform=mobile_android&current_version=0.0.0"
         )
         android_ok, android_detail = await _http_probe(android_update)
         checks.append(
@@ -288,8 +313,7 @@ class ClientDeploymentValidationService:
 
         # iOS / updates endpoint
         ios_update = (
-            f"{base}/api/v1/client-updates/check"
-            "?platform=mobile_ios&current_version=0.0.0"
+            f"{base}/api/v1/client-updates/check" "?platform=mobile_ios&current_version=0.0.0"
         )
         ios_ok, ios_detail = await _http_probe(ios_update)
         checks.append(
@@ -305,8 +329,7 @@ class ClientDeploymentValidationService:
 
         # macOS desktop update channel (paired with DMG)
         mac_update = (
-            f"{base}/api/v1/client-updates/check"
-            "?platform=desktop_macos&current_version=0.0.0"
+            f"{base}/api/v1/client-updates/check" "?platform=desktop_macos&current_version=0.0.0"
         )
         mac_ok, mac_detail = await _http_probe(mac_update)
         checks.append(
@@ -322,8 +345,7 @@ class ClientDeploymentValidationService:
 
         # Windows desktop update channel
         win_update = (
-            f"{base}/api/v1/client-updates/check"
-            "?platform=desktop_windows&current_version=0.0.0"
+            f"{base}/api/v1/client-updates/check" "?platform=desktop_windows&current_version=0.0.0"
         )
         win_ok, win_detail = await _http_probe(win_update)
         if not win_ok:
@@ -360,7 +382,8 @@ class ClientDeploymentValidationService:
         return {
             **validation.to_dict(),
             "min_desktop_version": self._settings.min_desktop_version,
-            "min_mobile_version": self._settings.min_mobile_version or self._settings.min_client_version,
+            "min_mobile_version": self._settings.min_mobile_version
+            or self._settings.min_client_version,
             "app_version": self._settings.app_version,
             "desktop_deployment_guide": "docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md",
             "mobile_deployment_guide": "docs/milestones/m14/MOBILE_DEPLOYMENT_GUIDE.md",

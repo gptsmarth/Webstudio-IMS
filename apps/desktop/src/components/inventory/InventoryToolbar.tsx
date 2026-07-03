@@ -30,8 +30,12 @@ export function InventoryToolbar({
   onBulkOperations,
 }: InventoryToolbarProps): JSX.Element {
   const selected = workspace.selectedItem;
-  const canTransfer = Boolean(canWrite && selected && !selected.is_archived && selected.status !== 'sold');
-  const canMarkSoldAction = Boolean(canSell && selected && !selected.is_archived && selected.status !== 'sold');
+  const canTransfer = Boolean(
+    canWrite && selected && !selected.is_archived && selected.status !== 'sold',
+  );
+  const canMarkSoldAction = Boolean(
+    canSell && selected && !selected.is_archived && selected.status !== 'sold',
+  );
 
   return (
     <div className="inv-toolbar">
@@ -65,7 +69,9 @@ export function InventoryToolbar({
           className="btn btn-secondary btn-sm"
           onClick={onTransfer}
           disabled={!canTransfer}
-          title={canTransfer ? 'Transfer selected laptop' : 'Select an available laptop to transfer'}
+          title={
+            canTransfer ? 'Transfer selected laptop' : 'Select an available laptop to transfer'
+          }
         >
           <MapPin size={14} aria-hidden />
           Transfer
@@ -75,7 +81,9 @@ export function InventoryToolbar({
           className="btn btn-secondary btn-sm"
           onClick={onMarkSold}
           disabled={!canMarkSoldAction}
-          title={canMarkSoldAction ? 'Mark selected laptop as sold' : 'Select a laptop to mark sold'}
+          title={
+            canMarkSoldAction ? 'Mark selected laptop as sold' : 'Select a laptop to mark sold'
+          }
         >
           <ShoppingBag size={14} aria-hidden />
           Mark Sold

@@ -48,6 +48,8 @@ export function colorVariantsLabel(model: ProductModel | null): string {
   return model.color_options;
 }
 
-export function modelDisplayName(item: Pick<InventoryItemDetail, 'model_number' | 'model_name'>): string {
+export function modelDisplayName(
+  item: Pick<InventoryItemDetail, 'model_number' | 'model_name'>,
+): string {
   return `${item.model_number} — ${item.model_name}`;
 }

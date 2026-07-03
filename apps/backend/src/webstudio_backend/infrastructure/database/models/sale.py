@@ -6,7 +6,18 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, Uuid, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -65,7 +76,9 @@ class Sale(Base, PrimaryKeyMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    snapshot_product_model_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    snapshot_product_model_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
     snapshot_brand_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     snapshot_brand_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_model_number: Mapped[str | None] = mapped_column(String(128), nullable=True)

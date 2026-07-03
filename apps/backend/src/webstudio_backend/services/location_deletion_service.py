@@ -15,7 +15,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     LocationNotFoundError,
     SameLocationMovementError,
 )
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemRepository
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 
 

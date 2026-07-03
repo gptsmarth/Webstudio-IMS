@@ -1,5 +1,8 @@
 import type { AuditAction, AuditListEntry, AuditSource } from '../services/api/AuditService';
-import { canReadAudit as canReadAuditPermission, canExportAudit as canExportAuditPermission } from '../services/PermissionService';
+import {
+  canReadAudit as canReadAuditPermission,
+  canExportAudit as canExportAuditPermission,
+} from '../services/PermissionService';
 import { formatRoleLabel } from '../store/useAuthStore';
 
 export type AuditViewMode = 'table' | 'timeline';
@@ -86,9 +89,11 @@ export function auditSeverityLabel(severity: string): string {
 }
 
 export function formatAuditEntity(entry: AuditListEntry): string {
-  if (entry.entity_type === 'inventory_item') return entry.serial_number ?? entry.entity_id.slice(0, 8);
+  if (entry.entity_type === 'inventory_item')
+    return entry.serial_number ?? entry.entity_id.slice(0, 8);
   if (entry.entity_type === 'sale') return entry.invoice_number ?? `Sale #${entry.entity_id}`;
-  if (entry.entity_type === 'product_model') return entry.model_number ?? entry.entity_id.slice(0, 8);
+  if (entry.entity_type === 'product_model')
+    return entry.model_number ?? entry.entity_id.slice(0, 8);
   return entry.entity_id;
 }
 

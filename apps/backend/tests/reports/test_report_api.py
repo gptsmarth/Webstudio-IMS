@@ -28,7 +28,10 @@ from webstudio_backend.infrastructure.repositories import (
     ProductModelRepository,
 )
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters
-from webstudio_backend.infrastructure.repositories.report_repository import ReportRepository, STREAM_BATCH_SIZE
+from webstudio_backend.infrastructure.repositories.report_repository import (
+    STREAM_BATCH_SIZE,
+    ReportRepository,
+)
 from webstudio_backend.services.notification_service import NotificationService
 from webstudio_backend.services.report_service import ReportService
 from webstudio_backend.services.sale_service import SaleService
@@ -55,7 +58,7 @@ async def _seed_report_data(db_session: AsyncSession) -> tuple[int, int]:
         storage_type=StorageType.SSD,
     )
     inventory_repo = InventoryItemRepository(db_session)
-    available_item = await inventory_repo.create(
+    await inventory_repo.create(
         serial_number="SN-RPT-001",
         product_model_id=product_model.id,
         color="Black",

@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import MainAdminDep
-from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.access_role import (
     CreateCustomAccessRoleRequest,
     CustomAccessRoleDetail,
@@ -68,7 +67,9 @@ async def list_access_roles(
     items = []
     for role in roles:
         assigned = await service.assigned_user_count(role.id)
-        items.append(CustomAccessRoleSummary.from_model(role, assigned_user_count=assigned).model_dump())
+        items.append(
+            CustomAccessRoleSummary.from_model(role, assigned_user_count=assigned).model_dump()
+        )
     return _envelope(request, items)
 
 
@@ -90,9 +91,13 @@ async def create_access_role(
     except DuplicateAccessRoleNameError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     assigned = await service.assigned_user_count(role.id)
-    return _envelope(request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump())
+    return _envelope(
+        request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump()
+    )
 
 
 @router.get("/{role_id}")
@@ -109,7 +114,9 @@ async def get_access_role(
     except CustomAccessRoleNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     assigned = await service.assigned_user_count(role.id)
-    return _envelope(request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump())
+    return _envelope(
+        request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump()
+    )
 
 
 @router.patch("/{role_id}")
@@ -135,9 +142,13 @@ async def update_access_role(
     except DuplicateAccessRoleNameError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     assigned = await service.assigned_user_count(role.id)
-    return _envelope(request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump())
+    return _envelope(
+        request, CustomAccessRoleDetail.from_model(role, assigned_user_count=assigned).model_dump()
+    )
 
 
 @router.delete("/{role_id}")

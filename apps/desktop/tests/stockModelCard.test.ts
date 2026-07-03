@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildStockModelSpecLines, parseNotesSpecLines, pickStockCardHighlightSpecs, stockAvailabilityLabel } from '../src/lib/stockModelCard';
+import {
+  buildStockModelSpecLines,
+  parseNotesSpecLines,
+  pickStockCardHighlightSpecs,
+  stockAvailabilityLabel,
+} from '../src/lib/stockModelCard';
 import type { ProductModel } from '../src/services/api/ProductModelService';
 
 const baseModel: ProductModel = {
@@ -64,6 +69,11 @@ describe('stockModelCard', () => {
   it('picks highlight specs for retailer cards', () => {
     const lines = buildStockModelSpecLines(baseModel);
     const highlights = pickStockCardHighlightSpecs(lines);
-    expect(highlights.map((line) => line.label)).toEqual(['Processor', 'Memory', 'Storage', 'Display']);
+    expect(highlights.map((line) => line.label)).toEqual([
+      'Processor',
+      'Memory',
+      'Storage',
+      'Display',
+    ]);
   });
 });

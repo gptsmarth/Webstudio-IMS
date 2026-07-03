@@ -47,11 +47,15 @@ export function SalesFiltersPanel({
           <select
             className="input"
             value={filters.brandId ?? ''}
-            onChange={(event) => setFilters({ brandId: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              setFilters({ brandId: event.target.value ? Number(event.target.value) : null })
+            }
           >
             <option value="">All brands</option>
             {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>{brand.name}</option>
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
             ))}
           </select>
         </label>
@@ -61,11 +65,15 @@ export function SalesFiltersPanel({
           <select
             className="input"
             value={filters.locationId ?? ''}
-            onChange={(event) => setFilters({ locationId: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              setFilters({ locationId: event.target.value ? Number(event.target.value) : null })
+            }
           >
             <option value="">All stores</option>
             {locations.map((location) => (
-              <option key={location.id} value={location.id}>{location.name}</option>
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
             ))}
           </select>
         </label>
@@ -75,11 +83,15 @@ export function SalesFiltersPanel({
           <select
             className="input"
             value={filters.userId ?? ''}
-            onChange={(event) => setFilters({ userId: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              setFilters({ userId: event.target.value ? Number(event.target.value) : null })
+            }
           >
             <option value="">All salespeople</option>
             {salespeople.map((person) => (
-              <option key={person.id} value={person.id}>{person.displayName}</option>
+              <option key={person.id} value={person.id}>
+                {person.displayName}
+              </option>
             ))}
           </select>
         </label>
@@ -119,7 +131,9 @@ export function SalesFiltersPanel({
           <select
             className="input"
             value={filters.saleSource}
-            onChange={(event) => setFilters({ saleSource: event.target.value as SalesFilters['saleSource'] })}
+            onChange={(event) =>
+              setFilters({ saleSource: event.target.value as SalesFilters['saleSource'] })
+            }
           >
             <option value="">All sources</option>
             <option value="manual">Manual</option>

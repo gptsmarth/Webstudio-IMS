@@ -26,7 +26,12 @@ from webstudio_backend.services.ai.logging import (
     log_provider_test,
 )
 from webstudio_backend.services.ai.providers.factory import create_provider
-from webstudio_backend.services.ai.types import AIProviderError, EnrichmentResult, ProviderId, ProviderTestResult
+from webstudio_backend.services.ai.types import (
+    AIProviderError,
+    EnrichmentResult,
+    ProviderId,
+    ProviderTestResult,
+)
 from webstudio_backend.services.product_image_service import resolve_product_image
 
 
@@ -173,12 +178,20 @@ class ProductEnrichmentService:
                         message=exc.message,
                     )
                     errors.append(exc)
-                    if exc.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED", "API_ERROR", "NOT_FOUND"}:
+                    if exc.code in {
+                        "RATE_LIMITED",
+                        "TIMEOUT",
+                        "QUOTA_EXCEEDED",
+                        "API_ERROR",
+                        "NOT_FOUND",
+                    }:
                         continue
                     raise
 
             if errors and attempt < retry_attempts - 1:
-                if any(error.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED"} for error in errors):
+                if any(
+                    error.code in {"RATE_LIMITED", "TIMEOUT", "QUOTA_EXCEEDED"} for error in errors
+                ):
                     continue
 
         if errors:

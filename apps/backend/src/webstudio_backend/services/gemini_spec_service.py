@@ -12,10 +12,18 @@ from webstudio_backend.services.ai.providers.factory import create_provider
 from webstudio_backend.services.ai.providers.gemini import GROUNDED_MODELS
 from webstudio_backend.services.ai.spec_normalization import (
     normalize_cpu as _normalize_cpu,
+)
+from webstudio_backend.services.ai.spec_normalization import (
     normalize_spec as _normalize_spec,
+)
+from webstudio_backend.services.ai.spec_normalization import (
     response_anchors_model_number as _response_anchors_model_number,
 )
-from webstudio_backend.services.ai.types import AIProviderConfig, AIProviderError, ProviderCredentials
+from webstudio_backend.services.ai.types import (
+    AIProviderConfig,
+    AIProviderError,
+    ProviderCredentials,
+)
 
 DEFAULT_MODEL = DEFAULT_GEMINI_MODEL
 

@@ -38,8 +38,44 @@ describe('catalogue utilities', () => {
 
   it('counts active models per brand only', () => {
     const map = countModelsByBrand([
-      { id: '1', brand_id: 2, brand_name: 'Dell', model_number: 'X', model_name: 'XPS', cpu: '', gpu: null, ram_gb: 16, storage_value: '512', storage_unit: 'GB', storage_type: 'SSD', status: 'active', display: null, color_options: null, product_image_url: null, search_aliases: null, notes: null },
-      { id: '2', brand_id: 2, brand_name: 'Dell', model_number: 'Y', model_name: 'Inspiron', cpu: '', gpu: null, ram_gb: 8, storage_value: '256', storage_unit: 'GB', storage_type: 'SSD', status: 'archived', display: null, color_options: null, product_image_url: null, search_aliases: null, notes: null },
+      {
+        id: '1',
+        brand_id: 2,
+        brand_name: 'Dell',
+        model_number: 'X',
+        model_name: 'XPS',
+        cpu: '',
+        gpu: null,
+        ram_gb: 16,
+        storage_value: '512',
+        storage_unit: 'GB',
+        storage_type: 'SSD',
+        status: 'active',
+        display: null,
+        color_options: null,
+        product_image_url: null,
+        search_aliases: null,
+        notes: null,
+      },
+      {
+        id: '2',
+        brand_id: 2,
+        brand_name: 'Dell',
+        model_number: 'Y',
+        model_name: 'Inspiron',
+        cpu: '',
+        gpu: null,
+        ram_gb: 8,
+        storage_value: '256',
+        storage_unit: 'GB',
+        storage_type: 'SSD',
+        status: 'archived',
+        display: null,
+        color_options: null,
+        product_image_url: null,
+        search_aliases: null,
+        notes: null,
+      },
     ]);
     expect(map.get(2)).toBe(1);
   });

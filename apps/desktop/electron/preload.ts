@@ -34,5 +34,6 @@ contextBridge.exposeInMainWorld('network', {
 contextBridge.exposeInMainWorld('update', {
   downloadArtifact: (request: { url: string; fileName: string; expectedSha256?: string }) =>
     ipcRenderer.invoke('update:downloadArtifact', request),
-  installAndRestart: (installerPath: string) => ipcRenderer.invoke('update:installAndRestart', installerPath),
+  installAndRestart: (installerPath: string) =>
+    ipcRenderer.invoke('update:installAndRestart', installerPath),
 });

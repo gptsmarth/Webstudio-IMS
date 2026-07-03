@@ -4,24 +4,29 @@ from __future__ import annotations
 
 pytest_plugins = ["auth.conftest"]
 
+import uuid
 from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-import uuid
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
-from .fixtures.sample_vouchers import SAMPLE_VOUCHER_XML
 from webstudio_backend.app import create_app
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import InventoryStatus, SettingValueType
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.integrations.tally.xml_parser import parse_vouchers_xml
 from webstudio_backend.services.tally_sync_service import TallySyncService
+
+from .fixtures.sample_vouchers import SAMPLE_VOUCHER_XML
 
 
 @pytest_asyncio.fixture
@@ -55,7 +60,9 @@ async def test_tally_health_endpoint(api_client: AsyncClient, initialized_system
 
 
 @pytest.mark.asyncio
-async def test_tally_connection_test_returns_stages(api_client: AsyncClient, initialized_system) -> None:
+async def test_tally_connection_test_returns_stages(
+    api_client: AsyncClient, initialized_system
+) -> None:
     headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
     response = await api_client.post("/api/v1/integrations/tally/connection/test", headers=headers)
     assert response.status_code == 200
@@ -106,7 +113,9 @@ async def test_tally_xml_processing_creates_sale(
     location,
 ) -> None:
     settings = SystemSettingRepository(db_session)
-    await settings.set_value("tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=1)
+    await settings.set_value(
+        "tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=1
+    )
     company_name = f"WEBSTUDIO-TEST-{uuid.uuid4().hex[:8]}"
     await settings.set_value(
         "tally_company_name",

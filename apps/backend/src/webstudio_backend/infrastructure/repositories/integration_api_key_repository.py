@@ -16,7 +16,9 @@ class IntegrationApiKeyRepository(SqlAlchemyRepository[IntegrationApiKey]):
         super().__init__(session, IntegrationApiKey)
 
     async def list_keys(self, *, include_archived: bool = False) -> list[IntegrationApiKey]:
-        statement = select(IntegrationApiKey).order_by(IntegrationApiKey.service_type, IntegrationApiKey.label)
+        statement = select(IntegrationApiKey).order_by(
+            IntegrationApiKey.service_type, IntegrationApiKey.label
+        )
         if not include_archived:
             statement = statement.where(IntegrationApiKey.archived_at.is_(None))
         result = await self._session.execute(statement)
@@ -73,7 +75,9 @@ class IntegrationApiKeyRepository(SqlAlchemyRepository[IntegrationApiKey]):
         await self._session.refresh(record)
         return record
 
-    async def archive(self, record: IntegrationApiKey, *, actor_id: int | None) -> IntegrationApiKey:
+    async def archive(
+        self, record: IntegrationApiKey, *, actor_id: int | None
+    ) -> IntegrationApiKey:
         record.archived_at = datetime.now(UTC)
         record.is_active = False
         record.updated_by_user_id = actor_id
@@ -81,7 +85,9 @@ class IntegrationApiKeyRepository(SqlAlchemyRepository[IntegrationApiKey]):
         await self._session.refresh(record)
         return record
 
-    async def restore(self, record: IntegrationApiKey, *, actor_id: int | None) -> IntegrationApiKey:
+    async def restore(
+        self, record: IntegrationApiKey, *, actor_id: int | None
+    ) -> IntegrationApiKey:
         record.archived_at = None
         record.is_active = True
         record.updated_by_user_id = actor_id

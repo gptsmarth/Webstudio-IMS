@@ -40,24 +40,41 @@ export function RecoveryKeyPanel({
       <div className="alert alert-warning">
         <AlertCircle size={14} aria-hidden="true" />
         <span>
-          <strong>This key will never be shown again.</strong> If you lose it, the administrator account cannot be recovered.
+          <strong>This key will never be shown again.</strong> If you lose it, the administrator
+          account cannot be recovered.
         </span>
       </div>
 
       <div>
         <p className="recovery-key-panel__label">Recovery Key</p>
         <div className="recovery-key-panel__key-box">
-          <code className={`recovery-key-panel__key ${isDemo ? 'recovery-key-panel__key--demo' : ''}`}>
+          <code
+            className={`recovery-key-panel__key ${isDemo ? 'recovery-key-panel__key--demo' : ''}`}
+          >
             {isDemo ? '[UI PREVIEW MODE — NO REAL KEY]' : recoveryKey}
           </code>
 
           {!isDemo && (
             <div className="recovery-key-panel__actions">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={handleCopyKey} title="Copy to clipboard">
-                {hasCopied ? <CheckCircle2 size={13} style={{ color: 'var(--color-success)' }} /> : <Copy size={13} />}
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleCopyKey}
+                title="Copy to clipboard"
+              >
+                {hasCopied ? (
+                  <CheckCircle2 size={13} style={{ color: 'var(--color-success)' }} />
+                ) : (
+                  <Copy size={13} />
+                )}
                 <span>{hasCopied ? 'Copied' : 'Copy'}</span>
               </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()} title="Print key sheet">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => window.print()}
+                title="Print key sheet"
+              >
                 <Printer size={13} />
               </button>
             </div>
@@ -67,7 +84,9 @@ export function RecoveryKeyPanel({
         {copyFeedback && <p className="recovery-key-panel__copy-feedback">{copyFeedback}</p>}
       </div>
 
-      <label className={`recovery-key-panel__confirm ${hasConfirmed ? 'recovery-key-panel__confirm--checked' : ''}`}>
+      <label
+        className={`recovery-key-panel__confirm ${hasConfirmed ? 'recovery-key-panel__confirm--checked' : ''}`}
+      >
         <input
           type="checkbox"
           checked={hasConfirmed}

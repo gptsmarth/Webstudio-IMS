@@ -2,7 +2,9 @@ import type { NotificationDetail, NotificationSeverity } from '../services/api/N
 
 export type NotificationCategoryLabel = 'Information' | 'Warning' | 'Critical';
 
-export function notificationCategoryLabel(severity: NotificationSeverity): NotificationCategoryLabel {
+export function notificationCategoryLabel(
+  severity: NotificationSeverity,
+): NotificationCategoryLabel {
   if (severity === 'error') return 'Critical';
   if (severity === 'warning') return 'Warning';
   return 'Information';

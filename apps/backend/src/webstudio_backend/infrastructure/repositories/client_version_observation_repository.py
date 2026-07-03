@@ -46,7 +46,9 @@ class ClientVersionObservationRepository:
         )
         await self._session.execute(stmt)
 
-    async def distribution_by_platform(self, platform_prefix: str) -> list[ClientVersionObservation]:
+    async def distribution_by_platform(
+        self, platform_prefix: str
+    ) -> list[ClientVersionObservation]:
         result = await self._session.execute(
             select(ClientVersionObservation)
             .where(ClientVersionObservation.platform.like(f"{platform_prefix}%"))

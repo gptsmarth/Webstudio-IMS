@@ -16,8 +16,16 @@ from webstudio_backend.services.ai.prompts import (
     default_image_search_query,
 )
 from webstudio_backend.services.ai.providers.base import AIProvider
-from webstudio_backend.services.ai.spec_normalization import normalize_spec, validate_enrichment_payload
-from webstudio_backend.services.ai.types import AIProviderConfig, AIProviderError, EnrichmentResult, ProviderTestResult
+from webstudio_backend.services.ai.spec_normalization import (
+    normalize_spec,
+    validate_enrichment_payload,
+)
+from webstudio_backend.services.ai.types import (
+    AIProviderConfig,
+    AIProviderError,
+    EnrichmentResult,
+    ProviderTestResult,
+)
 
 DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -52,15 +60,23 @@ class OpenRouterProvider(AIProvider):
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.", provider="openrouter")
 
-        prompt = build_spec_lookup_prompt(sku, brand_name=brand_name, model_name=model_name, use_web_search=False)
+        prompt = build_spec_lookup_prompt(
+            sku, brand_name=brand_name, model_name=model_name, use_web_search=False
+        )
         started = time.perf_counter()
         AIProviderHealthTracker.record_request("openrouter")
         try:
             body = await self._chat(prompt, json_mode=True)
             parsed_raw = parse_json_object(_extract_chat_text(body) or "")
             if not parsed_raw:
-                raise AIProviderError("NOT_FOUND", "OpenRouter returned an unreadable response.", provider="openrouter")
-            normalized = normalize_spec(parsed_raw, fallback_name=model_name or sku, source="openrouter")
+                raise AIProviderError(
+                    "NOT_FOUND",
+                    "OpenRouter returned an unreadable response.",
+                    provider="openrouter",
+                )
+            normalized = normalize_spec(
+                parsed_raw, fallback_name=model_name or sku, source="openrouter"
+            )
             if not validate_enrichment_payload(
                 normalized,
                 model_number=sku,
@@ -114,10 +130,14 @@ class OpenRouterProvider(AIProvider):
         brand_name: str | None = None,
         model_name: str | None = None,
     ) -> str:
-        fallback = default_image_search_query(model_number, brand_name=brand_name, model_name=model_name)
+        fallback = default_image_search_query(
+            model_number, brand_name=brand_name, model_name=model_name
+        )
         if not self.is_configured():
             return fallback
-        prompt = build_image_search_query_prompt(model_number, brand_name=brand_name, model_name=model_name)
+        prompt = build_image_search_query_prompt(
+            model_number, brand_name=brand_name, model_name=model_name
+        )
         try:
             body = await self._chat(prompt, json_mode=True)
             parsed = parse_json_object(_extract_chat_text(body) or "")
@@ -168,16 +188,26 @@ class OpenRouterProvider(AIProvider):
             async with httpx.AsyncClient(timeout=self._timeout()) as client:
                 response = await client.post(API_URL, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
-            raise AIProviderError("TIMEOUT", "OpenRouter request timed out.", provider="openrouter") from exc
+            raise AIProviderError(
+                "TIMEOUT", "OpenRouter request timed out.", provider="openrouter"
+            ) from exc
         except httpx.HTTPError as exc:
-            raise AIProviderError("API_ERROR", "Could not reach OpenRouter.", provider="openrouter") from exc
+            raise AIProviderError(
+                "API_ERROR", "Could not reach OpenRouter.", provider="openrouter"
+            ) from exc
 
         if response.status_code == 429:
-            raise AIProviderError("RATE_LIMITED", "OpenRouter rate limit reached.", provider="openrouter")
+            raise AIProviderError(
+                "RATE_LIMITED", "OpenRouter rate limit reached.", provider="openrouter"
+            )
         if response.status_code in {401, 403}:
-            raise AIProviderError("API_ERROR", "OpenRouter API key was rejected.", provider="openrouter")
+            raise AIProviderError(
+                "API_ERROR", "OpenRouter API key was rejected.", provider="openrouter"
+            )
         if response.status_code == 402:
-            raise AIProviderError("QUOTA_EXCEEDED", "OpenRouter quota exceeded.", provider="openrouter")
+            raise AIProviderError(
+                "QUOTA_EXCEEDED", "OpenRouter quota exceeded.", provider="openrouter"
+            )
         if response.status_code >= 400:
             raise AIProviderError("API_ERROR", "OpenRouter request failed.", provider="openrouter")
         return response.json()

@@ -10,7 +10,9 @@ from httpx import AsyncClient
 from PIL import Image
 
 from webstudio_backend.infrastructure.database.enums import StorageType, StorageUnit
-from webstudio_backend.infrastructure.repositories.product_model_repository import ProductModelRepository
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
 from webstudio_backend.services.product_image_service import validate_product_image_upload
 
 

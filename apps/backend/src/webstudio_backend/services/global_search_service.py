@@ -8,9 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
-from webstudio_backend.infrastructure.repositories.inventory_item_filters import InventorySearchFilters
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemRepository
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
+from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
+    InventorySearchFilters,
+)
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
 
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 25

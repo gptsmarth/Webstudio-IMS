@@ -24,7 +24,12 @@ interface AppShellProps {
   onLogout: () => void;
 }
 
-export function AppShell({ companyName, appVersion, connectionStatus, onLogout }: AppShellProps): JSX.Element {
+export function AppShell({
+  companyName,
+  appVersion,
+  connectionStatus,
+  onLogout,
+}: AppShellProps): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const { currentRoute, setRoute } = useNavigationStore();
   const { open: openSearch } = useSearchStore();
@@ -49,7 +54,9 @@ export function AppShell({ companyName, appVersion, connectionStatus, onLogout }
       try {
         const { ApiClientProvider } = await import('../services/api/ApiClientProvider');
         const client = await ApiClientProvider.getClient();
-        const policy = await client.get<{ session_timeout_minutes: number }>('/api/v1/auth/session-policy');
+        const policy = await client.get<{ session_timeout_minutes: number }>(
+          '/api/v1/auth/session-policy',
+        );
         setSessionTimeoutMinutes(policy.session_timeout_minutes);
       } catch {
         setSessionTimeoutMinutes(15);

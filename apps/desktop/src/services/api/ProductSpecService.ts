@@ -57,10 +57,16 @@ export class ProductSpecService {
     LoggingService.info('API', 'Looking up product spec via Gemini', { model: input.model_number });
     const client = await ApiClientProvider.getClient();
     try {
-      return await client.post<ProductSpecLookupResult>('/api/v1/product-models/spec-lookup', input);
+      return await client.post<ProductSpecLookupResult>(
+        '/api/v1/product-models/spec-lookup',
+        input,
+      );
     } catch (err: unknown) {
       const api = err as { code?: string; message?: string };
-      if (api.code && (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')) {
+      if (
+        api.code &&
+        (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')
+      ) {
         throw new SpecLookupError(api.code, api.message ?? 'Gemini lookup failed.');
       }
       return null;
@@ -69,7 +75,10 @@ export class ProductSpecService {
 
   static async resolveModelImage(modelId: string): Promise<ProductImageResolveResult> {
     const client = await ApiClientProvider.getClient();
-    return client.post<ProductImageResolveResult>(`/api/v1/product-models/${modelId}/resolve-image`, {});
+    return client.post<ProductImageResolveResult>(
+      `/api/v1/product-models/${modelId}/resolve-image`,
+      {},
+    );
   }
 
   static async fetchImageBlob(imageUrl: string): Promise<Blob> {

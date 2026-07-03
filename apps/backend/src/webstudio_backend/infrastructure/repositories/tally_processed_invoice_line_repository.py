@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import TallyLineOutcome, TallyLineStatus
-from webstudio_backend.infrastructure.database.models.tally_processed_invoice_line import TallyProcessedInvoiceLine
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice_line import (
+    TallyProcessedInvoiceLine,
+)
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 
 

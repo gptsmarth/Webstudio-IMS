@@ -16,11 +16,11 @@ from webstudio_backend.services.audit_log_presenter import (
     audit_operation,
     audit_result,
     audit_severity,
-    extract_security_event,
     extract_correlation_id,
     extract_invoice_number,
     extract_location_name,
     extract_request_id,
+    extract_security_event,
     related_tally_sync,
 )
 

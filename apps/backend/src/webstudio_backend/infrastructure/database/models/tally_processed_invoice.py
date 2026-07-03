@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, Numeric, String, func
+from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -22,7 +22,10 @@ class TallyProcessedInvoice(Base, PrimaryKeyMixin, TimestampMixin):
 
     tally_company_sync_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.tally_company_sync.id", name="fk_tally_processed_invoice_company_sync"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.tally_company_sync.id",
+            name="fk_tally_processed_invoice_company_sync",
+        ),
         nullable=False,
     )
     tally_voucher_guid: Mapped[str] = mapped_column(String(64), nullable=False)

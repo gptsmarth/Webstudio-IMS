@@ -34,7 +34,9 @@ export function InventoryFiltersPanel({
           <select
             className="input"
             value={filters.brandId ?? ''}
-            onChange={(event) => setFilters({ brandId: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              setFilters({ brandId: event.target.value ? Number(event.target.value) : null })
+            }
           >
             <option value="">All brands</option>
             {brands.map((brand) => (
@@ -50,7 +52,9 @@ export function InventoryFiltersPanel({
           <select
             className="input"
             value={filters.locationId ?? ''}
-            onChange={(event) => setFilters({ locationId: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              setFilters({ locationId: event.target.value ? Number(event.target.value) : null })
+            }
           >
             <option value="">All locations</option>
             {locations.map((location) => (
@@ -66,7 +70,9 @@ export function InventoryFiltersPanel({
           <select
             className="input"
             value={filters.status}
-            onChange={(event) => setFilters({ status: event.target.value as InventoryFilters['status'] })}
+            onChange={(event) =>
+              setFilters({ status: event.target.value as InventoryFilters['status'] })
+            }
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.label} value={option.value}>

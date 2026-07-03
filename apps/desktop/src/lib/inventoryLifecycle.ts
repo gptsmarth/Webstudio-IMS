@@ -16,10 +16,10 @@ export function buildInventoryLifecycle(
   auditLogs: AuditLogEntry[],
 ): LifecycleStep[] {
   const transferCount = auditLogs.filter((log) => log.action === 'LOCATION_CHANGE').length;
-  const hasTally = auditLogs.some((log) => log.source === 'TALLY_SYNC')
-    || item.status === 'sold' && auditLogs.some((log) =>
-      log.action === 'STATUS_CHANGE' && log.source === 'TALLY_SYNC',
-    );
+  const hasTally =
+    auditLogs.some((log) => log.source === 'TALLY_SYNC') ||
+    (item.status === 'sold' &&
+      auditLogs.some((log) => log.action === 'STATUS_CHANGE' && log.source === 'TALLY_SYNC'));
 
   const received = true;
   const available = ['available', 'reserved', 'sold'].includes(item.status);
@@ -30,7 +30,8 @@ export function buildInventoryLifecycle(
   const currentId: LifecycleStepId = (() => {
     if (tallySynced) return 'tally_synced';
     if (sold) return 'sold';
-    if (item.status === 'available' || item.status === 'reserved') return transferred ? 'transferred' : 'available';
+    if (item.status === 'available' || item.status === 'reserved')
+      return transferred ? 'transferred' : 'available';
     if (item.status === 'received') return 'received';
     return 'available';
   })();
@@ -41,16 +42,25 @@ export function buildInventoryLifecycle(
       id: 'available',
       label: 'Available',
       complete: available,
-      detail: item.status === 'available' ? 'Ready for sale' : available ? 'Stock available' : undefined,
+      detail:
+        item.status === 'available' ? 'Ready for sale' : available ? 'Stock available' : undefined,
     },
     {
       id: 'transferred',
       label: 'Transferred',
       complete: transferred,
-      detail: transferCount > 0 ? `${transferCount} movement${transferCount === 1 ? '' : 's'}` : 'No transfers yet',
+      detail:
+        transferCount > 0
+          ? `${transferCount} movement${transferCount === 1 ? '' : 's'}`
+          : 'No transfers yet',
     },
     { id: 'sold', label: 'Sold', complete: sold, detail: sold ? 'Sale recorded' : undefined },
-    { id: 'tally_synced', label: 'Tally synced', complete: tallySynced, detail: tallySynced ? 'Reflected in Tally' : undefined },
+    {
+      id: 'tally_synced',
+      label: 'Tally synced',
+      complete: tallySynced,
+      detail: tallySynced ? 'Reflected in Tally' : undefined,
+    },
   ];
 
   return steps.map((step) => ({

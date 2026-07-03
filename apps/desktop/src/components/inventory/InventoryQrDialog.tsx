@@ -45,21 +45,39 @@ export function InventoryQrDialog({
 
   return (
     <div className="inv-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="inv-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="inv-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="inv-dialog__header">
           <h2 className="inv-dialog__title">Inventory QR</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
         <div className="inv-dialog__body inv-qr-dialog">
-          <img src={imageUrl} alt={`QR code for ${serialNumber}`} className="inv-qr-dialog__image" />
+          <img
+            src={imageUrl}
+            alt={`QR code for ${serialNumber}`}
+            className="inv-qr-dialog__image"
+          />
           <p className="inv-qr-dialog__serial col-mono">{serialNumber}</p>
-          <p className="inv-qr-dialog__hint">Payload prepared for future mobile scanner compatibility.</p>
+          <p className="inv-qr-dialog__hint">
+            Payload prepared for future mobile scanner compatibility.
+          </p>
           <code className="inv-qr-dialog__payload col-mono">{payload}</code>
         </div>
         <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            Close
+          </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={printLabel}>
             <Printer size={14} aria-hidden />
             Print label

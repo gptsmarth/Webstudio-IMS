@@ -111,12 +111,20 @@ export function OfficeDeploymentWizard({
         >
           <header className="stg-recovery-wizard__header">
             <div>
-              <h2><Server size={18} aria-hidden /> Office deployment wizard</h2>
+              <h2>
+                <Server size={18} aria-hidden /> Office deployment wizard
+              </h2>
               <p className="stg-muted">
-                Detect server environment, apply recommended paths, and generate a deployment summary — no config file editing.
+                Detect server environment, apply recommended paths, and generate a deployment
+                summary — no config file editing.
               </p>
             </div>
-            <button type="button" className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              onClick={onClose}
+              aria-label="Close"
+            >
               <X size={16} />
             </button>
           </header>
@@ -138,16 +146,31 @@ export function OfficeDeploymentWizard({
             {step === 1 && (
               <div className="stg-recovery-wizard__intro">
                 <p>
-                  This wizard detects network, PostgreSQL, Windows service, API, backup path, image storage,
-                  AI provider, Tally, firewall, and ports. It saves recommended settings automatically and
-                  produces a deployment summary for your records.
+                  This wizard detects network, PostgreSQL, Windows service, API, backup path, image
+                  storage, AI provider, Tally, firewall, and ports. It saves recommended settings
+                  automatically and produces a deployment summary for your records.
                 </p>
                 <ul className="stg-recovery-validation-list">
-                  <li className="stg-recovery-status--healthy"><strong>No manual .env editing</strong><span>Paths and URLs are stored in WEBSTUDIO settings.</span></li>
-                  <li className="stg-recovery-status--healthy"><strong>IP guidance</strong><span>Recommends Static IP or DHCP reservation for the server.</span></li>
+                  <li className="stg-recovery-status--healthy">
+                    <strong>No manual .env editing</strong>
+                    <span>Paths and URLs are stored in WEBSTUDIO settings.</span>
+                  </li>
+                  <li className="stg-recovery-status--healthy">
+                    <strong>IP guidance</strong>
+                    <span>Recommends Static IP or DHCP reservation for the server.</span>
+                  </li>
                 </ul>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runDetection()}>
-                  {busy ? <RefreshCw size={14} className="spin" aria-hidden /> : <Network size={14} aria-hidden />}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy}
+                  onClick={() => void runDetection()}
+                >
+                  {busy ? (
+                    <RefreshCw size={14} className="spin" aria-hidden />
+                  ) : (
+                    <Network size={14} aria-hidden />
+                  )}
                   Start detection
                 </button>
               </div>
@@ -158,7 +181,8 @@ export function OfficeDeploymentWizard({
                 <div className={`stg-recovery-banner ${statusClass(detection.overall_status)}`}>
                   <strong>Overall: {detection.overall_status}</strong>
                   <p className="stg-muted">
-                    Server {detection.server_lan_ip} · {detection.hostname} · data root {detection.data_root}
+                    Server {detection.server_lan_ip} · {detection.hostname} · data root{' '}
+                    {detection.data_root}
                   </p>
                 </div>
 
@@ -182,7 +206,8 @@ export function OfficeDeploymentWizard({
                   <p>{detection.ip_strategy.rationale}</p>
                 </div>
                 <p className="stg-muted">
-                  Alternative: {detection.ip_strategy.alternative} — {detection.ip_strategy.alternative_rationale}
+                  Alternative: {detection.ip_strategy.alternative} —{' '}
+                  {detection.ip_strategy.alternative_rationale}
                 </p>
                 {detection.recommendations.length > 0 && (
                   <>
@@ -204,9 +229,20 @@ export function OfficeDeploymentWizard({
                   <Readonly label="Company" value={completeResult.summary.company_name || '—'} />
                   <Readonly label="Status" value={completeResult.summary.overall_status} />
                   <Readonly label="Server LAN IP" value={completeResult.summary.server_lan_ip} />
-                  <Readonly label="Client URL" value={completeResult.summary.client_connection_url ?? '—'} />
-                  <Readonly label="Backup path" value={completeResult.summary.saved_configuration.backup_folder ?? '—'} />
-                  <Readonly label="Image storage" value={completeResult.summary.saved_configuration.product_image_storage_path ?? '—'} />
+                  <Readonly
+                    label="Client URL"
+                    value={completeResult.summary.client_connection_url ?? '—'}
+                  />
+                  <Readonly
+                    label="Backup path"
+                    value={completeResult.summary.saved_configuration.backup_folder ?? '—'}
+                  />
+                  <Readonly
+                    label="Image storage"
+                    value={
+                      completeResult.summary.saved_configuration.product_image_storage_path ?? '—'
+                    }
+                  />
                   <Readonly label="Completed" value={completeResult.completed_at} />
                 </div>
                 <p className="stg-muted">{completeResult.summary.administrator_note}</p>
@@ -220,7 +256,12 @@ export function OfficeDeploymentWizard({
 
           <footer className="stg-recovery-wizard__footer">
             {step > 1 && step < 4 && (
-              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setStep((s) => Math.max(1, s - 1))}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={busy}
+                onClick={() => setStep((s) => Math.max(1, s - 1))}
+              >
                 <ChevronLeft size={14} aria-hidden /> Back
               </button>
             )}
@@ -233,13 +274,24 @@ export function OfficeDeploymentWizard({
               </button>
             )}
             {step === 3 && (
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void finishDeployment()}>
-                {busy ? <RefreshCw size={14} className="spin" aria-hidden /> : <Check size={14} aria-hidden />}
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => void finishDeployment()}
+              >
+                {busy ? (
+                  <RefreshCw size={14} className="spin" aria-hidden />
+                ) : (
+                  <Check size={14} aria-hidden />
+                )}
                 Save &amp; finish
               </button>
             )}
             {step === 4 && (
-              <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
+              <button type="button" className="btn btn-primary" onClick={onClose}>
+                Done
+              </button>
             )}
           </footer>
         </div>

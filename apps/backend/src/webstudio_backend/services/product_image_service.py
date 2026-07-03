@@ -274,7 +274,9 @@ async def validate_image_url(url: str, *, client: httpx.AsyncClient | None = Non
         return False
 
     owns_client = client is None
-    http = client or httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers={"User-Agent": USER_AGENT})
+    http = client or httpx.AsyncClient(
+        timeout=12.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}
+    )
     try:
         response = await http.get(
             normalized,
@@ -329,7 +331,9 @@ async def search_public_web_for_pages(query: str, *, client: httpx.AsyncClient) 
             headers={"User-Agent": USER_AGENT, "Referer": "https://html.duckduckgo.com/"},
         )
         if resp.status_code == 200:
-            for match in re.finditer(r'class="result__url"\s+href="([^"]+)"', resp.text, flags=re.IGNORECASE):
+            for match in re.finditer(
+                r'class="result__url"\s+href="([^"]+)"', resp.text, flags=re.IGNORECASE
+            ):
                 url = match.group(1).strip()
                 if url.startswith("//"):
                     url = f"https:{url}"
@@ -370,7 +374,9 @@ async def resolve_product_image(
         if _looks_like_image_url(page_url):
             candidates.append(page_url)
 
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+    async with httpx.AsyncClient(
+        timeout=15.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}
+    ) as client:
         for page_url in extract_grounding_page_urls(grounding_body)[:MAX_PAGE_FETCHES]:
             if _looks_like_image_url(page_url):
                 continue

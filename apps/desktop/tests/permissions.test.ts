@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { permissionSet, PermissionService, P } from '../src/services/PermissionService';
-import { canEditProductModels, canEditSellingPrice, canEditStockProductModel } from '../src/lib/inventory';
+import {
+  canEditProductModels,
+  canEditSellingPrice,
+  canEditStockProductModel,
+} from '../src/lib/inventory';
 
 describe('permission set cache', () => {
   it('reuses cached sets for identical permission lists', () => {

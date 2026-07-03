@@ -22,8 +22,8 @@ from webstudio_backend.api.schemas.user import (
 )
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import DbSessionDep, get_app_settings
-from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.core.exceptions import AppError
+from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.repositories.exceptions import (
     AccountDisabledError,
     AccountLockedError,
@@ -213,9 +213,13 @@ async def session_policy(
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current
-    from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
 
-    timeout = await SystemSettingRepository(db_session).get_int("session_timeout_minutes", default=15)
+    timeout = await SystemSettingRepository(db_session).get_int(
+        "session_timeout_minutes", default=15
+    )
     return _envelope(request, {"session_timeout_minutes": timeout})
 
 
@@ -237,7 +241,9 @@ async def change_password(
     except InvalidCredentialsError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return _envelope(request, {"success": True})
 
 
@@ -270,7 +276,9 @@ async def recover_main_admin_password(
     except MainAdminNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     response = MainAdminRecoverPasswordResponse(recovery_key=result.new_recovery_key)
     return _envelope(request, response.model_dump())

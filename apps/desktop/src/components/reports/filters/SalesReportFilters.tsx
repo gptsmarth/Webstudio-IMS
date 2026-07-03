@@ -9,15 +9,27 @@ export function SalesReportFilters(props: ReportFilterContext): JSX.Element {
       <ReferenceFields {...props} />
       <label className="report-builder__field">
         <span>Serial number</span>
-        <input className="input col-mono" value={filters.serialNumber} onChange={(e) => setFilters({ serialNumber: e.target.value })} />
+        <input
+          className="input col-mono"
+          value={filters.serialNumber}
+          onChange={(e) => setFilters({ serialNumber: e.target.value })}
+        />
       </label>
       <label className="report-builder__field">
         <span>Invoice number</span>
-        <input className="input" value={filters.invoiceNumber} onChange={(e) => setFilters({ invoiceNumber: e.target.value })} />
+        <input
+          className="input"
+          value={filters.invoiceNumber}
+          onChange={(e) => setFilters({ invoiceNumber: e.target.value })}
+        />
       </label>
       <label className="report-builder__field">
         <span>Customer</span>
-        <input className="input" value={filters.customerName} onChange={(e) => setFilters({ customerName: e.target.value })} />
+        <input
+          className="input"
+          value={filters.customerName}
+          onChange={(e) => setFilters({ customerName: e.target.value })}
+        />
       </label>
       <label className="report-builder__field">
         <span>Salesperson (user ID)</span>
@@ -31,7 +43,11 @@ export function SalesReportFilters(props: ReportFilterContext): JSX.Element {
       </label>
       <label className="report-builder__field">
         <span>Payment mode</span>
-        <input className="input" value={filters.paymentMode} onChange={(e) => setFilters({ paymentMode: e.target.value })} />
+        <input
+          className="input"
+          value={filters.paymentMode}
+          onChange={(e) => setFilters({ paymentMode: e.target.value })}
+        />
       </label>
       <label className="report-builder__field">
         <span>Sale source</span>

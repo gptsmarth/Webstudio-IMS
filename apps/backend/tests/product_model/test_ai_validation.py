@@ -24,12 +24,15 @@ def test_groq_hallucination_fa506ncq_vivobook_rejected() -> None:
         "source": "groq",
     }
     assert product_line_matches_sku("FA506NCQ-HN006W", payload, brand_name="ASUS") is False
-    assert validate_enrichment_payload(
-        payload,
-        model_number="FA506NCQ-HN006W",
-        provider="groq",
-        brand_name="ASUS",
-    ) is False
+    assert (
+        validate_enrichment_payload(
+            payload,
+            model_number="FA506NCQ-HN006W",
+            provider="groq",
+            brand_name="ASUS",
+        )
+        is False
+    )
 
 
 def test_groq_requires_full_sku_citation() -> None:
@@ -45,12 +48,15 @@ def test_groq_requires_full_sku_citation() -> None:
         "confidence_score": 0.96,
         "source": "groq",
     }
-    assert validate_enrichment_payload(
-        payload,
-        model_number="FA506NCQ-HN006W",
-        provider="groq",
-        brand_name="ASUS",
-    ) is True
+    assert (
+        validate_enrichment_payload(
+            payload,
+            model_number="FA506NCQ-HN006W",
+            provider="groq",
+            brand_name="ASUS",
+        )
+        is True
+    )
 
 
 def test_gemini_allows_family_anchor_with_grounding() -> None:
@@ -65,9 +71,12 @@ def test_gemini_allows_family_anchor_with_grounding() -> None:
         "confidence_score": 0.88,
         "source": "gemini",
     }
-    assert validate_enrichment_payload(
-        payload,
-        model_number="FA401EA-RG020WS",
-        provider="gemini",
-        brand_name="ASUS",
-    ) is True
+    assert (
+        validate_enrichment_payload(
+            payload,
+            model_number="FA401EA-RG020WS",
+            provider="gemini",
+            brand_name="ASUS",
+        )
+        is True
+    )

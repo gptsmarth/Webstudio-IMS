@@ -106,12 +106,7 @@ export function StockBrandGrid({
             aria-label={`Browse ${summary.brandName} models`}
           >
             <span className="stock-brand-tile__logo-wrap">
-              <img
-                src={logoSrc}
-                alt=""
-                className="stock-brand-tile__logo"
-                loading="lazy"
-              />
+              <img src={logoSrc} alt="" className="stock-brand-tile__logo" loading="lazy" />
             </span>
             <span className="stock-brand-tile__name">{summary.brandName}</span>
           </button>

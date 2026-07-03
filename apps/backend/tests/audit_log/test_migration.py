@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
-from tests.helpers.migrations import assert_at_least_migration
+from helpers.migrations import assert_at_least_migration
 from webstudio_backend.infrastructure.database.session import get_engine
 
 
@@ -23,8 +23,7 @@ async def test_migration_0005_audit_logs_exist(db_session) -> None:
             inspector = inspect(sync_connection)
             tables = inspector.get_table_names(schema="webstudio")
             indexes = {
-                index["name"]
-                for index in inspector.get_indexes("audit_logs", schema="webstudio")
+                index["name"] for index in inspector.get_indexes("audit_logs", schema="webstudio")
             }
             return tables, indexes
 

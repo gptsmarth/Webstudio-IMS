@@ -22,6 +22,8 @@ from webstudio_backend.api.dependencies.auth import (
 from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.settings import (
+    AIProviderTestRequest,
+    AIProviderTestResponse,
     BackupAdminDashboard,
     BackupCreateRequest,
     BackupCreateResponse,
@@ -41,22 +43,20 @@ from webstudio_backend.api.schemas.settings import (
     ExcelSettings,
     GeneralSettings,
     IntegrationsSettingsUpdate,
-    AIProviderTestRequest,
-    AIProviderTestResponse,
     InventorySettings,
+    MobileBackupStatusResponse,
     NotificationSettings,
     RecoveryCenterDashboard,
+    RecoveryFailureAnalysis,
     RecoveryHealthIssue,
     RecoveryReportsResponse,
     RecoveryValidationCheck,
     RecoveryValidationResponse,
-    RecoveryFailureAnalysis,
-    MobileBackupStatusResponse,
     RestoreHistoryEntry,
-    VerificationCheckEntry,
     SalesSettings,
     SecuritySettings,
     TallySettingsGroup,
+    VerificationCheckEntry,
 )
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
@@ -65,12 +65,14 @@ from webstudio_backend.core.request_context import get_correlation_id, get_reque
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.backup_run_filters import BackupHistoryFilters
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
+from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.backup_admin_service import BackupAdminService
 from webstudio_backend.services.backup_engine import BackupEngine
-from webstudio_backend.services.backup_production_validation_service import BackupProductionValidationService
+from webstudio_backend.services.backup_production_validation_service import (
+    BackupProductionValidationService,
+)
 from webstudio_backend.services.recovery_service import RecoveryService
 from webstudio_backend.services.restore_engine import RestoreEngine
-from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.settings_service import SettingsService
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
@@ -217,7 +219,9 @@ async def update_tally_settings(
             actor_id=current.user.id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return _envelope(request, updated.model_dump())
 
 
@@ -247,7 +251,9 @@ async def test_ai_provider_connection(
     del current
     provider = body.provider.strip().lower()
     if provider not in {"gemini", "groq", "openrouter", "mock"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported AI provider.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported AI provider."
+        )
     result = await ProductEnrichmentService(db_session, app_settings).test_provider(provider)  # type: ignore[arg-type]
     response = AIProviderTestResponse(
         provider=result.provider,
@@ -324,7 +330,9 @@ async def create_backup(
             storage_backend=storage_backend,
         )
     except RepositoryError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     return _envelope(
         request,
         BackupCreateResponse(
@@ -652,9 +660,7 @@ async def recovery_reports(
             total_backups=reports.total_backups,
             successful_backups=reports.successful_backups,
             failed_backups=reports.failed_backups,
-            failure_analysis=[
-                RecoveryFailureAnalysis(**row) for row in reports.failure_analysis
-            ],
+            failure_analysis=[RecoveryFailureAnalysis(**row) for row in reports.failure_analysis],
             export_supported=reports.export_supported,
         ).model_dump(),
     )
@@ -879,7 +885,9 @@ async def mobile_backup_history(
 ) -> dict:
     _ = current
     admin = await _backup_admin(db_session, app_settings)
-    result = await admin.list_history(BackupHistoryFilters(), PageParams(page=page, page_size=page_size))
+    result = await admin.list_history(
+        BackupHistoryFilters(), PageParams(page=page, page_size=page_size)
+    )
     items = [BackupHistoryEntry(**row).model_dump() for row in result.items]
     meta = _page_meta(result.page, result.page_size, result.total_items, result.total_pages)
     return _envelope(request, items, meta)

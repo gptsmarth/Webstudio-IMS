@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from decimal import Decimal
 
 from sqlalchemy import Select, func, inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -233,11 +232,15 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             await recorder.record_inventory_field_update(
                 inventory_item,
                 field_name="purchase_date",
-                old_value={"purchase_date": old_purchase_date.isoformat() if old_purchase_date else None},
+                old_value={
+                    "purchase_date": old_purchase_date.isoformat() if old_purchase_date else None
+                },
                 new_value={
-                    "purchase_date": inventory_item.purchase_date.isoformat()
-                    if inventory_item.purchase_date
-                    else None
+                    "purchase_date": (
+                        inventory_item.purchase_date.isoformat()
+                        if inventory_item.purchase_date
+                        else None
+                    )
                 },
                 actor=audit_actor,
             )
@@ -535,7 +538,9 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         if filters.color is not None:
             statement = statement.where(InventoryItem.color.ilike(f"%{filters.color.strip()}%"))
         if filters.current_location_id is not None:
-            statement = statement.where(InventoryItem.current_location_id == filters.current_location_id)
+            statement = statement.where(
+                InventoryItem.current_location_id == filters.current_location_id
+            )
         if filters.status is not None:
             statement = statement.where(InventoryItem.status == filters.status)
         if filters.serial_number is not None:

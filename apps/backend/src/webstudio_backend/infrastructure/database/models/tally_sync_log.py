@@ -23,7 +23,9 @@ class TallySyncLog(Base, PrimaryKeyMixin):
     sync_run_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     tally_company_sync_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.tally_company_sync.id", name="fk_tally_sync_log_company_sync"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.tally_company_sync.id", name="fk_tally_sync_log_company_sync"
+        ),
         nullable=False,
     )
     tally_processed_invoice_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -32,7 +34,9 @@ class TallySyncLog(Base, PrimaryKeyMixin):
     printed_invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     voucher_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sync_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    sync_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sync_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     processing_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     processing_status: Mapped[TallySyncRunStatus] = mapped_column(
         Enum(

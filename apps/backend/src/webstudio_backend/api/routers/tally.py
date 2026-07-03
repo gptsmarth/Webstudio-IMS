@@ -9,14 +9,20 @@ from datetime import date
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 
-from webstudio_backend.api.dependencies.auth import TallyRetrySyncDep, TallyRunSyncDep, TallyViewStatusDep
+from webstudio_backend.api.dependencies.auth import (
+    TallyRetrySyncDep,
+    TallyRunSyncDep,
+    TallyViewStatusDep,
+)
 from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.integrations.tally.connectivity import TallyHostValidationError
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 from webstudio_backend.services.tally_dashboard_service import TallyDashboardService
-from webstudio_backend.services.tally_production_validation_service import TallyProductionValidationService
+from webstudio_backend.services.tally_production_validation_service import (
+    TallyProductionValidationService,
+)
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 router = APIRouter(prefix="/api/v1/integrations/tally", tags=["tally"])

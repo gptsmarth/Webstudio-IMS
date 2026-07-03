@@ -14,7 +14,9 @@ export function DashboardGreeting({ session }: DashboardGreetingProps): JSX.Elem
         <h1 className="dash-greeting__name">{session.displayName}</h1>
         <p className="dash-greeting__meta">
           <span>{formatRoleLabel(session.role)}</span>
-          <span className="dash-greeting__dot" aria-hidden>·</span>
+          <span className="dash-greeting__dot" aria-hidden>
+            ·
+          </span>
           <span>{formatDisplayDate()}</span>
         </p>
       </div>

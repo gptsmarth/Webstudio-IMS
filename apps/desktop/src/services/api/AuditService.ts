@@ -90,7 +90,11 @@ interface ListMeta {
 
 export class AuditService {
   static async listLogs(params?: AuditListParams): Promise<AuditListResult> {
-    LoggingService.debug('API', 'Fetching audit logs', params as unknown as Record<string, unknown>);
+    LoggingService.debug(
+      'API',
+      'Fetching audit logs',
+      params as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
     const response = await client.getRaw<AuditListEntry[], ListMeta>('/api/v1/audit_logs', {
       page: 1,
@@ -112,7 +116,10 @@ export class AuditService {
     return client.get<AuditLogDetail>(`/api/v1/audit_logs/${auditLogId}`);
   }
 
-  static async listForInventoryItem(inventoryItemId: string, pageSize = 100): Promise<AuditListEntry[]> {
+  static async listForInventoryItem(
+    inventoryItemId: string,
+    pageSize = 100,
+  ): Promise<AuditListEntry[]> {
     const result = await this.listLogs({
       inventory_item_id: inventoryItemId,
       page_size: pageSize,
@@ -120,7 +127,10 @@ export class AuditService {
     return result.items;
   }
 
-  static async listLifecycleBySerial(serialNumber: string, pageSize = 100): Promise<AuditListEntry[]> {
+  static async listLifecycleBySerial(
+    serialNumber: string,
+    pageSize = 100,
+  ): Promise<AuditListEntry[]> {
     LoggingService.debug('API', 'Fetching audit lifecycle', { serialNumber });
     const client = await ApiClientProvider.getClient();
     const response = await client.getRaw<AuditListEntry[], ListMeta>(

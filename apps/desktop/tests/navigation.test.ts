@@ -8,17 +8,36 @@ import {
 } from '../src/config/navigation';
 
 const MAIN_ADMIN_PERMS = [
-  'users:view', 'users:create', 'inventory:view', 'inventory:create', 'inventory:edit',
-  'inventory:transfer', 'inventory:archive', 'inventory:restore', 'inventory:export',
-  'sales:view', 'sales:create', 'dashboard:view', 'brands:view', 'reports:view',
-  'audit:view', 'notifications:view', 'settings:view',
+  'users:view',
+  'users:create',
+  'inventory:view',
+  'inventory:create',
+  'inventory:edit',
+  'inventory:transfer',
+  'inventory:archive',
+  'inventory:restore',
+  'inventory:export',
+  'sales:view',
+  'sales:create',
+  'dashboard:view',
+  'brands:view',
+  'reports:view',
+  'audit:view',
+  'notifications:view',
+  'settings:view',
 ];
 
 const STOCK_ONLY_PERMS = ['inventory:view', 'dashboard:view'];
 
 const SALESPERSON_PERMS = [
-  'inventory:view', 'inventory:transfer', 'sales:view', 'dashboard:view',
-  'brands:view', 'product_models:view', 'locations:view', 'notifications:view',
+  'inventory:view',
+  'inventory:transfer',
+  'sales:view',
+  'dashboard:view',
+  'brands:view',
+  'product_models:view',
+  'locations:view',
+  'notifications:view',
 ];
 
 describe('navigation config', () => {

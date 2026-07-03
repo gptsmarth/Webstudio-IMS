@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile, status
@@ -19,7 +18,9 @@ from webstudio_backend.api.response_helpers import build_envelope
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.repositories.product_model_repository import ProductModelRepository
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
 from webstudio_backend.services.product_image_service import (
     USER_AGENT,
     is_safe_public_https_url,
@@ -145,7 +146,9 @@ async def upload_product_image(
     repo = ProductModelRepository(db_session)
     model = await repo.get_by_id(product_model_id)
     if model is None:
-        raise AppError("NOT_FOUND", "Product model not found.", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppError(
+            "NOT_FOUND", "Product model not found.", status_code=status.HTTP_404_NOT_FOUND
+        )
 
     payload = await file.read()
     if len(payload) > _MAX_UPLOAD_BYTES:

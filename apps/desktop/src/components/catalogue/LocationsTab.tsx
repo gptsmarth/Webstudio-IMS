@@ -14,7 +14,12 @@ import {
 } from '../../lib/catalogue';
 import { exportRowsToCsv } from '../../lib/catalogueExport';
 import type { DistributionGroup } from '../../services/api/DashboardService';
-import { LocationService, type CreateLocationRequest, type Location, type UpdateLocationRequest } from '../../services/api/LocationService';
+import {
+  LocationService,
+  type CreateLocationRequest,
+  type Location,
+  type UpdateLocationRequest,
+} from '../../services/api/LocationService';
 import { CatalogueEmptyState } from './CatalogueEmptyState';
 import { CataloguePagination } from './CataloguePagination';
 import { CatalogueRowActionsMenu, type CatalogueRowAction } from './CatalogueRowActionsMenu';
@@ -30,7 +35,11 @@ interface LocationsTabProps {
   onDataChange: () => void;
 }
 
-export function LocationsTab({ permissions, distributionByLocation, onDataChange }: LocationsTabProps): JSX.Element {
+export function LocationsTab({
+  permissions,
+  distributionByLocation,
+  onDataChange,
+}: LocationsTabProps): JSX.Element {
   const [items, setItems] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -84,7 +93,8 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     rows.sort((a, b) => {
       const dir = sortDirection === 'asc' ? 1 : -1;
       if (sortField === 'name') return a.name.localeCompare(b.name) * dir;
-      if (sortField === 'location_type') return a.location_type.localeCompare(b.location_type) * dir;
+      if (sortField === 'location_type')
+        return a.location_type.localeCompare(b.location_type) * dir;
       const aStock = stockByLocationId.get(String(a.id));
       const bStock = stockByLocationId.get(String(b.id));
       if (sortField === 'stock') return ((aStock?.available ?? 0) - (bStock?.available ?? 0)) * dir;
@@ -98,19 +108,28 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
 
   const toggleSort = (field: LocationSortField) => {
     if (sortField === field) setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortField(field); setSortDirection('asc'); }
+    else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
     setPage(1);
   };
 
   const sortIcon = (field: LocationSortField) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="cat-sort-icon cat-sort-icon--idle" />;
-    return sortDirection === 'asc' ? <ArrowUp size={12} className="cat-sort-icon" /> : <ArrowDown size={12} className="cat-sort-icon" />;
+    if (sortField !== field)
+      return <ArrowUpDown size={12} className="cat-sort-icon cat-sort-icon--idle" />;
+    return sortDirection === 'asc' ? (
+      <ArrowUp size={12} className="cat-sort-icon" />
+    ) : (
+      <ArrowDown size={12} className="cat-sort-icon" />
+    );
   };
 
   const handleSave = async (payload: CreateLocationRequest | UpdateLocationRequest) => {
     setActionLoading(true);
     try {
-      if (editing) await LocationService.updateLocation(editing.id, payload as UpdateLocationRequest);
+      if (editing)
+        await LocationService.updateLocation(editing.id, payload as UpdateLocationRequest);
       else await LocationService.createLocation(payload as CreateLocationRequest);
       await refresh();
       onDataChange();
@@ -156,7 +175,9 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     setActionLoading(true);
     setError(null);
     try {
-      await LocationService.deleteLocation(deleteDialog.location.id, { transfer_to_location_id: transferToLocationId });
+      await LocationService.deleteLocation(deleteDialog.location.id, {
+        transfer_to_location_id: transferToLocationId,
+      });
       setDeleteDialog(null);
       await refresh();
       onDataChange();
@@ -194,11 +215,17 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
     <div className="cat-tab-panel">
       <CatalogueToolbar
         search={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         searchPlaceholder="Search locations…"
         canWrite={canWrite}
         canExport={canExport}
-        onAdd={() => { setEditing(null); setDialogOpen(true); }}
+        onAdd={() => {
+          setEditing(null);
+          setDialogOpen(true);
+        }}
         addLabel="Add location"
         onExport={exportCsv}
         onRefresh={() => void refresh()}
@@ -208,7 +235,14 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
       <div className="cat-filters">
         <label className="cat-filters__field">
           <span>Type</span>
-          <select className="input" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}>
+          <select
+            className="input"
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="">All types</option>
             <option value="retail_floor">Retail floor</option>
             <option value="warehouse">Warehouse</option>
@@ -224,44 +258,91 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
           <table className="table-root cat-table">
             <thead className="cat-table__head">
               <tr>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('name')}>Location {sortIcon('name')}</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('location_type')}>Type {sortIcon('location_type')}</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('stock')}>Current Stock {sortIcon('stock')}</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('capacity')}>Capacity {sortIcon('capacity')}</th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('name')}>
+                  Location {sortIcon('name')}
+                </th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('location_type')}>
+                  Type {sortIcon('location_type')}
+                </th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('stock')}>
+                  Current Stock {sortIcon('stock')}
+                </th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('capacity')}>
+                  Capacity {sortIcon('capacity')}
+                </th>
                 <th>Status</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {loading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}>{Array.from({ length: 6 }).map((__, j) => <td key={j}><div className="skeleton cat-table__skeleton" /></td>)}</tr>
-              ))}
-              {!loading && pageItems.length === 0 && (
-                <tr><td colSpan={6}><CatalogueEmptyState title="No locations found" description="Add a location or adjust filters." onClearFilters={() => { setSearch(''); setTypeFilter(''); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add location" /></td></tr>
-              )}
-              {!loading && pageItems.map((location) => {
-                const stock = stockByLocationId.get(String(location.id));
-                return (
-                  <tr key={location.id}>
-                    <td>{location.name}</td>
-                    <td>{locationTypeLabel(location.location_type)}</td>
-                    <td>{stock?.available ?? 0}</td>
-                    <td title="Total units at location">{stock?.total ?? 0}</td>
-                    <td><span className={`badge ${catalogueStatusBadgeClass(location.is_active)}`}>{catalogueStatusLabel(location.is_active)}</span></td>
-                    <td>
-                      {canWrite && (
-                        <button type="button" className="cat-row-action" onClick={(e) => setMenu({ location, rect: e.currentTarget.getBoundingClientRect() })} aria-label={`Actions for ${location.name}`}>
-                          <MoreHorizontal size={14} />
-                        </button>
-                      )}
-                    </td>
+              {loading &&
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 6 }).map((__, j) => (
+                      <td key={j}>
+                        <div className="skeleton cat-table__skeleton" />
+                      </td>
+                    ))}
                   </tr>
-                );
-              })}
+                ))}
+              {!loading && pageItems.length === 0 && (
+                <tr>
+                  <td colSpan={6}>
+                    <CatalogueEmptyState
+                      title="No locations found"
+                      description="Add a location or adjust filters."
+                      onClearFilters={() => {
+                        setSearch('');
+                        setTypeFilter('');
+                      }}
+                      onAdd={() => setDialogOpen(true)}
+                      canWrite={canWrite}
+                      addLabel="Add location"
+                    />
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                pageItems.map((location) => {
+                  const stock = stockByLocationId.get(String(location.id));
+                  return (
+                    <tr key={location.id}>
+                      <td>{location.name}</td>
+                      <td>{locationTypeLabel(location.location_type)}</td>
+                      <td>{stock?.available ?? 0}</td>
+                      <td title="Total units at location">{stock?.total ?? 0}</td>
+                      <td>
+                        <span className={`badge ${catalogueStatusBadgeClass(location.is_active)}`}>
+                          {catalogueStatusLabel(location.is_active)}
+                        </span>
+                      </td>
+                      <td>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="cat-row-action"
+                            onClick={(e) =>
+                              setMenu({ location, rect: e.currentTarget.getBoundingClientRect() })
+                            }
+                            aria-label={`Actions for ${location.name}`}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
-        <CataloguePagination page={page} pageSize={pageSize} totalItems={filtered.length} onPageChange={setPage} loading={loading} />
+        <CataloguePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       {menu && (
@@ -274,7 +355,13 @@ export function LocationsTab({ permissions, distributionByLocation, onDataChange
         />
       )}
 
-      <LocationFormDialog open={dialogOpen} location={editing} loading={actionLoading} onClose={() => setDialogOpen(false)} onConfirm={handleSave} />
+      <LocationFormDialog
+        open={dialogOpen}
+        location={editing}
+        loading={actionLoading}
+        onClose={() => setDialogOpen(false)}
+        onConfirm={handleSave}
+      />
       <LocationDeleteDialog
         open={deleteDialog != null}
         location={deleteDialog?.location ?? null}

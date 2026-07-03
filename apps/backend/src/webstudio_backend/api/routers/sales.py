@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import SalesViewDep
@@ -85,7 +84,9 @@ async def list_sales(
         sort_field=sort_field or legacy_field,
         sort_direction=sort_direction or legacy_direction,
     )
-    result = await ReportService(db_session).sales_report(filters, PageParams(page=page, page_size=page_size))
+    result = await ReportService(db_session).sales_report(
+        filters, PageParams(page=page, page_size=page_size)
+    )
     return _envelope(
         request,
         [SaleListItem.from_row(row).model_dump() for row in result.items],

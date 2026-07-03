@@ -30,17 +30,23 @@ export function TallyReportFilters(props: ReportFilterContext): JSX.Element {
       </label>
       <label className="report-builder__field">
         <span>Invoice number</span>
-        <input className="input" value={filters.invoiceNumber} onChange={(e) => setFilters({ invoiceNumber: e.target.value })} />
+        <input
+          className="input"
+          value={filters.invoiceNumber}
+          onChange={(e) => setFilters({ invoiceNumber: e.target.value })}
+        />
       </label>
       <label className="report-builder__field">
         <span>Outcome</span>
         <select
           className="input"
           value={filters.tallyOutcome}
-          onChange={(e) => setFilters({
-            tallyOutcome: e.target.value as typeof filters.tallyOutcome,
-            notificationType: '',
-          })}
+          onChange={(e) =>
+            setFilters({
+              tallyOutcome: e.target.value as typeof filters.tallyOutcome,
+              notificationType: '',
+            })
+          }
         >
           <option value="">All outcomes</option>
           <option value="processed">Processed</option>

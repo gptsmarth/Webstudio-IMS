@@ -62,12 +62,20 @@ export function NetworkAdminWizard({ open, onClose }: NetworkAdminWizardProps): 
         >
           <header className="stg-recovery-wizard__header">
             <div>
-              <h2><Network size={18} aria-hidden /> Network administrator wizard</h2>
+              <h2>
+                <Network size={18} aria-hidden /> Network administrator wizard
+              </h2>
               <p className="stg-muted">
-                Validate server, database, API, firewall, ports, AI, Tally, and backup folders for your office LAN.
+                Validate server, database, API, firewall, ports, AI, Tally, and backup folders for
+                your office LAN.
               </p>
             </div>
-            <button type="button" className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              onClick={onClose}
+              aria-label="Close"
+            >
               <X size={16} />
             </button>
           </header>
@@ -78,11 +86,21 @@ export function NetworkAdminWizard({ open, onClose }: NetworkAdminWizardProps): 
             {!validation && (
               <div className="stg-recovery-wizard__intro">
                 <p>
-                  Supports static IP, DHCP reservation, multiple Wi‑Fi SSIDs and access points on the same LAN.
-                  Tally laptop mobility is tolerated — no manual reconnect required for clients.
+                  Supports static IP, DHCP reservation, multiple Wi‑Fi SSIDs and access points on
+                  the same LAN. Tally laptop mobility is tolerated — no manual reconnect required
+                  for clients.
                 </p>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runValidation()}>
-                  {busy ? <RefreshCw size={14} className="spin" aria-hidden /> : <Check size={14} aria-hidden />}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={busy}
+                  onClick={() => void runValidation()}
+                >
+                  {busy ? (
+                    <RefreshCw size={14} className="spin" aria-hidden />
+                  ) : (
+                    <Check size={14} aria-hidden />
+                  )}
                   Run validation
                 </button>
               </div>
@@ -129,9 +147,16 @@ export function NetworkAdminWizard({ open, onClose }: NetworkAdminWizardProps): 
           </div>
 
           <footer className="stg-recovery-wizard__footer">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Close
+            </button>
             {validation && (
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void runValidation()}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => void runValidation()}
+              >
                 Re-run validation
               </button>
             )}

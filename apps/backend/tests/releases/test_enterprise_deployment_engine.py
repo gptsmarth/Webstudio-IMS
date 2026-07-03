@@ -13,9 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel
 from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
 from webstudio_backend.services.deployment_platform_adapter import DeploymentPlatformAdapter
-from webstudio_backend.services.enterprise_deployment_engine import DEPLOYMENT_STEPS, EnterpriseDeploymentEngine
+from webstudio_backend.services.enterprise_deployment_engine import (
+    DEPLOYMENT_STEPS,
+    EnterpriseDeploymentEngine,
+)
 
 
 @pytest.fixture

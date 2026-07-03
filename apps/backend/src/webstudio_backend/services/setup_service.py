@@ -17,11 +17,11 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 )
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.security.password import hash_password
-from webstudio_backend.services.password_policy_service import PasswordPolicyService
 from webstudio_backend.infrastructure.security.recovery_key import (
     generate_recovery_key,
     hash_recovery_key,
 )
+from webstudio_backend.services.password_policy_service import PasswordPolicyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,9 +44,7 @@ class SetupService:
         company_name = await self._settings.get_string("company_name")
         main_admin = await self._users.get_main_admin()
         awaiting_recovery_confirmation = (
-            not initialized
-            and main_admin is not None
-            and main_admin.recovery_key_hash is not None
+            not initialized and main_admin is not None and main_admin.recovery_key_hash is not None
         )
         return {
             "system_initialized": initialized,
@@ -93,7 +91,9 @@ class SetupService:
             updated_by_user_id=user.id,
         )
         await self._recorder.record_recovery_key_generated(user, reason="initial_setup")
-        return SetupInitializeResult(user=user, company_name=normalized_company, recovery_key=recovery_key)
+        return SetupInitializeResult(
+            user=user, company_name=normalized_company, recovery_key=recovery_key
+        )
 
     async def confirm_recovery_key(self) -> None:
         if await self._settings.is_system_initialized():

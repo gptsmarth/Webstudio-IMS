@@ -94,7 +94,7 @@ export const P = {
   },
 } as const;
 
-export type PermissionCode = typeof P[keyof typeof P][keyof typeof P[keyof typeof P]];
+export type PermissionCode = (typeof P)[keyof typeof P][keyof (typeof P)[keyof typeof P]];
 
 export const DASHBOARD_WIDGET_PERMISSIONS: readonly string[] = [
   P.dashboard.quickActions,
@@ -205,7 +205,9 @@ export class PermissionService {
 const permissionSetCache = new Map<string, ReadonlySet<string>>();
 
 /** Cached Set lookup for repeated permission checks in a session. */
-export function permissionSet(permissions: string[] | ReadonlySet<string> | undefined | null): ReadonlySet<string> {
+export function permissionSet(
+  permissions: string[] | ReadonlySet<string> | undefined | null,
+): ReadonlySet<string> {
   if (permissions instanceof Set) return permissions;
   const list = Array.isArray(permissions) ? permissions : [];
   const key = list.slice().sort().join('\0');
@@ -249,11 +251,7 @@ export function canEditStockLaptop(permissions: string[]): boolean {
 
 export function canEditStockProductModel(permissions: string[]): boolean {
   const ps = PermissionService.from(permissions);
-  return ps.hasAny(
-    P.productModels.edit,
-    P.productModels.sellingPriceEdit,
-    P.inventory.stockEdit,
-  );
+  return ps.hasAny(P.productModels.edit, P.productModels.sellingPriceEdit, P.inventory.stockEdit);
 }
 
 export function canEditProductModels(permissions: string[]): boolean {
@@ -311,10 +309,7 @@ export function canExecuteRestore(permissions: string[]): boolean {
 }
 
 export function canAccessBackupModule(permissions: string[]): boolean {
-  return PermissionService.from(permissions).hasAny(
-    P.backup.view,
-    P.restore.view,
-  );
+  return PermissionService.from(permissions).hasAny(P.backup.view, P.restore.view);
 }
 
 export function canReadAudit(permissions: string[]): boolean {

@@ -14,10 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD
 from webstudio_backend.infrastructure.database.enums import SettingValueType
 from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
-from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
+from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
+from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 
 
 @pytest.mark.asyncio
@@ -47,9 +49,7 @@ async def test_refresh_rejected_after_idle_timeout(
     stored = token_hash_row.scalar_one()
     stale_time = datetime.now(UTC) - timedelta(minutes=5)
     await db_session.execute(
-        update(RefreshToken)
-        .where(RefreshToken.id == stored.id)
-        .values(last_used_at=stale_time),
+        update(RefreshToken).where(RefreshToken.id == stored.id).values(last_used_at=stale_time),
     )
     await db_session.commit()
 

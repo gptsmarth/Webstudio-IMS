@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, Depends, Request, Query, status
+from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
 from webstudio_backend.api.dependencies.auth import (
     AuthenticatedUser,
-    ProductModelsDeleteDep,
     ProductModelsCreateDep,
+    ProductModelsDeleteDep,
     ProductModelsEditDep,
     ProductModelsOrInventoryViewDep,
     ProductModelsSellingPriceDep,
 )
+from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
+from webstudio_backend.api.schemas.catalogue_deletion import ProductModelDeletePreviewResponse
 from webstudio_backend.api.schemas.product_model import (
     CreateProductModelRequest,
     ProductModelImageResolveResponse,
@@ -26,14 +28,9 @@ from webstudio_backend.api.schemas.product_model import (
     UpdateProductModelRequest,
     UpdateSellingPriceRequest,
 )
-from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
-from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
-from webstudio_backend.api.schemas.catalogue_deletion import ProductModelDeletePreviewResponse
-from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
-from webstudio_backend.core.config import get_settings
+from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.exceptions import AppError
-from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import ProductModelStatus, UserRole
 from webstudio_backend.infrastructure.database.models.brand import Brand
@@ -167,7 +164,9 @@ async def list_product_models(
     brand_repo = BrandRepository(db_session)
 
     if page is not None:
-        page_result = await paginate(db_session, statement, PageParams(page=page, page_size=page_size))
+        page_result = await paginate(
+            db_session, statement, PageParams(page=page, page_size=page_size)
+        )
         brand_names: dict[int, str] = {}
         for pm in page_result.items:
             if pm.brand_id not in brand_names:
@@ -195,10 +194,7 @@ async def list_product_models(
         .order_by(ProductModel.model_name, ProductModel.model_number),
     )
     product_models = result.all()
-    data = [
-        _model_payload(row[0], brand_name=row[1], current=current)
-        for row in product_models
-    ]
+    data = [_model_payload(row[0], brand_name=row[1], current=current) for row in product_models]
     return _envelope(request, data)
 
 
@@ -261,7 +257,7 @@ async def create_product_model(
         await db_session.commit()
         return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.get("/{model_id}")
@@ -348,6 +344,7 @@ async def update_product_model(
             old_brand_id = updated.brand_id
             updated.brand_id = body.brand_id
             from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
+
             await AuditRecorder(db_session).record_product_model_field_update(
                 updated,
                 field_name="brand_id",
@@ -362,7 +359,7 @@ async def update_product_model(
         brand_name = brand.name if brand else None
         return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
     except DuplicateModelNumberError as err:
-        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT)
+        raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
 
 
 @router.patch("/{model_id}/selling-price")
@@ -411,7 +408,9 @@ async def delete_product_model(
         )
 
     try:
-        await ProductModelDeletionService(db_session).delete_product_model(pm, actor=_actor(current))
+        await ProductModelDeletionService(db_session).delete_product_model(
+            pm, actor=_actor(current)
+        )
         await db_session.commit()
     except Exception as exc:
         raise_catalogue_deletion_error(exc)
@@ -435,7 +434,9 @@ async def product_model_delete_preview(
         )
 
     preview = await ProductModelDeletionService(db_session).preview(pm)
-    return _envelope(request, ProductModelDeletePreviewResponse.model_validate(preview).model_dump())
+    return _envelope(
+        request, ProductModelDeletePreviewResponse.model_validate(preview).model_dump()
+    )
 
 
 @router.post("/spec-lookup")
@@ -489,11 +490,10 @@ async def lookup_product_model_spec(
 async def resolve_product_model_image(
     request: Request,
     model_id: uuid.UUID,
-    current: ProductModelsEditDep,
+    current_user: ProductModelsEditDep,
     db_session: AsyncSession = DbSessionDep,
     app_settings=AppSettingsDep,
 ) -> dict:
-    del current
     repo = ProductModelRepository(db_session)
     pm = await repo.get_by_id(model_id)
     if not pm:
@@ -519,7 +519,7 @@ async def resolve_product_model_image(
         brand_name=brand_name,
         db_session=db_session,
         repo=repo,
-        actor=_actor(current),
+        actor=_actor(current_user),
         app_settings=app_settings,
     )
     if updated.product_image_url and not pm.product_image_url:

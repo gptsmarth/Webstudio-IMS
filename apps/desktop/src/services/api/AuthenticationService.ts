@@ -83,7 +83,11 @@ export class AuthenticationService {
     LoggingService.info('API', 'Attempting user login');
     const client = await ApiClientProvider.getClient();
     const response = await client.post<LoginResponse>('/api/v1/auth/login', credentials);
-    await AuthTokenStore.setTokens(response.access_token, response.refresh_token, response.expires_in);
+    await AuthTokenStore.setTokens(
+      response.access_token,
+      response.refresh_token,
+      response.expires_in,
+    );
     if (response.session_id) {
       await AuthTokenStore.setSessionId(response.session_id);
     }
@@ -99,7 +103,11 @@ export class AuthenticationService {
     const response = await client.post<LoginResponse>('/api/v1/auth/refresh', {
       refresh_token: refreshToken,
     });
-    await AuthTokenStore.setTokens(response.access_token, response.refresh_token, response.expires_in);
+    await AuthTokenStore.setTokens(
+      response.access_token,
+      response.refresh_token,
+      response.expires_in,
+    );
     if (response.session_id) {
       await AuthTokenStore.setSessionId(response.session_id);
     }

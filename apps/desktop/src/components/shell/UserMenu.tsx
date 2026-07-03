@@ -14,11 +14,12 @@ export function UserMenu({ session, appVersion, onLogout }: UserMenuProps): JSX.
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const initials = session.displayName
-    .split(/\s+/)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
-    .slice(0, 2) || session.username.slice(0, 2).toUpperCase();
+  const initials =
+    session.displayName
+      .split(/\s+/)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('')
+      .slice(0, 2) || session.username.slice(0, 2).toUpperCase();
 
   useEffect(() => {
     if (!open) return;
@@ -59,17 +60,19 @@ export function UserMenu({ session, appVersion, onLogout }: UserMenuProps): JSX.
         <div className="app-user-menu-panel animate-fade-in" role="menu">
           <div className="app-user-menu-header">
             <p className="app-user-menu-title">{session.displayName}</p>
-            <p className="app-user-menu-subtitle">{formatRoleLabel(session.role)} · v{appVersion}</p>
+            <p className="app-user-menu-subtitle">
+              {formatRoleLabel(session.role)} · v{appVersion}
+            </p>
           </div>
           <div className="divider" />
           <div className="app-user-menu-section" role="group" aria-label="Theme">
             <p className="app-user-menu-label">Theme</p>
             <div className="app-theme-options">
-              {([
+              {[
                 { value: 'light' as const, label: 'Light', icon: Sun },
                 { value: 'dark' as const, label: 'Dark', icon: Moon },
                 { value: 'system' as const, label: 'System', icon: Monitor },
-              ]).map(({ value, label, icon: Icon }) => (
+              ].map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
                   type="button"

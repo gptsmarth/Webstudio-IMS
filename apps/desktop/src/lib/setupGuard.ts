@@ -1,7 +1,13 @@
 import { SetupService, type SetupStatusResponse } from '../services/api/SetupService';
 import { readLocalInitializedFlag } from './setupGuardEvents';
 
-export { dispatchSetupRequired, isSetupRequiredApiError, markLocalInitializedFlag, readLocalInitializedFlag, SETUP_REQUIRED_EVENT } from './setupGuardEvents';
+export {
+  dispatchSetupRequired,
+  isSetupRequiredApiError,
+  markLocalInitializedFlag,
+  readLocalInitializedFlag,
+  SETUP_REQUIRED_EVENT,
+} from './setupGuardEvents';
 
 export function isSetupRequired(status: SetupStatusResponse): boolean {
   return !status.system_initialized || Boolean(status.awaiting_recovery_key_confirmation);

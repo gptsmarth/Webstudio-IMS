@@ -1,4 +1,12 @@
-export type DatePreset = '' | 'today' | 'yesterday' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+export type DatePreset =
+  | ''
+  | 'today'
+  | 'yesterday'
+  | 'week'
+  | 'month'
+  | 'quarter'
+  | 'year'
+  | 'custom';
 
 function startOfDay(date: Date): Date {
   const copy = new Date(date);

@@ -16,8 +16,16 @@ from webstudio_backend.services.ai.prompts import (
     default_image_search_query,
 )
 from webstudio_backend.services.ai.providers.base import AIProvider
-from webstudio_backend.services.ai.spec_normalization import normalize_spec, validate_enrichment_payload
-from webstudio_backend.services.ai.types import AIProviderConfig, AIProviderError, EnrichmentResult, ProviderTestResult
+from webstudio_backend.services.ai.spec_normalization import (
+    normalize_spec,
+    validate_enrichment_payload,
+)
+from webstudio_backend.services.ai.types import (
+    AIProviderConfig,
+    AIProviderError,
+    EnrichmentResult,
+    ProviderTestResult,
+)
 
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -48,7 +56,9 @@ class GroqProvider(AIProvider):
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.", provider="groq")
 
-        prompt = build_spec_lookup_prompt(sku, brand_name=brand_name, model_name=model_name, use_web_search=False)
+        prompt = build_spec_lookup_prompt(
+            sku, brand_name=brand_name, model_name=model_name, use_web_search=False
+        )
         started = time.perf_counter()
         AIProviderHealthTracker.record_request("groq")
 
@@ -57,7 +67,9 @@ class GroqProvider(AIProvider):
             text = _extract_chat_text(body)
             parsed_raw = parse_json_object(text or "")
             if not parsed_raw:
-                raise AIProviderError("NOT_FOUND", "Groq returned an unreadable response.", provider="groq")
+                raise AIProviderError(
+                    "NOT_FOUND", "Groq returned an unreadable response.", provider="groq"
+                )
             normalized = normalize_spec(parsed_raw, fallback_name=model_name or sku, source="groq")
             if not validate_enrichment_payload(
                 normalized,
@@ -112,10 +124,14 @@ class GroqProvider(AIProvider):
         brand_name: str | None = None,
         model_name: str | None = None,
     ) -> str:
-        fallback = default_image_search_query(model_number, brand_name=brand_name, model_name=model_name)
+        fallback = default_image_search_query(
+            model_number, brand_name=brand_name, model_name=model_name
+        )
         if not self.is_configured():
             return fallback
-        prompt = build_image_search_query_prompt(model_number, brand_name=brand_name, model_name=model_name)
+        prompt = build_image_search_query_prompt(
+            model_number, brand_name=brand_name, model_name=model_name
+        )
         try:
             body = await self._chat(prompt, json_mode=True)
             parsed = parse_json_object(_extract_chat_text(body) or "")
@@ -129,7 +145,9 @@ class GroqProvider(AIProvider):
 
     async def test_connection(self) -> ProviderTestResult:
         if not self.is_configured():
-            return ProviderTestResult(provider="groq", success=False, message="Groq API key is not configured.")
+            return ProviderTestResult(
+                provider="groq", success=False, message="Groq API key is not configured."
+            )
         started = time.perf_counter()
         try:
             await self._chat('Respond with JSON: {"status":"ok"}', json_mode=True)

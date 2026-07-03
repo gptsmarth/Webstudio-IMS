@@ -21,7 +21,7 @@ export function TallyPage(): JSX.Element {
         </div>
       </header>
 
-      {(tallySettings.error) && (
+      {tallySettings.error && (
         <div className="alert alert-danger tally-page__alert">
           <AlertCircle size={14} aria-hidden />
           <span>{tallySettings.error}</span>

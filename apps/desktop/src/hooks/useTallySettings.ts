@@ -43,21 +43,24 @@ export function useTallySettings(): UseTallySettingsResult {
     void refresh();
   }, [refresh]);
 
-  const saveTally = useCallback(async (payload: TallySettingsGroup) => {
-    if (!canWrite) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await SettingsService.updateTally(payload);
-      setTally(updated);
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setError(message.message ?? 'Unable to save Tally settings.');
-      throw err;
-    } finally {
-      setSaving(false);
-    }
-  }, [canWrite]);
+  const saveTally = useCallback(
+    async (payload: TallySettingsGroup) => {
+      if (!canWrite) return;
+      setSaving(true);
+      setError(null);
+      try {
+        const updated = await SettingsService.updateTally(payload);
+        setTally(updated);
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setError(message.message ?? 'Unable to save Tally settings.');
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [canWrite],
+  );
 
   return { tally, loading, saving, error, canWrite, refresh, saveTally };
 }

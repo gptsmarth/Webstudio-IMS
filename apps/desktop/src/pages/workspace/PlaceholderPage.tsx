@@ -24,7 +24,8 @@ export function PlaceholderPage({
         </div>
         <h2 className="app-placeholder-title">Module under development</h2>
         <p className="app-placeholder-text">
-          This page is a shell placeholder. Business functionality for <strong>{title}</strong> will be implemented in {milestone}.
+          This page is a shell placeholder. Business functionality for <strong>{title}</strong> will
+          be implemented in {milestone}.
         </p>
         <div className="app-placeholder-grid">
           <div className="app-placeholder-block skeleton" />

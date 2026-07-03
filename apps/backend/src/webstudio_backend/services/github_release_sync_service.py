@@ -17,9 +17,15 @@ from webstudio_backend.infrastructure.database.models.release_download_job impor
     ReleaseDownloadJob,
 )
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.github_release_client import GitHubRelease, GitHubReleaseClient
 from webstudio_backend.services.release_catalog_loader import release_from_bundle_dir
@@ -249,7 +255,9 @@ class GitHubReleaseSyncService:
             verified = await self._verify_checksums(bundle_dir, checksums, job)
             job.checksums_verified = verified
 
-            release = release_from_bundle_dir(bundle_dir, channel=job.release_channel, mark_current=False)
+            release = release_from_bundle_dir(
+                bundle_dir, channel=job.release_channel, mark_current=False
+            )
             if release is not None:
                 await self._release_repo.upsert_release(release)
 
@@ -261,7 +269,9 @@ class GitHubReleaseSyncService:
         except Exception as exc:
             job.status = ReleaseDownloadStatus.FAILED
             job.error_message = str(exc)
-            job.next_retry_at = datetime.now(UTC) + timedelta(minutes=min(60, job.attempt_count * 5))
+            job.next_retry_at = datetime.now(UTC) + timedelta(
+                minutes=min(60, job.attempt_count * 5)
+            )
             await self._download_repo.save_job(job)
             logger.warning(
                 "github.release.download_failed",
@@ -352,7 +362,10 @@ class GitHubReleaseSyncService:
         downloader = ReleaseDownloadService()
         verified_all = True
         for artifact in job.artifacts:
-            if artifact.artifact_name in MANIFEST_ASSET_NAMES | CHECKSUM_ASSET_NAMES | NOTES_ASSET_NAMES:
+            if (
+                artifact.artifact_name
+                in MANIFEST_ASSET_NAMES | CHECKSUM_ASSET_NAMES | NOTES_ASSET_NAMES
+            ):
                 expected = checksums.get(artifact.artifact_name)
                 if not expected or not artifact.local_path:
                     continue

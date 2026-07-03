@@ -51,19 +51,21 @@ export function DashboardNotificationsPanel({
     <DashboardWidget
       title="Notifications"
       subtitle={`${unreadCount} unread`}
-      action={(
+      action={
         <button type="button" className="dash-link-btn" onClick={() => setRoute('notifications')}>
           View all
           <ArrowRight size={14} aria-hidden />
         </button>
-      )}
+      }
     >
       {loading ? (
         <DashboardSkeleton rows={4} />
       ) : (
         <>
           <div className="dash-notification-counts">
-            <span className="dash-severity dash-severity--critical">Critical {counts.critical}</span>
+            <span className="dash-severity dash-severity--critical">
+              Critical {counts.critical}
+            </span>
             <span className="dash-severity dash-severity--warning">Warning {counts.warning}</span>
             <span className="dash-severity dash-severity--info">Info {counts.info}</span>
           </div>
@@ -78,18 +80,26 @@ export function DashboardNotificationsPanel({
               {items.slice(0, 6).map((item) => (
                 <li key={item.id} className="dash-notification-item">
                   <div className="dash-notification-item__main">
-                    <span className={severityClass(item.severity)}>{severityLabel(item.severity)}</span>
+                    <span className={severityClass(item.severity)}>
+                      {severityLabel(item.severity)}
+                    </span>
                     <div>
                       <p className="dash-notification-item__title">{item.title}</p>
                       <p className="dash-notification-item__meta">
                         {formatRelativeTime(item.created_at)}
-                        {!item.is_read && <span className="dash-notification-item__unread">Unread</span>}
+                        {!item.is_read && (
+                          <span className="dash-notification-item__unread">Unread</span>
+                        )}
                       </p>
                     </div>
                   </div>
                   <div className="dash-notification-item__actions">
                     {!item.is_read && onMarkRead && (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void onMarkRead(item.id)}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => void onMarkRead(item.id)}
+                      >
                         Mark read
                       </button>
                     )}

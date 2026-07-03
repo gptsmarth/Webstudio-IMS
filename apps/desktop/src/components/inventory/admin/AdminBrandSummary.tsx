@@ -6,11 +6,17 @@ interface AdminBrandSummaryProps {
   brandName?: string | null;
 }
 
-export function AdminBrandSummary({ summary, brandName }: AdminBrandSummaryProps): JSX.Element | null {
+export function AdminBrandSummary({
+  summary,
+  brandName,
+}: AdminBrandSummaryProps): JSX.Element | null {
   if (!summary) return null;
 
   return (
-    <section className="brand-availability-panel" aria-label={`${brandName ?? 'Brand'} stock overview`}>
+    <section
+      className="brand-availability-panel"
+      aria-label={`${brandName ?? 'Brand'} stock overview`}
+    >
       <div className="brand-availability-panel__hero">
         <div className="brand-availability-panel__icon" aria-hidden>
           <Package size={22} />
@@ -38,7 +44,9 @@ export function AdminBrandSummary({ summary, brandName }: AdminBrandSummaryProps
           </ul>
         </div>
       ) : (
-        <p className="brand-availability-panel__empty">No units currently available at any location.</p>
+        <p className="brand-availability-panel__empty">
+          No units currently available at any location.
+        </p>
       )}
     </section>
   );

@@ -15,8 +15,12 @@ from webstudio_backend.infrastructure.database.enums import (
 from webstudio_backend.infrastructure.database.models.notification import Notification
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
-from webstudio_backend.infrastructure.repositories.notification_filters import NotificationSearchFilters
-from webstudio_backend.infrastructure.repositories.notification_repository import NotificationRepository
+from webstudio_backend.infrastructure.repositories.notification_filters import (
+    NotificationSearchFilters,
+)
+from webstudio_backend.infrastructure.repositories.notification_repository import (
+    NotificationRepository,
+)
 
 
 class NotificationService:
@@ -40,7 +44,9 @@ class NotificationService:
         notification = await self._repo.require_by_id(notification_id)
         return await self._repo.mark_read(notification)
 
-    async def mark_resolved(self, notification_id: int, *, resolved_by_user_id: int) -> Notification:
+    async def mark_resolved(
+        self, notification_id: int, *, resolved_by_user_id: int
+    ) -> Notification:
         notification = await self._repo.require_by_id(notification_id)
         return await self._repo.mark_resolved(notification, resolved_by_user_id=resolved_by_user_id)
 

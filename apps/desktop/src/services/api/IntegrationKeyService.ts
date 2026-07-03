@@ -42,12 +42,17 @@ export class IntegrationKeyService {
   }
 
   static async createKey(payload: CreateIntegrationKeyRequest): Promise<IntegrationKeySummary> {
-    LoggingService.info('API', 'Creating integration API key', { service_type: payload.service_type });
+    LoggingService.info('API', 'Creating integration API key', {
+      service_type: payload.service_type,
+    });
     const client = await ApiClientProvider.getClient();
     return client.post<IntegrationKeySummary>('/api/v1/admin/integration-keys', payload);
   }
 
-  static async updateKey(keyId: number, payload: UpdateIntegrationKeyRequest): Promise<IntegrationKeySummary> {
+  static async updateKey(
+    keyId: number,
+    payload: UpdateIntegrationKeyRequest,
+  ): Promise<IntegrationKeySummary> {
     LoggingService.info('API', 'Updating integration API key', { keyId });
     const client = await ApiClientProvider.getClient();
     return client.patch<IntegrationKeySummary>(`/api/v1/admin/integration-keys/${keyId}`, payload);

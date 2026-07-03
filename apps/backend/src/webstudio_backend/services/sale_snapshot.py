@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from webstudio_backend.infrastructure.database.models.sale import Sale
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemDetailRow
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemDetailRow,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +45,16 @@ class SaleProductSnapshot:
             gpu=model.gpu,
             ram_gb=model.ram_gb,
             storage_value=model.storage_value,
-            storage_unit=model.storage_unit.value if hasattr(model.storage_unit, "value") else str(model.storage_unit),
-            storage_type=model.storage_type.value if hasattr(model.storage_type, "value") else str(model.storage_type),
+            storage_unit=(
+                model.storage_unit.value
+                if hasattr(model.storage_unit, "value")
+                else str(model.storage_unit)
+            ),
+            storage_type=(
+                model.storage_type.value
+                if hasattr(model.storage_type, "value")
+                else str(model.storage_type)
+            ),
             location_name=detail.location.name,
         )
 

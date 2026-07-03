@@ -16,7 +16,9 @@ from webstudio_backend.core.permissions import (
     validate_assignable_permissions,
 )
 from webstudio_backend.infrastructure.database.enums import UserRole
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.ai.config import resolve_ai_config
 from webstudio_backend.services.enterprise_rollback_engine import ROLLBACK_STEPS
 from webstudio_backend.services.platform_info_service import build_capabilities_payload
@@ -83,9 +85,21 @@ STOCK_MANAGER_TEMPLATE: frozenset[str] = frozenset(
 
 UAT_CHECKLIST: list[dict[str, str]] = [
     {"id": "UAT-01", "item": "Main Admin full module access verified", "owner": "Store admin"},
-    {"id": "UAT-02", "item": "Administrator (admin role) inventory + backup workflows", "owner": "Store admin"},
-    {"id": "UAT-03", "item": "Salesperson search, transfer, and sales view", "owner": "Sales staff"},
-    {"id": "UAT-04", "item": "Stock Manager custom role inventory operations", "owner": "Warehouse"},
+    {
+        "id": "UAT-02",
+        "item": "Administrator (admin role) inventory + backup workflows",
+        "owner": "Store admin",
+    },
+    {
+        "id": "UAT-03",
+        "item": "Salesperson search, transfer, and sales view",
+        "owner": "Sales staff",
+    },
+    {
+        "id": "UAT-04",
+        "item": "Stock Manager custom role inventory operations",
+        "owner": "Warehouse",
+    },
     {"id": "UAT-05", "item": "Custom access role created and assigned", "owner": "Main Admin"},
     {"id": "UAT-06", "item": "Inventory receive → available → sold lifecycle", "owner": "Staff"},
     {"id": "UAT-07", "item": "Manual sale or Tally-imported sale reflected", "owner": "Accounts"},
@@ -99,7 +113,11 @@ UAT_CHECKLIST: list[dict[str, str]] = [
     {"id": "UAT-15", "item": "Global search by serial and model", "owner": "Sales staff"},
     {"id": "UAT-16", "item": "Mobile offline cache and reconnect sync", "owner": "Floor staff"},
     {"id": "UAT-17", "item": "Client auto-update check from server", "owner": "IT"},
-    {"id": "UAT-18", "item": "Deployment rollback procedure documented", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "UAT-18",
+        "item": "Deployment rollback procedure documented",
+        "owner": "WEBSTUDIO engineer",
+    },
 ]
 
 
@@ -142,8 +160,7 @@ def _role_matrix_rows() -> list[dict[str, object]]:
                 module_access[mod_key] = "none"
             elif any(":view" in p or p.endswith(":view_status") for p in matched):
                 write = any(
-                    p.split(":")[-1] not in {"view", "view_status", "login"}
-                    for p in matched
+                    p.split(":")[-1] not in {"view", "view_status", "login"} for p in matched
                 )
                 module_access[mod_key] = "read_write" if write else "read"
             else:
@@ -259,7 +276,11 @@ class ProductionAcceptanceValidationService:
         ]
 
         for key, name, mod_key, api_hint in module_checks:
-            enabled = modules.get(mod_key, True) if mod_key != "catalogue" else modules.get("catalogue", True)
+            enabled = (
+                modules.get(mod_key, True)
+                if mod_key != "catalogue"
+                else modules.get("catalogue", True)
+            )
             status = "passed" if enabled else "warning"
             checks.append(
                 AcceptanceCheck(
@@ -275,7 +296,9 @@ class ProductionAcceptanceValidationService:
         # AI
         ai_status = "passed" if ai_config.enrichment_enabled else "warning"
         if not ai_config.enrichment_enabled:
-            recommendations.append("Configure AI provider keys if product enrichment is required at go-live.")
+            recommendations.append(
+                "Configure AI provider keys if product enrichment is required at go-live."
+            )
         checks.append(
             AcceptanceCheck(
                 key="module_ai",

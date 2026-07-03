@@ -90,7 +90,10 @@ class AIProviderHealthTracker:
 
     @classmethod
     def all_snapshots(cls, *, configured: dict[ProviderId, bool]) -> list[ProviderHealthSnapshot]:
-        return [cls.snapshot(provider, configured=configured.get(provider, False)) for provider in configured]
+        return [
+            cls.snapshot(provider, configured=configured.get(provider, False))
+            for provider in configured
+        ]
 
     @classmethod
     def reset(cls) -> None:

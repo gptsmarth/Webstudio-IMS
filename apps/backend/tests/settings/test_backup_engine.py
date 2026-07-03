@@ -168,11 +168,14 @@ def test_compute_next_scheduled_backup_daily() -> None:
 
 
 def test_backup_health_status_degraded_when_database_unhealthy() -> None:
-    assert backup_health_status(
-        database_health="failed",
-        last_verification_status="success",
-        storage_free_bytes=10_000_000_000,
-    ) == "degraded"
+    assert (
+        backup_health_status(
+            database_health="failed",
+            last_verification_status="success",
+            storage_free_bytes=10_000_000_000,
+        )
+        == "degraded"
+    )
 
 
 def test_postgres_connection_uses_database_url_and_tcp_host() -> None:

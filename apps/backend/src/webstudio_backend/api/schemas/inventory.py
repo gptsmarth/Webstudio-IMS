@@ -8,8 +8,14 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, StorageType, StorageUnit
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemDetailRow
+from webstudio_backend.infrastructure.database.enums import (
+    InventoryStatus,
+    StorageType,
+    StorageUnit,
+)
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemDetailRow,
+)
 
 
 class CreateInventoryItemRequest(BaseModel):

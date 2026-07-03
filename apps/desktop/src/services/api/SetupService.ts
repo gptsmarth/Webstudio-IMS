@@ -64,9 +64,14 @@ export class SetupService {
     return client.post<SetupConfirmRecoveryKeyResponse>('/api/v1/setup/confirm-recovery-key');
   }
 
-  static async recoverAdminPassword(data: MainAdminRecoverPasswordRequest): Promise<MainAdminRecoverPasswordResponse> {
+  static async recoverAdminPassword(
+    data: MainAdminRecoverPasswordRequest,
+  ): Promise<MainAdminRecoverPasswordResponse> {
     LoggingService.info('API', 'Attempting Main Admin password recovery via recovery key');
     const client = await ApiClientProvider.getClient();
-    return client.post<MainAdminRecoverPasswordResponse>('/api/v1/auth/main-admin/recover-password', data);
+    return client.post<MainAdminRecoverPasswordResponse>(
+      '/api/v1/auth/main-admin/recover-password',
+      data,
+    );
   }
 }

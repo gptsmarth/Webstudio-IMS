@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
-from tests.helpers.migrations import assert_at_least_migration
+from helpers.migrations import assert_at_least_migration
 from webstudio_backend.infrastructure.database.session import get_engine
 
 

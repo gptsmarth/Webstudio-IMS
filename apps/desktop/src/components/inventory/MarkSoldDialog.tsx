@@ -67,7 +67,12 @@ export function MarkSoldDialog({
             </h2>
             <p className="inv-dialog__subtitle col-mono">{serialNumber}</p>
           </div>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
@@ -75,15 +80,27 @@ export function MarkSoldDialog({
         <div className="inv-dialog__body inv-dialog__form-grid">
           <label className="inv-filters__field">
             <span className="inv-filters__label">Invoice number</span>
-            <input className="input" value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} />
+            <input
+              className="input"
+              value={invoiceNumber}
+              onChange={(event) => setInvoiceNumber(event.target.value)}
+            />
           </label>
           <label className="inv-filters__field">
             <span className="inv-filters__label">Customer name</span>
-            <input className="input" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+            <input
+              className="input"
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+            />
           </label>
           <label className="inv-filters__field">
             <span className="inv-filters__label">Payment mode</span>
-            <select className="input" value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
+            <select
+              className="input"
+              value={paymentMode}
+              onChange={(event) => setPaymentMode(event.target.value)}
+            >
               {PAYMENT_MODES.map((mode) => (
                 <option key={mode} value={mode}>
                   {mode}
@@ -93,7 +110,12 @@ export function MarkSoldDialog({
           </label>
           <label className="inv-filters__field">
             <span className="inv-filters__label">Sale date</span>
-            <input type="date" className="input" value={saleDate} onChange={(event) => setSaleDate(event.target.value)} />
+            <input
+              type="date"
+              className="input"
+              value={saleDate}
+              onChange={(event) => setSaleDate(event.target.value)}
+            />
           </label>
           <label className="inv-filters__field">
             <span className="inv-filters__label">Sale amount (₹)</span>
@@ -109,16 +131,31 @@ export function MarkSoldDialog({
           </label>
           <label className="inv-filters__field inv-dialog__field-full">
             <span className="inv-filters__label">Remarks</span>
-            <textarea className="input inv-dialog__textarea" rows={3} value={remarks} onChange={(event) => setRemarks(event.target.value)} />
+            <textarea
+              className="input inv-dialog__textarea"
+              rows={3}
+              value={remarks}
+              onChange={(event) => setRemarks(event.target.value)}
+            />
           </label>
           {error && <p className="inv-dialog__error inv-dialog__field-full">{error}</p>}
         </div>
 
         <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : 'Confirm sale'}
           </button>
         </footer>

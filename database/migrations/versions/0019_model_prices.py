@@ -27,9 +27,7 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
 
-    op.execute(
-        sa.text(
-            f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.product_models pm
             SET
                 selling_price = COALESCE(pm.selling_price, sub.selling_price),
@@ -44,9 +42,7 @@ def upgrade() -> None:
                 GROUP BY product_model_id
             ) sub
             WHERE pm.id = sub.product_model_id
-            """
-        )
-    )
+            """))
 
     op.drop_column("inventory_items", "selling_price", schema=SCHEMA)
     op.drop_column("inventory_items", "purchase_price", schema=SCHEMA)

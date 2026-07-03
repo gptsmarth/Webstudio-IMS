@@ -6,7 +6,10 @@ interface DashboardStoreStatusProps {
   loading: boolean;
 }
 
-export function DashboardStoreStatus({ locations, loading }: DashboardStoreStatusProps): JSX.Element {
+export function DashboardStoreStatus({
+  locations,
+  loading,
+}: DashboardStoreStatusProps): JSX.Element {
   if (loading) {
     return (
       <ul className="dash-store-status">
@@ -37,11 +40,11 @@ export function DashboardStoreStatus({ locations, loading }: DashboardStoreStatu
           <li key={location.id} className="dash-store-status__item">
             <div className="dash-store-status__main">
               <span className="dash-store-status__name">{location.name}</span>
-              <span className={`dash-store-status__badge dash-store-status__badge--${tone}`}>{status}</span>
+              <span className={`dash-store-status__badge dash-store-status__badge--${tone}`}>
+                {status}
+              </span>
             </div>
-            <span className="dash-store-status__meta">
-              {location.available} available
-            </span>
+            <span className="dash-store-status__meta">{location.available} available</span>
           </li>
         );
       })}

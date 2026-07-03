@@ -102,7 +102,9 @@ export function BackupAdminCenter({
     <div className="stg-backup-admin">
       {dashboard && (
         <div className="stg-backup-admin__dashboard">
-          <div className={`stg-backup-health stg-backup-health--${dashboard.storage_health === 'healthy' ? 'healthy' : dashboard.storage_health === 'degraded' ? 'degraded' : 'warning'}`}>
+          <div
+            className={`stg-backup-health stg-backup-health--${dashboard.storage_health === 'healthy' ? 'healthy' : dashboard.storage_health === 'degraded' ? 'degraded' : 'warning'}`}
+          >
             <ShieldCheck size={16} aria-hidden />
             <div>
               <strong>Storage health: {dashboard.storage_health}</strong>
@@ -112,10 +114,19 @@ export function BackupAdminCenter({
           <div className="stg-readonly-grid">
             <Readonly label="Disk free" value={formatBytes(dashboard.storage_free_bytes)} />
             <Readonly label="Disk used" value={formatBytes(dashboard.storage_used_bytes)} />
-            <Readonly label="Backup folder used" value={formatBytes(dashboard.backup_folder_used_bytes)} />
+            <Readonly
+              label="Backup folder used"
+              value={formatBytes(dashboard.backup_folder_used_bytes)}
+            />
             <Readonly label="Retention" value={retentionLabel} />
-            <Readonly label="Oldest backup" value={dashboard.oldest_backup_at ? formatDateTime(dashboard.oldest_backup_at) : '—'} />
-            <Readonly label="Newest backup" value={dashboard.newest_backup_at ? formatDateTime(dashboard.newest_backup_at) : '—'} />
+            <Readonly
+              label="Oldest backup"
+              value={dashboard.oldest_backup_at ? formatDateTime(dashboard.oldest_backup_at) : '—'}
+            />
+            <Readonly
+              label="Newest backup"
+              value={dashboard.newest_backup_at ? formatDateTime(dashboard.newest_backup_at) : '—'}
+            />
             <Readonly label="Failed backups" value={String(dashboard.failed_backup_count)} />
             <Readonly label="Warnings" value={String(dashboard.warning_count)} />
           </div>
@@ -158,7 +169,11 @@ export function BackupAdminCenter({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => void SettingsService.exportBackupHistory('xlsx', filters).then((blob) => downloadBlob(blob, 'backup-history.xlsx'))}
+            onClick={() =>
+              void SettingsService.exportBackupHistory('xlsx', filters).then((blob) =>
+                downloadBlob(blob, 'backup-history.xlsx'),
+              )
+            }
           >
             <FileSpreadsheet size={14} aria-hidden />
             Export Excel
@@ -166,7 +181,11 @@ export function BackupAdminCenter({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => void SettingsService.exportBackupHistory('pdf', filters).then((blob) => downloadBlob(blob, 'backup-history.pdf'))}
+            onClick={() =>
+              void SettingsService.exportBackupHistory('pdf', filters).then((blob) =>
+                downloadBlob(blob, 'backup-history.pdf'),
+              )
+            }
           >
             <FileText size={14} aria-hidden />
             Export PDF
@@ -195,11 +214,16 @@ export function BackupAdminCenter({
           <tbody>
             {history.length === 0 && !loading && (
               <tr>
-                <td colSpan={9} className="stg-muted">No backups match the current filters.</td>
+                <td colSpan={9} className="stg-muted">
+                  No backups match the current filters.
+                </td>
               </tr>
             )}
             {history.map((item) => (
-              <tr key={item.filename} className={item.is_archived ? 'stg-backup-admin__row--archived' : ''}>
+              <tr
+                key={item.filename}
+                className={item.is_archived ? 'stg-backup-admin__row--archived' : ''}
+              >
                 <td className="col-mono">{item.filename}</td>
                 <td>{item.backup_type ?? 'full'}</td>
                 <td>{formatDateTime(item.created_at)}</td>
@@ -207,7 +231,9 @@ export function BackupAdminCenter({
                 <td>{item.duration_ms != null ? `${item.duration_ms} ms` : '—'}</td>
                 <td>{formatBytes(item.size_bytes)}</td>
                 <td>
-                  <span className={`stg-backup-verify stg-backup-verify--${item.verification_status ?? 'unknown'}`}>
+                  <span
+                    className={`stg-backup-verify stg-backup-verify--${item.verification_status ?? 'unknown'}`}
+                  >
                     {item.status ?? item.verification_status}
                   </span>
                 </td>
@@ -219,7 +245,9 @@ export function BackupAdminCenter({
                       className="btn btn-ghost btn-xs"
                       title="View details"
                       disabled={actionBusy === item.filename}
-                      onClick={() => void SettingsService.getBackupDetails(item.filename).then(setDetail)}
+                      onClick={() =>
+                        void SettingsService.getBackupDetails(item.filename).then(setDetail)
+                      }
                     >
                       <Eye size={12} aria-hidden />
                     </button>
@@ -228,7 +256,11 @@ export function BackupAdminCenter({
                       className="btn btn-ghost btn-xs"
                       title="Download"
                       disabled={actionBusy === item.filename}
-                      onClick={() => void SettingsService.downloadBackup(item.filename).then((blob) => downloadBlob(blob, item.filename))}
+                      onClick={() =>
+                        void SettingsService.downloadBackup(item.filename).then((blob) =>
+                          downloadBlob(blob, item.filename),
+                        )
+                      }
                     >
                       <Download size={12} aria-hidden />
                     </button>
@@ -239,10 +271,12 @@ export function BackupAdminCenter({
                           className="btn btn-ghost btn-xs"
                           title="Verify"
                           disabled={actionBusy === item.filename}
-                          onClick={() => void runAction(item.filename, async () => {
-                            const result = await SettingsService.verifyBackup(item.filename);
-                            setVerifyResult(result);
-                          })}
+                          onClick={() =>
+                            void runAction(item.filename, async () => {
+                              const result = await SettingsService.verifyBackup(item.filename);
+                              setVerifyResult(result);
+                            })
+                          }
                         >
                           <ShieldCheck size={12} aria-hidden />
                         </button>
@@ -263,7 +297,11 @@ export function BackupAdminCenter({
                             className="btn btn-ghost btn-xs"
                             title="Archive"
                             disabled={actionBusy === item.filename}
-                            onClick={() => void runAction(item.filename, () => SettingsService.archiveBackup(item.filename))}
+                            onClick={() =>
+                              void runAction(item.filename, () =>
+                                SettingsService.archiveBackup(item.filename),
+                              )
+                            }
                           >
                             <Archive size={12} aria-hidden />
                           </button>
@@ -274,8 +312,14 @@ export function BackupAdminCenter({
                           title="Delete"
                           disabled={actionBusy === item.filename}
                           onClick={() => {
-                            if (window.confirm(`Delete backup ${item.filename}? This cannot be undone.`)) {
-                              void runAction(item.filename, () => SettingsService.deleteBackup(item.filename));
+                            if (
+                              window.confirm(
+                                `Delete backup ${item.filename}? This cannot be undone.`,
+                              )
+                            ) {
+                              void runAction(item.filename, () =>
+                                SettingsService.deleteBackup(item.filename),
+                              );
                             }
                           }}
                         >
@@ -294,7 +338,12 @@ export function BackupAdminCenter({
       {detail && (
         <ModalPortal>
           <div className="stg-restore-overlay" role="presentation" onClick={() => setDetail(null)}>
-            <div className="stg-backup-detail animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="stg-backup-detail animate-slide-in"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h3>Backup details</h3>
               <div className="stg-readonly-grid">
                 <Readonly label="Name" value={detail.filename} />
@@ -306,7 +355,13 @@ export function BackupAdminCenter({
               {(detail.warnings?.length ?? 0) > 0 && (
                 <p className="stg-backup-warning">Warnings: {detail.warnings?.join('; ')}</p>
               )}
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setDetail(null)}>Close</button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setDetail(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </ModalPortal>
@@ -314,15 +369,35 @@ export function BackupAdminCenter({
 
       {verifyResult && (
         <ModalPortal>
-          <div className="stg-restore-overlay" role="presentation" onClick={() => setVerifyResult(null)}>
-            <div className="stg-backup-detail animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="stg-restore-overlay"
+            role="presentation"
+            onClick={() => setVerifyResult(null)}
+          >
+            <div
+              className="stg-backup-detail animate-slide-in"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h3>Verification result</h3>
-              <p className={`stg-backup-verify stg-backup-verify--${verifyResult.verification_status}`}>
+              <p
+                className={`stg-backup-verify stg-backup-verify--${verifyResult.verification_status}`}
+              >
                 {verifyResult.verification_status}
               </p>
               <Readonly label="Checksum valid" value={verifyResult.checksum_valid ? 'Yes' : 'No'} />
-              <Readonly label="Integrity valid" value={verifyResult.integrity_valid ? 'Yes' : 'No'} />
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setVerifyResult(null)}>Close</button>
+              <Readonly
+                label="Integrity valid"
+                value={verifyResult.integrity_valid ? 'Yes' : 'No'}
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setVerifyResult(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </ModalPortal>

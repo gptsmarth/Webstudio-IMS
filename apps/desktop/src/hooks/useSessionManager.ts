@@ -35,7 +35,9 @@ export function useSessionManager({
     try {
       const tokens = await AuthenticationService.refresh();
       const profile = await AuthenticationService.getCurrentUser();
-      setSession(sessionFromUser({ ...profile, ...tokens.user, permissions: profile.permissions ?? [] }));
+      setSession(
+        sessionFromUser({ ...profile, ...tokens.user, permissions: profile.permissions ?? [] }),
+      );
     } catch {
       clearSession();
       await AuthTokenStore.clear();

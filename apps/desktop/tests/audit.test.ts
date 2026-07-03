@@ -88,10 +88,13 @@ describe('audit helpers', () => {
 
   it('requires filters before export', () => {
     expect(hasActiveAuditFilters(DEFAULT_AUDIT_FILTERS, '')).toBe(false);
-    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, severity: 'critical' }, '')).toBe(true);
-    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, module: 'Security' }, '')).toBe(true);
-    expect(auditFiltersToExportParams({ ...DEFAULT_AUDIT_FILTERS, operation: 'CREATE' }, '').audit_action).toBe(
-      'CREATE',
+    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, severity: 'critical' }, '')).toBe(
+      true,
     );
+    expect(hasActiveAuditFilters({ ...DEFAULT_AUDIT_FILTERS, module: 'Security' }, '')).toBe(true);
+    expect(
+      auditFiltersToExportParams({ ...DEFAULT_AUDIT_FILTERS, operation: 'CREATE' }, '')
+        .audit_action,
+    ).toBe('CREATE');
   });
 });

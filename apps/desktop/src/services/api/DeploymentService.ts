@@ -91,6 +91,8 @@ export const DeploymentService = {
 
   async getSummary(): Promise<{ summary: OfficeDeploymentSummary | null }> {
     const client = await ApiClientProvider.getClient();
-    return client.get<{ summary: OfficeDeploymentSummary | null }>('/api/v1/deployment/office/summary');
+    return client.get<{ summary: OfficeDeploymentSummary | null }>(
+      '/api/v1/deployment/office/summary',
+    );
   },
 };

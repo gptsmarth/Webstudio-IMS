@@ -34,13 +34,13 @@ export function inventoryFiltersToExportParams(
 
 export function hasActiveInventoryFilters(filters: InventoryFilters, search: string): boolean {
   return Boolean(
-    search.trim()
-    || filters.brandId
-    || filters.locationId
-    || filters.status
-    || filters.color.trim()
-    || filters.createdDateFrom
-    || filters.createdDateTo
-    || filters.includeArchived,
+    search.trim() ||
+    filters.brandId ||
+    filters.locationId ||
+    filters.status ||
+    filters.color.trim() ||
+    filters.createdDateFrom ||
+    filters.createdDateTo ||
+    filters.includeArchived,
   );
 }

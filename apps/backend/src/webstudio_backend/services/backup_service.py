@@ -98,7 +98,9 @@ class BackupService:
 
     def restore_backup(self, filename: str, *, session=None, app_settings=None) -> None:
         if session is not None and app_settings is not None:
-            BackupEngine(session, app_settings, backup_dir=self._backup_dir).restore_backup(filename)
+            BackupEngine(session, app_settings, backup_dir=self._backup_dir).restore_backup(
+                filename
+            )
             return
         from webstudio_backend.core.config import get_settings
 

@@ -482,7 +482,9 @@ class BackupEngine:
             env["PGPASSWORD"] = password
         cmd = ["pg_dump", "-h", host, "-p", port, "-U", user, *(extra_args or []), db_name]
         with output_path.open("w", encoding="utf-8") as handle:
-            subprocess.run(cmd, check=True, stdout=handle, env=env, stderr=subprocess.PIPE, text=True)
+            subprocess.run(
+                cmd, check=True, stdout=handle, env=env, stderr=subprocess.PIPE, text=True
+            )
 
     def _restore_sql_file(self, path: Path, *, dump_mode: str = DATABASE_DUMP_MODE_FULL) -> None:
         if self._settings.is_test and not use_real_database_dump():

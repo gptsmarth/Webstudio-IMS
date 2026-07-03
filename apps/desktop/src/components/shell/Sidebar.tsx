@@ -11,7 +11,12 @@ interface SidebarItemProps {
   onClick: () => void;
 }
 
-export function SidebarItem({ label, icon: Icon, active = false, onClick }: SidebarItemProps): JSX.Element {
+export function SidebarItem({
+  label,
+  icon: Icon,
+  active = false,
+  onClick,
+}: SidebarItemProps): JSX.Element {
   return (
     <button
       type="button"
@@ -22,7 +27,10 @@ export function SidebarItem({ label, icon: Icon, active = false, onClick }: Side
       <Icon
         size={16}
         strokeWidth={active ? 2.25 : 1.75}
-        style={{ color: active ? 'var(--color-primary-500)' : 'var(--color-text-tertiary)', flexShrink: 0 }}
+        style={{
+          color: active ? 'var(--color-primary-500)' : 'var(--color-text-tertiary)',
+          flexShrink: 0,
+        }}
         aria-hidden
       />
       <span>{label}</span>
@@ -39,7 +47,9 @@ export function Sidebar({ companyName, children }: SidebarProps): JSX.Element {
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const [logoFailed, setLogoFailed] = useState(false);
   const logoSrc = WebstudioAssetRegistry.getLogoForTheme(resolvedTheme);
-  const logoFallbackSrc = WebstudioAssetRegistry.getLogoForTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  const logoFallbackSrc = WebstudioAssetRegistry.getLogoForTheme(
+    resolvedTheme === 'dark' ? 'light' : 'dark',
+  );
 
   useEffect(() => {
     setLogoFailed(false);

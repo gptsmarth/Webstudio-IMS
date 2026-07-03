@@ -11,12 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus, SettingValueType
+from webstudio_backend.infrastructure.database.enums import (
+    ReleaseChannel,
+    ReleaseDownloadStatus,
+    SettingValueType,
+)
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
 from webstudio_backend.infrastructure.repositories.client_version_observation_repository import (
     ClientVersionObservationRepository,
 )
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.release_catalog_loader import SUPPORTED_PLATFORMS
 from webstudio_backend.services.release_semver import compare_semver, is_valid_semver
@@ -165,19 +174,35 @@ class ClientUpdateService:
         release_notes = release_payload.get("release_notes") or ""
         published_at = release_payload.get("published_at") or ""
 
-        mobile_version = str((components.get("mobile_flutter") or {}).get("version", release_version))
+        mobile_version = str(
+            (components.get("mobile_flutter") or {}).get("version", release_version)
+        )
         desktop_version = str((components.get("desktop") or {}).get("version", release_version))
         compatibility = release_payload.get("compatibility_matrix") or {}
         mobile_min = str((compatibility.get("mobile") or {}).get("min_version", release_version))
         desktop_min = str((compatibility.get("desktop") or {}).get("min_version", release_version))
 
-        await self._settings_repo.set_value("mobile_latest_version", mobile_version, value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("mobile_release_channel", channel, value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("mobile_release_date", str(published_at), value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("mobile_release_notes", str(release_notes), value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("desktop_latest_version", desktop_version, value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("desktop_min_supported_version", desktop_min, value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("mobile_min_supported_version", mobile_min, value_type=SettingValueType.STRING)
+        await self._settings_repo.set_value(
+            "mobile_latest_version", mobile_version, value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "mobile_release_channel", channel, value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "mobile_release_date", str(published_at), value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "mobile_release_notes", str(release_notes), value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "desktop_latest_version", desktop_version, value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "desktop_min_supported_version", desktop_min, value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "mobile_min_supported_version", mobile_min, value_type=SettingValueType.STRING
+        )
 
         android_url = self._build_download_url(
             platform="mobile_android",
@@ -191,12 +216,18 @@ class ClientUpdateService:
             build_number=build_number,
             channel=channel,
         )
-        await self._settings_repo.set_value("mobile_apk_download_url", android_url, value_type=SettingValueType.STRING)
-        await self._settings_repo.set_value("desktop_windows_download_url", windows_url, value_type=SettingValueType.STRING)
+        await self._settings_repo.set_value(
+            "mobile_apk_download_url", android_url, value_type=SettingValueType.STRING
+        )
+        await self._settings_repo.set_value(
+            "desktop_windows_download_url", windows_url, value_type=SettingValueType.STRING
+        )
 
         ios_url = await self._resolve_app_store_url(release_payload)
         if ios_url:
-            await self._settings_repo.set_value("mobile_ios_app_store_url", ios_url, value_type=SettingValueType.STRING)
+            await self._settings_repo.set_value(
+                "mobile_ios_app_store_url", ios_url, value_type=SettingValueType.STRING
+            )
 
     async def build_enriched_version_payload(self) -> dict[str, Any]:
         from webstudio_backend.services.platform_info_service import build_version_payload
@@ -206,11 +237,15 @@ class ClientUpdateService:
         latest = await self._releases.get_latest_release(channel)
         compatibility = latest.get("compatibility_matrix") or {}
         desktop_compat = compatibility.get("desktop") or {}
-        mobile_compat = compatibility.get("mobile") or {}
 
         desktop_latest = (
             await self._settings_repo.get_string("desktop_latest_version")
-            or str((latest.get("manifest") or {}).get("components", {}).get("desktop", {}).get("version"))
+            or str(
+                (latest.get("manifest") or {})
+                .get("components", {})
+                .get("desktop", {})
+                .get("version")
+            )
             or latest.get("release_version")
             or self._settings.app_version
         )
@@ -250,7 +285,10 @@ class ClientUpdateService:
             return latest
         history = await self._releases.get_release_history(channel=channel, page=1, page_size=50)
         for item in history.get("items", []):
-            if item.get("release_version") == release_version and item.get("build_number") == build_number:
+            if (
+                item.get("release_version") == release_version
+                and item.get("build_number") == build_number
+            ):
                 return await self._releases.get_latest_release(channel)
         raise FileNotFoundError("Release not found in catalog")
 

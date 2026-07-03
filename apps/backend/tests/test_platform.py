@@ -5,15 +5,17 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from webstudio_backend.core.config import Settings
+
 
 @pytest.mark.asyncio
-async def test_api_version(api_client: AsyncClient) -> None:
+async def test_api_version(api_client: AsyncClient, test_settings: Settings) -> None:
     response = await api_client.get("/api/v1/version")
     assert response.status_code == 200
     body = response.json()
     data = body["data"]
-    assert data["backend_version"] == "0.1.0"
-    assert data["version"] == "0.1.0"
+    assert data["backend_version"] == test_settings.app_version
+    assert data["version"] == test_settings.app_version
     assert data["api_version"] == "1.0"
     assert "schema_version" in data
     assert "build_version" in data
@@ -22,7 +24,7 @@ async def test_api_version(api_client: AsyncClient) -> None:
     assert "release_channel" in data
     assert "database_revision" in data
     assert "version_identity" in data
-    assert data["version_identity"]["version"] == "0.1.0"
+    assert data["version_identity"]["version"] == test_settings.app_version
     assert "min_desktop_version" in data
     assert "min_mobile_version" in data
     assert "mobile" in data
@@ -36,12 +38,12 @@ async def test_api_version(api_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_capabilities(api_client: AsyncClient) -> None:
+async def test_api_capabilities(api_client: AsyncClient, test_settings: Settings) -> None:
     response = await api_client.get("/api/v1/capabilities")
     assert response.status_code == 200
     body = response.json()
     data = body["data"]
-    assert data["installed_version"] == "0.1.0"
+    assert data["installed_version"] == test_settings.app_version
     assert data["modules"]["inventory"] is True
     assert data["modules"]["sales"] is True
     assert "ai" in data

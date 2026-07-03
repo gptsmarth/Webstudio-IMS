@@ -6,7 +6,11 @@ interface PageBackButtonProps {
   disabled?: boolean;
 }
 
-export function PageBackButton({ label = 'Back', onClick, disabled }: PageBackButtonProps): JSX.Element {
+export function PageBackButton({
+  label = 'Back',
+  onClick,
+  disabled,
+}: PageBackButtonProps): JSX.Element {
   return (
     <button
       type="button"

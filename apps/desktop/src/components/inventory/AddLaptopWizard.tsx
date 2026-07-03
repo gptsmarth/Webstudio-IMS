@@ -10,7 +10,10 @@ import {
   type FetchedProductSpec,
 } from '../../lib/productSpecLookup';
 import type { Location } from '../../services/api/LocationService';
-import type { CreateProductModelRequest, ProductModel } from '../../services/api/ProductModelService';
+import type {
+  CreateProductModelRequest,
+  ProductModel,
+} from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 import { ProductSpecService } from '../../services/api/ProductSpecService';
@@ -69,12 +72,16 @@ export function AddLaptopWizard({
   const [modelName, setModelName] = useState('');
   const [mode, setMode] = useState<'existing' | 'new'>('new');
   const [productModelId, setProductModelId] = useState('');
-  const [existingLookup, setExistingLookup] = useState<Awaited<ReturnType<typeof lookupExistingModelInventory>> | null>(null);
+  const [existingLookup, setExistingLookup] = useState<Awaited<
+    ReturnType<typeof lookupExistingModelInventory>
+  > | null>(null);
   const [checking, setChecking] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [fetchMessage, setFetchMessage] = useState<string | null>(null);
   const [unitCount, setUnitCount] = useState(1);
-  const [units, setUnits] = useState<SerialUnitEntry[]>([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '' }]);
+  const [units, setUnits] = useState<SerialUnitEntry[]>([
+    { serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '' },
+  ]);
   const [status, setStatus] = useState<InventoryStatus>('available');
   const [cpu, setCpu] = useState('');
   const [gpu, setGpu] = useState('');
@@ -93,7 +100,8 @@ export function AddLaptopWizard({
   const autoFetchTriggered = useRef(false);
 
   const brandModels = productModels.filter((model) => model.brand_id === brandId);
-  const selectedModel = brandModels.find((model) => model.id === productModelId) ?? existingLookup?.model ?? null;
+  const selectedModel =
+    brandModels.find((model) => model.id === productModelId) ?? existingLookup?.model ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -160,23 +168,26 @@ export function AddLaptopWizard({
     setProductImageUrl(spec.product_image_url);
   }, []);
 
-  const applyInternetSpec = useCallback((internet: FetchedProductSpec) => {
-    if (!internet) return;
-    setModelName(internet.model_name || modelName);
-    setCpu(internet.cpu);
-    setGpu(internet.gpu ?? '');
-    setRamGb(String(internet.ram_gb));
-    setStorageValue(internet.storage_value);
-    setStorageUnit(internet.storage_unit);
-    setStorageType(internet.storage_type);
-    setDisplay(internet.display ?? '');
-    setColorOptions(internet.color_options ?? '');
-    if (internet.description) {
-      setDescription(internet.description);
-    }
-    setSpecNotes(internet.notes ?? '');
-    setProductImageUrl(internet.product_image_url);
-  }, [modelName]);
+  const applyInternetSpec = useCallback(
+    (internet: FetchedProductSpec) => {
+      if (!internet) return;
+      setModelName(internet.model_name || modelName);
+      setCpu(internet.cpu);
+      setGpu(internet.gpu ?? '');
+      setRamGb(String(internet.ram_gb));
+      setStorageValue(internet.storage_value);
+      setStorageUnit(internet.storage_unit);
+      setStorageType(internet.storage_type);
+      setDisplay(internet.display ?? '');
+      setColorOptions(internet.color_options ?? '');
+      if (internet.description) {
+        setDescription(internet.description);
+      }
+      setSpecNotes(internet.notes ?? '');
+      setProductImageUrl(internet.product_image_url);
+    },
+    [modelName],
+  );
 
   const runGeminiFetch = useCallback(async (): Promise<boolean> => {
     if (!modelNumber.trim()) return false;
@@ -200,11 +211,15 @@ export function AddLaptopWizard({
         );
         return true;
       }
-      setFetchMessage('Auto-fetch found no match — enter details manually or tap Auto fetch to retry.');
+      setFetchMessage(
+        'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.',
+      );
       return false;
     } catch (err: unknown) {
       const message = err as { message?: string };
-      setFetchMessage(message.message ?? 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.');
+      setFetchMessage(
+        message.message ?? 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.',
+      );
       return false;
     } finally {
       setFetching(false);
@@ -293,7 +308,9 @@ export function AddLaptopWizard({
   };
 
   const submit = async () => {
-    const validUnits = units.filter((unit) => unit.serial_number.trim() && unit.color.trim() && unit.current_location_id);
+    const validUnits = units.filter(
+      (unit) => unit.serial_number.trim() && unit.color.trim() && unit.current_location_id,
+    );
     if (validUnits.length === 0) {
       setError('Enter at least one serial number, color, and location.');
       return;
@@ -317,21 +334,24 @@ export function AddLaptopWizard({
       productModelId: mode === 'existing' ? productModelId : undefined,
       units: validUnits,
       status,
-      newProductModel: mode === 'new' ? {
-        brand_id: brandId,
-        model_number: modelNumber.trim(),
-        model_name: modelName.trim(),
-        cpu: cpu.trim(),
-        gpu: gpu.trim() || null,
-        ram_gb: Number(ramGb),
-        storage_value: storageValue,
-        storage_unit: storageUnit,
-        storage_type: storageType,
-        display: display.trim() || null,
-        color_options: colorOptions.trim() || null,
-        product_image_url: productImageUrl,
-        notes: composeModelNotes(description, specNotes),
-      } : undefined,
+      newProductModel:
+        mode === 'new'
+          ? {
+              brand_id: brandId,
+              model_number: modelNumber.trim(),
+              model_name: modelName.trim(),
+              cpu: cpu.trim(),
+              gpu: gpu.trim() || null,
+              ram_gb: Number(ramGb),
+              storage_value: storageValue,
+              storage_unit: storageUnit,
+              storage_type: storageType,
+              display: display.trim() || null,
+              color_options: colorOptions.trim() || null,
+              product_image_url: productImageUrl,
+              notes: composeModelNotes(description, specNotes),
+            }
+          : undefined,
     };
 
     try {
@@ -346,16 +366,28 @@ export function AddLaptopWizard({
 
   return (
     <div className="inv-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="inv-dialog inv-dialog--wide animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="inv-dialog__header">
           <div>
             <h2 className="inv-dialog__title">Add laptop — {brandName}</h2>
             <p className="inv-dialog__lead">
               Brand is fixed to {brandName}. Step {stepLabel(step, mode)}.
-              {mode === 'existing' && step === 'units' ? ' Add serial numbers for this existing model.' : null}
+              {mode === 'existing' && step === 'units'
+                ? ' Add serial numbers for this existing model.'
+                : null}
             </p>
           </div>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
@@ -377,7 +409,8 @@ export function AddLaptopWizard({
                 autoFocus
               />
               <p className="add-laptop-wizard__hint">
-                We check the database automatically. Existing models skip configuration — you only add serial numbers.
+                We check the database automatically. Existing models skip configuration — you only
+                add serial numbers.
               </p>
               {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
               <button
@@ -395,9 +428,11 @@ export function AddLaptopWizard({
             <div className="add-laptop-wizard__step">
               <p className="add-laptop-wizard__hint">
                 New model <span className="col-mono">{modelNumber}</span>
-                {fetching ? ' — auto-fetching configuration…' : ' — confirm or edit configuration below.'}
+                {fetching
+                  ? ' — auto-fetching configuration…'
+                  : ' — confirm or edit configuration below.'}
               </p>
-              {(productImagePreview || productImageUrl) ? (
+              {productImagePreview || productImageUrl ? (
                 <div className="add-laptop-wizard__image">
                   <div className="inv-product-image">
                     <div className="inv-product-image__frame">
@@ -406,14 +441,24 @@ export function AddLaptopWizard({
                         alt={modelName || modelNumber}
                         className="inv-product-image__img"
                       />
-                      <span className="inv-product-image__badge inv-product-image__badge--remote">Auto fetch</span>
+                      <span className="inv-product-image__badge inv-product-image__badge--remote">
+                        Auto fetch
+                      </span>
                     </div>
-                    <p className="inv-product-image__hint">Preview from auto-fetch. Saved with the new product model.</p>
+                    <p className="inv-product-image__hint">
+                      Preview from auto-fetch. Saved with the new product model.
+                    </p>
                   </div>
                 </div>
               ) : null}
-              <label className="form-label">Model name
-                <input className="input" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. Vivobook 15" />
+              <label className="form-label">
+                Model name
+                <input
+                  className="input"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  placeholder="e.g. Vivobook 15"
+                />
               </label>
               <div className="add-laptop-wizard__actions-row">
                 <button
@@ -448,23 +493,77 @@ export function AddLaptopWizard({
               </div>
               {specTab === 'configuration' ? (
                 <div className="add-laptop-wizard__form-grid" role="tabpanel">
-                  <label>CPU<input className="input" value={cpu} onChange={(e) => setCpu(e.target.value)} /></label>
-                  <label>GPU<input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} /></label>
-                  <label>RAM (GB)<input className="input" value={ramGb} onChange={(e) => setRamGb(e.target.value)} /></label>
-                  <label>Storage<input className="input" value={storageValue} onChange={(e) => setStorageValue(e.target.value)} /></label>
-                  <label>Storage unit
-                    <select className="input" value={storageUnit} onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}>
-                      {STORAGE_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                  <label>
+                    CPU
+                    <input className="input" value={cpu} onChange={(e) => setCpu(e.target.value)} />
+                  </label>
+                  <label>
+                    GPU
+                    <input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} />
+                  </label>
+                  <label>
+                    RAM (GB)
+                    <input
+                      className="input"
+                      value={ramGb}
+                      onChange={(e) => setRamGb(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Storage
+                    <input
+                      className="input"
+                      value={storageValue}
+                      onChange={(e) => setStorageValue(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Storage unit
+                    <select
+                      className="input"
+                      value={storageUnit}
+                      onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}
+                    >
+                      {STORAGE_UNITS.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
                     </select>
                   </label>
-                  <label>Storage type
-                    <select className="input" value={storageType} onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}>
-                      {STORAGE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                  <label>
+                    Storage type
+                    <select
+                      className="input"
+                      value={storageType}
+                      onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}
+                    >
+                      {STORAGE_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </select>
                   </label>
-                  <label className="add-laptop-wizard__field-full">Display<input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} /></label>
-                  <label className="add-laptop-wizard__field-full">Color options<input className="input" value={colorOptions} onChange={(e) => setColorOptions(e.target.value)} placeholder="e.g. Quiet Blue, Cool Silver" /></label>
-                  <label className="add-laptop-wizard__field-full">Additional specs
+                  <label className="add-laptop-wizard__field-full">
+                    Display
+                    <input
+                      className="input"
+                      value={display}
+                      onChange={(e) => setDisplay(e.target.value)}
+                    />
+                  </label>
+                  <label className="add-laptop-wizard__field-full">
+                    Color options
+                    <input
+                      className="input"
+                      value={colorOptions}
+                      onChange={(e) => setColorOptions(e.target.value)}
+                      placeholder="e.g. Quiet Blue, Cool Silver"
+                    />
+                  </label>
+                  <label className="add-laptop-wizard__field-full">
+                    Additional specs
                     <textarea
                       className="input add-laptop-wizard__textarea"
                       rows={4}
@@ -476,7 +575,8 @@ export function AddLaptopWizard({
                 </div>
               ) : (
                 <div className="add-laptop-wizard__description-panel" role="tabpanel">
-                  <label className="form-label">Product description
+                  <label className="form-label">
+                    Product description
                     <textarea
                       className="input add-laptop-wizard__textarea"
                       rows={8}
@@ -498,7 +598,12 @@ export function AddLaptopWizard({
                 >
                   Back
                 </button>
-                <button type="button" className="btn btn-primary" disabled={!modelName.trim() || !cpu.trim()} onClick={() => setStep('units')}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!modelName.trim() || !cpu.trim()}
+                  onClick={() => setStep('units')}
+                >
                   Next — serial numbers
                 </button>
               </div>
@@ -514,9 +619,20 @@ export function AddLaptopWizard({
                 </div>
               )}
               <label className="form-label">Number of units</label>
-              <input type="number" className="input" min={1} max={50} value={unitCount} onChange={(e) => setUnitCount(Number(e.target.value))} />
+              <input
+                type="number"
+                className="input"
+                min={1}
+                max={50}
+                value={unitCount}
+                onChange={(e) => setUnitCount(Number(e.target.value))}
+              />
               <label className="form-label">Initial status</label>
-              <select className="input" value={status} onChange={(e) => setStatus(e.target.value as InventoryStatus)}>
+              <select
+                className="input"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as InventoryStatus)}
+              >
                 <option value="received">Received</option>
                 <option value="available">Available</option>
               </select>
@@ -532,27 +648,43 @@ export function AddLaptopWizard({
                       className="input col-mono"
                       placeholder={`Serial ${index + 1}`}
                       value={unit.serial_number}
-                      onChange={(e) => setUnits((current) => current.map((row, i) => (
-                        i === index ? { ...row, serial_number: e.target.value } : row
-                      )))}
+                      onChange={(e) =>
+                        setUnits((current) =>
+                          current.map((row, i) =>
+                            i === index ? { ...row, serial_number: e.target.value } : row,
+                          ),
+                        )
+                      }
                     />
                     <input
                       className="input"
                       placeholder="Color"
                       value={unit.color}
-                      onChange={(e) => setUnits((current) => current.map((row, i) => (
-                        i === index ? { ...row, color: e.target.value } : row
-                      )))}
+                      onChange={(e) =>
+                        setUnits((current) =>
+                          current.map((row, i) =>
+                            i === index ? { ...row, color: e.target.value } : row,
+                          ),
+                        )
+                      }
                     />
                     <select
                       className="input"
                       value={unit.current_location_id}
-                      onChange={(e) => setUnits((current) => current.map((row, i) => (
-                        i === index ? { ...row, current_location_id: Number(e.target.value) } : row
-                      )))}
+                      onChange={(e) =>
+                        setUnits((current) =>
+                          current.map((row, i) =>
+                            i === index
+                              ? { ...row, current_location_id: Number(e.target.value) }
+                              : row,
+                          ),
+                        )
+                      }
                     >
                       {locations.map((location) => (
-                        <option key={location.id} value={location.id}>{location.name}</option>
+                        <option key={location.id} value={location.id}>
+                          {location.name}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -560,15 +692,28 @@ export function AddLaptopWizard({
               </div>
               {error && <p className="inv-dialog__error">{error}</p>}
               <div className="add-laptop-wizard__nav">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep(mode === 'existing' ? 'model' : 'specs')}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setStep(mode === 'existing' ? 'model' : 'specs')}
+                >
                   Back
                 </button>
                 {mode === 'existing' ? (
-                  <button type="button" className="btn btn-primary" disabled={loading} onClick={() => void submit()}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={loading}
+                    onClick={() => void submit()}
+                  >
                     {loading ? 'Adding…' : 'Add to inventory'}
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" onClick={() => setStep('review')}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setStep('review')}
+                  >
                     Review
                   </button>
                 )}
@@ -578,21 +723,32 @@ export function AddLaptopWizard({
 
           {step === 'review' && mode === 'new' && (
             <div className="add-laptop-wizard__step">
-              <p><strong>{modelNumber}</strong> — {modelName}</p>
+              <p>
+                <strong>{modelNumber}</strong> — {modelName}
+              </p>
               <p>{units.filter((u) => u.serial_number.trim()).length} unit(s) · New model</p>
               <ul className="add-laptop-wizard__review-list">
-                {units.filter((u) => u.serial_number.trim()).map((unit, index) => (
-                  <li key={index}>
-                    <span className="col-mono">{unit.serial_number}</span>
-                    <span>{unit.color}</span>
-                    <span>{locations.find((l) => l.id === unit.current_location_id)?.name}</span>
-                  </li>
-                ))}
+                {units
+                  .filter((u) => u.serial_number.trim())
+                  .map((unit, index) => (
+                    <li key={index}>
+                      <span className="col-mono">{unit.serial_number}</span>
+                      <span>{unit.color}</span>
+                      <span>{locations.find((l) => l.id === unit.current_location_id)?.name}</span>
+                    </li>
+                  ))}
               </ul>
               {error && <p className="inv-dialog__error">{error}</p>}
               <div className="add-laptop-wizard__nav">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep('units')}>Back</button>
-                <button type="button" className="btn btn-primary" disabled={loading} onClick={() => void submit()}>
+                <button type="button" className="btn btn-ghost" onClick={() => setStep('units')}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={loading}
+                  onClick={() => void submit()}
+                >
                   {loading ? 'Adding…' : 'Add to inventory'}
                 </button>
               </div>

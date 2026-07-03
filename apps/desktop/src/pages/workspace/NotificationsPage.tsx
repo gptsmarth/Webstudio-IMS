@@ -22,10 +22,14 @@ export function NotificationsPage(): JSX.Element {
   const [categoryFilter, setCategoryFilter] = useState<'' | 'info' | 'warning' | 'error'>('');
   const debouncedSearch = useDebounce(search, 250);
 
-  const filtered = useMemo(() => center.items.filter((item) => {
-    if (categoryFilter && item.severity !== categoryFilter) return false;
-    return matchesNotificationSearch(item, debouncedSearch);
-  }), [categoryFilter, center.items, debouncedSearch]);
+  const filtered = useMemo(
+    () =>
+      center.items.filter((item) => {
+        if (categoryFilter && item.severity !== categoryFilter) return false;
+        return matchesNotificationSearch(item, debouncedSearch);
+      }),
+    [categoryFilter, center.items, debouncedSearch],
+  );
 
   return (
     <div className="notif-page animate-fade-in">
@@ -35,7 +39,8 @@ export function NotificationsPage(): JSX.Element {
           <div className="notif-page__title-block">
             <h1 className="notif-page__title">Notification Center</h1>
             <p className="notif-page__subtitle">
-              Information, warnings, and critical alerts from inventory, sales, transfers, and Tally sync.
+              Information, warnings, and critical alerts from inventory, sales, transfers, and Tally
+              sync.
             </p>
           </div>
           <span className="badge badge-neutral notif-page__count">{center.unreadCount} unread</span>
@@ -73,7 +78,9 @@ export function NotificationsPage(): JSX.Element {
 
         {center.loading && (
           <div className="notif-page__skeleton">
-            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton notif-card__skeleton" />)}
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton notif-card__skeleton" />
+            ))}
           </div>
         )}
 
@@ -85,52 +92,73 @@ export function NotificationsPage(): JSX.Element {
         )}
 
         <ul className="notif-page__list">
-        {!center.loading && filtered.map((item) => {
-          const parsed = parseNotificationDescription(item.title, item.description);
-          return (
-          <li
-            key={item.id}
-            className={`notif-card notif-card--${item.severity} ${item.is_read ? '' : 'notif-card--unread'}`}
-          >
-            <div className="notif-card__head">
-              <span className={`badge ${notificationCategoryBadgeClass(item.severity)} notif-card__badge`}>
-                {notificationCategoryLabel(item.severity)}
-              </span>
-              <span className="notif-card__type">{notificationTypeLabel(item.notification_type)}</span>
-              <time className="notif-card__time">{formatRelativeTime(item.created_at)}</time>
-            </div>
-            <div className="notif-card__body">
-              <h2 className="notif-card__title">{item.title}</h2>
-              <p className="notif-card__desc">{parsed.summary || item.description}</p>
-              {parsed.details.length > 0 && (
-                <dl className="struct-panel__rows notif-card__details">
-                  {parsed.details.map((row) => (
-                    <div key={row.key} className="struct-panel__row">
-                      <dt>{row.label}</dt>
-                      <dd className={row.label.toLowerCase().includes('id') ? 'col-mono' : undefined}>{row.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              {item.serial_number && <p className="notif-card__serial col-mono">Serial {item.serial_number}</p>}
-            </div>
-            <div className="notif-card__actions">
-              {canManage && !item.is_read && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void center.markRead(item.id)}>
-                  <Check size={14} aria-hidden />
-                  Mark read
-                </button>
-              )}
-              {canManage && !item.is_resolved && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void center.archive(item.id)}>
-                  <Archive size={14} aria-hidden />
-                  Resolve
-                </button>
-              )}
-            </div>
-          </li>
-          );
-        })}
+          {!center.loading &&
+            filtered.map((item) => {
+              const parsed = parseNotificationDescription(item.title, item.description);
+              return (
+                <li
+                  key={item.id}
+                  className={`notif-card notif-card--${item.severity} ${item.is_read ? '' : 'notif-card--unread'}`}
+                >
+                  <div className="notif-card__head">
+                    <span
+                      className={`badge ${notificationCategoryBadgeClass(item.severity)} notif-card__badge`}
+                    >
+                      {notificationCategoryLabel(item.severity)}
+                    </span>
+                    <span className="notif-card__type">
+                      {notificationTypeLabel(item.notification_type)}
+                    </span>
+                    <time className="notif-card__time">{formatRelativeTime(item.created_at)}</time>
+                  </div>
+                  <div className="notif-card__body">
+                    <h2 className="notif-card__title">{item.title}</h2>
+                    <p className="notif-card__desc">{parsed.summary || item.description}</p>
+                    {parsed.details.length > 0 && (
+                      <dl className="struct-panel__rows notif-card__details">
+                        {parsed.details.map((row) => (
+                          <div key={row.key} className="struct-panel__row">
+                            <dt>{row.label}</dt>
+                            <dd
+                              className={
+                                row.label.toLowerCase().includes('id') ? 'col-mono' : undefined
+                              }
+                            >
+                              {row.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    {item.serial_number && (
+                      <p className="notif-card__serial col-mono">Serial {item.serial_number}</p>
+                    )}
+                  </div>
+                  <div className="notif-card__actions">
+                    {canManage && !item.is_read && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => void center.markRead(item.id)}
+                      >
+                        <Check size={14} aria-hidden />
+                        Mark read
+                      </button>
+                    )}
+                    {canManage && !item.is_resolved && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => void center.archive(item.id)}
+                      >
+                        <Archive size={14} aria-hidden />
+                        Resolve
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
         </ul>
       </div>
     </div>

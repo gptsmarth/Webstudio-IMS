@@ -9,9 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import TallyProcessingStatus
-from webstudio_backend.infrastructure.database.models.tally_processed_invoice import TallyProcessedInvoice
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice import (
+    TallyProcessedInvoice,
+)
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
-from webstudio_backend.integrations.tally.incremental_sync import normalize_party_name, normalize_voucher_amount
+from webstudio_backend.integrations.tally.incremental_sync import (
+    normalize_party_name,
+    normalize_voucher_amount,
+)
 
 
 class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice]):

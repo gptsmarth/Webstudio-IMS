@@ -15,8 +15,6 @@ import httpx
 from loguru import logger
 
 from webstudio_backend.services.product_image_service import (
-    IMAGE_CONTENT_TYPES,
-    USER_AGENT,
     _content_looks_like_image,
     _dedupe_urls,
     _normalize_https_url,
@@ -243,11 +241,22 @@ def url_from_trusted_catalog(url: str, *, brand_name: str | None = None) -> bool
             return True
     return any(
         fragment in host
-        for fragment in ("dlcdn", "asus.com", "dell.com", "hp.com", "lenovo.com", "acer.com", "amazon.", "flipkart.")
+        for fragment in (
+            "dlcdn",
+            "asus.com",
+            "dell.com",
+            "hp.com",
+            "lenovo.com",
+            "acer.com",
+            "amazon.",
+            "flipkart.",
+        )
     )
 
 
-def is_relevant_product_image(url: str, model_number: str, *, brand_name: str | None = None) -> bool:
+def is_relevant_product_image(
+    url: str, model_number: str, *, brand_name: str | None = None
+) -> bool:
     if is_blocked_image_host(url):
         return False
     if url_mentions_model(url, model_number):
@@ -255,7 +264,9 @@ def is_relevant_product_image(url: str, model_number: str, *, brand_name: str | 
     return url_from_trusted_catalog(url, brand_name=brand_name)
 
 
-def score_image_candidate_url(url: str, *, brand_name: str | None = None, model_number: str | None = None) -> int:
+def score_image_candidate_url(
+    url: str, *, brand_name: str | None = None, model_number: str | None = None
+) -> int:
     if is_blocked_image_host(url):
         return -100
     host = (urlparse(url).hostname or "").lower()
@@ -272,7 +283,9 @@ def score_image_candidate_url(url: str, *, brand_name: str | None = None, model_
             score += 12
     if any(path.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".avif")):
         score += 6
-    if any(token in path for token in ("product", "catalog", "notebook", "laptop", "hero", "media")):
+    if any(
+        token in path for token in ("product", "catalog", "notebook", "laptop", "hero", "media")
+    ):
         score += 4
     if any(token in path for token in _UNWANTED_PATH_FRAGMENTS):
         score -= 30
@@ -320,7 +333,9 @@ async def _rank_page_images_from_urls(
             if is_relevant_product_image(page_url, model_number, brand_name=brand_name):
                 ranked.append(
                     (
-                        score_image_candidate_url(page_url, brand_name=brand_name, model_number=model_number),
+                        score_image_candidate_url(
+                            page_url, brand_name=brand_name, model_number=model_number
+                        ),
                         page_url,
                     )
                 )
@@ -332,7 +347,12 @@ async def _rank_page_images_from_urls(
             if not is_relevant_product_image(url, model_number, brand_name=brand_name):
                 continue
             ranked.append(
-                (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
+                (
+                    score_image_candidate_url(
+                        url, brand_name=brand_name, model_number=model_number
+                    ),
+                    url,
+                )
             )
 
 
@@ -350,7 +370,7 @@ async def search_bing_image_urls(
         )
         if response.status_code >= 400:
             return []
-        urls = re.findall(r'murl&quot;:&quot;(https://[^&]+?)&quot;', response.text)
+        urls = re.findall(r"murl&quot;:&quot;(https://[^&]+?)&quot;", response.text)
         if not urls:
             urls = re.findall(r'"murl":"(https://[^"]+)"', response.text)
         return _dedupe_urls(urls)[:limit]
@@ -498,12 +518,24 @@ async def discover_product_image_url(
     for raw in candidate_urls or []:
         url = _normalize_https_url(raw)
         if url and is_relevant_product_image(url, model_number, brand_name=brand_name):
-            ranked.append((score_image_candidate_url(url, brand_name=brand_name, model_number=model_number) + 8, url))
+            ranked.append(
+                (
+                    score_image_candidate_url(url, brand_name=brand_name, model_number=model_number)
+                    + 8,
+                    url,
+                )
+            )
 
     for raw in build_brand_direct_image_candidates(model_number, brand_name=brand_name):
         url = _normalize_https_url(raw)
         if url:
-            ranked.append((score_image_candidate_url(url, brand_name=brand_name, model_number=model_number) + 10, url))
+            ranked.append(
+                (
+                    score_image_candidate_url(url, brand_name=brand_name, model_number=model_number)
+                    + 10,
+                    url,
+                )
+            )
 
     async with httpx.AsyncClient(
         timeout=20.0,
@@ -515,7 +547,12 @@ async def discover_product_image_url(
                 if not is_relevant_product_image(url, model_number, brand_name=brand_name):
                     continue
                 ranked.append(
-                    (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
+                    (
+                        score_image_candidate_url(
+                            url, brand_name=brand_name, model_number=model_number
+                        ),
+                        url,
+                    )
                 )
 
         for query in queries:
@@ -523,7 +560,12 @@ async def discover_product_image_url(
                 if not is_relevant_product_image(url, model_number, brand_name=brand_name):
                     continue
                 ranked.append(
-                    (score_image_candidate_url(url, brand_name=brand_name, model_number=model_number), url)
+                    (
+                        score_image_candidate_url(
+                            url, brand_name=brand_name, model_number=model_number
+                        ),
+                        url,
+                    )
                 )
 
         for query in queries:
@@ -564,5 +606,7 @@ async def discover_product_image_url(
                 return stored or url
             return url
 
-    logger.info("No product image found for {} (checked {} ranked candidates)", model_number, checked)
+    logger.info(
+        "No product image found for {} (checked {} ranked candidates)", model_number, checked
+    )
     return None

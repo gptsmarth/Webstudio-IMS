@@ -28,8 +28,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text(
-            f"""
+        sa.text(f"""
             UPDATE {SCHEMA}.users u
             SET password_changed_at = sub.latest_at
             FROM (
@@ -38,17 +37,14 @@ def upgrade() -> None:
                 GROUP BY user_id
             ) sub
             WHERE u.id = sub.user_id AND u.password_changed_at IS NULL
-            """
-        ),
+            """),
     )
     op.execute(
-        sa.text(
-            f"""
+        sa.text(f"""
             UPDATE {SCHEMA}.users
             SET password_changed_at = created_at
             WHERE password_changed_at IS NULL AND password_hash IS NOT NULL
-            """
-        ),
+            """),
     )
 
     op.create_table(
@@ -98,7 +94,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_integration_api_keys_service_type", table_name="integration_api_keys", schema=SCHEMA)
+    op.drop_index(
+        "ix_integration_api_keys_service_type", table_name="integration_api_keys", schema=SCHEMA
+    )
     op.drop_table("integration_api_keys", schema=SCHEMA)
     op.drop_column("users", "password_changed_at", schema=SCHEMA)
     op.drop_column("users", "archived_at", schema=SCHEMA)

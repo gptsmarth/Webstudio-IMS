@@ -5,7 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -48,8 +58,12 @@ class SoftwareRelease(PrimaryKeyMixin, TimestampMixin, Base):
     release_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     checksums: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    compatibility_matrix: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    supported_platforms: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    compatibility_matrix: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    supported_platforms: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

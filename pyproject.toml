@@ -25,7 +25,11 @@ extend-exclude = ["apps/mobile/android"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-ignore = ["B008", "UP046"]
+ignore = ["B008", "UP046", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"database/migrations/**/*.py" = ["E501", "E402"]
+"apps/backend/tests/**/*.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["webstudio_backend"]

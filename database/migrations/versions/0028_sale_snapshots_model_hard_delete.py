@@ -17,27 +17,66 @@ SCHEMA = "webstudio"
 
 
 def upgrade() -> None:
-    op.add_column("sales", sa.Column("snapshot_serial_number", sa.String(length=128), nullable=True), schema=SCHEMA)
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_serial_number", sa.String(length=128), nullable=True),
+        schema=SCHEMA,
+    )
     op.add_column(
         "sales",
         sa.Column("snapshot_product_model_id", postgresql.UUID(as_uuid=True), nullable=True),
         schema=SCHEMA,
     )
-    op.add_column("sales", sa.Column("snapshot_brand_id", sa.BigInteger(), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_brand_name", sa.String(length=128), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_model_number", sa.String(length=128), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_model_name", sa.String(length=256), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_color", sa.String(length=64), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_cpu", sa.String(length=256), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_gpu", sa.String(length=256), nullable=True), schema=SCHEMA)
+    op.add_column(
+        "sales", sa.Column("snapshot_brand_id", sa.BigInteger(), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_brand_name", sa.String(length=128), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_model_number", sa.String(length=128), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_model_name", sa.String(length=256), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales", sa.Column("snapshot_color", sa.String(length=64), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "sales", sa.Column("snapshot_cpu", sa.String(length=256), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "sales", sa.Column("snapshot_gpu", sa.String(length=256), nullable=True), schema=SCHEMA
+    )
     op.add_column("sales", sa.Column("snapshot_ram_gb", sa.Integer(), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_storage_value", sa.Numeric(12, 2), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_storage_unit", sa.String(length=16), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_storage_type", sa.String(length=32), nullable=True), schema=SCHEMA)
-    op.add_column("sales", sa.Column("snapshot_location_name", sa.String(length=128), nullable=True), schema=SCHEMA)
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_storage_value", sa.Numeric(12, 2), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_storage_unit", sa.String(length=16), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_storage_type", sa.String(length=32), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "sales",
+        sa.Column("snapshot_location_name", sa.String(length=128), nullable=True),
+        schema=SCHEMA,
+    )
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.sales AS sale
             SET
                 snapshot_serial_number = item.serial_number,
@@ -60,10 +99,15 @@ def upgrade() -> None:
             INNER JOIN {SCHEMA}.locations AS location ON location.id = item.current_location_id
             WHERE sale.inventory_item_id = item.id
               AND sale.snapshot_serial_number IS NULL
-            """)
-    )
+            """))
 
-    op.alter_column("sales", "inventory_item_id", existing_type=postgresql.UUID(as_uuid=True), nullable=True, schema=SCHEMA)
+    op.alter_column(
+        "sales",
+        "inventory_item_id",
+        existing_type=postgresql.UUID(as_uuid=True),
+        nullable=True,
+        schema=SCHEMA,
+    )
 
     op.drop_constraint("fk_sales_inventory_item", "sales", schema=SCHEMA, type_="foreignkey")
     op.create_foreign_key(
@@ -78,40 +122,36 @@ def upgrade() -> None:
     )
 
     # Permanently remove archived models and their inventory units (sales keep snapshot rows).
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.sales AS sale
             SET inventory_item_id = NULL
             FROM {SCHEMA}.inventory_items AS item
             INNER JOIN {SCHEMA}.product_models AS model ON model.id = item.product_model_id
             WHERE sale.inventory_item_id = item.id
               AND model.status = 'archived'
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.audit_logs AS log
             SET inventory_item_id = NULL
             FROM {SCHEMA}.inventory_items AS item
             INNER JOIN {SCHEMA}.product_models AS model ON model.id = item.product_model_id
             WHERE log.inventory_item_id = item.id
               AND model.status = 'archived'
-            """)
-    )
+            """))
 
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             DELETE FROM {SCHEMA}.inventory_items AS item
             USING {SCHEMA}.product_models AS model
             WHERE item.product_model_id = model.id
               AND model.status = 'archived'
-            """)
-    )
+            """))
 
     op.execute(sa.text(f"DELETE FROM {SCHEMA}.product_models WHERE status = 'archived'"))
 
-    op.drop_constraint("fk_audit_logs_inventory_item", "audit_logs", schema=SCHEMA, type_="foreignkey")
+    op.drop_constraint(
+        "fk_audit_logs_inventory_item", "audit_logs", schema=SCHEMA, type_="foreignkey"
+    )
     op.create_foreign_key(
         "fk_audit_logs_inventory_item",
         "audit_logs",

@@ -86,8 +86,7 @@ def response_anchors_model_number(
     if not sku:
         return False
     haystack = " ".join(
-        str(result.get(key) or "")
-        for key in ("model_name", "notes", "description")
+        str(result.get(key) or "") for key in ("model_name", "notes", "description")
     ).upper()
     if sku in haystack:
         return True
@@ -102,7 +101,15 @@ def response_anchors_model_number(
 _ASUS_GAMING_FAMILY = re.compile(r"^(FA[567]|FX[567]|GU|GA|G[567]|RC7)", re.IGNORECASE)
 _ASUS_CONSUMER_FAMILY = re.compile(r"^(X|E|M|S|UX|K\d|D\d)", re.IGNORECASE)
 _CONSUMER_LINE_MARKERS = ("vivobook", "zenbook", "chromebook", "expertbook")
-_GAMING_LINE_MARKERS = ("tuf gaming", "tuf ", "rog ", "republic of gamers", "strix", "zephyrus", "tuf-a")
+_GAMING_LINE_MARKERS = (
+    "tuf gaming",
+    "tuf ",
+    "rog ",
+    "republic of gamers",
+    "strix",
+    "zephyrus",
+    "tuf-a",
+)
 
 
 def product_line_matches_sku(
@@ -118,8 +125,7 @@ def product_line_matches_sku(
 
     family = model_number.strip().upper().split("-", 1)[0]
     text = " ".join(
-        str(result.get(key) or "")
-        for key in ("model_name", "description", "notes")
+        str(result.get(key) or "") for key in ("model_name", "description", "notes")
     ).lower()
 
     if _ASUS_GAMING_FAMILY.match(family):
@@ -159,7 +165,9 @@ def validate_enrichment_payload(
     return True
 
 
-def normalize_spec(data: dict[str, Any], fallback_name: str, *, source: str = "gemini") -> dict[str, Any]:
+def normalize_spec(
+    data: dict[str, Any], fallback_name: str, *, source: str = "gemini"
+) -> dict[str, Any]:
     storage_unit = str(data.get("storage_unit", "GB")).upper()
     if storage_unit not in {"GB", "TB"}:
         storage_unit = "GB"
@@ -174,7 +182,9 @@ def normalize_spec(data: dict[str, Any], fallback_name: str, *, source: str = "g
         ram_gb = None
 
     storage_raw = data.get("storage_value")
-    storage_value = str(storage_raw).strip() if storage_raw is not None and str(storage_raw).strip() else None
+    storage_value = (
+        str(storage_raw).strip() if storage_raw is not None and str(storage_raw).strip() else None
+    )
 
     image_url = data.get("product_image_url")
     if image_url is not None:
@@ -203,8 +213,10 @@ def normalize_spec(data: dict[str, Any], fallback_name: str, *, source: str = "g
         "warranty",
         "notes",
     )
-    notes_str = compose_spec_notes(data) if any(data.get(key) for key in spec_keys) else (
-        str(notes).strip() if notes else None
+    notes_str = (
+        compose_spec_notes(data)
+        if any(data.get(key) for key in spec_keys)
+        else (str(notes).strip() if notes else None)
     )
 
     description_raw = data.get("description")

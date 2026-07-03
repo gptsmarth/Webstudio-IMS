@@ -19,7 +19,9 @@ from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
 
 
 @pytest_asyncio.fixture

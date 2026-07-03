@@ -1,5 +1,9 @@
 import { useEffect } from 'react';
-import { defaultRouteForPermissions, isRouteAllowedForPermissions, type WorkspaceRoute } from '../config/navigation';
+import {
+  defaultRouteForPermissions,
+  isRouteAllowedForPermissions,
+  type WorkspaceRoute,
+} from '../config/navigation';
 import { useAuthStore, useNavigationStore } from '../store';
 import {
   AuditPage,

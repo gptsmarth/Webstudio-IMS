@@ -70,7 +70,10 @@ export class UpdateService {
       throw new Error('No update artifact available');
     }
     const env = await ConfigService.getEnvironment();
-    const url = ClientUpdateService.resolveAbsoluteDownloadUrl(status.artifact.download_url, env.apiBaseUrl);
+    const url = ClientUpdateService.resolveAbsoluteDownloadUrl(
+      status.artifact.download_url,
+      env.apiBaseUrl,
+    );
     if (!window.update?.downloadArtifact) {
       throw new Error('Desktop update runtime is unavailable');
     }

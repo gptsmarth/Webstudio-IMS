@@ -9,12 +9,7 @@ import { buildSalesTimelineEvents, SalesTimeline } from './SalesTimeline';
 interface SalesDetailDrawerProps {
   workspace: Pick<
     SalesWorkspaceState,
-    | 'selectedId'
-    | 'selectedItem'
-    | 'selectItem'
-    | 'saleDetail'
-    | 'auditLogs'
-    | 'drawerLoading'
+    'selectedId' | 'selectedItem' | 'selectItem' | 'saleDetail' | 'auditLogs' | 'drawerLoading'
   >;
 }
 
@@ -50,7 +45,12 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
           <p className="sales-drawer__eyebrow">Sale record</p>
           <h2 className="sales-drawer__title">{item.invoice_number}</h2>
         </div>
-        <button type="button" className="app-toolbar-icon-btn" onClick={() => workspace.selectItem(null)} aria-label="Close drawer">
+        <button
+          type="button"
+          className="app-toolbar-icon-btn"
+          onClick={() => workspace.selectItem(null)}
+          aria-label="Close drawer"
+        >
           <X size={16} aria-hidden />
         </button>
       </header>
@@ -104,7 +104,9 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                 </div>
                 <div>
                   <dt>Sold by</dt>
-                  <dd>{detail?.recorded_by_display_name ?? item.recorded_by_display_name ?? '—'}</dd>
+                  <dd>
+                    {detail?.recorded_by_display_name ?? item.recorded_by_display_name ?? '—'}
+                  </dd>
                 </div>
                 <div>
                   <dt>Recorded at</dt>
@@ -115,7 +117,9 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
 
             <section className="sales-drawer__section">
               <h3 className="sales-drawer__section-title">Customer</h3>
-              <p className="sales-drawer__text">{detail?.customer_name ?? item.customer_name ?? '—'}</p>
+              <p className="sales-drawer__text">
+                {detail?.customer_name ?? item.customer_name ?? '—'}
+              </p>
               {detail?.notes && <p className="sales-drawer__muted">Notes: {detail.notes}</p>}
             </section>
 
@@ -124,11 +128,16 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
               <dl className="sales-detail-grid">
                 <div>
                   <dt>Brand</dt>
-                  <dd><InventoryBrandCell brandName={detail?.brand_name ?? item.brand_name} /></dd>
+                  <dd>
+                    <InventoryBrandCell brandName={detail?.brand_name ?? item.brand_name} />
+                  </dd>
                 </div>
                 <div>
                   <dt>Model</dt>
-                  <dd>{detail?.model_number ?? item.model_number} — {detail?.model_name ?? item.model_name}</dd>
+                  <dd>
+                    {detail?.model_number ?? item.model_number} —{' '}
+                    {detail?.model_name ?? item.model_name}
+                  </dd>
                 </div>
                 <div>
                   <dt>Serial</dt>
@@ -168,7 +177,9 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                   </div>
                   <div>
                     <dt>Printed invoice</dt>
-                    <dd className="col-mono">{detail.printed_invoice_number ?? detail.invoice_number}</dd>
+                    <dd className="col-mono">
+                      {detail.printed_invoice_number ?? detail.invoice_number}
+                    </dd>
                   </div>
                   <div>
                     <dt>Internal voucher</dt>

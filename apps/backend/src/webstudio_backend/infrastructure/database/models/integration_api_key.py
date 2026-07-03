@@ -23,11 +23,19 @@ class IntegrationApiKey(PrimaryKeyMixin, TimestampMixin, Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.users.id", name="fk_integration_api_keys_created_by", ondelete="SET NULL"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.users.id",
+            name="fk_integration_api_keys_created_by",
+            ondelete="SET NULL",
+        ),
         nullable=True,
     )
     updated_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey(f"{DATABASE_SCHEMA}.users.id", name="fk_integration_api_keys_updated_by", ondelete="SET NULL"),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.users.id",
+            name="fk_integration_api_keys_updated_by",
+            ondelete="SET NULL",
+        ),
         nullable=True,
     )

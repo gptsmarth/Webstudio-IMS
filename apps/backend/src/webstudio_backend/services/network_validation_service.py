@@ -14,7 +14,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.ai.config import resolve_ai_config
 from webstudio_backend.services.discovery_health_service import build_discovery_health_payload
 from webstudio_backend.services.startup_orchestrator import (
@@ -73,11 +75,23 @@ PRODUCTION_INFRASTRUCTURE_CHECKLIST: list[dict[str, str]] = [
     {"id": "NET-03", "item": "All store SSIDs route to same subnet/VLAN", "owner": "IT"},
     {"id": "NET-04", "item": "Windows Firewall allows API + mDNS from store subnet", "owner": "IT"},
     {"id": "NET-05", "item": "PostgreSQL bound to localhost only (port 5432)", "owner": "IT"},
-    {"id": "NET-06", "item": "Desktop client connects via discovery or saved URL", "owner": "Store admin"},
+    {
+        "id": "NET-06",
+        "item": "Desktop client connects via discovery or saved URL",
+        "owner": "Store admin",
+    },
     {"id": "NET-07", "item": "Android client connects on store Wi‑Fi", "owner": "Store admin"},
     {"id": "NET-08", "item": "iOS client connects on store Wi‑Fi", "owner": "Store admin"},
-    {"id": "NET-09", "item": "Client auto-reconnect verified after server restart", "owner": "Store admin"},
-    {"id": "NET-10", "item": "Tally laptop hostname resolves from server (if enabled)", "owner": "Accounts"},
+    {
+        "id": "NET-09",
+        "item": "Client auto-reconnect verified after server restart",
+        "owner": "Store admin",
+    },
+    {
+        "id": "NET-10",
+        "item": "Tally laptop hostname resolves from server (if enabled)",
+        "owner": "Accounts",
+    },
 ]
 
 
@@ -254,7 +268,9 @@ class NetworkValidationService:
         # AI
         ai = await verify_ai_configuration(self._session, self._settings)
         ai_config = await resolve_ai_config(self._session, self._settings)
-        ai_status = {"ok": "passed", "warning": "warning", "failed": "failed"}.get(ai.status, "warning")
+        ai_status = {"ok": "passed", "warning": "warning", "failed": "failed"}.get(
+            ai.status, "warning"
+        )
         checks.append(
             NetworkValidationCheck(
                 key="ai",
@@ -278,7 +294,10 @@ class NetworkValidationService:
                     tally_detail = diagnostics.user_message or "Workstation reachable."
                 else:
                     tally_status = "warning"
-                    tally_detail = diagnostics.user_message or "Tally workstation offline — sync will retry automatically."
+                    tally_detail = (
+                        diagnostics.user_message
+                        or "Tally workstation offline — sync will retry automatically."
+                    )
                     recommendations.append(
                         "Tally laptop may be on another floor or SSID; ensure hostname resolves and TCP "
                         f"{tally_port_int} is open on the laptop when Tally is running.",
@@ -350,7 +369,9 @@ class NetworkValidationService:
         lan_base = _lan_base_url(self._settings, lan_ip)
         subnet_hint = _same_subnet_hint(lan_ip)
         localhost_api = _port_listening("127.0.0.1", api_port)
-        lan_api_socket = _port_listening(lan_ip, api_port) if lan_ip != "127.0.0.1" else localhost_api
+        lan_api_socket = (
+            _port_listening(lan_ip, api_port) if lan_ip != "127.0.0.1" else localhost_api
+        )
 
         # Static server IP
         ip_documented = _ip_documented_for_clients(
@@ -381,7 +402,11 @@ class NetworkValidationService:
         # LAN accessibility
         lan_http_ok, lan_http_detail = await _http_probe(urljoin(lan_base, "/api/v1/health/live"))
         lan_status = "passed" if lan_api_socket and lan_http_ok else "failed"
-        if localhost_api and not lan_api_socket and self._settings.api_host not in {"0.0.0.0", "::"}:
+        if (
+            localhost_api
+            and not lan_api_socket
+            and self._settings.api_host not in {"0.0.0.0", "::"}
+        ):
             lan_status = "failed"
         checks.append(
             NetworkValidationCheck(
@@ -431,9 +456,7 @@ class NetworkValidationService:
         firewall_message = f"Inbound API port {api_port} reachable on LAN interface."
         if localhost_api and not lan_api_socket and lan_ip != "127.0.0.1":
             firewall_status = "failed"
-            firewall_message = (
-                f"API listens locally but not on LAN IP {lan_ip} — check Windows Firewall and bind host."
-            )
+            firewall_message = f"API listens locally but not on LAN IP {lan_ip} — check Windows Firewall and bind host."
             recommendations.append(
                 f"Run infra/windows/configure-firewall.ps1 -ApiPort {api_port} -Subnet {subnet_hint}.",
             )
@@ -470,7 +493,9 @@ class NetworkValidationService:
         # PostgreSQL connectivity
         pg = await verify_postgresql(self._settings)
         mig_status, mig_msg = await _migration_status(self._session)
-        pg_status = "passed" if pg.status == "ok" and mig_status == "passed" and pg_local else "failed"
+        pg_status = (
+            "passed" if pg.status == "ok" and mig_status == "passed" and pg_local else "failed"
+        )
         checks.append(
             NetworkValidationCheck(
                 key="postgresql_connectivity",
@@ -499,10 +524,14 @@ class NetworkValidationService:
         # Server discovery
         discovery_payload = await build_discovery_health_payload(self._session, self._settings)
         discovery_online = bool(discovery_payload.get("online"))
-        discovery_status = "passed" if discovery_online and (mdns_active or discovery_candidates) else "warning"
+        discovery_status = (
+            "passed" if discovery_online and (mdns_active or discovery_candidates) else "warning"
+        )
         if self._settings.mdns_enabled and not mdns_active:
             discovery_status = "warning"
-            recommendations.append("Start mDNS advertisement or provide manual discovery URLs for clients.")
+            recommendations.append(
+                "Start mDNS advertisement or provide manual discovery URLs for clients."
+            )
         checks.append(
             NetworkValidationCheck(
                 key="server_discovery",
@@ -583,7 +612,9 @@ class NetworkValidationService:
             recommendations=recommendations,
         )
 
-    async def build_production_network_report(self, *, mdns_active: bool = False) -> dict[str, object]:
+    async def build_production_network_report(
+        self, *, mdns_active: bool = False
+    ) -> dict[str, object]:
         validation = await self.run_production_network_validation(mdns_active=mdns_active)
         data_root = _storage_path(self._settings)
         lan_ip = self._pick_lan_ip()

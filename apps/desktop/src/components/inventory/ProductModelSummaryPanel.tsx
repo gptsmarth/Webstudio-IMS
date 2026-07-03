@@ -10,7 +10,9 @@ interface ProductModelSummaryPanelProps {
   model: ProductModel | null;
 }
 
-export function ProductModelSummaryPanel({ model }: ProductModelSummaryPanelProps): JSX.Element | null {
+export function ProductModelSummaryPanel({
+  model,
+}: ProductModelSummaryPanelProps): JSX.Element | null {
   const [summary, setSummary] = useState<ProductModelUnitSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +88,8 @@ export function ProductModelSummaryPanel({ model }: ProductModelSummaryPanelProp
             )}
           </div>
           <p className="inv-model-summary__hint">
-            New serial numbers will be linked to this product model — not a duplicate catalogue entry.
+            New serial numbers will be linked to this product model — not a duplicate catalogue
+            entry.
           </p>
         </>
       )}

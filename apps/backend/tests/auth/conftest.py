@@ -8,10 +8,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.app import create_app
-from webstudio_backend.core.config import Settings, get_settings
+from webstudio_backend.core.config import get_settings
 from webstudio_backend.core.dependencies import get_db_session
-from webstudio_backend.infrastructure.database.enums import UserRole
-from webstudio_backend.infrastructure.security.password import hash_password
 from webstudio_backend.services.setup_service import SetupService
 
 TEST_PASSWORD = "SecurePass123!"
@@ -55,7 +53,9 @@ async def initialized_system(db_session: AsyncSession) -> tuple[object, str]:
 
 @pytest_asyncio.fixture
 async def api_client(db_session: AsyncSession) -> AsyncClient:
-    settings = get_settings().model_copy(update={"jwt_secret": "test-jwt-secret-for-auth-tests-32b!"})
+    settings = get_settings().model_copy(
+        update={"jwt_secret": "test-jwt-secret-for-auth-tests-32b!"}
+    )
     app = create_app(settings)
 
     async def override_get_db():

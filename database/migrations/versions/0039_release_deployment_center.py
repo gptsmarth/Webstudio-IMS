@@ -37,7 +37,9 @@ def upgrade() -> None:
         sa.Column("release_channel", release_channel_enum, nullable=True),
         sa.Column("job_id", sa.BigInteger(), nullable=True),
         sa.Column("release_id", sa.BigInteger(), nullable=True),
-        sa.Column("administrator_approved", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "administrator_approved", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("performed_by_user_id", sa.BigInteger(), nullable=True),
         sa.Column("detail_json", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -61,5 +63,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_release_deployment_events_created", table_name="release_deployment_events", schema=SCHEMA)
+    op.drop_index(
+        "ix_release_deployment_events_created",
+        table_name="release_deployment_events",
+        schema=SCHEMA,
+    )
     op.drop_table("release_deployment_events", schema=SCHEMA)

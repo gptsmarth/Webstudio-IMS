@@ -64,7 +64,13 @@ export function CatalogueToolbar({
             Export
           </button>
         )}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onRefresh} disabled={loading} aria-label="Refresh">
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onRefresh}
+          disabled={loading}
+          aria-label="Refresh"
+        >
           <RefreshCw size={14} aria-hidden className={loading ? 'cat-spin' : undefined} />
         </button>
       </div>

@@ -108,16 +108,14 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text(
-            f"""
+        sa.text(f"""
             INSERT INTO {SCHEMA}.system_settings (setting_key, setting_value, value_type, description)
             VALUES
                 ('password_require_lowercase', 'true', 'boolean', 'Require lowercase letters in passwords'),
                 ('password_history_count', '5', 'integer', 'Number of previous passwords to disallow reuse'),
                 ('remember_me_ttl_days', '30', 'integer', 'Refresh token TTL when Remember Me is enabled')
             ON CONFLICT (setting_key) DO NOTHING
-            """
-        ),
+            """),
     )
 
 

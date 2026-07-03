@@ -189,7 +189,9 @@ async def test_recovery_invalidates_sessions(
 
 @pytest.mark.asyncio
 async def test_password_recovery_policy_for_normal_users(api_client: AsyncClient) -> None:
-    response = await api_client.get("/api/v1/auth/password-recovery-policy", params={"role": "admin"})
+    response = await api_client.get(
+        "/api/v1/auth/password-recovery-policy", params={"role": "admin"}
+    )
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["self_service_available"] is False

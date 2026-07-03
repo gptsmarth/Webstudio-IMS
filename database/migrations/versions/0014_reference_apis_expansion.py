@@ -23,17 +23,43 @@ SCHEMA = "webstudio"
 
 def upgrade() -> None:
     # Add columns to brands table
-    op.add_column("brands", sa.Column("short_name", sa.String(length=64), nullable=True), schema=SCHEMA)
-    op.add_column("brands", sa.Column("logo_filename", sa.String(length=256), nullable=True), schema=SCHEMA)
-    op.add_column("brands", sa.Column("display_order", sa.Integer(), nullable=False, server_default="0"), schema=SCHEMA)
+    op.add_column(
+        "brands", sa.Column("short_name", sa.String(length=64), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "brands", sa.Column("logo_filename", sa.String(length=256), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "brands",
+        sa.Column("display_order", sa.Integer(), nullable=False, server_default="0"),
+        schema=SCHEMA,
+    )
 
     # Add columns to product_models table
-    op.add_column("product_models", sa.Column("display", sa.String(length=128), nullable=True), schema=SCHEMA)
-    op.add_column("product_models", sa.Column("color_options", sa.String(length=256), nullable=True), schema=SCHEMA)
-    op.add_column("product_models", sa.Column("warranty", sa.String(length=128), nullable=True), schema=SCHEMA)
-    op.add_column("product_models", sa.Column("product_image_url", sa.String(length=512), nullable=True), schema=SCHEMA)
-    op.add_column("product_models", sa.Column("search_aliases", sa.String(length=1024), nullable=True), schema=SCHEMA)
-    op.add_column("product_models", sa.Column("notes", sa.String(length=2000), nullable=True), schema=SCHEMA)
+    op.add_column(
+        "product_models", sa.Column("display", sa.String(length=128), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "product_models",
+        sa.Column("color_options", sa.String(length=256), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "product_models", sa.Column("warranty", sa.String(length=128), nullable=True), schema=SCHEMA
+    )
+    op.add_column(
+        "product_models",
+        sa.Column("product_image_url", sa.String(length=512), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "product_models",
+        sa.Column("search_aliases", sa.String(length=1024), nullable=True),
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "product_models", sa.Column("notes", sa.String(length=2000), nullable=True), schema=SCHEMA
+    )
 
 
 def downgrade() -> None:

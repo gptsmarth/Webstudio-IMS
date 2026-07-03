@@ -62,16 +62,23 @@ export function useDashboardPage(): DashboardPageState {
     setLoading(true);
     setError(null);
     try {
-      const [snapshot, distribution, activity, notificationResult, tallyDashboard, apiHealth, databaseHealth] =
-        await Promise.all([
-          DashboardService.getOperationsSnapshot(),
-          DashboardService.getDistribution(),
-          DashboardService.getRecentActivity(12),
-          NotificationService.listNotifications({ is_resolved: false, page_size: 8 }),
-          TallyService.getDashboard(),
-          HealthService.getLive().catch(() => null),
-          HealthService.getReady().catch(() => null),
-        ]);
+      const [
+        snapshot,
+        distribution,
+        activity,
+        notificationResult,
+        tallyDashboard,
+        apiHealth,
+        databaseHealth,
+      ] = await Promise.all([
+        DashboardService.getOperationsSnapshot(),
+        DashboardService.getDistribution(),
+        DashboardService.getRecentActivity(12),
+        NotificationService.listNotifications({ is_resolved: false, page_size: 8 }),
+        TallyService.getDashboard(),
+        HealthService.getLive().catch(() => null),
+        HealthService.getReady().catch(() => null),
+      ]);
 
       if (!mountedRef.current) return;
 
@@ -90,7 +97,9 @@ export function useDashboardPage(): DashboardPageState {
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       const message = err as { response?: { data?: { detail?: string } }; message?: string };
-      setError(message.response?.data?.detail ?? message.message ?? 'Unable to load dashboard data.');
+      setError(
+        message.response?.data?.detail ?? message.message ?? 'Unable to load dashboard data.',
+      );
       setData(EMPTY_DATA);
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -103,15 +112,21 @@ export function useDashboardPage(): DashboardPageState {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const markNotificationRead = useCallback(async (id: number) => {
-    await NotificationService.markRead(id);
-    await refresh();
-  }, [refresh]);
+  const markNotificationRead = useCallback(
+    async (id: number) => {
+      await NotificationService.markRead(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const resolveNotification = useCallback(async (id: number) => {
-    await NotificationService.resolve(id);
-    await refresh();
-  }, [refresh]);
+  const resolveNotification = useCallback(
+    async (id: number) => {
+      await NotificationService.resolve(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
   const triggerTallySync = useCallback(async () => {
     setSyncingTally(true);

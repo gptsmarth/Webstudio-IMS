@@ -5,7 +5,10 @@ import type { AuditWorkspaceState } from '../../hooks/useAuditWorkspace';
 import { auditResultBadgeClass, auditResultLabel, formatActorRole } from '../../lib/audit';
 
 interface AuditDetailDrawerProps {
-  workspace: Pick<AuditWorkspaceState, 'selectedId' | 'selectedEntry' | 'selectEntry' | 'drawerLoading'>;
+  workspace: Pick<
+    AuditWorkspaceState,
+    'selectedId' | 'selectedEntry' | 'selectEntry' | 'drawerLoading'
+  >;
 }
 
 export function AuditDetailDrawer({ workspace }: AuditDetailDrawerProps): JSX.Element | null {
@@ -41,12 +44,25 @@ export function AuditDetailDrawer({ workspace }: AuditDetailDrawerProps): JSX.El
           <section className="aud-drawer__section aud-drawer__section--card">
             <h3 className="aud-drawer__section-title">Who & when</h3>
             <dl className="aud-drawer__dl">
-              <div><dt>User</dt><dd>{entry.actor_display_name ?? 'System'}</dd></div>
-              <div><dt>Role</dt><dd>{formatActorRole(entry.actor_role)}</dd></div>
-              <div><dt>Timestamp</dt><dd>{formatDateTime(entry.created_at)}</dd></div>
+              <div>
+                <dt>User</dt>
+                <dd>{entry.actor_display_name ?? 'System'}</dd>
+              </div>
+              <div>
+                <dt>Role</dt>
+                <dd>{formatActorRole(entry.actor_role)}</dd>
+              </div>
+              <div>
+                <dt>Timestamp</dt>
+                <dd>{formatDateTime(entry.created_at)}</dd>
+              </div>
               <div>
                 <dt>Result</dt>
-                <dd><span className={auditResultBadgeClass(entry.result)}>{auditResultLabel(entry.result)}</span></dd>
+                <dd>
+                  <span className={auditResultBadgeClass(entry.result)}>
+                    {auditResultLabel(entry.result)}
+                  </span>
+                </dd>
               </div>
             </dl>
           </section>
@@ -77,11 +93,22 @@ export function AuditDetailDrawer({ workspace }: AuditDetailDrawerProps): JSX.El
             <dl className="aud-drawer__dl">
               <div>
                 <dt>Inventory item</dt>
-                <dd className="col-mono">{entry.related_inventory_item_id ?? entry.serial_number ?? '—'}</dd>
+                <dd className="col-mono">
+                  {entry.related_inventory_item_id ?? entry.serial_number ?? '—'}
+                </dd>
               </div>
-              <div><dt>Sale</dt><dd className="col-mono">{entry.related_sale_id ?? entry.invoice_number ?? '—'}</dd></div>
-              <div><dt>Tally sync</dt><dd>{entry.related_tally_sync ? 'Yes' : 'No'}</dd></div>
-              <div><dt>Request ID</dt><dd className="col-mono aud-drawer__mono">{entry.request_id ?? '—'}</dd></div>
+              <div>
+                <dt>Sale</dt>
+                <dd className="col-mono">{entry.related_sale_id ?? entry.invoice_number ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Tally sync</dt>
+                <dd>{entry.related_tally_sync ? 'Yes' : 'No'}</dd>
+              </div>
+              <div>
+                <dt>Request ID</dt>
+                <dd className="col-mono aud-drawer__mono">{entry.request_id ?? '—'}</dd>
+              </div>
             </dl>
           </section>
 

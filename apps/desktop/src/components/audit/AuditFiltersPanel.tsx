@@ -23,20 +23,20 @@ export function AuditFiltersPanel({
   locations,
 }: AuditFiltersPanelProps): JSX.Element {
   const hasFilters = Boolean(
-    filters.userId
-    || filters.role
-    || filters.operation
-    || filters.module
-    || filters.source
-    || filters.locationId
-    || filters.result
-    || filters.severity
-    || filters.module === 'Security'
-    || filters.serialNumber
-    || filters.invoiceNumber
-    || filters.modelNumber
-    || filters.dateFrom
-    || filters.dateTo,
+    filters.userId ||
+    filters.role ||
+    filters.operation ||
+    filters.module ||
+    filters.source ||
+    filters.locationId ||
+    filters.result ||
+    filters.severity ||
+    filters.module === 'Security' ||
+    filters.serialNumber ||
+    filters.invoiceNumber ||
+    filters.modelNumber ||
+    filters.dateFrom ||
+    filters.dateTo,
   );
 
   return (
@@ -60,7 +60,11 @@ export function AuditFiltersPanel({
       </label>
       <label className="aud-filters__field">
         <span>Role</span>
-        <select className="input" value={filters.role} onChange={(event) => setFilters({ role: event.target.value })}>
+        <select
+          className="input"
+          value={filters.role}
+          onChange={(event) => setFilters({ role: event.target.value })}
+        >
           <option value="">All roles</option>
           {ROLES.map((role) => (
             <option key={role} value={role}>
@@ -74,7 +78,9 @@ export function AuditFiltersPanel({
         <select
           className="input"
           value={filters.operation}
-          onChange={(event) => setFilters({ operation: event.target.value as AuditFilters['operation'] })}
+          onChange={(event) =>
+            setFilters({ operation: event.target.value as AuditFilters['operation'] })
+          }
         >
           <option value="">All operations</option>
           {AUDIT_ACTIONS.map((action) => (
@@ -86,7 +92,11 @@ export function AuditFiltersPanel({
       </label>
       <label className="aud-filters__field">
         <span>Module</span>
-        <select className="input" value={filters.module} onChange={(event) => setFilters({ module: event.target.value })}>
+        <select
+          className="input"
+          value={filters.module}
+          onChange={(event) => setFilters({ module: event.target.value })}
+        >
           <option value="">All modules</option>
           {AUDIT_MODULES.map((module) => (
             <option key={module} value={module}>
@@ -132,7 +142,9 @@ export function AuditFiltersPanel({
         <select
           className="input"
           value={filters.severity}
-          onChange={(event) => setFilters({ severity: event.target.value as AuditFilters['severity'] })}
+          onChange={(event) =>
+            setFilters({ severity: event.target.value as AuditFilters['severity'] })
+          }
         >
           <option value="">All severities</option>
           {AUDIT_SEVERITIES.map((severity) => (
@@ -156,14 +168,28 @@ export function AuditFiltersPanel({
       </label>
       <label className="aud-filters__field">
         <span>From</span>
-        <input className="input" type="date" value={filters.dateFrom} onChange={(event) => setFilters({ dateFrom: event.target.value })} />
+        <input
+          className="input"
+          type="date"
+          value={filters.dateFrom}
+          onChange={(event) => setFilters({ dateFrom: event.target.value })}
+        />
       </label>
       <label className="aud-filters__field">
         <span>To</span>
-        <input className="input" type="date" value={filters.dateTo} onChange={(event) => setFilters({ dateTo: event.target.value })} />
+        <input
+          className="input"
+          type="date"
+          value={filters.dateTo}
+          onChange={(event) => setFilters({ dateTo: event.target.value })}
+        />
       </label>
       {hasFilters && (
-        <button type="button" className="btn btn-ghost btn-sm aud-filters__reset" onClick={resetFilters}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm aud-filters__reset"
+          onClick={resetFilters}
+        >
           Clear filters
         </button>
       )}

@@ -7,7 +7,9 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.ai.types import AIProviderConfig, ProviderCredentials, ProviderId
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
@@ -29,7 +31,9 @@ def mask_api_key(api_key: str) -> str | None:
 VALID_PROVIDERS: tuple[ProviderId, ...] = ("gemini", "groq", "openrouter", "mock")
 
 
-def _parse_provider(value: str | None, *, default: ProviderId = DEFAULT_PRIMARY_PROVIDER) -> ProviderId:
+def _parse_provider(
+    value: str | None, *, default: ProviderId = DEFAULT_PRIMARY_PROVIDER
+) -> ProviderId:
     token = (value or default).strip().lower()
     if token in VALID_PROVIDERS:
         return token  # type: ignore[return-value]
@@ -56,18 +60,24 @@ def _parse_fallback_chain(raw: str | None) -> list[ProviderId]:
 async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AIProviderConfig:
     repo = SystemSettingRepository(session)
 
-    gemini_key = (await repo.get_string("gemini_api_key") or "").strip() or app_settings.gemini_api_key.strip()
+    gemini_key = (
+        await repo.get_string("gemini_api_key") or ""
+    ).strip() or app_settings.gemini_api_key.strip()
     gemini_model = (
         (await repo.get_string("gemini_model") or "").strip()
         or app_settings.gemini_model.strip()
         or DEFAULT_GEMINI_MODEL
     )
 
-    groq_key = (await repo.get_string("groq_api_key") or "").strip() or app_settings.groq_api_key.strip()
+    groq_key = (
+        await repo.get_string("groq_api_key") or ""
+    ).strip() or app_settings.groq_api_key.strip()
     groq_model = (await repo.get_string("groq_model") or "").strip() or DEFAULT_GROQ_MODEL
 
     openrouter_key = (await repo.get_string("openrouter_api_key") or "").strip()
-    openrouter_model = (await repo.get_string("openrouter_model") or "").strip() or DEFAULT_OPENROUTER_MODEL
+    openrouter_model = (
+        await repo.get_string("openrouter_model") or ""
+    ).strip() or DEFAULT_OPENROUTER_MODEL
 
     primary = _parse_provider(await repo.get_string("ai_primary_provider"))
     fallback = _parse_fallback_chain(await repo.get_string("ai_fallback_chain"))
@@ -75,7 +85,9 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
         fallback = [primary, *[provider for provider in fallback if provider != primary]]
 
     enrichment_enabled_raw = await repo.get_string("ai_enrichment_enabled")
-    enrichment_enabled = enrichment_enabled_raw.strip().lower() != "false" if enrichment_enabled_raw else True
+    enrichment_enabled = (
+        enrichment_enabled_raw.strip().lower() != "false" if enrichment_enabled_raw else True
+    )
 
     timeout_raw = await repo.get_string("ai_timeout_seconds")
     try:
@@ -105,7 +117,9 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
     )
 
 
-async def resolve_gemini_credentials(session: AsyncSession, app_settings: Settings) -> tuple[str, str]:
+async def resolve_gemini_credentials(
+    session: AsyncSession, app_settings: Settings
+) -> tuple[str, str]:
     """Backward-compatible Gemini credential resolver."""
     config = await resolve_ai_config(session, app_settings)
     return config.gemini.api_key, config.gemini.model

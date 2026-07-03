@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from webstudio_backend.infrastructure.database.session import session_scope
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.scheduler_runtime_service import (
     SchedulerRuntimeService,
     is_shutdown_requested,
@@ -30,7 +32,9 @@ async def maybe_process_notification_delivery() -> None:
 
 async def notification_scheduler_loop() -> None:
     while not is_shutdown_requested():
-        if not await sleep_until_next_run("notification_delivery", interval_seconds=NOTIFICATION_INTERVAL_SECONDS):
+        if not await sleep_until_next_run(
+            "notification_delivery", interval_seconds=NOTIFICATION_INTERVAL_SECONDS
+        ):
             break
         try:
             await maybe_process_notification_delivery()

@@ -9,7 +9,9 @@ from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.repositories.exceptions import ProductModelHasInventoryError
-from webstudio_backend.infrastructure.repositories.product_model_repository import ProductModelRepository
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
 
 
 class ProductModelDeletionService:

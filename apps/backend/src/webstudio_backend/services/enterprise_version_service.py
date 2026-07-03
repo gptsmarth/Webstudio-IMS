@@ -24,7 +24,9 @@ class EnterpriseVersionService:
 
     async def build_version_identity(self) -> dict[str, Any]:
         database_revision = await resolve_schema_version(self._session)
-        git_commit = resolve_git_commit(catalog=self._catalog, fallback=self._settings.build_version)
+        git_commit = resolve_git_commit(
+            catalog=self._catalog, fallback=self._settings.build_version
+        )
         git_short = resolve_git_short(git_commit, catalog=self._catalog)
         release_channel = self._resolve_release_channel()
         release_date = self._resolve_release_date()
@@ -69,8 +71,7 @@ class EnterpriseVersionService:
         manifest = payload.get("manifest") or {}
         database = manifest.get("database") or {}
         database_revision = (
-            str(database.get("alembic_head") or "").strip()
-            or identity["database_revision"]
+            str(database.get("alembic_head") or "").strip() or identity["database_revision"]
         )
 
         enriched = dict(payload)

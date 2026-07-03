@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.repositories.backup_run_repository import BackupRunRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.backup_completeness import DATABASE_DUMP_MODE_DATA_ONLY
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.backup_manifest import BACKUP_VERSION, SUPPORTED_BACKUP_VERSIONS
@@ -54,15 +56,35 @@ class BackupProductionValidationReport:
 PRODUCTION_RESTORE_CHECKLIST: list[dict[str, str]] = [
     {"id": "BKP-01", "item": "Automatic backup schedule configured", "owner": "Store admin"},
     {"id": "BKP-02", "item": "Manual backup completes successfully", "owner": "Store admin"},
-    {"id": "BKP-03", "item": "Latest archive verifies (checksum + manifest)", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "BKP-03",
+        "item": "Latest archive verifies (checksum + manifest)",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "BKP-04", "item": "Off-site copy stored outside server PC", "owner": "IT"},
     {"id": "BKP-05", "item": "Restore preview reviewed before full restore", "owner": "Main Admin"},
-    {"id": "BKP-06", "item": "Database recovery tested on staging or drill", "owner": "WEBSTUDIO engineer"},
-    {"id": "BKP-07", "item": "Configuration snapshot present in manifest", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "BKP-06",
+        "item": "Database recovery tested on staging or drill",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "BKP-07",
+        "item": "Configuration snapshot present in manifest",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "BKP-08", "item": "Windows Service restarts after server reboot", "owner": "IT"},
     {"id": "BKP-09", "item": "Schedulers resume from runtime state", "owner": "WEBSTUDIO engineer"},
-    {"id": "BKP-10", "item": "Tally checkpoint survives server restart", "owner": "WEBSTUDIO engineer"},
-    {"id": "BKP-11", "item": "Release rollback path documented (Deployment Center)", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "BKP-10",
+        "item": "Tally checkpoint survives server restart",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "BKP-11",
+        "item": "Release rollback path documented (Deployment Center)",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "BKP-12", "item": "Fresh machine recovery procedure documented", "owner": "IT"},
 ]
 
@@ -76,7 +98,9 @@ def _aggregate_status(checks: list[BackupValidationCheck]) -> str:
 
 
 class BackupProductionValidationService:
-    def __init__(self, session: AsyncSession, settings: Settings, *, backup_dir: Path | None = None) -> None:
+    def __init__(
+        self, session: AsyncSession, settings: Settings, *, backup_dir: Path | None = None
+    ) -> None:
         self._session = session
         self._settings = settings
         self._system = SystemSettingRepository(session)
@@ -101,7 +125,9 @@ class BackupProductionValidationService:
         if not backup_env:
             recommendations.append("Set WEBSTUDIO_BACKUP_SCHEDULER=1 in production .env.")
         if schedule == "manual":
-            recommendations.append("Set backup schedule to daily or weekly for automatic protection.")
+            recommendations.append(
+                "Set backup schedule to daily or weekly for automatic protection."
+            )
         checks.append(
             BackupValidationCheck(
                 key="automatic_backups",
@@ -248,13 +274,17 @@ class BackupProductionValidationService:
                         stored_checksum=latest.checksum_sha256,
                         checksum_file_fn=self._engine._checksum_file,  # noqa: SLF001
                     )
-                    integrity_status = "passed" if integrity.overall_health == "healthy" else "failed"
+                    integrity_status = (
+                        "passed" if integrity.overall_health == "healthy" else "failed"
+                    )
                     integrity_message = (
                         f"Latest '{latest.filename}': {integrity.overall_health} "
                         f"(checksum={'ok' if integrity.checksum_valid else 'fail'})."
                     )
                     if integrity_status == "failed":
-                        recommendations.append(f"Re-run backup or verify archive: {latest.filename}")
+                        recommendations.append(
+                            f"Re-run backup or verify archive: {latest.filename}"
+                        )
                 except Exception as exc:  # noqa: BLE001
                     integrity_status = "failed"
                     integrity_message = f"Integrity check failed: {exc}"
@@ -292,7 +322,9 @@ class BackupProductionValidationService:
                     detail="Fix permissions or choose a new backup_folder in settings.",
                 ),
             )
-            recommendations.append("Ensure backup folder is on a dedicated data volume with free space.")
+            recommendations.append(
+                "Ensure backup folder is on a dedicated data volume with free space."
+            )
 
         overall = _aggregate_status(checks)
         return BackupProductionValidationReport(

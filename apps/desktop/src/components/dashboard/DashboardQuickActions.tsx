@@ -1,11 +1,4 @@
-import {
-  FileSpreadsheet,
-  PackagePlus,
-  RefreshCw,
-  Search,
-  ShoppingBag,
-  Truck,
-} from 'lucide-react';
+import { FileSpreadsheet, PackagePlus, RefreshCw, Search, ShoppingBag, Truck } from 'lucide-react';
 import type { WorkspaceRoute } from '../../config/navigation';
 import { P } from '../../services/PermissionService';
 import { useNavigationStore, useSearchStore } from '../../store';
@@ -25,16 +18,50 @@ const ACTIONS: {
   permission?: string;
   tally?: boolean;
 }[] = [
-  { id: 'add', label: 'Add Laptop', icon: PackagePlus, route: 'inventory', permission: P.inventory.create },
+  {
+    id: 'add',
+    label: 'Add Laptop',
+    icon: PackagePlus,
+    route: 'inventory',
+    permission: P.inventory.create,
+  },
   { id: 'search', label: 'Search', icon: Search, search: true },
-  { id: 'transfer', label: 'Transfer', icon: Truck, route: 'inventory', permission: P.inventory.transfer },
-  { id: 'sold', label: 'Mark Sold', icon: ShoppingBag, route: 'inventory', permission: P.sales.create },
+  {
+    id: 'transfer',
+    label: 'Transfer',
+    icon: Truck,
+    route: 'inventory',
+    permission: P.inventory.transfer,
+  },
+  {
+    id: 'sold',
+    label: 'Mark Sold',
+    icon: ShoppingBag,
+    route: 'inventory',
+    permission: P.sales.create,
+  },
   { id: 'sales', label: 'Sales', icon: ShoppingBag, route: 'sales', permission: P.sales.view },
-  { id: 'reports', label: 'Reports & Export', icon: FileSpreadsheet, route: 'reports', permission: P.reports.view },
-  { id: 'tally', label: 'Run Tally Sync', icon: RefreshCw, tally: true, permission: P.tally.runSync },
+  {
+    id: 'reports',
+    label: 'Reports & Export',
+    icon: FileSpreadsheet,
+    route: 'reports',
+    permission: P.reports.view,
+  },
+  {
+    id: 'tally',
+    label: 'Run Tally Sync',
+    icon: RefreshCw,
+    tally: true,
+    permission: P.tally.runSync,
+  },
 ];
 
-export function DashboardQuickActions({ permissions, onTallySync, syncingTally }: DashboardQuickActionsProps): JSX.Element {
+export function DashboardQuickActions({
+  permissions,
+  onTallySync,
+  syncingTally,
+}: DashboardQuickActionsProps): JSX.Element {
   const { setRoute } = useNavigationStore();
   const { open: openSearch } = useSearchStore();
   const granted = new Set(permissions);

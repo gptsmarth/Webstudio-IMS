@@ -3,7 +3,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import { formatInventoryDate } from '../../lib/inventory';
 import { saleStatusBadgeClass, saleStatusLabel } from '../../lib/inventoryDomain';
 import { hasActiveInventoryFilters } from '../../lib/inventoryExport';
-import type { InventorySortField, InventoryWorkspaceState } from '../../hooks/useInventoryWorkspace';
+import type {
+  InventorySortField,
+  InventoryWorkspaceState,
+} from '../../hooks/useInventoryWorkspace';
 import type { InventoryItemDetail } from '../../services/api/InventoryService';
 import { InventoryBrandCell } from './InventoryBrandCell';
 import { InventoryEmptyState } from './InventoryEmptyState';
@@ -20,7 +23,13 @@ interface ColumnDef {
 
 const COLUMNS: ColumnDef[] = [
   { id: 'status', label: 'Status', sortField: 'status', minWidth: 100, defaultWidth: 110 },
-  { id: 'serial', label: 'Serial Number', sortField: 'serial_number', minWidth: 140, defaultWidth: 160 },
+  {
+    id: 'serial',
+    label: 'Serial Number',
+    sortField: 'serial_number',
+    minWidth: 140,
+    defaultWidth: 160,
+  },
   { id: 'brand', label: 'Brand', minWidth: 120, defaultWidth: 130 },
   { id: 'model', label: 'Product Model', minWidth: 150, defaultWidth: 170 },
   { id: 'color', label: 'Unit Color', sortField: 'color', minWidth: 90, defaultWidth: 100 },
@@ -84,10 +93,14 @@ export function InventoryTable({
 }: InventoryTableProps): JSX.Element {
   const [widths, setWidths] = useState<Record<string, number>>(() => {
     const saved = loadWidths();
-    return Object.fromEntries(COLUMNS.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]));
+    return Object.fromEntries(
+      COLUMNS.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]),
+    );
   });
   const [focusedIndex, setFocusedIndex] = useState(-1);
-  const [menuState, setMenuState] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
+  const [menuState, setMenuState] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(
+    null,
+  );
   const resizeRef = useRef<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
@@ -135,9 +148,11 @@ export function InventoryTable({
     if (workspace.sortField !== field) {
       return <ArrowUpDown size={12} aria-hidden className="inv-sort-icon inv-sort-icon--idle" />;
     }
-    return workspace.sortDirection === 'asc'
-      ? <ArrowUp size={12} aria-hidden className="inv-sort-icon" />
-      : <ArrowDown size={12} aria-hidden className="inv-sort-icon" />;
+    return workspace.sortDirection === 'asc' ? (
+      <ArrowUp size={12} aria-hidden className="inv-sort-icon" />
+    ) : (
+      <ArrowDown size={12} aria-hidden className="inv-sort-icon" />
+    );
   };
 
   const onTableKeyDown = (event: React.KeyboardEvent) => {
@@ -185,7 +200,9 @@ export function InventoryTable({
                   key={column.id}
                   style={{ width: widths[column.id], minWidth: column.minWidth }}
                   className={column.sortField ? 'inv-table__th-sortable' : undefined}
-                  onClick={column.sortField ? () => workspace.toggleSort(column.sortField!) : undefined}
+                  onClick={
+                    column.sortField ? () => workspace.toggleSort(column.sortField!) : undefined
+                  }
                 >
                   <span className="inv-table__th-content">
                     {column.label}
@@ -237,10 +254,14 @@ export function InventoryTable({
                     if (node) rowRefs.current.set(index, node);
                     else rowRefs.current.delete(index);
                   }}
-                  className={[
-                    workspace.selectedId === item.id ? 'selected' : '',
-                    focusedIndex === index ? 'inv-table__row--focused' : '',
-                  ].filter(Boolean).join(' ') || undefined}
+                  className={
+                    [
+                      workspace.selectedId === item.id ? 'selected' : '',
+                      focusedIndex === index ? 'inv-table__row--focused' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                   onClick={() => workspace.selectItem(item.id)}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
@@ -260,7 +281,9 @@ export function InventoryTable({
                   <td>{item.color}</td>
                   <td>{item.current_location_name}</td>
                   <td>
-                    <span className={`badge ${saleStatusBadgeClass(item.status, item.is_archived)}`}>
+                    <span
+                      className={`badge ${saleStatusBadgeClass(item.status, item.is_archived)}`}
+                    >
                       {saleStatusLabel(item.status, item.is_archived)}
                     </span>
                   </td>
@@ -301,7 +324,9 @@ export function InventoryTable({
 
       <div className="inv-table-pagination">
         <span className="inv-table-pagination__meta">
-          {workspace.totalItems > 0 ? `${pageStart}–${pageEnd} of ${workspace.totalItems}` : '0 items'}
+          {workspace.totalItems > 0
+            ? `${pageStart}–${pageEnd} of ${workspace.totalItems}`
+            : '0 items'}
         </span>
         <div className="inv-table-pagination__controls">
           <button

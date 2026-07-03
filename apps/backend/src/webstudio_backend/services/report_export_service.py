@@ -44,7 +44,9 @@ class ReportExportService:
             content = await asyncio.to_thread(self._build_pdf, title, headers, collected)
             media_type = "application/pdf"
             extension = "pdf"
-        filename = f"{report_type.value}-report-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.{extension}"
+        filename = (
+            f"{report_type.value}-report-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.{extension}"
+        )
         return content, media_type, filename
 
     @staticmethod

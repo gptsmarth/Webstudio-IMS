@@ -45,13 +45,17 @@ class DashboardDistributionResponse(BaseModel):
     as_of: datetime
 
     @classmethod
-    def from_distribution(cls, distribution: DashboardDistribution) -> DashboardDistributionResponse:
+    def from_distribution(
+        cls, distribution: DashboardDistribution
+    ) -> DashboardDistributionResponse:
         total_available = sum(row.available for row in distribution.by_location)
         return cls(
             total_available_inventory=total_available,
             by_brand=[DistributionGroup.from_row(row) for row in distribution.by_brand],
             by_location=[DistributionGroup.from_row(row) for row in distribution.by_location],
-            by_product_model=[DistributionGroup.from_row(row) for row in distribution.by_product_model],
+            by_product_model=[
+                DistributionGroup.from_row(row) for row in distribution.by_product_model
+            ],
             as_of=distribution.as_of,
         )
 

@@ -9,7 +9,10 @@ from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentSe
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.providers.factory import build_provider_chain, create_provider
 from webstudio_backend.services.ai.providers.mock import MockProvider
-from webstudio_backend.services.ai.types import AIProviderConfig, AIProviderError, ProviderCredentials
+from webstudio_backend.services.ai.types import (
+    AIProviderConfig,
+    AIProviderError,
+)
 
 
 def test_parse_fallback_chain_accepts_json_and_csv() -> None:
@@ -21,7 +24,9 @@ def test_parse_fallback_chain_accepts_json_and_csv() -> None:
 async def test_mock_provider_returns_deterministic_spec() -> None:
     config = AIProviderConfig()
     provider = MockProvider(config)
-    result = await provider.enrich_product_spec("MOCK-TEST-001", brand_name="ASUS", model_name="Vivobook")
+    result = await provider.enrich_product_spec(
+        "MOCK-TEST-001", brand_name="ASUS", model_name="Vivobook"
+    )
     assert result.cpu
     assert result.ram_gb in {8, 16, 32}
     assert result.provider == "mock"
@@ -49,8 +54,10 @@ def test_provider_chain_respects_fallback_order() -> None:
 @pytest.mark.asyncio
 async def test_enrichment_service_uses_mock_provider(db_session, test_settings) -> None:
     AIProviderHealthTracker.reset()
-    from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
     from webstudio_backend.infrastructure.database.enums import SettingValueType
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
 
     repo = SystemSettingRepository(db_session)
     await repo.set_value("ai_primary_provider", "mock", value_type=SettingValueType.STRING)
@@ -68,10 +75,14 @@ async def test_enrichment_service_uses_mock_provider(db_session, test_settings) 
 
 
 @pytest.mark.asyncio
-async def test_enrichment_service_fallback_to_mock_when_gemini_not_configured(db_session, test_settings) -> None:
+async def test_enrichment_service_fallback_to_mock_when_gemini_not_configured(
+    db_session, test_settings
+) -> None:
     AIProviderHealthTracker.reset()
-    from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
     from webstudio_backend.infrastructure.database.enums import SettingValueType
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
 
     repo = SystemSettingRepository(db_session)
     await repo.set_value("gemini_api_key", "", value_type=SettingValueType.STRING)
@@ -84,7 +95,10 @@ async def test_enrichment_service_fallback_to_mock_when_gemini_not_configured(db
 
 
 def test_default_ai_config_uses_gemini_primary() -> None:
-    from webstudio_backend.services.ai.config import DEFAULT_FALLBACK_CHAIN, DEFAULT_PRIMARY_PROVIDER
+    from webstudio_backend.services.ai.config import (
+        DEFAULT_FALLBACK_CHAIN,
+        DEFAULT_PRIMARY_PROVIDER,
+    )
     from webstudio_backend.services.ai.types import AIProviderConfig
 
     config = AIProviderConfig()
@@ -100,10 +114,14 @@ def test_parse_fallback_chain_defaults_to_gemini() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enrichment_service_fallback_to_mock_when_groq_not_configured(db_session, test_settings) -> None:
+async def test_enrichment_service_fallback_to_mock_when_groq_not_configured(
+    db_session, test_settings
+) -> None:
     AIProviderHealthTracker.reset()
-    from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
     from webstudio_backend.infrastructure.database.enums import SettingValueType
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
 
     repo = SystemSettingRepository(db_session)
     await repo.set_value("groq_api_key", "", value_type=SettingValueType.STRING)

@@ -11,20 +11,21 @@ from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import UserRole, UserStatus
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
+from webstudio_backend.infrastructure.repositories.custom_access_role_repository import (
+    CustomAccessRoleRepository,
+)
 from webstudio_backend.infrastructure.repositories.exceptions import (
     LastMainAdminError,
     SelfMainAdminDisableError,
     UserNotFoundError,
 )
-from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
-from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
-from webstudio_backend.infrastructure.repositories.custom_access_role_repository import (
-    CustomAccessRoleRepository,
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
 )
+from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.repositories.user_validation import validate_human_role
 from webstudio_backend.infrastructure.security.password import hash_password
 from webstudio_backend.services.custom_access_role_service import CustomAccessRoleNotFoundError
-from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.services.password_policy_service import PasswordPolicyService
 from webstudio_backend.services.user_admin_service import UserAdminService
 
@@ -99,7 +100,9 @@ class UserService:
     ) -> User:
         user = await self.get_user(user_id)
         old_name = user.display_name
-        updated = await self._users.update_display_name(user, display_name, actor_id=actor.user_id or 0)
+        updated = await self._users.update_display_name(
+            user, display_name, actor_id=actor.user_id or 0
+        )
         await self._recorder.record_user_update(
             updated,
             field_name="display_name",
@@ -217,7 +220,9 @@ class UserService:
             raise SelfMainAdminDisableError()
         if user.role == UserRole.MAIN_ADMIN:
             await self._ensure_not_last_main_admin(user)
-        updated = await self._users.set_status(user, UserStatus.DISABLED, actor_id=actor.user_id or 0)
+        updated = await self._users.set_status(
+            user, UserStatus.DISABLED, actor_id=actor.user_id or 0
+        )
         await self._refresh_tokens.revoke_all_for_user(user.id)
         await self._recorder.record_user_disable(updated, actor=actor)
         return updated
@@ -236,7 +241,9 @@ class UserService:
         await self._recorder.record_user_update(
             updated,
             field_name="lockout",
-            old_value={"locked_until": user.locked_until.isoformat() if user.locked_until else None},
+            old_value={
+                "locked_until": user.locked_until.isoformat() if user.locked_until else None
+            },
             new_value={"locked_until": None, "failed_login_count": 0},
             actor=actor,
             description=f"Account unlocked for user '{user.username}'",

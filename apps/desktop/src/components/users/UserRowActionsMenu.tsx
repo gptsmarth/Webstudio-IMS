@@ -82,7 +82,12 @@ export function UserRowActionsMenu({
       role="menu"
       aria-label={`Actions for ${user.username}`}
     >
-      <button type="button" className="usr-row-menu__item" role="menuitem" onClick={() => onAction('view')}>
+      <button
+        type="button"
+        className="usr-row-menu__item"
+        role="menuitem"
+        onClick={() => onAction('view')}
+      >
         <Eye size={14} aria-hidden /> View details
       </button>
       <button

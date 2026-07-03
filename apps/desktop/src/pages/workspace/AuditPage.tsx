@@ -50,7 +50,9 @@ export function AuditPage(): JSX.Element {
         <WorkspacePageBack />
         <div>
           <h1 className="aud-page__title">Audit Center</h1>
-          <p className="aud-page__subtitle">Immutable history of business operations, system events, and integrations.</p>
+          <p className="aud-page__subtitle">
+            Immutable history of business operations, system events, and integrations.
+          </p>
         </div>
       </header>
 
@@ -58,11 +60,15 @@ export function AuditPage(): JSX.Element {
         <AuditToolbar workspace={workspace} canExport={canExport} />
 
         {!canExport && hasExportPermission && (
-          <p className="aud-page__hint">Apply search or filters to enable filtered Excel/PDF exports.</p>
+          <p className="aud-page__hint">
+            Apply search or filters to enable filtered Excel/PDF exports.
+          </p>
         )}
 
         {!hasExportPermission && (
-          <p className="aud-page__hint">Your account does not have permission to export audit logs.</p>
+          <p className="aud-page__hint">
+            Your account does not have permission to export audit logs.
+          </p>
         )}
 
         <AuditFiltersPanel
@@ -77,7 +83,11 @@ export function AuditPage(): JSX.Element {
           <div className="alert alert-danger aud-page__alert">
             <AlertCircle size={14} aria-hidden />
             <span>{workspace.error}</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void workspace.refresh()}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => void workspace.refresh()}
+            >
               Retry
             </button>
           </div>
@@ -87,13 +97,19 @@ export function AuditPage(): JSX.Element {
           <div className="alert alert-danger aud-page__alert">
             <AlertCircle size={14} aria-hidden />
             <span>{workspace.actionError}</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={workspace.clearActionError}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={workspace.clearActionError}
+            >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className={`aud-page__body ${workspace.selectedId ? 'aud-page__body--drawer-open' : ''}`}>
+        <div
+          className={`aud-page__body ${workspace.selectedId ? 'aud-page__body--drawer-open' : ''}`}
+        >
           {workspace.viewMode === 'table' ? (
             <AuditTable workspace={workspace} onView={(entry) => workspace.selectEntry(entry.id)} />
           ) : (

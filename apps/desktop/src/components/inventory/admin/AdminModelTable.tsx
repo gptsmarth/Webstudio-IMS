@@ -64,21 +64,36 @@ export function AdminModelTable({
               <tr
                 key={row.model.id}
                 className="admin-model-table__row"
-                onClick={() => onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)}
+                onClick={() =>
+                  onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)
+                }
               >
-                <td className="col-mono admin-model-table__model-number">{row.model.model_number}</td>
+                <td className="col-mono admin-model-table__model-number">
+                  {row.model.model_number}
+                </td>
                 <td className="admin-model-table__name">{row.model.model_name}</td>
-                <td className="admin-model-table__config">{formatInventorySpecsTable(row.model)}</td>
-                <td className="admin-model-table__num">{formatInventoryPrice(row.model.selling_price)}</td>
-                <td className="admin-model-table__num">{formatInventoryPrice(row.model.purchase_price)}</td>
+                <td className="admin-model-table__config">
+                  {formatInventorySpecsTable(row.model)}
+                </td>
+                <td className="admin-model-table__num">
+                  {formatInventoryPrice(row.model.selling_price)}
+                </td>
+                <td className="admin-model-table__num">
+                  {formatInventoryPrice(row.model.purchase_price)}
+                </td>
                 <td className="admin-model-table__num">{row.availableUnits}</td>
                 <td className="admin-model-table__num">{row.soldUnits}</td>
                 <td>
-                  <span className={`badge ${row.availableUnits === 0 ? 'badge-warning' : 'badge-success'}`}>
+                  <span
+                    className={`badge ${row.availableUnits === 0 ? 'badge-warning' : 'badge-success'}`}
+                  >
                     {row.availableUnits === 0 ? 'Zero availability' : 'In stock'}
                   </span>
                 </td>
-                <td className="admin-model-table__actions" onClick={(event) => event.stopPropagation()}>
+                <td
+                  className="admin-model-table__actions"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"

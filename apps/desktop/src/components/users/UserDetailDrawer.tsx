@@ -46,7 +46,9 @@ function AuditRow({ log }: { log: AuditLogEntry }): JSX.Element {
 function LoginEventRow({ event }: { event: UserLoginEventSummary }): JSX.Element {
   return (
     <li className="usr-audit-row">
-      <span className="usr-audit-row__action">{event.success ? 'Login success' : 'Login failed'}</span>
+      <span className="usr-audit-row__action">
+        {event.success ? 'Login success' : 'Login failed'}
+      </span>
       <span className="usr-audit-row__meta">
         {formatDateTime(event.created_at)}
         {event.ip_address ? ` · ${event.ip_address}` : ''}
@@ -138,9 +140,7 @@ export function UserDetailDrawer({ workspace }: UserDetailDrawerProps): JSX.Elem
                 </div>
                 <div>
                   <dt>Status</dt>
-                  <dd>
-                    {status && <span className={status.badgeClass}>{status.label}</span>}
-                  </dd>
+                  <dd>{status && <span className={status.badgeClass}>{status.label}</span>}</dd>
                 </div>
                 <div>
                   <dt>Last login</dt>
@@ -177,7 +177,11 @@ export function UserDetailDrawer({ workspace }: UserDetailDrawerProps): JSX.Elem
           {tab === 'permissions' && (
             <section className="usr-drawer__section usr-drawer__section--permissions">
               <h3 className="usr-drawer__section-title">Permissions</h3>
-              <PermissionViewer rolePermissions={workspace.rolePermissions} selectedRole={user.role} compact />
+              <PermissionViewer
+                rolePermissions={workspace.rolePermissions}
+                selectedRole={user.role}
+                compact
+              />
             </section>
           )}
 

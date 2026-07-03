@@ -18,12 +18,7 @@ import { inventoryFiltersToExportParams } from '../lib/inventoryExport';
 import { AuditService, type AuditLogEntry } from '../services/api/AuditService';
 import { useInventoryStore } from '../store';
 
-export type InventorySortField =
-  | 'serial_number'
-  | 'status'
-  | 'color'
-  | 'updated_at'
-  | 'created_at';
+export type InventorySortField = 'serial_number' | 'status' | 'color' | 'updated_at' | 'created_at';
 
 export interface InventoryFilters {
   brandId: number | null;
@@ -78,10 +73,7 @@ export interface InventoryWorkspaceState {
   markSold: (payload: MarkSoldRequest) => Promise<void>;
   archiveItem: (id?: string) => Promise<void>;
   restoreItem: (id?: string) => Promise<void>;
-  updateItem: (patch: {
-    serial_number?: string;
-    color?: string;
-  }) => Promise<void>;
+  updateItem: (patch: { serial_number?: string; color?: string }) => Promise<void>;
   addInventoryBatch: (payload: AddInventoryBatchRequest) => Promise<void>;
   addLaptopWizard: (payload: AddLaptopWizardRequest) => Promise<void>;
   exportInventory: (format: 'xlsx' | 'pdf') => Promise<void>;
@@ -97,7 +89,13 @@ function parseApiError(err: unknown): string {
   return message.response?.data?.detail ?? message.message ?? 'Request failed.';
 }
 
-function filtersToParams(filters: InventoryFilters, search: string, page: number, pageSize: number, sort: string): InventoryListParams {
+function filtersToParams(
+  filters: InventoryFilters,
+  search: string,
+  page: number,
+  pageSize: number,
+  sort: string,
+): InventoryListParams {
   const params: InventoryListParams = {
     page,
     page_size: pageSize,
@@ -271,16 +269,19 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
     }
   }, []);
 
-  const selectItem = useCallback((id: string | null) => {
-    setSelectedId(id);
-    if (id) void loadDrawerData(id);
-    else {
-      setAuditLogs([]);
-      setSaleDetail(null);
-      setProductModel(null);
-      setSiblingUnits([]);
-    }
-  }, [loadDrawerData]);
+  const selectItem = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (id) void loadDrawerData(id);
+      else {
+        setAuditLogs([]);
+        setSaleDetail(null);
+        setProductModel(null);
+        setSiblingUnits([]);
+      }
+    },
+    [loadDrawerData],
+  );
 
   const refreshSelected = useCallback(async () => {
     if (!selectedId) return;
@@ -305,149 +306,173 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
     clearFocus();
   }, [focus, clearFocus, selectItem]);
 
-  const runAction = useCallback(async (operation: () => Promise<void>) => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      await operation();
-      await refreshSelected();
-    } catch (err: unknown) {
-      const message = parseApiError(err);
-      setActionError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(false);
-    }
-  }, [refreshSelected]);
-
-  const transferLocation = useCallback(async (locationId: number) => {
-    if (!selectedId) return;
-    await runAction(async () => {
-      await InventoryService.transferLocation(selectedId, locationId);
-    });
-  }, [runAction, selectedId]);
-
-  const markSold = useCallback(async (payload: MarkSoldRequest) => {
-    if (!selectedId) return;
-    await runAction(async () => {
-      const response = await InventoryService.markSold(selectedId, payload);
-      setSaleDetail(response.sale);
-    });
-  }, [runAction, selectedId]);
-
-  const archiveItem = useCallback(async (id?: string) => {
-    const targetId = id ?? selectedId;
-    if (!targetId) return;
-    await runAction(async () => {
-      await InventoryService.archiveItem(targetId);
-    });
-  }, [runAction, selectedId]);
-
-  const restoreItem = useCallback(async (id?: string) => {
-    const targetId = id ?? selectedId;
-    if (!targetId) return;
-    await runAction(async () => {
-      await InventoryService.restoreItem(targetId);
-    });
-  }, [runAction, selectedId]);
-
-  const updateItem = useCallback(async (patch: {
-    serial_number?: string;
-    color?: string;
-  }) => {
-    if (!selectedId) return;
-    await runAction(async () => {
-      await InventoryService.updateItem(selectedId, patch);
-    });
-  }, [runAction, selectedId]);
-
-  const addInventoryBatch = useCallback(async (payload: AddInventoryBatchRequest) => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      let modelId = payload.productModelId;
-      if (payload.mode === 'new' && payload.newProductModel) {
-        const model = await ProductModelService.createModel(payload.newProductModel);
-        modelId = model.id;
-        await loadProductModels(payload.newProductModel.brand_id);
+  const runAction = useCallback(
+    async (operation: () => Promise<void>) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await operation();
+        await refreshSelected();
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
       }
-      if (!modelId) throw new Error('Product model is required.');
+    },
+    [refreshSelected],
+  );
 
-      let lastCreated: InventoryItemDetail | null = null;
-      for (const serialNumber of payload.serialNumbers) {
-        lastCreated = await InventoryService.createItem({
-          serial_number: serialNumber,
-          product_model_id: modelId,
-          color: payload.color,
-          current_location_id: payload.current_location_id,
-          status: payload.status,
-        });
+  const transferLocation = useCallback(
+    async (locationId: number) => {
+      if (!selectedId) return;
+      await runAction(async () => {
+        await InventoryService.transferLocation(selectedId, locationId);
+      });
+    },
+    [runAction, selectedId],
+  );
+
+  const markSold = useCallback(
+    async (payload: MarkSoldRequest) => {
+      if (!selectedId) return;
+      await runAction(async () => {
+        const response = await InventoryService.markSold(selectedId, payload);
+        setSaleDetail(response.sale);
+      });
+    },
+    [runAction, selectedId],
+  );
+
+  const archiveItem = useCallback(
+    async (id?: string) => {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      await runAction(async () => {
+        await InventoryService.archiveItem(targetId);
+      });
+    },
+    [runAction, selectedId],
+  );
+
+  const restoreItem = useCallback(
+    async (id?: string) => {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      await runAction(async () => {
+        await InventoryService.restoreItem(targetId);
+      });
+    },
+    [runAction, selectedId],
+  );
+
+  const updateItem = useCallback(
+    async (patch: { serial_number?: string; color?: string }) => {
+      if (!selectedId) return;
+      await runAction(async () => {
+        await InventoryService.updateItem(selectedId, patch);
+      });
+    },
+    [runAction, selectedId],
+  );
+
+  const addInventoryBatch = useCallback(
+    async (payload: AddInventoryBatchRequest) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        let modelId = payload.productModelId;
+        if (payload.mode === 'new' && payload.newProductModel) {
+          const model = await ProductModelService.createModel(payload.newProductModel);
+          modelId = model.id;
+          await loadProductModels(payload.newProductModel.brand_id);
+        }
+        if (!modelId) throw new Error('Product model is required.');
+
+        let lastCreated: InventoryItemDetail | null = null;
+        for (const serialNumber of payload.serialNumbers) {
+          lastCreated = await InventoryService.createItem({
+            serial_number: serialNumber,
+            product_model_id: modelId,
+            color: payload.color,
+            current_location_id: payload.current_location_id,
+            status: payload.status,
+          });
+        }
+
+        if (lastCreated) {
+          setSelectedId(lastCreated.id);
+          await loadDrawerData(lastCreated.id);
+        }
+        await refresh();
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
       }
+    },
+    [loadDrawerData, loadProductModels, refresh],
+  );
 
-      if (lastCreated) {
-        setSelectedId(lastCreated.id);
-        await loadDrawerData(lastCreated.id);
+  const addLaptopWizard = useCallback(
+    async (payload: AddLaptopWizardRequest) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        let modelId = payload.productModelId;
+        if (payload.mode === 'new' && payload.newProductModel) {
+          const model = await ProductModelService.createModel(payload.newProductModel);
+          modelId = model.id;
+          await loadProductModels(payload.brandId);
+        }
+        if (!modelId) throw new Error('Product model is required.');
+
+        let lastCreated: InventoryItemDetail | null = null;
+        for (const unit of payload.units) {
+          lastCreated = await InventoryService.createItem({
+            serial_number: unit.serial_number.trim(),
+            product_model_id: modelId,
+            color: unit.color.trim(),
+            current_location_id: unit.current_location_id,
+            status: payload.status,
+          });
+        }
+
+        if (lastCreated) {
+          setSelectedId(lastCreated.id);
+          await loadDrawerData(lastCreated.id);
+        }
+        await refresh();
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
       }
-      await refresh();
-    } catch (err: unknown) {
-      const message = parseApiError(err);
-      setActionError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(false);
-    }
-  }, [loadDrawerData, loadProductModels, refresh]);
+    },
+    [loadDrawerData, loadProductModels, refresh],
+  );
 
-  const addLaptopWizard = useCallback(async (payload: AddLaptopWizardRequest) => {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      let modelId = payload.productModelId;
-      if (payload.mode === 'new' && payload.newProductModel) {
-        const model = await ProductModelService.createModel(payload.newProductModel);
-        modelId = model.id;
-        await loadProductModels(payload.brandId);
+  const exportInventory = useCallback(
+    async (format: 'xlsx' | 'pdf') => {
+      setActionError(null);
+      try {
+        await ReportService.exportReport(
+          'inventory',
+          format,
+          inventoryFiltersToExportParams(filters, debouncedSearch, sortField, sortDirection),
+        );
+      } catch (err: unknown) {
+        setActionError(parseApiError(err));
+        throw err;
       }
-      if (!modelId) throw new Error('Product model is required.');
-
-      let lastCreated: InventoryItemDetail | null = null;
-      for (const unit of payload.units) {
-        lastCreated = await InventoryService.createItem({
-          serial_number: unit.serial_number.trim(),
-          product_model_id: modelId,
-          color: unit.color.trim(),
-          current_location_id: unit.current_location_id,
-          status: payload.status,
-        });
-      }
-
-      if (lastCreated) {
-        setSelectedId(lastCreated.id);
-        await loadDrawerData(lastCreated.id);
-      }
-      await refresh();
-    } catch (err: unknown) {
-      const message = parseApiError(err);
-      setActionError(message);
-      throw new Error(message);
-    } finally {
-      setActionLoading(false);
-    }
-  }, [loadDrawerData, loadProductModels, refresh]);
-
-  const exportInventory = useCallback(async (format: 'xlsx' | 'pdf') => {
-    setActionError(null);
-    try {
-      await ReportService.exportReport(
-        'inventory',
-        format,
-        inventoryFiltersToExportParams(filters, debouncedSearch, sortField, sortDirection),
-      );
-    } catch (err: unknown) {
-      setActionError(parseApiError(err));
-      throw err;
-    }
-  }, [debouncedSearch, filters, sortDirection, sortField]);
+    },
+    [debouncedSearch, filters, sortDirection, sortField],
+  );
 
   return {
     items,

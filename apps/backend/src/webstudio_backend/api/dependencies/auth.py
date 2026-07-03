@@ -9,20 +9,18 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.core.config import Settings, get_settings
+from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import DbSessionDep, get_app_settings
 from webstudio_backend.core.permissions import (
-    permissions_for_role,
     user_has_any_permission,
     user_has_permission,
 )
-from webstudio_backend.services.permission_resolver import PermissionResolver
-from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import UserRole
 from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.infrastructure.security.jwt import TokenError, decode_access_token
+from webstudio_backend.services.permission_resolver import PermissionResolver
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -130,7 +128,9 @@ MainAdminDep = Annotated[AuthenticatedUser, Depends(require_main_admin)]
 InventoryViewDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:view"))]
 InventoryCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:create"))]
 InventoryEditDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:edit"))]
-InventoryTransferDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:transfer"))]
+InventoryTransferDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("inventory:transfer"))
+]
 InventoryArchiveDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:archive"))]
 InventoryRestoreDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:restore"))]
 
@@ -154,11 +154,15 @@ BrandsOrInventoryViewDep = Annotated[
         require_any_permission("brands:view", "inventory:view", "inventory:create"),
     ),
 ]
-BrandsCreateDep = Annotated[AuthenticatedUser, Depends(require_any_permission("brands:create", "brands:edit"))]
+BrandsCreateDep = Annotated[
+    AuthenticatedUser, Depends(require_any_permission("brands:create", "brands:edit"))
+]
 BrandsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:edit"))]
 BrandsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:delete"))]
 
-ProductModelsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:view"))]
+ProductModelsViewDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("product_models:view"))
+]
 ProductModelsOrInventoryViewDep = Annotated[
     AuthenticatedUser,
     Depends(
@@ -169,7 +173,9 @@ ProductModelsOrInventoryViewDep = Annotated[
         ),
     ),
 ]
-ProductModelsCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:create"))]
+ProductModelsCreateDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("product_models:create"))
+]
 ProductModelsEditDep = Annotated[
     AuthenticatedUser,
     Depends(
@@ -180,7 +186,9 @@ ProductModelsEditDep = Annotated[
         ),
     ),
 ]
-ProductModelsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("product_models:delete"))]
+ProductModelsDeleteDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("product_models:delete"))
+]
 ProductModelsSellingPriceDep = Annotated[
     AuthenticatedUser,
     Depends(
@@ -197,7 +205,9 @@ LocationsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("lo
 UsersViewDep = Annotated[AuthenticatedUser, Depends(require_permission("users:view"))]
 UsersCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("users:create"))]
 UsersEditDep = Annotated[AuthenticatedUser, Depends(require_permission("users:edit"))]
-UsersResetPasswordDep = Annotated[AuthenticatedUser, Depends(require_permission("users:reset_password"))]
+UsersResetPasswordDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("users:reset_password"))
+]
 UsersActivateDep = Annotated[AuthenticatedUser, Depends(require_permission("users:activate"))]
 UsersDeactivateDep = Annotated[AuthenticatedUser, Depends(require_permission("users:deactivate"))]
 
@@ -206,8 +216,12 @@ AuditViewDep = Annotated[AuthenticatedUser, Depends(require_permission("audit:vi
 AuditLifecycleDep = Annotated[AuthenticatedUser, Depends(require_permission("audit:lifecycle"))]
 
 # Notifications
-NotificationsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("notifications:view"))]
-NotificationsManageDep = Annotated[AuthenticatedUser, Depends(require_permission("notifications:manage"))]
+NotificationsViewDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("notifications:view"))
+]
+NotificationsManageDep = Annotated[
+    AuthenticatedUser, Depends(require_permission("notifications:manage"))
+]
 
 # Settings
 SettingsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("settings:view"))]

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import NotificationsManageDep, NotificationsViewDep
 from webstudio_backend.api.notification_errors import raise_notification_error
-from webstudio_backend.api.schemas.notification import NotificationDetail
 from webstudio_backend.api.response_helpers import build_page_meta
+from webstudio_backend.api.schemas.notification import NotificationDetail
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
@@ -26,7 +24,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     NotificationAlreadyResolvedError,
     NotificationNotFoundError,
 )
-from webstudio_backend.infrastructure.repositories.notification_filters import NotificationSearchFilters
+from webstudio_backend.infrastructure.repositories.notification_filters import (
+    NotificationSearchFilters,
+)
 from webstudio_backend.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])

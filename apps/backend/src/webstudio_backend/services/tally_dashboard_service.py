@@ -12,11 +12,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import NotificationCategory
 from webstudio_backend.infrastructure.database.models.notification import Notification
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
-from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import TallyProcessedInvoiceRepository
-from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import TallySyncHistoryRepository
-from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import TallySyncLogRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
+    TallyProcessedInvoiceRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import (
+    TallySyncHistoryRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import (
+    TallySyncLogRepository,
+)
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 from webstudio_backend.services.tally_sync_service import TallySyncService
@@ -56,7 +66,9 @@ class TallyDashboardService:
             last_successful_connection_at = company.last_successful_connection_at
             last_failed_connection_at = company.last_failed_connection_at
 
-        last_sync = company.last_successful_sync_at if company and company.last_successful_sync_at else None
+        last_sync = (
+            company.last_successful_sync_at if company and company.last_successful_sync_at else None
+        )
         next_sync = await self._resolve_next_scheduled_sync(last_sync=last_sync, interval=interval)
 
         pending_notifications = await self._pending_notification_count()
@@ -66,12 +78,21 @@ class TallyDashboardService:
             else []
         )
 
-        stats = {"invoices_processed": 0, "inventory_entries": 0, "duplicates": 0, "missing_serials": 0, "model_mismatches": 0, "failures": 0}
+        stats = {
+            "invoices_processed": 0,
+            "inventory_entries": 0,
+            "duplicates": 0,
+            "missing_serials": 0,
+            "model_mismatches": 0,
+            "failures": 0,
+        }
         if company_id is not None:
             aggregated = await self._sync_logs.aggregate_stats(company_id)
             stats = {
                 "invoices_processed": aggregated["invoices_processed"],
-                "inventory_entries": aggregated["successfully_updated"] + aggregated["missing_serial"] + aggregated["missing_model"],
+                "inventory_entries": aggregated["successfully_updated"]
+                + aggregated["missing_serial"]
+                + aggregated["missing_model"],
                 "duplicates": aggregated["already_sold"],
                 "missing_serials": aggregated["missing_serial"],
                 "model_mismatches": aggregated["model_mismatches"],
@@ -110,9 +131,11 @@ class TallyDashboardService:
             "companies": [
                 {
                     "company_name": item.company_name,
-                    "last_successful_sync_time": item.last_successful_sync_at.isoformat()
-                    if item.last_successful_sync_at
-                    else None,
+                    "last_successful_sync_time": (
+                        item.last_successful_sync_at.isoformat()
+                        if item.last_successful_sync_at
+                        else None
+                    ),
                     "last_error": item.last_error,
                     "connection_status": item.connection_status,
                     "connectivity_status": item.connectivity_status,
@@ -174,11 +197,17 @@ class TallyDashboardService:
             total_imported = await self._sync_history.sum_total_imported(company_id)
             last_invoice = await self._processed_invoices.get_last_successful_import(company_id)
             if last_invoice:
-                last_invoice_imported = last_invoice.printed_invoice_number or last_invoice.tally_voucher_number
+                last_invoice_imported = (
+                    last_invoice.printed_invoice_number or last_invoice.tally_voucher_number
+                )
                 if last_invoice.voucher_date:
                     last_invoice_date = last_invoice.voucher_date.isoformat()
 
-        is_connected = enabled and connection_status == "connected" and connectivity_status not in {"offline", "xml_error"}
+        is_connected = (
+            enabled
+            and connection_status == "connected"
+            and connectivity_status not in {"offline", "xml_error"}
+        )
         scheduler_env = os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
         sync_in_progress = bool(company and company.sync_in_progress)
 
@@ -191,7 +220,10 @@ class TallyDashboardService:
         elif not scheduler_env:
             scheduler_status = "manual"
             scheduler_label = "Manual sync only (scheduler not active on server)"
-        elif connectivity_status in {"offline", "xml_error"} or connection_status in {"disconnected", "error"}:
+        elif connectivity_status in {"offline", "xml_error"} or connection_status in {
+            "disconnected",
+            "error",
+        }:
             scheduler_status = "waiting"
             scheduler_label = "Waiting for Tally workstation"
         else:
@@ -233,7 +265,11 @@ class TallyDashboardService:
             "scheduler_status": scheduler_status,
             "scheduler_status_label": scheduler_label,
             "retry_countdown_seconds": retry_countdown_seconds if pending_retry else None,
-            "retry_countdown_label": _format_countdown(retry_countdown_seconds) if pending_retry and retry_countdown_seconds is not None else None,
+            "retry_countdown_label": (
+                _format_countdown(retry_countdown_seconds)
+                if pending_retry and retry_countdown_seconds is not None
+                else None
+            ),
             "sync_health": sync_health,
             "pending_retry": pending_retry,
             "todays_imports": imported_today,
@@ -302,31 +338,35 @@ class TallyDashboardService:
         )
         buffer = io.StringIO()
         writer = csv.writer(buffer)
-        writer.writerow([
-            "Date",
-            "Start Time",
-            "End Time",
-            "Duration",
-            "Invoices Checked",
-            "Imported",
-            "Skipped",
-            "Errors",
-            "Status",
-            "Error Summary",
-        ])
+        writer.writerow(
+            [
+                "Date",
+                "Start Time",
+                "End Time",
+                "Duration",
+                "Invoices Checked",
+                "Imported",
+                "Skipped",
+                "Errors",
+                "Status",
+                "Error Summary",
+            ]
+        )
         for row in rows:
-            writer.writerow([
-                row["sync_date"],
-                row["start_time"],
-                row["end_time"] or "",
-                row["duration_label"],
-                row["invoices_checked"],
-                row["invoices_imported"],
-                row["invoices_skipped"],
-                row["errors_count"],
-                row["status_label"],
-                row["error_summary"] or "",
-            ])
+            writer.writerow(
+                [
+                    row["sync_date"],
+                    row["start_time"],
+                    row["end_time"] or "",
+                    row["duration_label"],
+                    row["invoices_checked"],
+                    row["invoices_imported"],
+                    row["invoices_skipped"],
+                    row["errors_count"],
+                    row["status_label"],
+                    row["error_summary"] or "",
+                ]
+            )
         return buffer.getvalue()
 
     async def build_status_summary(self) -> dict:
@@ -376,9 +416,13 @@ class TallyDashboardService:
         return None
 
     async def _pending_notification_count(self) -> int:
-        statement = select(func.count()).select_from(Notification).where(
-            Notification.category == NotificationCategory.TALLY_SYNC,
-            Notification.is_resolved.is_(False),
+        statement = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.category == NotificationCategory.TALLY_SYNC,
+                Notification.is_resolved.is_(False),
+            )
         )
         result = await self._session.execute(statement)
         return int(result.scalar_one())

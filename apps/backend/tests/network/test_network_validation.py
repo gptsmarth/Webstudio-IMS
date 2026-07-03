@@ -50,7 +50,9 @@ PRODUCTION_CHECK_KEYS = {
 
 
 @pytest.mark.asyncio
-async def test_production_network_validation_includes_m14b_checks(db_session, test_settings) -> None:
+async def test_production_network_validation_includes_m14b_checks(
+    db_session, test_settings
+) -> None:
     service = NetworkValidationService(db_session, test_settings)
     report = await service.run_production_network_validation(mdns_active=False)
     keys = {check.key for check in report.checks}

@@ -27,7 +27,11 @@ export function StockModelCardGrid({
     return (
       <div className="stock-model-card-grid">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="skeleton stock-model-card stock-model-card--skeleton" aria-hidden />
+          <div
+            key={index}
+            className="skeleton stock-model-card stock-model-card--skeleton"
+            aria-hidden
+          />
         ))}
       </div>
     );
@@ -48,7 +52,9 @@ export function StockModelCardGrid({
           key={row.model.id}
           row={row}
           showPrice={showPrice}
-          onSelect={() => onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)}
+          onSelect={() =>
+            onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)
+          }
         />
       ))}
     </div>

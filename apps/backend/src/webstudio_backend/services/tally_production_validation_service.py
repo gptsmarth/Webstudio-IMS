@@ -9,7 +9,12 @@ from datetime import UTC, date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
+    TallyProcessedInvoiceRepository,
+)
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
 from webstudio_backend.integrations.tally.incremental_sync import (
     SYNC_INTERVAL_MAX_SECONDS,
@@ -18,9 +23,6 @@ from webstudio_backend.integrations.tally.incremental_sync import (
     resolve_incremental_from_date,
 )
 from webstudio_backend.integrations.tally.xml_client import TallyXmlClient
-from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
-    TallyProcessedInvoiceRepository,
-)
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 from webstudio_backend.services.tally_dashboard_service import TallyDashboardService
@@ -61,15 +63,43 @@ TALLY_VALIDATION_CHECKLIST: list[dict[str, str]] = [
     {"id": "TLY-01", "item": "Tally ERP 9 running with company books open", "owner": "Accounts"},
     {"id": "TLY-02", "item": "XML port 9000 enabled on billing PC", "owner": "Accounts"},
     {"id": "TLY-03", "item": "Server resolves Tally hostname on LAN", "owner": "IT"},
-    {"id": "TLY-04", "item": "Test Connection succeeds in Settings → Tally", "owner": "Store admin"},
-    {"id": "TLY-05", "item": "Incremental sync imports new vouchers only", "owner": "WEBSTUDIO engineer"},
-    {"id": "TLY-06", "item": "GUID checkpoint advances after successful import", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "TLY-04",
+        "item": "Test Connection succeeds in Settings → Tally",
+        "owner": "Store admin",
+    },
+    {
+        "id": "TLY-05",
+        "item": "Incremental sync imports new vouchers only",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "TLY-06",
+        "item": "GUID checkpoint advances after successful import",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "TLY-07", "item": "Last sync timestamp updates on dashboard", "owner": "Store admin"},
-    {"id": "TLY-08", "item": "Sync resumes after WEBSTUDIO Server restart", "owner": "WEBSTUDIO engineer"},
+    {
+        "id": "TLY-08",
+        "item": "Sync resumes after WEBSTUDIO Server restart",
+        "owner": "WEBSTUDIO engineer",
+    },
     {"id": "TLY-09", "item": "Sync resumes after Tally restart", "owner": "WEBSTUDIO engineer"},
-    {"id": "TLY-10", "item": "Offline period replays vouchers when Tally returns", "owner": "WEBSTUDIO engineer"},
-    {"id": "TLY-11", "item": "Duplicate voucher GUID skipped on re-sync", "owner": "WEBSTUDIO engineer"},
-    {"id": "TLY-12", "item": "Manual Sync Now imports from dashboard/settings", "owner": "Store admin"},
+    {
+        "id": "TLY-10",
+        "item": "Offline period replays vouchers when Tally returns",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "TLY-11",
+        "item": "Duplicate voucher GUID skipped on re-sync",
+        "owner": "WEBSTUDIO engineer",
+    },
+    {
+        "id": "TLY-12",
+        "item": "Manual Sync Now imports from dashboard/settings",
+        "owner": "Store admin",
+    },
 ]
 
 
@@ -103,14 +133,18 @@ class TallyProductionValidationService:
         self._runtime = SchedulerRuntimeService(session)
         self._company_sync = TallyCompanySyncRepository(session)
 
-    async def run_production_validation(self, *, assume_live_tally: bool = True) -> TallyProductionValidationReport:
+    async def run_production_validation(
+        self, *, assume_live_tally: bool = True
+    ) -> TallyProductionValidationReport:
         checks: list[TallyValidationCheck] = []
         recommendations: list[str] = []
 
         enabled = await self._sync.is_enabled()
         host, port, company_name, interval = await self._sync.get_connection_config()
         clamped_interval = clamp_sync_interval_seconds(interval)
-        company_sync = await self._company_sync.get_or_create(company_name) if company_name else None
+        company_sync = (
+            await self._company_sync.get_or_create(company_name) if company_name else None
+        )
 
         live_reachable = False
         live_detail = "Tally integration disabled"
@@ -160,7 +194,9 @@ class TallyProductionValidationService:
             inc_message = f"Incremental window starts {incremental_from.isoformat()}."
             if company_sync.last_successful_sync_at is None:
                 inc_status = "warning"
-                inc_message = f"First sync will request vouchers from {incremental_from.isoformat()}."
+                inc_message = (
+                    f"First sync will request vouchers from {incremental_from.isoformat()}."
+                )
         else:
             inc_status = "warning"
             inc_message = "Configure Tally company name before first sync."
@@ -292,7 +328,9 @@ class TallyProductionValidationService:
         )
 
         # Automatic scheduler
-        auto_status = "passed" if scheduler_env and enabled else ("skipped" if not enabled else "warning")
+        auto_status = (
+            "passed" if scheduler_env and enabled else ("skipped" if not enabled else "warning")
+        )
         checks.append(
             TallyValidationCheck(
                 key="automatic_scheduler",
@@ -356,7 +394,9 @@ class TallyProductionValidationService:
                 ),
             )
             if not live_reachable:
-                recommendations.append("Ensure Tally is running with XML port open before go-live sign-off.")
+                recommendations.append(
+                    "Ensure Tally is running with XML port open before go-live sign-off."
+                )
 
         if enabled and company_name and not re.fullmatch(r"[\w.\-]+", host, re.I):
             recommendations.append("Use Tally laptop hostname (not raw IP) for DHCP mobility.")

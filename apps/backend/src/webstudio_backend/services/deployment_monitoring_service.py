@@ -8,7 +8,6 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.database.enums import ReleaseDownloadStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.client_version_observation_repository import (
     ClientVersionObservationRepository,
@@ -19,7 +18,9 @@ from webstudio_backend.infrastructure.repositories.release_deployment_repository
 from webstudio_backend.infrastructure.repositories.release_deployment_run_repository import (
     ReleaseDeploymentRunRepository,
 )
-from webstudio_backend.infrastructure.repositories.release_download_repository import ReleaseDownloadRepository
+from webstudio_backend.infrastructure.repositories.release_download_repository import (
+    ReleaseDownloadRepository,
+)
 from webstudio_backend.services.enterprise_deployment_engine import EnterpriseDeploymentEngine
 from webstudio_backend.services.enterprise_rollback_engine import EnterpriseRollbackEngine
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
@@ -48,7 +49,9 @@ class DeploymentMonitoringService:
             page=PageParams(page=1, page_size=20),
         )
         deployment_runs = await self._deployment_runs.list_recent(limit=20)
-        rollback_history = await EnterpriseRollbackEngine(self._session, self._settings).list_history(
+        rollback_history = await EnterpriseRollbackEngine(
+            self._session, self._settings
+        ).list_history(
             page=1,
             page_size=15,
         )
@@ -66,7 +69,9 @@ class DeploymentMonitoringService:
             "deployment_runs": [self._serialize_deployment_run(run) for run in deployment_runs],
             "rollback_history": rollback_history.get("items", []),
             "deployment_durations": self._deployment_durations(deployment_runs),
-            "health_check_history": self._health_check_history(deployment_runs, rollback_history.get("items", [])),
+            "health_check_history": self._health_check_history(
+                deployment_runs, rollback_history.get("items", [])
+            ),
             "desktop_version_distribution": self._serialize_version_distribution(
                 await self._client_versions.distribution_by_platform("desktop"),
             ),
@@ -149,7 +154,9 @@ class DeploymentMonitoringService:
     def _deployment_durations(runs: list[Any]) -> list[dict[str, Any]]:
         durations = []
         for run in runs:
-            seconds = DeploymentMonitoringService._duration_seconds(run.created_at, run.completed_at)
+            seconds = DeploymentMonitoringService._duration_seconds(
+                run.created_at, run.completed_at
+            )
             if seconds is None:
                 continue
             durations.append(
@@ -221,7 +228,11 @@ class DeploymentMonitoringService:
                     "action": event.event_type,
                     "release_version": event.release_version,
                     "error_message": event.error_message,
-                    "timestamp": event.completed_at.isoformat() if event.completed_at else event.created_at.isoformat(),
+                    "timestamp": (
+                        event.completed_at.isoformat()
+                        if event.completed_at
+                        else event.created_at.isoformat()
+                    ),
                 },
             )
         for run in runs:
@@ -234,7 +245,11 @@ class DeploymentMonitoringService:
                     "action": "deploy",
                     "release_version": run.release_version,
                     "error_message": run.error_message,
-                    "timestamp": run.completed_at.isoformat() if run.completed_at else run.created_at.isoformat(),
+                    "timestamp": (
+                        run.completed_at.isoformat()
+                        if run.completed_at
+                        else run.created_at.isoformat()
+                    ),
                 },
             )
         for item in rollback_items:

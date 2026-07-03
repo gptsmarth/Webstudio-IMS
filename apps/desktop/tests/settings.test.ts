@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canReadSettings, canWriteSettings, canAccessBackupModule, formatBytes, SETTINGS_CATEGORIES, visibleSettingsCategories } from '../src/lib/settings';
+import {
+  canReadSettings,
+  canWriteSettings,
+  canAccessBackupModule,
+  formatBytes,
+  SETTINGS_CATEGORIES,
+  visibleSettingsCategories,
+} from '../src/lib/settings';
 import { canManageBackup, canViewBackup } from '../src/services/PermissionService';
 import {
   loadAppearancePreferences,

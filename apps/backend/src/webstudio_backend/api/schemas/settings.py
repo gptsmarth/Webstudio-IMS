@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-_RESTORE_SCOPE_PATTERN = (
-    "^(entire_database|settings_only|company_config|users_only|reports_only)$"
-)
+_RESTORE_SCOPE_PATTERN = "^(entire_database|settings_only|company_config|users_only|reports_only)$"
 _RESTORE_SOURCE_PATTERN = "^(local|scheduled|imported|emergency)$"
 _BACKUP_SOURCE_PATTERN = "^(local|scheduled|imported)$"
 
@@ -55,7 +53,9 @@ class InventorySettings(BaseModel):
 
 
 class SalesSettings(BaseModel):
-    default_payment_modes: list[str] = Field(default_factory=lambda: ["Cash", "UPI", "Card", "Finance"])
+    default_payment_modes: list[str] = Field(
+        default_factory=lambda: ["Cash", "UPI", "Card", "Finance"]
+    )
     invoice_prefix: str = "INV-"
     manual_sale_enabled: bool = True
     default_salesperson_id: int | None = None
@@ -111,11 +111,15 @@ class IntegrationsSettingsUpdate(BaseModel):
     ai_fallback_chain: list[str] = Field(default_factory=lambda: ["gemini"])
     ai_enrichment_enabled: bool = True
     ai_timeout_seconds: int = Field(default=90, ge=15, le=300)
-    ai_retry_count: int = Field(default=2, ge=0, le=5, description="Total spec lookup attempts (includes the first try).")
+    ai_retry_count: int = Field(
+        default=2, ge=0, le=5, description="Total spec lookup attempts (includes the first try)."
+    )
     groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
     groq_api_key: str | None = Field(default=None, max_length=256)
     clear_groq_api_key: bool = False
-    openrouter_model: str = Field(default="meta-llama/llama-3.3-70b-instruct:free", min_length=1, max_length=128)
+    openrouter_model: str = Field(
+        default="meta-llama/llama-3.3-70b-instruct:free", min_length=1, max_length=128
+    )
     openrouter_api_key: str | None = Field(default=None, max_length=256)
     clear_openrouter_api_key: bool = False
 

@@ -97,10 +97,20 @@ export function UserFormDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">{isEdit ? 'Edit user' : 'Create user'}</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} />
           </button>
         </header>
@@ -108,17 +118,31 @@ export function UserFormDialog({
           {!isEdit && (
             <label className="cat-field">
               <span>Username</span>
-              <input className="input col-mono" value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
+              <input
+                className="input col-mono"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoFocus
+              />
             </label>
           )}
           <label className="cat-field">
             <span>Full name</span>
-            <input className="input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoFocus={isEdit} />
+            <input
+              className="input"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              autoFocus={isEdit}
+            />
           </label>
           {!isEdit && (
             <label className="cat-field">
               <span>Role</span>
-              <select className="input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+              <select
+                className="input"
+                value={role}
+                onChange={(event) => setRole(event.target.value as UserRole)}
+              >
                 {HUMAN_USER_ROLES.map((entry) => (
                   <option key={entry} value={entry}>
                     {apiRoleLabel(entry)}
@@ -138,7 +162,11 @@ export function UserFormDialog({
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                   />
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={generatePassword}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={generatePassword}
+                  >
                     Generate
                   </button>
                 </div>
@@ -146,7 +174,10 @@ export function UserFormDialog({
               <div className="cat-field cat-field--full">
                 <div className="usr-strength">
                   <div className="usr-strength__bar" aria-hidden>
-                    <span className={`usr-strength__fill usr-strength__fill--${strength.score}`} style={{ width: `${strength.percent}%` }} />
+                    <span
+                      className={`usr-strength__fill usr-strength__fill--${strength.score}`}
+                      style={{ width: `${strength.percent}%` }}
+                    />
                   </div>
                   <span className="usr-strength__label">{strength.label}</span>
                 </div>
@@ -157,10 +188,20 @@ export function UserFormDialog({
           {error && <p className="cat-dialog__error cat-field--full">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : isEdit ? 'Save changes' : 'Create user'}
           </button>
         </footer>

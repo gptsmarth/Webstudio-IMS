@@ -30,7 +30,8 @@ function formatSpecBullet(line: StockModelSpecLine): string {
 }
 
 function formatCardPrice(val: number | string | null | undefined): string {
-  if (val === null || val === undefined || val === '' || Number(val) === 0) return 'Price on request';
+  if (val === null || val === undefined || val === '' || Number(val) === 0)
+    return 'Price on request';
   const num = typeof val === 'string' ? Number(val) : val;
   if (Number.isNaN(num) || num === 0) return 'Price on request';
   return new Intl.NumberFormat('en-IN', {
@@ -38,7 +39,9 @@ function formatCardPrice(val: number | string | null | undefined): string {
     currency: 'INR',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(num).replace('₹', '₹ ');
+  })
+    .format(num)
+    .replace('₹', '₹ ');
 }
 
 export function StockModelCard({
@@ -55,9 +58,7 @@ export function StockModelCard({
     [row.model],
   );
   const screenHint = displayScreenHint(row.model.display);
-  const visibleSpecs = specsExpanded
-    ? specLines
-    : specLines.slice(0, COLLAPSED_SPEC_COUNT);
+  const visibleSpecs = specsExpanded ? specLines : specLines.slice(0, COLLAPSED_SPEC_COUNT);
   const hasMoreSpecs = specLines.length > COLLAPSED_SPEC_COUNT;
 
   useEffect(() => {
@@ -105,7 +106,10 @@ export function StockModelCard({
               }}
             />
           ) : (
-            <div className="stock-model-card__image stock-model-card__image--placeholder" aria-hidden>
+            <div
+              className="stock-model-card__image stock-model-card__image--placeholder"
+              aria-hidden
+            >
               <Laptop size={64} strokeWidth={1} />
             </div>
           )}
@@ -113,9 +117,7 @@ export function StockModelCard({
 
         <div className="stock-model-card__content">
           <header className="stock-model-card__header">
-            {screenHint && (
-              <p className="stock-model-card__screen-hint">{screenHint}</p>
-            )}
+            {screenHint && <p className="stock-model-card__screen-hint">{screenHint}</p>}
             <h3 className="stock-model-card__title">{row.model.model_name}</h3>
             <p className="stock-model-card__number col-mono">{row.model.model_number}</p>
           </header>
@@ -127,7 +129,16 @@ export function StockModelCard({
               <div className="stock-model-card__price-block">
                 <p
                   className="stock-model-card__price"
-                  style={!row.model.selling_price || Number(row.model.selling_price) === 0 ? { fontSize: '18px', fontWeight: 600, color: 'var(--color-text-secondary)', letterSpacing: 'normal' } : undefined}
+                  style={
+                    !row.model.selling_price || Number(row.model.selling_price) === 0
+                      ? {
+                          fontSize: '18px',
+                          fontWeight: 600,
+                          color: 'var(--color-text-secondary)',
+                          letterSpacing: 'normal',
+                        }
+                      : undefined
+                  }
                 >
                   {formatCardPrice(row.model.selling_price)}
                 </p>
@@ -141,7 +152,9 @@ export function StockModelCard({
               <ul className="stock-model-card__spec-list">
                 {visibleSpecs.map((line) => (
                   <li key={`${line.label}-${line.value}`} className="stock-model-card__spec-item">
-                    <span className="stock-model-card__spec-bullet" aria-hidden>•</span>
+                    <span className="stock-model-card__spec-bullet" aria-hidden>
+                      •
+                    </span>
                     <span className="stock-model-card__spec-text">{formatSpecBullet(line)}</span>
                   </li>
                 ))}

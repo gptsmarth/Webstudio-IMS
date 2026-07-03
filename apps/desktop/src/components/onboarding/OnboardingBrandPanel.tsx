@@ -17,7 +17,10 @@ const BRAND_LOGOS = [
   { name: 'canon', src: ASSET_MANIFEST.brandLogos.canon },
 ] as const;
 
-export function OnboardingBrandPanel({ appVersion, footerRight = 'SECURE CONNECTION ACTIVE' }: OnboardingBrandPanelProps): JSX.Element {
+export function OnboardingBrandPanel({
+  appVersion,
+  footerRight = 'SECURE CONNECTION ACTIVE',
+}: OnboardingBrandPanelProps): JSX.Element {
   const logoLightPath = WebstudioAssetRegistry.getAsset('logoLight');
   const logoPath = WebstudioAssetRegistry.getAsset('logo');
 
@@ -41,11 +44,15 @@ export function OnboardingBrandPanel({ appVersion, footerRight = 'SECURE CONNECT
           <div className="onboarding-brand-panel__addresses">
             <div>
               <span className="onboarding-brand-panel__outlet-label">Outlet 1</span>
-              <span className="onboarding-brand-panel__outlet-text">22, D.A.V. Market, Opp. Madhu Hotel, Yamunanagar</span>
+              <span className="onboarding-brand-panel__outlet-text">
+                22, D.A.V. Market, Opp. Madhu Hotel, Yamunanagar
+              </span>
             </div>
             <div>
               <span className="onboarding-brand-panel__outlet-label">Outlet 2</span>
-              <span className="onboarding-brand-panel__outlet-text">26-29 F, D.A.V. Market, Yamunanagar</span>
+              <span className="onboarding-brand-panel__outlet-text">
+                26-29 F, D.A.V. Market, Yamunanagar
+              </span>
             </div>
           </div>
         </div>
@@ -55,7 +62,11 @@ export function OnboardingBrandPanel({ appVersion, footerRight = 'SECURE CONNECT
           <div className="onboarding-brand-panel__brands-grid">
             {BRAND_LOGOS.map((brand) => (
               <div key={brand.name} className="onboarding-brand-panel__brand-cell">
-                <img src={brand.src} alt={brand.name} className="onboarding-brand-panel__brand-logo" />
+                <img
+                  src={brand.src}
+                  alt={brand.name}
+                  className="onboarding-brand-panel__brand-logo"
+                />
               </div>
             ))}
           </div>

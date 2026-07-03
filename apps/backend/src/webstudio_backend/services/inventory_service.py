@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +11,9 @@ from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import InventoryStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
-from webstudio_backend.infrastructure.repositories.inventory_item_filters import InventorySearchFilters
+from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
+    InventorySearchFilters,
+)
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemDetailRow,
     InventoryItemRepository,
@@ -90,14 +91,18 @@ class InventoryService:
         assert detail is not None
         return detail
 
-    async def archive_item(self, item_id: uuid.UUID, *, actor: AuditActor) -> InventoryItemDetailRow:
+    async def archive_item(
+        self, item_id: uuid.UUID, *, actor: AuditActor
+    ) -> InventoryItemDetailRow:
         item = await self._repo.require_by_id(item_id)
         await self._repo.archive(item, actor=actor)
         detail = await self._repo.get_detail(item_id)
         assert detail is not None
         return detail
 
-    async def restore_item(self, item_id: uuid.UUID, *, actor: AuditActor) -> InventoryItemDetailRow:
+    async def restore_item(
+        self, item_id: uuid.UUID, *, actor: AuditActor
+    ) -> InventoryItemDetailRow:
         item = await self._repo.require_by_id(item_id)
         await self._repo.restore(item, actor=actor)
         detail = await self._repo.get_detail(item_id)

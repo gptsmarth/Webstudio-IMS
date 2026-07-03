@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
 from webstudio_backend.infrastructure.database.enums import (
+    HUMAN_USER_ROLES,
     AuditAction,
     AuditSource,
-    HUMAN_USER_ROLES,
     InventoryStatus,
     ProductModelStatus,
     UserStatus,
@@ -106,7 +106,9 @@ class DashboardRepository:
             func.count(InventoryItem.id)
             .filter(InventoryItem.status == InventoryStatus.SOLD)
             .label("sold"),
-            func.count(InventoryItem.id).filter(InventoryItem.is_archived.is_(True)).label("archived"),
+            func.count(InventoryItem.id)
+            .filter(InventoryItem.is_archived.is_(True))
+            .label("archived"),
         )
         row = (await self._session.execute(statement)).one()
         return InventorySummaryCounts(
@@ -118,7 +120,9 @@ class DashboardRepository:
 
     async def get_reference_counts(self) -> ReferenceCounts:
         brands = int(await self._session.scalar(select(func.count()).select_from(Brand)) or 0)
-        models = int(await self._session.scalar(select(func.count()).select_from(ProductModel)) or 0)
+        models = int(
+            await self._session.scalar(select(func.count()).select_from(ProductModel)) or 0
+        )
         locations = int(await self._session.scalar(select(func.count()).select_from(Location)) or 0)
         users = int(
             await self._session.scalar(
@@ -161,7 +165,9 @@ class DashboardRepository:
             InventoryItem.status == InventoryStatus.AVAILABLE,
             InventoryItem.is_archived.is_(False),
         )
-        sold_case = func.count(InventoryItem.id).filter(InventoryItem.status == InventoryStatus.SOLD)
+        sold_case = func.count(InventoryItem.id).filter(
+            InventoryItem.status == InventoryStatus.SOLD
+        )
         active_case = func.count(InventoryItem.id).filter(InventoryItem.is_archived.is_(False))
 
         statement = (
@@ -196,7 +202,9 @@ class DashboardRepository:
             InventoryItem.status == InventoryStatus.AVAILABLE,
             InventoryItem.is_archived.is_(False),
         )
-        sold_case = func.count(InventoryItem.id).filter(InventoryItem.status == InventoryStatus.SOLD)
+        sold_case = func.count(InventoryItem.id).filter(
+            InventoryItem.status == InventoryStatus.SOLD
+        )
         active_case = func.count(InventoryItem.id).filter(InventoryItem.is_archived.is_(False))
 
         statement = (
@@ -229,7 +237,9 @@ class DashboardRepository:
             InventoryItem.status == InventoryStatus.AVAILABLE,
             InventoryItem.is_archived.is_(False),
         )
-        sold_case = func.count(InventoryItem.id).filter(InventoryItem.status == InventoryStatus.SOLD)
+        sold_case = func.count(InventoryItem.id).filter(
+            InventoryItem.status == InventoryStatus.SOLD
+        )
         active_case = func.count(InventoryItem.id).filter(InventoryItem.is_archived.is_(False))
 
         statement = (

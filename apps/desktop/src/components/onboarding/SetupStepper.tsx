@@ -30,9 +30,15 @@ export function SetupStepper({ steps, currentStep }: SetupStepperProps): JSX.Ele
                   .join(' ')}
                 aria-current={isCurrent ? 'step' : undefined}
               >
-                {isComplete ? <Check size={12} strokeWidth={2.5} aria-hidden="true" /> : step.number}
+                {isComplete ? (
+                  <Check size={12} strokeWidth={2.5} aria-hidden="true" />
+                ) : (
+                  step.number
+                )}
               </div>
-              <span className={`setup-stepper__label ${isCurrent ? 'setup-stepper__label--current' : ''}`}>
+              <span
+                className={`setup-stepper__label ${isCurrent ? 'setup-stepper__label--current' : ''}`}
+              >
                 {step.label}
               </span>
             </div>

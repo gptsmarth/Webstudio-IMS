@@ -15,7 +15,10 @@ export function ReportExportBar({
   onExport,
 }: ReportExportBarProps): JSX.Element {
   return (
-    <section className={`report-export ${!hasPreviewed ? 'report-export--locked' : ''}`} aria-label="Export options">
+    <section
+      className={`report-export ${!hasPreviewed ? 'report-export--locked' : ''}`}
+      aria-label="Export options"
+    >
       <div className="report-export__copy">
         <h2 className="report-export__title">Export</h2>
         <p className="report-export__hint">
@@ -43,7 +46,12 @@ export function ReportExportBar({
           <FileText size={14} aria-hidden />
           PDF
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" disabled title="CSV export — architecture ready">
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          disabled
+          title="CSV export — architecture ready"
+        >
           CSV
         </button>
       </div>

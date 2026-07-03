@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.repositories.password_history_repository import PasswordHistoryRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.security.password import hash_password, verify_password
+from webstudio_backend.infrastructure.repositories.password_history_repository import (
+    PasswordHistoryRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.security.password import verify_password
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,8 +34,12 @@ class PasswordPolicyService:
     async def get_policy(self) -> PasswordPolicy:
         return PasswordPolicy(
             min_length=await self._settings.get_int("password_min_length", default=10),
-            require_uppercase=await self._settings.get_bool("password_require_uppercase", default=True),
-            require_lowercase=await self._settings.get_bool("password_require_lowercase", default=True),
+            require_uppercase=await self._settings.get_bool(
+                "password_require_uppercase", default=True
+            ),
+            require_lowercase=await self._settings.get_bool(
+                "password_require_lowercase", default=True
+            ),
             require_number=await self._settings.get_bool("password_require_number", default=True),
             require_symbol=await self._settings.get_bool("password_require_symbol", default=False),
             history_count=await self._settings.get_int("password_history_count", default=5),
@@ -54,11 +62,15 @@ class PasswordPolicyService:
         self.validate_strength(password, policy)
         return policy
 
-    async def ensure_not_reused(self, user_id: int, password: str, *, current_hash: str | None) -> None:
+    async def ensure_not_reused(
+        self, user_id: int, password: str, *, current_hash: str | None
+    ) -> None:
         policy = await self.get_policy()
         if current_hash and verify_password(current_hash, password):
             raise ValueError("New password must be different from the current password")
-        if await self._history.password_reused(user_id, password, history_count=policy.history_count):
+        if await self._history.password_reused(
+            user_id, password, history_count=policy.history_count
+        ):
             raise ValueError("Password was used recently. Choose a different password.")
 
     async def record_password(self, user_id: int, password_hash: str) -> None:

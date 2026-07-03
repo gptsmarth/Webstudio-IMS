@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +61,7 @@ class SaleService:
         if item.status is not InventoryStatus.AVAILABLE:
             raise InventoryNotAvailableForSaleError(str(item.id), item.status.value)
 
-        sold_at = datetime.combine(sale_date, time.min, tzinfo=timezone.utc)
+        sold_at = datetime.combine(sale_date, time.min, tzinfo=UTC)
         old_status = item.status
         item.status = InventoryStatus.SOLD
         await self._session.flush()

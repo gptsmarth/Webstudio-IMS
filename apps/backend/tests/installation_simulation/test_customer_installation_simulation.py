@@ -15,16 +15,17 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
 from webstudio_backend.app import create_app
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import SettingValueType
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 
 COMPANY_NAME = "PRECISION LAPTOPS"
@@ -92,7 +93,9 @@ async def test_m12j_customer_installation_simulation(
     assert detect.status_code == 200
     detect_data = detect.json()["data"]
     check_keys = {c["key"] for c in detect_data["checks"]}
-    assert {"network", "postgresql", "api", "backup_path", "tally", "firewall", "ports"}.issubset(check_keys)
+    assert {"network", "postgresql", "api", "backup_path", "tally", "firewall", "ports"}.issubset(
+        check_keys
+    )
 
     complete = await sim_client.post("/api/v1/deployment/office/complete", headers=headers)
     assert complete.status_code == 200
@@ -237,6 +240,8 @@ def test_m12j_windows_service_scripts_present() -> None:
     missing = [str(p.relative_to(root)) for p in required if not p.is_file()]
     assert not missing, f"Missing installer artifacts: {missing}"
 
-    install_script = (root / "infra/windows/install-webstudio-service.ps1").read_text(encoding="utf-8")
+    install_script = (root / "infra/windows/install-webstudio-service.ps1").read_text(
+        encoding="utf-8"
+    )
     assert "SERVICE_DELAYED_AUTO_START" in install_script
     assert "alembic upgrade head" in install_script

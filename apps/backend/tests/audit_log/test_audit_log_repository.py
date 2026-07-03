@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from audit_log.conftest import ADMIN_ACTOR
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-from webstudio_backend.infrastructure.database.enums import AuditAction, AuditSource, InventoryStatus
+from webstudio_backend.infrastructure.database.enums import (
+    AuditAction,
+    AuditSource,
+    InventoryStatus,
+)
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories import PageParams
@@ -230,7 +234,9 @@ async def test_historical_location_name_preserved_after_rename(
     admin_actor: AuditActor,
 ) -> None:
     await LocationRepository(db_session).update_name(
-        warehouse, "Renamed Warehouse", actor=admin_actor,
+        warehouse,
+        "Renamed Warehouse",
+        actor=admin_actor,
     )
 
     audit_repository = AuditLogRepository(db_session)

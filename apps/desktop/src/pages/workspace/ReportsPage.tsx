@@ -21,7 +21,8 @@ export function ReportsPage(): JSX.Element {
         <div>
           <h1 className="reports-page__title">Report Center</h1>
           <p className="reports-page__subtitle">
-            Choose a report type, configure filters, preview results, then export. Exports always match the filtered preview.
+            Choose a report type, configure filters, preview results, then export. Exports always
+            match the filtered preview.
           </p>
         </div>
       </header>
@@ -52,7 +53,9 @@ export function ReportsPage(): JSX.Element {
             {builder.loading ? 'Loading preview…' : 'Preview results'}
           </button>
           {!builder.hasPreviewed && (
-            <p className="report-center__preview-hint">Export is disabled until you preview filtered results.</p>
+            <p className="report-center__preview-hint">
+              Export is disabled until you preview filtered results.
+            </p>
           )}
         </div>
 

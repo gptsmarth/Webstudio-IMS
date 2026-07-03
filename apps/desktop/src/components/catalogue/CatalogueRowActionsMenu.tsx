@@ -39,11 +39,21 @@ export function CatalogueRowActionsMenu({
       aria-label={`Actions for ${label}`}
     >
       {!hideEdit && (
-        <button type="button" className="cat-row-menu__item" role="menuitem" onClick={() => onAction('edit')}>
+        <button
+          type="button"
+          className="cat-row-menu__item"
+          role="menuitem"
+          onClick={() => onAction('edit')}
+        >
           <Pencil size={14} aria-hidden /> Edit
         </button>
       )}
-      <button type="button" className="cat-row-menu__item cat-row-menu__item--danger" role="menuitem" onClick={() => onAction('delete')}>
+      <button
+        type="button"
+        className="cat-row-menu__item cat-row-menu__item--danger"
+        role="menuitem"
+        onClick={() => onAction('delete')}
+      >
         <Trash2 size={14} aria-hidden /> Delete
       </button>
     </div>,

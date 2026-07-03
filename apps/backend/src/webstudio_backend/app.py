@@ -15,26 +15,71 @@ from loguru import logger
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
-from webstudio_backend.api.routers import access_roles, audit_logs, auth, brands, client_deployment, client_updates, dashboard, deployment, deployment_center, discovery, health, integration_keys, inventory, locations, metadata, network, notifications, platform, product_images, product_models, releases, reports, sales, search, security, settings as settings_router, setup, sync, tally, users
+from webstudio_backend.api.routers import (
+    access_roles,
+    audit_logs,
+    auth,
+    brands,
+    client_deployment,
+    client_updates,
+    dashboard,
+    deployment,
+    deployment_center,
+    discovery,
+    health,
+    integration_keys,
+    inventory,
+    locations,
+    metadata,
+    network,
+    notifications,
+    platform,
+    product_images,
+    product_models,
+    releases,
+    reports,
+    sales,
+    search,
+    security,
+    setup,
+    sync,
+    tally,
+    users,
+)
+from webstudio_backend.api.routers import (
+    settings as settings_router,
+)
 from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
 from webstudio_backend.core.startup_validation import validate_startup_settings
-from webstudio_backend.infrastructure.database.session import close_db, get_session_factory, init_db, session_scope
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
-from webstudio_backend.services.audit_retention_scheduler import audit_retention_loop, maybe_purge_audit_logs
+from webstudio_backend.infrastructure.database.session import (
+    close_db,
+    get_session_factory,
+    init_db,
+    session_scope,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
+from webstudio_backend.services.audit_retention_scheduler import (
+    audit_retention_loop,
+    maybe_purge_audit_logs,
+)
 from webstudio_backend.services.backup_scheduler import backup_scheduler_loop
 from webstudio_backend.services.maintenance_scheduler import maintenance_scheduler_loop
 from webstudio_backend.services.mdns_advertisement_service import MdnsAdvertisementService
 from webstudio_backend.services.notification_scheduler import notification_scheduler_loop
+from webstudio_backend.services.release_sync_scheduler import release_sync_loop
 from webstudio_backend.services.scheduler_runtime_service import (
     SchedulerRuntimeService,
     is_shutdown_requested,
     reset_shutdown_flag,
     sleep_until_next_run,
 )
-from webstudio_backend.services.release_sync_scheduler import release_sync_loop
 from webstudio_backend.services.shutdown_orchestrator import run_graceful_shutdown
 from webstudio_backend.services.startup_orchestrator import run_startup_orchestration
 from webstudio_backend.services.tally_connectivity_scheduler import tally_connectivity_probe_loop
@@ -148,16 +193,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             session_factory = get_session_factory()
             async with session_factory() as session:
-                company_name = (await SystemSettingRepository(session).get_string("company_name") or "").strip()
+                company_name = (
+                    await SystemSettingRepository(session).get_string("company_name") or ""
+                ).strip()
         except Exception:
             company_name = ""
         _mdns_service = MdnsAdvertisementService(settings)
         app.state.mdns_service = _mdns_service
         _mdns_service.start(company_name=company_name)
 
-    scheduler_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
-    )
+    scheduler_enabled = not settings.is_test and os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
     backup_scheduler_enabled = (
         not settings.is_test and os.getenv("WEBSTUDIO_BACKUP_SCHEDULER", "1") == "1"
     )

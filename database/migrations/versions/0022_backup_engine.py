@@ -25,7 +25,9 @@ def upgrade() -> None:
         sa.Column("trigger_type", sa.String(length=32), nullable=False, server_default="manual"),
         sa.Column("storage_backend", sa.String(length=32), nullable=False, server_default="local"),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="running"),
-        sa.Column("verification_status", sa.String(length=32), nullable=False, server_default="pending"),
+        sa.Column(
+            "verification_status", sa.String(length=32), nullable=False, server_default="pending"
+        ),
         sa.Column("size_bytes", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("duration_ms", sa.Integer(), nullable=True),
         sa.Column("checksum_sha256", sa.String(length=64), nullable=True),

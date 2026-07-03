@@ -11,8 +11,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
-from webstudio_backend.infrastructure.database.enums import RELEASE_CHANNEL_ENUM_NAME, ReleaseChannel
-from webstudio_backend.infrastructure.database.mixins import PrimaryKeyMixin
+from webstudio_backend.infrastructure.database.enums import (
+    RELEASE_CHANNEL_ENUM_NAME,
+    ReleaseChannel,
+)
 
 
 class ReleaseDeploymentEvent(Base):

@@ -18,7 +18,10 @@ from webstudio_backend.services.deployment_center_service import DeploymentCente
 from webstudio_backend.services.enterprise_rollback_engine import ROLLBACK_STEPS
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
 from webstudio_backend.services.restore_engine import RestoreEngine
-from webstudio_backend.services.scheduler_runtime_service import DEFAULT_INTERVALS, SchedulerRuntimeService
+from webstudio_backend.services.scheduler_runtime_service import (
+    DEFAULT_INTERVALS,
+    SchedulerRuntimeService,
+)
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 TARGET_VERSION = "1.0.0"
@@ -172,9 +175,14 @@ class FinalProductionHandoverValidationService:
             HandoverCheck(
                 key="desktop_installation",
                 name="Desktop Installation",
-                status="passed" if _repo_file_exists(desktop_exe) or _repo_file_exists(
-                    "docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md",
-                ) else "warning",
+                status=(
+                    "passed"
+                    if _repo_file_exists(desktop_exe)
+                    or _repo_file_exists(
+                        "docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md",
+                    )
+                    else "warning"
+                ),
                 message="Windows desktop NSIS installer documented",
                 detail=f"Artifact path: {desktop_exe}",
                 category="client",
@@ -202,7 +210,7 @@ class FinalProductionHandoverValidationService:
                 name="Android Installation",
                 status="passed",
                 message="Android APK sideload distribution",
-                detail=f"release/mobile/WEBSTUDIO IMS.apk; bundle com.webstudio.webstudio_ims",
+                detail="release/mobile/WEBSTUDIO IMS.apk; bundle com.webstudio.webstudio_ims",
                 category="client",
             ),
         )
@@ -216,7 +224,7 @@ class FinalProductionHandoverValidationService:
                 name="iOS Installation",
                 status="passed",
                 message="iOS IPA via TestFlight or enterprise Ad Hoc",
-                detail=f"release/mobile/WEBSTUDIO IMS.ipa; signing per MOBILE_DEPLOYMENT_GUIDE",
+                detail="release/mobile/WEBSTUDIO IMS.ipa; signing per MOBILE_DEPLOYMENT_GUIDE",
                 category="client",
             ),
         )
@@ -243,7 +251,11 @@ class FinalProductionHandoverValidationService:
                 name="Database",
                 status="passed" if db_ok else "failed",
                 message=f"PostgreSQL webstudio schema; Alembic head {ALEMBIC_HEAD}",
-                detail=self._settings.database_url.split("@")[-1] if "@" in self._settings.database_url else "configured",
+                detail=(
+                    self._settings.database_url.split("@")[-1]
+                    if "@" in self._settings.database_url
+                    else "configured"
+                ),
                 category="data",
             ),
         )
@@ -300,7 +312,9 @@ class FinalProductionHandoverValidationService:
         # Notifications
         from webstudio_backend.api.routers import notifications as notifications_router
 
-        notif_routes = [route.path for route in notifications_router.router.routes if hasattr(route, "path")]
+        notif_routes = [
+            route.path for route in notifications_router.router.routes if hasattr(route, "path")
+        ]
         notif_ok = any("notifications" in p for p in notif_routes)
         checks.append(
             HandoverCheck(
@@ -315,7 +329,9 @@ class FinalProductionHandoverValidationService:
 
         # Tally
         tally = TallySyncService(self._session)
-        tally_ok = hasattr(tally, "run_sync") and _repo_file_exists("docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md")
+        tally_ok = hasattr(tally, "run_sync") and _repo_file_exists(
+            "docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md"
+        )
         checks.append(
             HandoverCheck(
                 key="tally",
@@ -341,7 +357,9 @@ class FinalProductionHandoverValidationService:
         ):
             ai_status = "warning"
             ai_message = "AI stack ready; no provider keys configured (optional)"
-            recommendations.append("Configure AI keys in Settings → Integrations if enrichment is required.")
+            recommendations.append(
+                "Configure AI keys in Settings → Integrations if enrichment is required."
+            )
         checks.append(
             HandoverCheck(
                 key="ai",
@@ -380,7 +398,9 @@ class FinalProductionHandoverValidationService:
         from webstudio_backend.api.routers import deployment_center as dc_router
 
         dc_routes = {getattr(r, "path", "") for r in dc_router.router.routes}
-        dc_ok = hasattr(dc, "get_dashboard") and any("deployment/center/dashboard" in path for path in dc_routes)
+        dc_ok = hasattr(dc, "get_dashboard") and any(
+            "deployment/center/dashboard" in path for path in dc_routes
+        )
         checks.append(
             HandoverCheck(
                 key="deployment_center",

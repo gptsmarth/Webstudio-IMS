@@ -12,14 +12,14 @@ from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.services.client_deployment_validation_service import (
     ClientDeploymentValidationService,
 )
+from webstudio_backend.services.final_production_handover_validation_service import (
+    FinalProductionHandoverValidationService,
+)
 from webstudio_backend.services.production_acceptance_validation_service import (
     ProductionAcceptanceValidationService,
 )
 from webstudio_backend.services.production_certification_validation_service import (
     ProductionCertificationValidationService,
-)
-from webstudio_backend.services.final_production_handover_validation_service import (
-    FinalProductionHandoverValidationService,
 )
 
 router = APIRouter(prefix="/api/v1/deployment", tags=["deployment"])

@@ -16,13 +16,15 @@ from webstudio_backend.infrastructure.repositories.software_release_repository i
     SoftwareReleaseRepository,
 )
 from webstudio_backend.services.enterprise_version_service import EnterpriseVersionService
-from webstudio_backend.services.platform_info_service import resolve_build_version, resolve_schema_version
+from webstudio_backend.services.platform_info_service import (
+    resolve_build_version,
+    resolve_schema_version,
+)
 from webstudio_backend.services.release_catalog_loader import (
     build_compatibility_matrix,
     build_supported_platforms,
     default_release_channel_for_env,
     discover_bundle_dirs,
-    parse_build_number,
     release_from_bundle_dir,
 )
 
@@ -76,7 +78,9 @@ class EnterpriseReleaseService:
         if row is not None:
             payload = self._serialize_release(row)
             payload["installed_on_server"] = row.release_version == self._settings.app_version
-            return await EnterpriseVersionService(self._session, self._settings).enrich_release_payload(payload)
+            return await EnterpriseVersionService(
+                self._session, self._settings
+            ).enrich_release_payload(payload)
         return await EnterpriseVersionService(self._session, self._settings).enrich_release_payload(
             self._synthetic_current_payload(channel),
         )
@@ -86,7 +90,9 @@ class EnterpriseReleaseService:
         resolved_channel = self.resolve_channel(channel)
         row = await self._repo.get_latest(resolved_channel)
         if row is None:
-            return await EnterpriseVersionService(self._session, self._settings).enrich_release_payload(
+            return await EnterpriseVersionService(
+                self._session, self._settings
+            ).enrich_release_payload(
                 self._synthetic_current_payload(resolved_channel),
             )
         return await EnterpriseVersionService(self._session, self._settings).enrich_release_payload(

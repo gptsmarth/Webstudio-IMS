@@ -5,13 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Enum, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
-from webstudio_backend.infrastructure.database.enums import RELEASE_CHANNEL_ENUM_NAME, ReleaseChannel
+from webstudio_backend.infrastructure.database.enums import (
+    RELEASE_CHANNEL_ENUM_NAME,
+    ReleaseChannel,
+)
 from webstudio_backend.infrastructure.database.mixins import PrimaryKeyMixin, TimestampMixin
 
 

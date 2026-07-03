@@ -8,7 +8,6 @@ from webstudio_backend.services.tally_production_validation_service import (
     TallyProductionValidationService,
 )
 
-
 PRODUCTION_TALLY_CHECK_KEYS = {
     "xml_request_generation",
     "incremental_synchronization",

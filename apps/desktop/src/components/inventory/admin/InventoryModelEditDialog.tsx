@@ -165,7 +165,10 @@ export function InventoryModelEditDialog({
   };
 
   const archive = async () => {
-    if (!onArchive || !confirmCatalogueRemoval(`${model.brand_name ?? ''} ${model.model_name}`.trim(), 'model')) {
+    if (
+      !onArchive ||
+      !confirmCatalogueRemoval(`${model.brand_name ?? ''} ${model.model_name}`.trim(), 'model')
+    ) {
       return;
     }
     setError(null);
@@ -188,13 +191,29 @@ export function InventoryModelEditDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="inv-dialog__header">
-          <h2 id="edit-model-dialog-title" className="inv-dialog__title">Edit model</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <h2 id="edit-model-dialog-title" className="inv-dialog__title">
+            Edit model
+          </h2>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
         <div className="inv-dialog__body inv-model-edit">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              marginBottom: '16px',
+              flexWrap: 'wrap',
+            }}
+          >
             <p className="inv-dialog__hint" style={{ margin: 0 }}>
               {model.brand_name ? `${model.brand_name} · ` : ''}
               <span className="col-mono">{model.model_number}</span>
@@ -214,11 +233,19 @@ export function InventoryModelEditDialog({
           <div className="inv-model-edit__grid">
             <label className="inv-filters__field">
               <span className="inv-filters__label">Model number</span>
-              <input className="input" value={modelNumber} onChange={(e) => setModelNumber(e.target.value)} />
+              <input
+                className="input"
+                value={modelNumber}
+                onChange={(e) => setModelNumber(e.target.value)}
+              />
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Model name</span>
-              <input className="input" value={modelName} onChange={(e) => setModelName(e.target.value)} />
+              <input
+                className="input"
+                value={modelName}
+                onChange={(e) => setModelName(e.target.value)}
+              />
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Processor</span>
@@ -226,37 +253,73 @@ export function InventoryModelEditDialog({
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Graphics</span>
-              <input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} placeholder="Optional" />
+              <input
+                className="input"
+                value={gpu}
+                onChange={(e) => setGpu(e.target.value)}
+                placeholder="Optional"
+              />
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">RAM (GB)</span>
-              <input className="input" type="number" min={1} value={ramGb} onChange={(e) => setRamGb(e.target.value)} />
+              <input
+                className="input"
+                type="number"
+                min={1}
+                value={ramGb}
+                onChange={(e) => setRamGb(e.target.value)}
+              />
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Storage</span>
-              <input className="input" type="number" min={0} step="0.01" value={storageValue} onChange={(e) => setStorageValue(e.target.value)} />
+              <input
+                className="input"
+                type="number"
+                min={0}
+                step="0.01"
+                value={storageValue}
+                onChange={(e) => setStorageValue(e.target.value)}
+              />
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Storage unit</span>
-              <select className="input" value={storageUnit} onChange={(e) => setStorageUnit(e.target.value as StorageUnit)}>
+              <select
+                className="input"
+                value={storageUnit}
+                onChange={(e) => setStorageUnit(e.target.value as StorageUnit)}
+              >
                 <option value="GB">GB</option>
                 <option value="TB">TB</option>
               </select>
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Storage type</span>
-              <select className="input" value={storageType} onChange={(e) => setStorageType(e.target.value as StorageType)}>
+              <select
+                className="input"
+                value={storageType}
+                onChange={(e) => setStorageType(e.target.value as StorageType)}
+              >
                 <option value="SSD">SSD</option>
                 <option value="HDD">HDD</option>
               </select>
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Display</span>
-              <input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} placeholder="Optional" />
+              <input
+                className="input"
+                value={display}
+                onChange={(e) => setDisplay(e.target.value)}
+                placeholder="Optional"
+              />
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Color options</span>
-              <input className="input" value={colorOptions} onChange={(e) => setColorOptions(e.target.value)} placeholder="Optional" />
+              <input
+                className="input"
+                value={colorOptions}
+                onChange={(e) => setColorOptions(e.target.value)}
+                placeholder="Optional"
+              />
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Image URL</span>
@@ -283,21 +346,43 @@ export function InventoryModelEditDialog({
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Purchase price (INR)</span>
-              <input className="input" inputMode="decimal" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="Model-wide" />
+              <input
+                className="input"
+                inputMode="decimal"
+                value={purchasePrice}
+                onChange={(e) => setPurchasePrice(e.target.value)}
+                placeholder="Model-wide"
+              />
               {model.purchase_price != null && (
-                <span className="inv-dialog__hint">Current: {formatInventoryPrice(model.purchase_price)}</span>
+                <span className="inv-dialog__hint">
+                  Current: {formatInventoryPrice(model.purchase_price)}
+                </span>
               )}
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Selling price (INR)</span>
-              <input className="input" inputMode="decimal" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Model-wide" />
+              <input
+                className="input"
+                inputMode="decimal"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(e.target.value)}
+                placeholder="Model-wide"
+              />
               {model.selling_price != null && (
-                <span className="inv-dialog__hint">Current: {formatInventoryPrice(model.selling_price)}</span>
+                <span className="inv-dialog__hint">
+                  Current: {formatInventoryPrice(model.selling_price)}
+                </span>
               )}
             </label>
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Notes</span>
-              <textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+              <textarea
+                className="input"
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional"
+              />
             </label>
           </div>
 
@@ -305,14 +390,29 @@ export function InventoryModelEditDialog({
         </div>
         <footer className="inv-dialog__footer">
           {canArchive && onArchive && model.status === 'active' && (
-            <button type="button" className="btn btn-danger btn-sm inv-dialog__footer-leading" onClick={() => void archive()} disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-danger btn-sm inv-dialog__footer-leading"
+              onClick={() => void archive()}
+              disabled={loading}
+            >
               Remove model
             </button>
           )}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : 'Save changes'}
           </button>
         </footer>

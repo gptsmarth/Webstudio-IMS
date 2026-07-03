@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
 from webstudio_backend.infrastructure.database.enums import UserRole
 from webstudio_backend.infrastructure.repositories.exceptions import (
-    SetupPendingRecoveryConfirmationError,
     SystemAlreadyInitializedError,
 )
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (

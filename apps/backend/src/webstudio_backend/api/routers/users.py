@@ -43,8 +43,13 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     SelfMainAdminDisableError,
     UserNotFoundError,
 )
-from webstudio_backend.infrastructure.repositories.refresh_token_repository import RefreshTokenRepository
-from webstudio_backend.services.custom_access_role_service import CustomAccessRoleNotFoundError, CustomAccessRoleService
+from webstudio_backend.infrastructure.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
+)
+from webstudio_backend.services.custom_access_role_service import (
+    CustomAccessRoleNotFoundError,
+    CustomAccessRoleService,
+)
 from webstudio_backend.services.permission_resolver import PermissionResolver
 from webstudio_backend.services.user_admin_service import UserAdminExtras, UserAdminService
 from webstudio_backend.services.user_service import UserService
@@ -132,7 +137,9 @@ def _serialize_detail(
 
 
 async def _custom_role_name_map(db_session: AsyncSession, users: list[User]) -> dict[int, str]:
-    role_ids = {user.custom_access_role_id for user in users if user.custom_access_role_id is not None}
+    role_ids = {
+        user.custom_access_role_id for user in users if user.custom_access_role_id is not None
+    }
     if not role_ids:
         return {}
     roles = await CustomAccessRoleService(db_session).list_roles(include_inactive=True)
@@ -175,7 +182,11 @@ async def list_users(
             _serialize_summary(
                 user,
                 extras_map[user.id],
-                custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+                custom_role_name=(
+                    role_names.get(user.custom_access_role_id)
+                    if user.custom_access_role_id
+                    else None
+                ),
             )
             for user in result.items
         ],
@@ -217,7 +228,9 @@ async def create_user(
     except DuplicateUsernameError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return _envelope(request, UserDetail.from_model(user).model_dump())
 
 
@@ -244,7 +257,9 @@ async def get_user(
             user,
             extras,
             permissions=permissions,
-            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            custom_role_name=(
+                role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None
+            ),
             sessions=sessions,
             login_events=login_events,
         ),
@@ -260,7 +275,9 @@ async def update_user(
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     if body.display_name is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update"
+        )
     service = UserService(db_session)
     try:
         user = await service.update_display_name(
@@ -289,7 +306,9 @@ async def update_user_role(
     except LastMainAdminError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     permissions = await PermissionResolver(db_session).resolve_for_user(user)
     return _envelope(request, UserDetail.from_model(user, permissions=permissions).model_dump())
 
@@ -316,7 +335,9 @@ async def assign_user_access(
     except CustomAccessRoleNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     permissions = await PermissionResolver(db_session).resolve_for_user(user)
     return _envelope(request, UserDetail.from_model(user, permissions=permissions).model_dump())
 
@@ -339,7 +360,9 @@ async def reset_password(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return _envelope(request, {"success": True})
 
 
@@ -398,7 +421,9 @@ async def unlock_user(
             user,
             extras,
             permissions=permissions,
-            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            custom_role_name=(
+                role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None
+            ),
         ),
     )
 
@@ -445,7 +470,9 @@ async def archive_user(
             user,
             extras,
             permissions=permissions,
-            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            custom_role_name=(
+                role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None
+            ),
         ),
     )
 
@@ -473,6 +500,8 @@ async def restore_user(
             user,
             extras,
             permissions=permissions,
-            custom_role_name=role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None,
+            custom_role_name=(
+                role_names.get(user.custom_access_role_id) if user.custom_access_role_id else None
+            ),
         ),
     )

@@ -17,17 +17,23 @@ export function ReportWorkflowSteps({ hasPreviewed }: ReportWorkflowStepsProps):
       {STEPS.map((step, index) => {
         const Icon = step.icon;
         const active = step.id === 'preview' && hasPreviewed;
-        const complete = (step.id === 'type' || step.id === 'filters')
-          || (step.id === 'preview' && hasPreviewed)
-          || (step.id === 'export' && hasPreviewed);
+        const complete =
+          step.id === 'type' ||
+          step.id === 'filters' ||
+          (step.id === 'preview' && hasPreviewed) ||
+          (step.id === 'export' && hasPreviewed);
         return (
           <li
             key={step.id}
-            className={[
-              'report-workflow__step',
-              complete ? 'report-workflow__step--complete' : '',
-              active ? 'report-workflow__step--active' : '',
-            ].filter(Boolean).join(' ') || undefined}
+            className={
+              [
+                'report-workflow__step',
+                complete ? 'report-workflow__step--complete' : '',
+                active ? 'report-workflow__step--active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
           >
             <span className="report-workflow__index">{index + 1}</span>
             <Icon size={14} aria-hidden className="report-workflow__icon" />

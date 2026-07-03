@@ -234,16 +234,10 @@ def compatibility_report(
     current_key = _revision_sort_key(current_schema_version)
     schema_match = not backup_schema or backup_schema == current_schema_version
     backup_schema_newer = bool(
-        backup_schema
-        and current_schema_version
-        and not schema_match
-        and backup_key > current_key
+        backup_schema and current_schema_version and not schema_match and backup_key > current_key
     )
     migration_required = bool(
-        backup_schema
-        and current_schema_version
-        and not schema_match
-        and backup_key < current_key
+        backup_schema and current_schema_version and not schema_match and backup_key < current_key
     )
     version_supported = backup_version in SUPPORTED_BACKUP_VERSIONS
     backward_compatible = version_supported and not backup_schema_newer

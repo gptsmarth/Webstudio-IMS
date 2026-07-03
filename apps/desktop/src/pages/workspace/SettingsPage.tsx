@@ -24,7 +24,9 @@ export function SettingsPage(): JSX.Element {
       <div className="stg-page">
         <div className="stg-empty">
           <p className="stg-empty__title">Access restricted</p>
-          <p className="stg-empty__text">{permissionDenied ?? 'Sign in again to access system settings.'}</p>
+          <p className="stg-empty__text">
+            {permissionDenied ?? 'Sign in again to access system settings.'}
+          </p>
         </div>
       </div>
     );
@@ -39,7 +41,8 @@ export function SettingsPage(): JSX.Element {
         <div>
           <h1 className="stg-page__title">System Settings</h1>
           <p className="stg-page__subtitle">
-            Administration control center for company profile, security, integrations, backups, and system health.
+            Administration control center for company profile, security, integrations, backups, and
+            system health.
           </p>
         </div>
       </header>

@@ -2,18 +2,31 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
 import uuid
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, SettingValueType, TallyProcessingStatus
+from tally.fixtures.sample_vouchers import SAMPLE_VOUCHER_XML
+from webstudio_backend.infrastructure.database.enums import (
+    InventoryStatus,
+    SettingValueType,
+    TallyProcessingStatus,
+)
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
-from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import TallyProcessedInvoiceRepository
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
+    TallyProcessedInvoiceRepository,
+)
 from webstudio_backend.integrations.tally.incremental_sync import (
     SYNC_INTERVAL_MAX_SECONDS,
     SYNC_INTERVAL_MIN_SECONDS,
@@ -22,7 +35,6 @@ from webstudio_backend.integrations.tally.incremental_sync import (
 )
 from webstudio_backend.integrations.tally.xml_parser import parse_vouchers_xml
 from webstudio_backend.services.tally_sync_service import TallySyncService
-from tests.tally.fixtures.sample_vouchers import SAMPLE_VOUCHER_XML
 
 
 def test_clamp_sync_interval_seconds() -> None:
@@ -143,8 +155,16 @@ async def test_fallback_fingerprint_duplicate_skipped(db_session: AsyncSession) 
 
 @pytest.mark.asyncio
 async def test_process_voucher_xml_skips_already_imported(db_session: AsyncSession) -> None:
-    from webstudio_backend.infrastructure.repositories import BrandRepository, LocationRepository, ProductModelRepository
-    from webstudio_backend.infrastructure.database.enums import LocationType, StorageType, StorageUnit
+    from webstudio_backend.infrastructure.database.enums import (
+        LocationType,
+        StorageType,
+        StorageUnit,
+    )
+    from webstudio_backend.infrastructure.repositories import (
+        BrandRepository,
+        LocationRepository,
+        ProductModelRepository,
+    )
 
     suffix = uuid.uuid4().hex[:8]
 
@@ -183,7 +203,9 @@ async def test_process_voucher_xml_skips_already_imported(db_session: AsyncSessi
     )
 
     settings = SystemSettingRepository(db_session)
-    await settings.set_value("tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=None)
+    await settings.set_value(
+        "tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=None
+    )
     await settings.set_value(
         "tally_company_name",
         "WEBSTUDIO",
@@ -202,11 +224,15 @@ async def test_process_voucher_xml_skips_already_imported(db_session: AsyncSessi
     await db_session.commit()
 
     service = TallySyncService(db_session)
-    first = await service.process_voucher_xml(dedup_xml, correlation_id="first", company_name="WEBSTUDIO")
+    first = await service.process_voucher_xml(
+        dedup_xml, correlation_id="first", company_name="WEBSTUDIO"
+    )
     await db_session.commit()
     assert first.counters.invoices_imported >= 1
 
-    second = await service.process_voucher_xml(dedup_xml, correlation_id="second", company_name="WEBSTUDIO")
+    second = await service.process_voucher_xml(
+        dedup_xml, correlation_id="second", company_name="WEBSTUDIO"
+    )
     assert second.counters.invoices_skipped >= 1
     assert second.counters.invoices_imported == 0
 

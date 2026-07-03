@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.database.enums import SettingValueType
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.network_validation_service import (
     NetworkValidationCheck,
     NetworkValidationService,
@@ -112,7 +114,9 @@ class OfficeDeploymentService:
         hostname = socket.gethostname()
         data_root = self._resolve_writable_data_root()
 
-        checks.append(await self._check_network(lan_ip=lan_ip, hostname=hostname, mdns_active=mdns_active))
+        checks.append(
+            await self._check_network(lan_ip=lan_ip, hostname=hostname, mdns_active=mdns_active)
+        )
         checks.append(await self._check_postgresql())
         checks.append(self._check_windows_service())
         checks.append(self._check_api())
@@ -237,7 +241,9 @@ class OfficeDeploymentService:
             "saved_configuration": apply_result.saved_settings if apply_result else {},
             "created_directories": apply_result.created_directories if apply_result else [],
             "apply_messages": apply_result.messages if apply_result else [],
-            "client_connection_url": apply_result.saved_settings.get("office_server_url") if apply_result else None,
+            "client_connection_url": (
+                apply_result.saved_settings.get("office_server_url") if apply_result else None
+            ),
             "configuration_files_required": False,
             "administrator_note": (
                 "All paths and connection hints were saved in WEBSTUDIO system settings. "
@@ -283,7 +289,9 @@ class OfficeDeploymentService:
         hostname: str,
         mdns_active: bool,
     ) -> NetworkValidationCheck:
-        detail = f"Hostname {hostname}; LAN IP {lan_ip}; mDNS {'active' if mdns_active else 'inactive'}"
+        detail = (
+            f"Hostname {hostname}; LAN IP {lan_ip}; mDNS {'active' if mdns_active else 'inactive'}"
+        )
         status = "passed"
         message = "Office LAN connectivity detected"
         if lan_ip.startswith("127."):
@@ -363,7 +371,9 @@ class OfficeDeploymentService:
             name="Backup Path",
             status=status,
             message=str(backup_path),
-            detail=storage.detail if storage.status != "ok" else "Writable backup directory confirmed",
+            detail=(
+                storage.detail if storage.status != "ok" else "Writable backup directory confirmed"
+            ),
         )
 
     async def _check_image_storage(self, data_root: Path) -> NetworkValidationCheck:
@@ -408,7 +418,9 @@ class OfficeDeploymentService:
         tally_status = tally_cfg.status
         tally_detail = tally_cfg.detail
         if tally_enabled:
-            from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
+            from webstudio_backend.services.tally_connectivity_service import (
+                TallyConnectivityService,
+            )
 
             try:
                 diagnostics = await TallyConnectivityService(self._session).test_connection()

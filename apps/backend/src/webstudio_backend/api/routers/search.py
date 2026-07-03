@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import CurrentUserDep

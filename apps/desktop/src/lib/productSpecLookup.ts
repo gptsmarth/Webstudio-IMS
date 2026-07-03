@@ -34,9 +34,7 @@ export function findModelByNumber(
   const normalized = modelNumber.trim().toLowerCase();
   if (!normalized) return null;
 
-  const pool = brandId
-    ? models.filter((model) => model.brand_id === brandId)
-    : models;
+  const pool = brandId ? models.filter((model) => model.brand_id === brandId) : models;
 
   return pool.find((model) => model.model_number.trim().toLowerCase() === normalized) ?? null;
 }

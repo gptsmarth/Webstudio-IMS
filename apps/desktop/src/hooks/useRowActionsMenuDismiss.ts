@@ -26,7 +26,10 @@ export function useRowActionsMenuDismiss(
   }, [menuRef, onClose]);
 }
 
-export function rowMenuPosition(anchorRect: DOMRect, menuHeight = 280): { top: number; left: number } {
+export function rowMenuPosition(
+  anchorRect: DOMRect,
+  menuHeight = 280,
+): { top: number; left: number } {
   return {
     top: Math.min(anchorRect.bottom + 4, window.innerHeight - menuHeight),
     left: Math.min(anchorRect.left, window.innerWidth - 220),

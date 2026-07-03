@@ -86,10 +86,11 @@ async function searchProductModels(query: string): Promise<SearchResult[]> {
   const models = await ProductModelService.listModels();
   const term = query.toLowerCase();
   return models
-    .filter((model) =>
-      model.model_number.toLowerCase().includes(term)
-      || model.model_name.toLowerCase().includes(term)
-      || (model.brand_name ?? '').toLowerCase().includes(term),
+    .filter(
+      (model) =>
+        model.model_number.toLowerCase().includes(term) ||
+        model.model_name.toLowerCase().includes(term) ||
+        (model.brand_name ?? '').toLowerCase().includes(term),
     )
     .slice(0, 5)
     .map((model) => ({
@@ -120,7 +121,11 @@ async function searchNotifications(query: string): Promise<SearchResult[]> {
   const result = await NotificationService.listNotifications({ page_size: 20 });
   const term = query.toLowerCase();
   return result.items
-    .filter((item) => [item.title, item.description, item.serial_number ?? ''].some((f) => f.toLowerCase().includes(term)))
+    .filter((item) =>
+      [item.title, item.description, item.serial_number ?? ''].some((f) =>
+        f.toLowerCase().includes(term),
+      ),
+    )
     .slice(0, 5)
     .map((item) => ({
       id: `notif-${item.id}`,
@@ -135,7 +140,11 @@ async function searchAudit(query: string): Promise<SearchResult[]> {
   const result = await AuditService.listLogs({ page_size: 20 });
   const term = query.toLowerCase();
   return result.items
-    .filter((item) => [item.description ?? '', item.action, item.actor_display_name ?? ''].some((f) => f.toLowerCase().includes(term)))
+    .filter((item) =>
+      [item.description ?? '', item.action, item.actor_display_name ?? ''].some((f) =>
+        f.toLowerCase().includes(term),
+      ),
+    )
     .slice(0, 5)
     .map((item) => ({
       id: `audit-${item.id}`,
@@ -150,9 +159,19 @@ export const SEARCH_PROVIDERS: SearchProvider[] = [
   { id: 'inventory', label: 'Inventory', entityType: 'serial', search: searchInventory },
   { id: 'sales', label: 'Sales', entityType: 'invoice', search: searchSales },
   { id: 'brands', label: 'Brands', entityType: 'brand', search: searchBrands },
-  { id: 'models', label: 'Product Models', entityType: 'product_model', search: searchProductModels },
+  {
+    id: 'models',
+    label: 'Product Models',
+    entityType: 'product_model',
+    search: searchProductModels,
+  },
   { id: 'locations', label: 'Locations', entityType: 'location', search: searchLocations },
-  { id: 'notifications', label: 'Notifications', entityType: 'notification', search: searchNotifications },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    entityType: 'notification',
+    search: searchNotifications,
+  },
   { id: 'audit', label: 'Audit Logs', entityType: 'audit', search: searchAudit },
 ];
 
@@ -161,7 +180,10 @@ export interface GroupedSearchResults {
   items: SearchResult[];
 }
 
-export async function runGlobalSearch(query: string, permissions?: string[]): Promise<SearchResult[]> {
+export async function runGlobalSearch(
+  query: string,
+  permissions?: string[],
+): Promise<SearchResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
@@ -172,7 +194,9 @@ export async function runGlobalSearch(query: string, permissions?: string[]): Pr
   });
 
   try {
-    const batches = await Promise.all(providers.map((provider) => Promise.resolve(provider.search(trimmed))));
+    const batches = await Promise.all(
+      providers.map((provider) => Promise.resolve(provider.search(trimmed))),
+    );
     return batches.flat().slice(0, 24);
   } catch {
     return [];
@@ -205,7 +229,9 @@ export function loadRecentSearches(): string[] {
 export function saveRecentSearch(query: string): void {
   const trimmed = query.trim();
   if (!trimmed) return;
-  const recent = loadRecentSearches().filter((entry) => entry.toLowerCase() !== trimmed.toLowerCase());
+  const recent = loadRecentSearches().filter(
+    (entry) => entry.toLowerCase() !== trimmed.toLowerCase(),
+  );
   recent.unshift(trimmed);
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, RECENT_LIMIT)));
 }

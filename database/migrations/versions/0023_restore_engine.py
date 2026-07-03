@@ -21,9 +21,13 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("filename", sa.String(length=256), nullable=False),
         sa.Column("source", sa.String(length=32), nullable=False, server_default="local"),
-        sa.Column("restore_scope", sa.String(length=32), nullable=False, server_default="entire_database"),
+        sa.Column(
+            "restore_scope", sa.String(length=32), nullable=False, server_default="entire_database"
+        ),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="running"),
-        sa.Column("verification_status", sa.String(length=32), nullable=False, server_default="pending"),
+        sa.Column(
+            "verification_status", sa.String(length=32), nullable=False, server_default="pending"
+        ),
         sa.Column("emergency_backup_filename", sa.String(length=256), nullable=True),
         sa.Column("duration_ms", sa.Integer(), nullable=True),
         sa.Column("actor_user_id", sa.BigInteger(), nullable=True),

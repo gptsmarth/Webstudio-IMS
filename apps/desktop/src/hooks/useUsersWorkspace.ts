@@ -191,7 +191,11 @@ export function useUsersWorkspace(): UsersWorkspaceState {
       try {
         const [detail, entityAudits, actorAudits] = await Promise.all([
           UserService.getUser(selectedId),
-          AuditService.listLogs({ entity_type: 'user', entity_id: String(selectedId), page_size: 20 }),
+          AuditService.listLogs({
+            entity_type: 'user',
+            entity_id: String(selectedId),
+            page_size: 20,
+          }),
           AuditService.listLogs({ actor_user_id: selectedId, page_size: 20 }),
         ]);
         if (cancelled) return;
@@ -214,7 +218,7 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     };
   }, [selectedId]);
 
-  const runAction = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
+  const runAction = useCallback(async <T>(action: () => Promise<T>): Promise<T> => {
     setActionLoading(true);
     setActionError(null);
     try {
@@ -244,7 +248,9 @@ export function useUsersWorkspace(): UsersWorkspaceState {
 
   const updateUser = useCallback(
     async (userId: number, displayName: string) => {
-      const updated = await runAction(() => UserService.updateUser(userId, { display_name: displayName }));
+      const updated = await runAction(() =>
+        UserService.updateUser(userId, { display_name: displayName }),
+      );
       await refresh();
       if (selectedId === userId) setSelectedUser(updated);
       return updated;
@@ -277,7 +283,10 @@ export function useUsersWorkspace(): UsersWorkspaceState {
   const assignCustomAccess = useCallback(
     async (userId: number, customRoleId: number) => {
       const updated = await runAction(() =>
-        UserService.assignUserAccess(userId, { access_type: 'custom', custom_role_id: customRoleId }),
+        UserService.assignUserAccess(userId, {
+          access_type: 'custom',
+          custom_role_id: customRoleId,
+        }),
       );
       await refresh();
       if (selectedId === userId) setSelectedUser(updated);
@@ -288,7 +297,9 @@ export function useUsersWorkspace(): UsersWorkspaceState {
 
   const resetPassword = useCallback(
     async (userId: number, temporaryPassword: string) => {
-      await runAction(() => UserService.resetPassword(userId, { temporary_password: temporaryPassword }));
+      await runAction(() =>
+        UserService.resetPassword(userId, { temporary_password: temporaryPassword }),
+      );
     },
     [runAction],
   );

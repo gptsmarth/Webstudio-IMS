@@ -5,10 +5,9 @@ from __future__ import annotations
 import pytest
 
 from webstudio_backend.services.backup_production_validation_service import (
-    BackupProductionValidationService,
     PRODUCTION_RESTORE_CHECKLIST,
+    BackupProductionValidationService,
 )
-
 
 PRODUCTION_BACKUP_CHECK_KEYS = {
     "automatic_backups",

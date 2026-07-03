@@ -26,7 +26,9 @@ class AuditRecorder:
     """Records append-only audit entries with human-readable snapshots."""
 
     def __init__(self, session: AsyncSession) -> None:
-        from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
+        from webstudio_backend.infrastructure.repositories.audit_log_repository import (
+            AuditLogRepository,
+        )
 
         self._repository = AuditLogRepository(session)
         self._session = session
@@ -307,9 +309,7 @@ class AuditRecorder:
             field_name="current_location",
             old_value={"current_location": old_ref},
             new_value={"current_location": new_ref},
-            description=(
-                f"Location changed from {old_ref['name']} to {new_ref['name']}"
-            ),
+            description=(f"Location changed from {old_ref['name']} to {new_ref['name']}"),
         )
 
     async def record_inventory_status_change(
@@ -332,9 +332,7 @@ class AuditRecorder:
             new_value.update(extra_new_value)
         description = f"Status changed from {old_label} to {new_label}"
         if extra_new_value and extra_new_value.get("invoice_number"):
-            description = (
-                f"{description} (Invoice: {extra_new_value['invoice_number']})"
-            )
+            description = f"{description} (Invoice: {extra_new_value['invoice_number']})"
         await self.record(
             entity_type="inventory_item",
             entity_id=str(item.id),
@@ -370,9 +368,7 @@ class AuditRecorder:
             field_name="product_model",
             old_value={"product_model": old_ref},
             new_value={"product_model": new_ref},
-            description=(
-                f"Product model changed from {old_ref['name']} to {new_ref['name']}"
-            ),
+            description=(f"Product model changed from {old_ref['name']} to {new_ref['name']}"),
         )
 
     async def record_inventory_field_update(
@@ -525,7 +521,8 @@ class AuditRecorder:
             field_name=field_name,
             old_value=old_value,
             new_value=enriched,
-            description=description or self._field_change_description(field_name, old_value, new_value),
+            description=description
+            or self._field_change_description(field_name, old_value, new_value),
         )
 
     async def record_user_disable(self, user: User, *, actor: AuditActor) -> None:
@@ -536,7 +533,11 @@ class AuditRecorder:
             actor=actor,
             field_name="status",
             old_value={"status": "active"},
-            new_value={"status": "disabled", "security_event": "user_deactivation", "severity": "medium"},
+            new_value={
+                "status": "disabled",
+                "security_event": "user_deactivation",
+                "severity": "medium",
+            },
             description=f"User '{user.username}' deactivated",
         )
 
@@ -548,7 +549,11 @@ class AuditRecorder:
             actor=actor,
             field_name="status",
             old_value={"status": "disabled"},
-            new_value={"status": "active", "security_event": "user_activation", "severity": "medium"},
+            new_value={
+                "status": "active",
+                "security_event": "user_activation",
+                "severity": "medium",
+            },
             description=f"User '{user.username}' activated",
         )
 
@@ -572,11 +577,17 @@ class AuditRecorder:
             actor=actor,
             field_name="archived_at",
             old_value={"is_archived": True},
-            new_value={"is_archived": False, "security_event": "user_restore", "severity": "medium"},
+            new_value={
+                "is_archived": False,
+                "security_event": "user_restore",
+                "severity": "medium",
+            },
             description=f"User '{user.username}' restored from archive",
         )
 
-    async def record_user_force_logout(self, user: User, *, actor: AuditActor, sessions_revoked: int) -> None:
+    async def record_user_force_logout(
+        self, user: User, *, actor: AuditActor, sessions_revoked: int
+    ) -> None:
         await self.record(
             entity_type="user",
             entity_id=str(user.id),
@@ -688,8 +699,16 @@ class AuditRecorder:
             entity_type="user",
             entity_id=str(user.id),
             action=AuditAction.SYSTEM_ACTION,
-            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
-            new_value={"security_event": "login_success", "severity": "low", "username": user.username},
+            actor=AuditActor(
+                user_id=user.id,
+                display_name=user.display_name or user.username,
+                role=user.role.value,
+            ),
+            new_value={
+                "security_event": "login_success",
+                "severity": "low",
+                "username": user.username,
+            },
             description=f"User '{user.username}' logged in",
             source=AuditSource.MANUAL,
         )
@@ -727,7 +746,11 @@ class AuditRecorder:
             entity_type="user",
             entity_id=str(user.id),
             action=AuditAction.SYSTEM_ACTION,
-            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            actor=AuditActor(
+                user_id=user.id,
+                display_name=user.display_name or user.username,
+                role=user.role.value,
+            ),
             new_value={
                 "security_event": "logout",
                 "severity": "low",
@@ -765,7 +788,11 @@ class AuditRecorder:
             entity_type="user",
             entity_id=str(user.id),
             action=AuditAction.SYSTEM_ACTION,
-            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
+            actor=AuditActor(
+                user_id=user.id,
+                display_name=user.display_name or user.username,
+                role=user.role.value,
+            ),
             new_value={
                 "security_event": "session_revoked",
                 "severity": "medium",
@@ -823,7 +850,9 @@ class AuditRecorder:
         new_value: str | None,
         actor: AuditActor,
     ) -> None:
-        event = "tally_configuration" if setting_key.startswith("tally_") else "configuration_change"
+        event = (
+            "tally_configuration" if setting_key.startswith("tally_") else "configuration_change"
+        )
         await self.record(
             entity_type="system_setting",
             entity_id=setting_key,
@@ -858,7 +887,13 @@ class AuditRecorder:
                 display_name=user.display_name or user.username,
                 role=user.role.value,
             ),
-            new_value={"permission": permission, "path": path, "method": method, "security_event": "permission_denied", "severity": "high"},
+            new_value={
+                "permission": permission,
+                "path": path,
+                "method": method,
+                "security_event": "permission_denied",
+                "severity": "high",
+            },
             description=f"Permission denied: {permission} ({method} {path})",
             source=AuditSource.SYSTEM,
         )
@@ -868,8 +903,16 @@ class AuditRecorder:
             entity_type="user",
             entity_id=str(user.id),
             action=AuditAction.SYSTEM_ACTION,
-            actor=AuditActor(user_id=user.id, display_name=user.display_name or user.username, role=user.role.value),
-            new_value={"reason": reason, "security_event": "recovery_key_regenerated", "severity": "critical"},
+            actor=AuditActor(
+                user_id=user.id,
+                display_name=user.display_name or user.username,
+                role=user.role.value,
+            ),
+            new_value={
+                "reason": reason,
+                "security_event": "recovery_key_regenerated",
+                "severity": "critical",
+            },
             description="Main Admin recovery key generated",
             source=AuditSource.SYSTEM,
         )
@@ -893,7 +936,11 @@ class AuditRecorder:
             actor=AuditActor.system(display_name="Recovery", role="system"),
             field_name="password",
             old_value={"password_recovered": False},
-            new_value={"password_recovered": True, "security_event": "password_reset", "severity": "critical"},
+            new_value={
+                "password_recovered": True,
+                "security_event": "password_reset",
+                "severity": "critical",
+            },
             description=f"Main Admin password recovered for '{user.username}'",
             source=AuditSource.SYSTEM,
         )

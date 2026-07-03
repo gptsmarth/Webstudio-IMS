@@ -75,7 +75,9 @@ class TallySyncHistoryRepository(SqlAlchemyRepository[TallySyncHistory]):
         company_sync_id: int | None = None,
         limit: int = 20,
     ) -> list[TallySyncHistory]:
-        statement = select(TallySyncHistory).order_by(desc(TallySyncHistory.started_at)).limit(limit)
+        statement = (
+            select(TallySyncHistory).order_by(desc(TallySyncHistory.started_at)).limit(limit)
+        )
         if company_sync_id is not None:
             statement = statement.where(TallySyncHistory.tally_company_sync_id == company_sync_id)
         result = await self._session.execute(statement)

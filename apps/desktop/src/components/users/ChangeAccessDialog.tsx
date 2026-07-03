@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { HUMAN_USER_ROLES, apiRoleLabel, userDisplayName } from '../../lib/users';
 import { PermissionViewer } from './PermissionViewer';
-import { AccessRoleService, type CustomAccessRoleSummary } from '../../services/api/AccessRoleService';
+import {
+  AccessRoleService,
+  type CustomAccessRoleSummary,
+} from '../../services/api/AccessRoleService';
 import type { RolePermissionsEntry, UserRole, UserSummary } from '../../services/api/UserService';
 
 interface ChangeAccessDialogProps {
@@ -32,7 +35,9 @@ export function ChangeAccessDialog({
 
   useEffect(() => {
     if (!open) return;
-    void AccessRoleService.listRoles().then(setCustomRoles).catch(() => setCustomRoles([]));
+    void AccessRoleService.listRoles()
+      .then(setCustomRoles)
+      .catch(() => setCustomRoles([]));
   }, [open]);
 
   useEffect(() => {
@@ -77,10 +82,20 @@ export function ChangeAccessDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog cat-dialog--wide animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="cat-dialog cat-dialog--wide animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">Change access</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} />
           </button>
         </header>
@@ -102,7 +117,11 @@ export function ChangeAccessDialog({
           {accessType === 'builtin' ? (
             <label className="cat-field">
               <span>Built-in role</span>
-              <select className="input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+              <select
+                className="input"
+                value={role}
+                onChange={(event) => setRole(event.target.value as UserRole)}
+              >
                 {HUMAN_USER_ROLES.map((entry) => (
                   <option key={entry} value={entry}>
                     {apiRoleLabel(entry)}
@@ -116,7 +135,9 @@ export function ChangeAccessDialog({
               <select
                 className="input"
                 value={customRoleId}
-                onChange={(event) => setCustomRoleId(event.target.value ? Number(event.target.value) : '')}
+                onChange={(event) =>
+                  setCustomRoleId(event.target.value ? Number(event.target.value) : '')
+                }
               >
                 <option value="">Select a role…</option>
                 {customRoles.map((entry) => (
@@ -130,16 +151,30 @@ export function ChangeAccessDialog({
           {accessType === 'builtin' && (
             <div className="usr-dialog-permissions">
               <p className="usr-dialog-permissions__title">Effective permissions</p>
-              <PermissionViewer rolePermissions={rolePermissions} selectedRole={previewRole} compact />
+              <PermissionViewer
+                rolePermissions={rolePermissions}
+                selectedRole={previewRole}
+                compact
+              />
             </div>
           )}
           {error && <p className="cat-dialog__error">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : 'Save access'}
           </button>
         </footer>

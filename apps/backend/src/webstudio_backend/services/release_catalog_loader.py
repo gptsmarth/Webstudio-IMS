@@ -58,11 +58,13 @@ def build_compatibility_matrix(manifest: dict[str, Any]) -> dict[str, Any]:
     release = manifest.get("release") or {}
     return {
         "desktop": {
-            "min_version": backend.get("min_desktop_version") or manifest.get("release_version", "0.0.0"),
+            "min_version": backend.get("min_desktop_version")
+            or manifest.get("release_version", "0.0.0"),
             "latest_version": (components.get("desktop") or {}).get("version"),
         },
         "mobile": {
-            "min_version": backend.get("min_mobile_version") or manifest.get("release_version", "0.0.0"),
+            "min_version": backend.get("min_mobile_version")
+            or manifest.get("release_version", "0.0.0"),
             "latest_version": (components.get("mobile_flutter") or {}).get("version"),
         },
         "server": {

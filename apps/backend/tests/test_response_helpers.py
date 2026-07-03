@@ -31,6 +31,8 @@ def test_build_page_meta_empty() -> None:
 
 
 def test_build_page_meta_legacy_aliases() -> None:
-    meta = build_page_meta(page=2, page_size=25, total_items=40, total_pages=2, include_legacy_aliases=True)
+    meta = build_page_meta(
+        page=2, page_size=25, total_items=40, total_pages=2, include_legacy_aliases=True
+    )
     assert meta.total_records == 40
     assert meta.current_page == 2

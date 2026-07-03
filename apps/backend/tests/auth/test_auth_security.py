@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.conftest import MAIN_ADMIN_USERNAME, TEST_PASSWORD, login_headers
 from webstudio_backend.infrastructure.database.enums import SettingValueType
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
 from webstudio_backend.services.password_policy_service import PasswordPolicyService
 
 
@@ -101,13 +103,17 @@ async def test_password_policy_enforced_from_settings(db_session: AsyncSession) 
 
 
 @pytest.mark.asyncio
-async def test_unlock_user(api_client: AsyncClient, initialized_system, db_session: AsyncSession) -> None:
+async def test_unlock_user(
+    api_client: AsyncClient, initialized_system, db_session: AsyncSession
+) -> None:
     from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 
     headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
     admin = await UserRepository(db_session).get_by_username(MAIN_ADMIN_USERNAME)
     assert admin is not None
-    await UserRepository(db_session).record_failed_login(admin, lockout_threshold=1, lockout_minutes=30)
+    await UserRepository(db_session).record_failed_login(
+        admin, lockout_threshold=1, lockout_minutes=30
+    )
     await db_session.commit()
 
     unlock = await api_client.post(f"/api/v1/users/{admin.id}/unlock", headers=headers)

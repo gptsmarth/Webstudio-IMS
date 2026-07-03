@@ -82,7 +82,9 @@ class User(PrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     custom_access_role_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey(

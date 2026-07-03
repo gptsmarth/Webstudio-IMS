@@ -14,7 +14,10 @@ from webstudio_backend.infrastructure.database.enums import (
     NotificationStatus,
     NotificationType,
 )
-from webstudio_backend.infrastructure.database.models.notification import Notification, notification_status
+from webstudio_backend.infrastructure.database.models.notification import (
+    Notification,
+    notification_status,
+)
 
 
 class NotificationDetail(BaseModel):

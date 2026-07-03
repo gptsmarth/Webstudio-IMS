@@ -10,14 +10,22 @@ interface StockModelRowProps {
   hideBrand?: boolean;
 }
 
-export function StockModelRow({ row, onSelect, hideBrand = true }: StockModelRowProps): JSX.Element {
+export function StockModelRow({
+  row,
+  onSelect,
+  hideBrand = true,
+}: StockModelRowProps): JSX.Element {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const specLines = useMemo(() => buildStockModelSpecLines(row.model), [row.model]);
   const inStock = row.availableUnits > 0;
   const specPreview = useMemo(
-    () => specLines.slice(0, 4).map((line) => line.value).join(' · '),
+    () =>
+      specLines
+        .slice(0, 4)
+        .map((line) => line.value)
+        .join(' · '),
     [specLines],
   );
 
@@ -42,7 +50,11 @@ export function StockModelRow({ row, onSelect, hideBrand = true }: StockModelRow
   }, [row.model.brand_name, row.model.id, row.model.model_name, row.model.product_image_url]);
 
   return (
-    <button type="button" className={`stock-model-row${inStock ? '' : ' stock-model-row--empty'}`} onClick={onSelect}>
+    <button
+      type="button"
+      className={`stock-model-row${inStock ? '' : ' stock-model-row--empty'}`}
+      onClick={onSelect}
+    >
       <div className="stock-model-row__media">
         {imageLoading ? (
           <div className="stock-model-row__image stock-model-row__image--placeholder skeleton" />
@@ -74,7 +86,9 @@ export function StockModelRow({ row, onSelect, hideBrand = true }: StockModelRow
       </div>
 
       <div className="stock-model-row__aside">
-        <span className={`stock-model-row__badge${inStock ? ' stock-model-row__badge--in' : ' stock-model-row__badge--out'}`}>
+        <span
+          className={`stock-model-row__badge${inStock ? ' stock-model-row__badge--in' : ' stock-model-row__badge--out'}`}
+        >
           {inStock ? 'In stock' : 'Out of stock'}
         </span>
         <span className="stock-model-row__units">{stockAvailabilityLabel(row.availableUnits)}</span>

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -46,7 +46,9 @@ async def test_brand_delete_blocked_with_dependencies(
     )
     await db_session.commit()
 
-    preview = await api_client.get(f"/api/v1/brands/{brand.id}/delete-preview", headers=admin_headers)
+    preview = await api_client.get(
+        f"/api/v1/brands/{brand.id}/delete-preview", headers=admin_headers
+    )
     assert preview.status_code == 200
     preview_data = preview.json()["data"]
     assert preview_data["product_model_count"] == 1
@@ -78,7 +80,9 @@ async def test_product_model_delete_blocked_with_inventory(
     db_session: AsyncSession,
 ) -> None:
     brand = await BrandRepository(db_session).create("Model Block Brand")
-    location = await LocationRepository(db_session).create("Model Block Loc", location_type=LocationType.WAREHOUSE)
+    location = await LocationRepository(db_session).create(
+        "Model Block Loc", location_type=LocationType.WAREHOUSE
+    )
     product_model = await ProductModelRepository(db_session).create(
         brand_id=brand.id,
         model_number="MB-01",
@@ -106,7 +110,9 @@ async def test_product_model_delete_blocked_with_inventory(
     assert preview.json()["data"]["inventory_count"] == 1
     assert preview.json()["data"]["can_delete"] is False
 
-    resp = await api_client.delete(f"/api/v1/product-models/{product_model.id}", headers=admin_headers)
+    resp = await api_client.delete(
+        f"/api/v1/product-models/{product_model.id}", headers=admin_headers
+    )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "CATALOGUE_DELETE_BLOCKED"
 
@@ -118,8 +124,12 @@ async def test_location_delete_preview_and_transfer(
     db_session: AsyncSession,
 ) -> None:
     brand = await BrandRepository(db_session).create("Transfer Brand")
-    source = await LocationRepository(db_session).create("Source Loc", location_type=LocationType.WAREHOUSE)
-    destination = await LocationRepository(db_session).create("Dest Loc", location_type=LocationType.RETAIL_FLOOR)
+    source = await LocationRepository(db_session).create(
+        "Source Loc", location_type=LocationType.WAREHOUSE
+    )
+    destination = await LocationRepository(db_session).create(
+        "Dest Loc", location_type=LocationType.RETAIL_FLOOR
+    )
     product_model = await ProductModelRepository(db_session).create(
         brand_id=brand.id,
         model_number="TR-01",
@@ -139,7 +149,9 @@ async def test_location_delete_preview_and_transfer(
     )
     await db_session.commit()
 
-    preview = await api_client.get(f"/api/v1/locations/{source.id}/delete-preview", headers=admin_headers)
+    preview = await api_client.get(
+        f"/api/v1/locations/{source.id}/delete-preview", headers=admin_headers
+    )
     assert preview.status_code == 200
     preview_data = preview.json()["data"]
     assert preview_data["inventory_count"] == 1
@@ -173,11 +185,13 @@ async def test_location_delete_preserves_tally_sales_with_mapped_location(
     admin_headers: dict[str, str],
     db_session: AsyncSession,
 ) -> None:
-    source = await LocationRepository(db_session).create("Tally Source", location_type=LocationType.RETAIL_FLOOR)
+    source = await LocationRepository(db_session).create(
+        "Tally Source", location_type=LocationType.RETAIL_FLOOR
+    )
     sale = Sale(
         inventory_item_id=None,
         sale_source=SaleSource.TALLY,
-        sold_at=datetime.now(timezone.utc),
+        sold_at=datetime.now(UTC),
         invoice_number="TALLY-LOC-001",
         mapped_location_id=source.id,
         snapshot_location_name=None,
@@ -205,7 +219,9 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     db_session: AsyncSession,
 ) -> None:
     brand = await BrandRepository(db_session).create("History Brand")
-    location = await LocationRepository(db_session).create("History Loc", location_type=LocationType.WAREHOUSE)
+    location = await LocationRepository(db_session).create(
+        "History Loc", location_type=LocationType.WAREHOUSE
+    )
     product_model = await ProductModelRepository(db_session).create(
         brand_id=brand.id,
         model_number="HIST-01",
@@ -226,7 +242,7 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     sale = Sale(
         inventory_item_id=item.id,
         sale_source=SaleSource.MANUAL,
-        sold_at=datetime.now(timezone.utc),
+        sold_at=datetime.now(UTC),
         invoice_number="INV-HIST-001",
         snapshot_serial_number=item.serial_number,
         snapshot_product_model_id=product_model.id,
@@ -241,7 +257,9 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     sale_id = sale.id
     item_id = item.id
 
-    resp = await api_client.delete(f"/api/v1/product-models/{product_model.id}", headers=admin_headers)
+    resp = await api_client.delete(
+        f"/api/v1/product-models/{product_model.id}", headers=admin_headers
+    )
     assert resp.status_code == 409
 
     await InventoryItemRepository(db_session).force_delete(
@@ -249,7 +267,9 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     )
     await db_session.commit()
 
-    resp = await api_client.delete(f"/api/v1/product-models/{product_model.id}", headers=admin_headers)
+    resp = await api_client.delete(
+        f"/api/v1/product-models/{product_model.id}", headers=admin_headers
+    )
     assert resp.status_code == 204
 
     persisted_sale = await db_session.get(Sale, sale_id)
@@ -259,11 +279,15 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     assert persisted_sale.snapshot_serial_number == "SN-HIST-001"
 
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.entity_type == "product_model",
-                AuditLog.entity_id == str(product_model.id),
-            ),
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.entity_type == "product_model",
+                    AuditLog.entity_id == str(product_model.id),
+                ),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert audit_rows

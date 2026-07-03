@@ -5,7 +5,10 @@ import {
   inventoryStatusBadgeClass,
   inventoryStatusLabel,
 } from '../src/lib/inventory';
-import { hasActiveInventoryFilters, inventoryFiltersToExportParams } from '../src/lib/inventoryExport';
+import {
+  hasActiveInventoryFilters,
+  inventoryFiltersToExportParams,
+} from '../src/lib/inventoryExport';
 import {
   colorVariantsLabel,
   modelDisplayName,
@@ -80,8 +83,12 @@ describe('inventory domain helpers', () => {
   });
 
   it('formats model display name and color variants', () => {
-    expect(modelDisplayName({ model_number: 'X1515', model_name: 'Vivobook' })).toBe('X1515 — Vivobook');
+    expect(modelDisplayName({ model_number: 'X1515', model_name: 'Vivobook' })).toBe(
+      'X1515 — Vivobook',
+    );
     expect(colorVariantsLabel(null)).toBe('—');
-    expect(colorVariantsLabel({ color_options: 'Quiet Blue, Silver' } as never)).toBe('Quiet Blue, Silver');
+    expect(colorVariantsLabel({ color_options: 'Quiet Blue, Silver' } as never)).toBe(
+      'Quiet Blue, Silver',
+    );
   });
 });

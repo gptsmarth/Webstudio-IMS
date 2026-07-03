@@ -20,6 +20,7 @@ class LocationRepository(SqlAlchemyRepository[Location]):
 
     async def get_by_name(self, name: str) -> Location | None:
         from sqlalchemy import func
+
         normalized = name.strip().lower()
         statement = select(Location).where(func.lower(Location.name) == normalized)
         result = await self._session.execute(statement)
@@ -124,6 +125,7 @@ class LocationRepository(SqlAlchemyRepository[Location]):
             if is_active != old_val:
                 location.is_active = is_active
                 from webstudio_backend.infrastructure.database.enums import AuditAction
+
                 action = AuditAction.ARCHIVE if not is_active else AuditAction.RESTORE
                 await recorder.record(
                     entity_type="location",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -79,7 +80,9 @@ async def initialized_system(db_session: AsyncSession) -> None:
 
 @pytest_asyncio.fixture
 async def api_client(db_session: AsyncSession) -> AsyncClient:
-    settings = get_settings().model_copy(update={"jwt_secret": "test-jwt-secret-for-auth-tests-32b!"})
+    settings = get_settings().model_copy(
+        update={"jwt_secret": "test-jwt-secret-for-auth-tests-32b!"}
+    )
     app = create_app(settings)
 
     async def override_get_db():
@@ -107,7 +110,9 @@ async def main_admin_headers(api_client: AsyncClient, initialized_system) -> dic
 
 
 @pytest_asyncio.fixture
-async def admin_headers(db_session: AsyncSession, api_client: AsyncClient, initialized_system) -> dict[str, str]:
+async def admin_headers(
+    db_session: AsyncSession, api_client: AsyncClient, initialized_system
+) -> dict[str, str]:
     await UserRepository(db_session).create(
         username="admin1",
         password_hash=hash_password(TEST_PASSWORD),
@@ -118,7 +123,9 @@ async def admin_headers(db_session: AsyncSession, api_client: AsyncClient, initi
 
 
 @pytest_asyncio.fixture
-async def salesperson_headers(db_session: AsyncSession, api_client: AsyncClient, initialized_system) -> dict[str, str]:
+async def salesperson_headers(
+    db_session: AsyncSession, api_client: AsyncClient, initialized_system
+) -> dict[str, str]:
     await UserRepository(db_session).create(
         username="sales1",
         password_hash=hash_password(TEST_PASSWORD),

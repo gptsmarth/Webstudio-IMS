@@ -21,28 +21,31 @@ export function useBulkOperations(
 ): (operation: BulkOperationType) => void {
   const { selectedIds, canWrite } = context;
 
-  return useCallback((operation: BulkOperationType) => {
-    switch (operation) {
-      case 'import':
-        callbacks.onImport();
-        break;
-      case 'transfer':
-        if (selectedIds.length > 0) callbacks.onTransfer();
-        break;
-      case 'archive':
-        if (canWrite && selectedIds.length > 0) void callbacks.onArchive(selectedIds);
-        break;
-      case 'restore':
-        if (canWrite && selectedIds.length > 0) void callbacks.onRestore(selectedIds);
-        break;
-      case 'status_update':
-        if (canWrite && selectedIds.length > 0) callbacks.onStatusUpdate(selectedIds);
-        break;
-      case 'export':
-        if (selectedIds.length > 0) callbacks.onExport(selectedIds);
-        break;
-      default:
-        break;
-    }
-  }, [callbacks, canWrite, selectedIds]);
+  return useCallback(
+    (operation: BulkOperationType) => {
+      switch (operation) {
+        case 'import':
+          callbacks.onImport();
+          break;
+        case 'transfer':
+          if (selectedIds.length > 0) callbacks.onTransfer();
+          break;
+        case 'archive':
+          if (canWrite && selectedIds.length > 0) void callbacks.onArchive(selectedIds);
+          break;
+        case 'restore':
+          if (canWrite && selectedIds.length > 0) void callbacks.onRestore(selectedIds);
+          break;
+        case 'status_update':
+          if (canWrite && selectedIds.length > 0) callbacks.onStatusUpdate(selectedIds);
+          break;
+        case 'export':
+          if (selectedIds.length > 0) callbacks.onExport(selectedIds);
+          break;
+        default:
+          break;
+      }
+    },
+    [callbacks, canWrite, selectedIds],
+  );
 }

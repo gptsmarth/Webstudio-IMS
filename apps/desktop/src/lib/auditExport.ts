@@ -11,7 +11,7 @@ export function auditFiltersToExportParams(
     actor_role: filters.role || undefined,
     audit_action: filters.operation || undefined,
     audit_source: filters.source || undefined,
-    security_only: (filters.securityOnly || filters.module === 'Security') ? true : undefined,
+    security_only: filters.securityOnly || filters.module === 'Security' ? true : undefined,
     audit_severity: filters.severity || undefined,
     location_id: filters.locationId ?? undefined,
     serial_number: filters.serialNumber.trim() || undefined,
@@ -23,21 +23,21 @@ export function auditFiltersToExportParams(
 
 export function hasActiveAuditFilters(filters: AuditFilters, search: string): boolean {
   return Boolean(
-    search.trim()
-    || filters.userId
-    || filters.role
-    || filters.operation
-    || filters.module
-    || filters.source
-    || filters.locationId
-    || filters.result
-    || filters.serialNumber.trim()
-    || filters.invoiceNumber.trim()
-    || filters.modelNumber.trim()
-    || filters.dateFrom
-    || filters.dateTo
-    || filters.severity
-    || filters.securityOnly
-    || filters.module === 'Security'
+    search.trim() ||
+    filters.userId ||
+    filters.role ||
+    filters.operation ||
+    filters.module ||
+    filters.source ||
+    filters.locationId ||
+    filters.result ||
+    filters.serialNumber.trim() ||
+    filters.invoiceNumber.trim() ||
+    filters.modelNumber.trim() ||
+    filters.dateFrom ||
+    filters.dateTo ||
+    filters.severity ||
+    filters.securityOnly ||
+    filters.module === 'Security',
   );
 }

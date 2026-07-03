@@ -67,8 +67,12 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
 
     webstudio_data_root: str = Field(default="", validation_alias="WEBSTUDIO_DATA_ROOT")
-    graceful_shutdown_seconds: int = Field(default=30, validation_alias="WEBSTUDIO_GRACEFUL_SHUTDOWN_SECONDS")
-    scheduler_state_persist_seconds: int = Field(default=60, validation_alias="WEBSTUDIO_SCHEDULER_PERSIST_SECONDS")
+    graceful_shutdown_seconds: int = Field(
+        default=30, validation_alias="WEBSTUDIO_GRACEFUL_SHUTDOWN_SECONDS"
+    )
+    scheduler_state_persist_seconds: int = Field(
+        default=60, validation_alias="WEBSTUDIO_SCHEDULER_PERSIST_SECONDS"
+    )
     discovery_candidates: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["192.168.1.100", "webstudio-server.local"],
         validation_alias="WEBSTUDIO_DISCOVERY_CANDIDATES",

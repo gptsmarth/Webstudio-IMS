@@ -50,30 +50,33 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
 
   return create<HierarchyNavState>((set) => ({
     ...initial,
-    openBrand: (brandId, brandName) => set((state) => ({
-      level: 'models',
-      brandId,
-      brandName,
-      modelId: null,
-      modelLabel: null,
-      search: '',
-      searchField: state.searchField,
-      showZeroStock: state.showZeroStock,
-    })),
-    openModel: (modelId, modelLabel) => set({
-      level: 'serials',
-      modelId,
-      modelLabel,
-    }),
+    openBrand: (brandId, brandName) =>
+      set((state) => ({
+        level: 'models',
+        brandId,
+        brandName,
+        modelId: null,
+        modelLabel: null,
+        search: '',
+        searchField: state.searchField,
+        showZeroStock: state.showZeroStock,
+      })),
+    openModel: (modelId, modelLabel) =>
+      set({
+        level: 'serials',
+        modelId,
+        modelLabel,
+      }),
     goToBrands: () => set({ ...initial }),
-    goToModels: () => set((state) => ({
-      level: 'models',
-      modelId: null,
-      modelLabel: null,
-      search: state.search,
-      searchField: state.searchField,
-      showZeroStock: state.showZeroStock,
-    })),
+    goToModels: () =>
+      set((state) => ({
+        level: 'models',
+        modelId: null,
+        modelLabel: null,
+        search: state.search,
+        searchField: state.searchField,
+        showZeroStock: state.showZeroStock,
+      })),
     setSearch: (search) => set({ search }),
     setSearchField: (searchField) => set({ searchField }),
     setShowZeroStock: (showZeroStock) => set({ showZeroStock }),

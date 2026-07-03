@@ -19,7 +19,12 @@ const STEPS = [
   { number: 3, label: 'Recovery Key' },
 ];
 
-export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMode, appVersion }: Props): JSX.Element {
+export function SetupWizardPage({
+  onSetupComplete,
+  initialRecoveryKey,
+  isDemoMode,
+  appVersion,
+}: Props): JSX.Element {
   const [step, setStep] = useState<1 | 2 | 3>(initialRecoveryKey ? 3 : 1);
   const [isOfflineDemo, setIsOfflineDemo] = useState(Boolean(isDemoMode));
   const [logoError, setLogoError] = useState(false);
@@ -86,13 +91,17 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
       setStep(3);
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { detail?: string } } };
-      const isOffline = !errorObj.response || (errorObj.response.status ?? 0) >= 500 || isOfflineDemo;
+      const isOffline =
+        !errorObj.response || (errorObj.response.status ?? 0) >= 500 || isOfflineDemo;
       if (isOffline) {
         setIsOfflineDemo(true);
         setRecoveryKey('DEMO-PREVIEW-MODE-BACKEND-UNAVAILABLE');
         setStep(3);
       } else {
-        setError(errorObj.response?.data?.detail ?? 'Setup failed. Please check your details and try again.');
+        setError(
+          errorObj.response?.data?.detail ??
+            'Setup failed. Please check your details and try again.',
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -110,7 +119,8 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
       onSetupComplete();
     } catch (err: unknown) {
       const errorObj = err as { response?: { status?: number; data?: { detail?: string } } };
-      const isOffline = !errorObj.response || (errorObj.response.status ?? 0) >= 500 || isOfflineDemo;
+      const isOffline =
+        !errorObj.response || (errorObj.response.status ?? 0) >= 500 || isOfflineDemo;
       if (isOffline) {
         onSetupComplete();
       } else {
@@ -140,7 +150,9 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
             </div>
 
             <h1 className="setup-wizard__title">System Setup</h1>
-            <p className="setup-wizard__subtitle">Configure your organization and administrator account.</p>
+            <p className="setup-wizard__subtitle">
+              Configure your organization and administrator account.
+            </p>
           </header>
 
           <SetupStepper steps={STEPS} currentStep={step} />
@@ -169,7 +181,9 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
               </div>
 
               <div className="setup-wizard__field">
-                <label htmlFor="company-name" className="form-label">Organization Name</label>
+                <label htmlFor="company-name" className="form-label">
+                  Organization Name
+                </label>
                 <input
                   id="company-name"
                   type="text"
@@ -183,13 +197,18 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
               </div>
 
               <div className="setup-wizard__actions setup-wizard__actions--end">
-                <button type="submit" className="btn btn-primary">Continue</button>
+                <button type="submit" className="btn btn-primary">
+                  Continue
+                </button>
               </div>
             </form>
           )}
 
           {step === 2 && (
-            <form onSubmit={(e) => void handleStep2Submit(e)} className="setup-wizard__form animate-fade-in">
+            <form
+              onSubmit={(e) => void handleStep2Submit(e)}
+              className="setup-wizard__form animate-fade-in"
+            >
               <div className="setup-wizard__section">
                 <h2 className="setup-wizard__section-title">Administrator Account</h2>
                 <p className="setup-wizard__section-text">
@@ -198,7 +217,9 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
               </div>
 
               <div className="setup-wizard__field">
-                <label htmlFor="admin-name" className="form-label">Full Name</label>
+                <label htmlFor="admin-name" className="form-label">
+                  Full Name
+                </label>
                 <input
                   id="admin-name"
                   type="text"
@@ -212,7 +233,9 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
               </div>
 
               <div className="setup-wizard__field">
-                <label htmlFor="username" className="form-label">Username</label>
+                <label htmlFor="username" className="form-label">
+                  Username
+                </label>
                 <input
                   id="username"
                   type="text"
@@ -226,7 +249,9 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
 
               <div className="setup-wizard__field-row">
                 <div className="setup-wizard__field">
-                  <label htmlFor="password" className="form-label">Password</label>
+                  <label htmlFor="password" className="form-label">
+                    Password
+                  </label>
                   <div className="setup-wizard__input-wrap">
                     <input
                       id="password"
@@ -237,14 +262,21 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
                       onChange={(e) => setPassword(e.target.value)}
                       required
                     />
-                    <button type="button" className="setup-wizard__eye-btn" onClick={() => setShowPassword((p) => !p)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    <button
+                      type="button"
+                      className="setup-wizard__eye-btn"
+                      onClick={() => setShowPassword((p) => !p)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
                 </div>
 
                 <div className="setup-wizard__field">
-                  <label htmlFor="confirm-password" className="form-label">Confirm Password</label>
+                  <label htmlFor="confirm-password" className="form-label">
+                    Confirm Password
+                  </label>
                   <div className="setup-wizard__input-wrap">
                     <input
                       id="confirm-password"
@@ -255,7 +287,12 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                     />
-                    <button type="button" className="setup-wizard__eye-btn" onClick={() => setShowConfirm((p) => !p)} aria-label={showConfirm ? 'Hide password' : 'Show password'}>
+                    <button
+                      type="button"
+                      className="setup-wizard__eye-btn"
+                      onClick={() => setShowConfirm((p) => !p)}
+                      aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                    >
                       {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
@@ -263,7 +300,14 @@ export function SetupWizardPage({ onSetupComplete, initialRecoveryKey, isDemoMod
               </div>
 
               <div className="setup-wizard__actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setStep(1); setError(null); }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setStep(1);
+                    setError(null);
+                  }}
+                >
                   Back
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={isSubmitting}>

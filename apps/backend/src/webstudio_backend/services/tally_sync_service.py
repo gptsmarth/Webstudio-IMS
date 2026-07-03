@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
@@ -26,34 +26,48 @@ from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
-from webstudio_backend.infrastructure.repositories.inventory_item_repository import InventoryItemRepository
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
 from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
-from webstudio_backend.infrastructure.repositories.notification_repository import NotificationRepository
-from webstudio_backend.infrastructure.repositories.product_model_repository import ProductModelRepository
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
 from webstudio_backend.infrastructure.repositories.sale_repository import SaleRepository
-from webstudio_backend.infrastructure.repositories.system_setting_repository import SystemSettingRepository
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
+from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+    SystemSettingRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_repository import (
     TallyProcessedInvoiceLineRepository,
 )
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
     TallyProcessedInvoiceRepository,
 )
-from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import TallySyncHistoryRepository
-from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import TallySyncLogRepository
-from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS, MONITORED_VOUCHER_TYPES, VOUCHER_TYPE_STORE_MAP
+from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import (
+    TallySyncHistoryRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import (
+    TallySyncLogRepository,
+)
+from webstudio_backend.integrations.tally.constants import (
+    DEFAULT_SYNC_INTERVAL_SECONDS,
+    MONITORED_VOUCHER_TYPES,
+    VOUCHER_TYPE_STORE_MAP,
+)
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
     clamp_sync_interval_seconds,
     resolve_incremental_from_date,
 )
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
-from webstudio_backend.integrations.tally.connectivity import map_exception_to_user_message
-from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
-from webstudio_backend.integrations.tally.xml_client import TallyConnectionError, TallyXmlClient
+from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.integrations.tally.xml_parser import models_equivalent, parse_vouchers_xml
 from webstudio_backend.services.notification_service import NotificationService
 from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
+from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 
 _sync_lock = asyncio.Lock()
 
@@ -139,7 +153,9 @@ class TallySyncService:
         diagnostics = await TallyConnectivityService(self._session).test_connection()
         return diagnostics.reachable
 
-    async def run_sync(self, *, correlation_id: str, triggered_by_user_id: int | None = None) -> TallySyncResult:
+    async def run_sync(
+        self, *, correlation_id: str, triggered_by_user_id: int | None = None
+    ) -> TallySyncResult:
         if _sync_lock.locked():
             return TallySyncResult(
                 sync_run_id=str(uuid.uuid4()),
@@ -366,7 +382,9 @@ class TallySyncService:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.SUCCESS)
                 run_status = TallySyncRunStatus.SUCCESS
             elif line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.PARTIAL_SUCCESS)
+                await self._processed_invoices.update_status(
+                    invoice, TallyProcessingStatus.PARTIAL_SUCCESS
+                )
                 run_status = TallySyncRunStatus.PARTIAL_SUCCESS
             else:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
@@ -401,7 +419,10 @@ class TallySyncService:
             )
 
             last_imported_guid = voucher.guid
-            if last_imported_voucher_date is None or voucher.voucher_date >= last_imported_voucher_date:
+            if (
+                last_imported_voucher_date is None
+                or voucher.voucher_date >= last_imported_voucher_date
+            ):
                 last_imported_voucher_date = voucher.voucher_date
 
             await self._recorder.record_system_action(
@@ -420,7 +441,9 @@ class TallySyncService:
         now = datetime.now(UTC)
         duration_ms = int((now - started_at).total_seconds() * 1000)
         run_success = counters.failures == 0
-        history_status = "success" if run_success else "partial" if counters.invoices_imported else "failed"
+        history_status = (
+            "success" if run_success else "partial" if counters.invoices_imported else "failed"
+        )
 
         if run_success:
             consecutive_failures = 0
@@ -429,7 +452,11 @@ class TallySyncService:
                 last_successful_sync_at=now,
                 last_processed_guid=last_imported_guid,
                 last_imported_voucher_date=last_imported_voucher_date,
-                last_processed_master_id=all_vouchers[-1].master_id if all_vouchers else company_sync.last_processed_master_id,
+                last_processed_master_id=(
+                    all_vouchers[-1].master_id
+                    if all_vouchers
+                    else company_sync.last_processed_master_id
+                ),
                 connection_status="connected",
                 consecutive_sync_failures=0,
                 last_sync_duration_ms=duration_ms,
@@ -465,7 +492,9 @@ class TallySyncService:
         await self._recorder.record_system_action(
             entity_type="tally_sync",
             entity_id=str(sync_run_id),
-            description="Tally sync completed" if run_success else "Tally sync completed with issues",
+            description=(
+                "Tally sync completed" if run_success else "Tally sync completed with issues"
+            ),
             source=AuditSource.TALLY_SYNC,
             new_value={
                 "invoices_checked": counters.invoices_checked,
@@ -480,7 +509,11 @@ class TallySyncService:
         return TallySyncResult(
             sync_run_id=str(sync_run_id),
             success=run_success,
-            message="Synchronization completed." if run_success else "Synchronization completed with issues.",
+            message=(
+                "Synchronization completed."
+                if run_success
+                else "Synchronization completed with issues."
+            ),
             counters=counters,
             connection_status="connected",
         )
@@ -496,7 +529,10 @@ class TallySyncService:
             amount=voucher.amount,
             party_name=voucher.party_name,
         )
-        return by_fallback is not None and by_fallback.processing_status is TallyProcessingStatus.SUCCESS
+        return (
+            by_fallback is not None
+            and by_fallback.processing_status is TallyProcessingStatus.SUCCESS
+        )
 
     async def _notify_sync_outcome(
         self,
@@ -532,7 +568,6 @@ class TallySyncService:
                 category=NotificationCategory.TALLY_SYNC,
                 tally_company_name=company_name,
             )
-
 
     async def _process_voucher(
         self,
@@ -753,9 +788,7 @@ class TallySyncService:
         if model_mismatch:
             detail = await self._inventory.get_detail(inventory_item.id)
             inventory_model = (
-                f"{detail.brand.name} {detail.product_model.model_name}"
-                if detail
-                else "Unknown"
+                f"{detail.brand.name} {detail.product_model.model_name}" if detail else "Unknown"
             )
             await self._notifications.create_notification(
                 notification_type=NotificationType.PRODUCT_MODEL_MISMATCH,
@@ -853,7 +886,9 @@ class TallySyncService:
             if line_stats["failed"] == 0 and line_stats["completed"] > 0:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.SUCCESS)
             elif line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.PARTIAL_SUCCESS)
+                await self._processed_invoices.update_status(
+                    invoice, TallyProcessingStatus.PARTIAL_SUCCESS
+                )
             else:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
         return TallySyncResult(

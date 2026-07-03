@@ -9,7 +9,9 @@ export interface LicensePermissionContext {
 }
 
 /** Passthrough until licensing is implemented. */
-export function createLicensePermissionContext(licenseTier: string | null = null): LicensePermissionContext {
+export function createLicensePermissionContext(
+  licenseTier: string | null = null,
+): LicensePermissionContext {
   return {
     licenseTier,
     isPermissionLicensed: () => true,

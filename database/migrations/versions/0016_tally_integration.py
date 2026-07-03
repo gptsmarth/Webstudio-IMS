@@ -142,7 +142,9 @@ def upgrade() -> None:
         referent_schema=SCHEMA,
     )
     op.create_index("ix_sales_tally_voucher_guid", "sales", ["tally_voucher_guid"], schema=SCHEMA)
-    op.create_index("ix_sales_printed_invoice_number", "sales", ["printed_invoice_number"], schema=SCHEMA)
+    op.create_index(
+        "ix_sales_printed_invoice_number", "sales", ["printed_invoice_number"], schema=SCHEMA
+    )
 
     op.execute(
         sa.text(f"""
@@ -161,7 +163,9 @@ def upgrade() -> None:
         sa.Column("last_processed_guid", sa.String(length=64), nullable=True),
         sa.Column("last_processed_master_id", sa.String(length=64), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("connection_status", sa.String(length=32), server_default="disconnected", nullable=False),
+        sa.Column(
+            "connection_status", sa.String(length=32), server_default="disconnected", nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -331,8 +335,14 @@ def downgrade() -> None:
     op.drop_index("ix_tally_sync_log_run_id", table_name="tally_sync_log", schema=SCHEMA)
     op.drop_table("tally_sync_log", schema=SCHEMA)
     op.drop_table("tally_processed_invoice_line", schema=SCHEMA)
-    op.drop_index("ix_tally_processed_invoice_voucher_number", table_name="tally_processed_invoice", schema=SCHEMA)
-    op.drop_index("ix_tally_processed_invoice_master_id", table_name="tally_processed_invoice", schema=SCHEMA)
+    op.drop_index(
+        "ix_tally_processed_invoice_voucher_number",
+        table_name="tally_processed_invoice",
+        schema=SCHEMA,
+    )
+    op.drop_index(
+        "ix_tally_processed_invoice_master_id", table_name="tally_processed_invoice", schema=SCHEMA
+    )
     op.drop_table("tally_processed_invoice", schema=SCHEMA)
     op.drop_table("tally_company_sync", schema=SCHEMA)
     op.drop_index("ix_sales_printed_invoice_number", table_name="sales", schema=SCHEMA)

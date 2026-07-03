@@ -31,7 +31,9 @@ def upgrade() -> None:
         "enterprise_rollback_runs",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("release_channel", release_channel_enum, nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default=sa.text("'pending'")
+        ),
         sa.Column("current_step", sa.String(length=64), nullable=True),
         sa.Column("steps_json", JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("from_release_version", sa.String(length=32), nullable=False),
@@ -44,7 +46,9 @@ def upgrade() -> None:
         sa.Column("deployment_event_id", sa.BigInteger(), nullable=True),
         sa.Column("pre_rollback_backup_filename", sa.String(length=256), nullable=True),
         sa.Column("database_restore_filename", sa.String(length=256), nullable=True),
-        sa.Column("scheduler_snapshot", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "scheduler_snapshot", JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("config_snapshot_path", sa.Text(), nullable=True),
         sa.Column("service_config_snapshot_path", sa.Text(), nullable=True),
         sa.Column("target_bundle_dir", sa.Text(), nullable=True),
@@ -84,6 +88,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_enterprise_rollback_runs_status", table_name="enterprise_rollback_runs", schema=SCHEMA)
-    op.drop_index("ix_enterprise_rollback_runs_created", table_name="enterprise_rollback_runs", schema=SCHEMA)
+    op.drop_index(
+        "ix_enterprise_rollback_runs_status", table_name="enterprise_rollback_runs", schema=SCHEMA
+    )
+    op.drop_index(
+        "ix_enterprise_rollback_runs_created", table_name="enterprise_rollback_runs", schema=SCHEMA
+    )
     op.drop_table("enterprise_rollback_runs", schema=SCHEMA)

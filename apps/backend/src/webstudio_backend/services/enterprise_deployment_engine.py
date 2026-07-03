@@ -18,17 +18,21 @@ from webstudio_backend.infrastructure.database.enums import (
     NotificationSeverity,
     NotificationType,
 )
-from webstudio_backend.infrastructure.database.models.release_deployment_run import ReleaseDeploymentRun
+from webstudio_backend.infrastructure.database.models.release_deployment_run import (
+    ReleaseDeploymentRun,
+)
 from webstudio_backend.infrastructure.repositories.release_deployment_run_repository import (
     ReleaseDeploymentRunRepository,
 )
-from webstudio_backend.infrastructure.repositories.software_release_repository import SoftwareReleaseRepository
+from webstudio_backend.infrastructure.repositories.software_release_repository import (
+    SoftwareReleaseRepository,
+)
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.deployment_platform_adapter import DeploymentPlatformAdapter
+from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.release_manifest_validator import validate_release_manifest
 from webstudio_backend.services.release_storage_paths import resolve_release_updates_root
 from webstudio_backend.services.restore_engine import RestoreEngine
-from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 
 DEPLOYMENT_STEPS: tuple[str, ...] = (
@@ -50,6 +54,7 @@ DEPLOYMENT_STEPS: tuple[str, ...] = (
     "mark_catalog_current",
     "deployment_completed",
 )
+
 
 class EnterpriseDeploymentEngine:
     def __init__(
@@ -98,7 +103,9 @@ class EnterpriseDeploymentEngine:
 
         try:
             for step in DEPLOYMENT_STEPS:
-                detail = await self._execute_step(run, step, snapshot_root=snapshot_root, user_id=user_id)
+                detail = await self._execute_step(
+                    run, step, snapshot_root=snapshot_root, user_id=user_id
+                )
                 await self._runs.mark_step(run, step=step, status="completed", detail=detail)
                 await self._session.commit()
         except Exception as exc:
@@ -256,7 +263,9 @@ class EnterpriseDeploymentEngine:
         )
         return {"notification_id": notification.id}
 
-    async def _mark_catalog_current(self, run: ReleaseDeploymentRun, *, user_id: int) -> dict[str, Any]:
+    async def _mark_catalog_current(
+        self, run: ReleaseDeploymentRun, *, user_id: int
+    ) -> dict[str, Any]:
         await self._release_repo.clear_current_flags(run.release_channel)
         release = await self._release_repo.find_existing(
             release_version=run.release_version,
@@ -272,7 +281,9 @@ class EnterpriseDeploymentEngine:
         release_payload = EnterpriseReleaseService._serialize_release(release)  # noqa: SLF001
         from webstudio_backend.services.client_update_service import ClientUpdateService
 
-        await ClientUpdateService(self._session, self._settings).sync_platform_settings_from_release(
+        await ClientUpdateService(
+            self._session, self._settings
+        ).sync_platform_settings_from_release(
             release_payload,
         )
         return {"release_id": release.id}
@@ -313,7 +324,9 @@ class EnterpriseDeploymentEngine:
 
             run.status = "rolled_back"
             run.completed_at = datetime.now(UTC)
-            run.error_message = (run.error_message or "") + f" | rollback: {', '.join(rollback_steps)}"
+            run.error_message = (
+                run.error_message or ""
+            ) + f" | rollback: {', '.join(rollback_steps)}"
             await self._runs.save(run)
             await self._session.commit()
         except Exception as exc:

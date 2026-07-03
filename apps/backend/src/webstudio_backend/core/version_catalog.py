@@ -123,10 +123,9 @@ def resolve_git_commit(*, catalog: VersionCatalog | None = None, fallback: str =
     root = find_repo_root(Path(__file__).resolve())
     if root is not None:
         try:
-            return (
-                subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True)
-                .strip()
-            )
+            return subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
         except (subprocess.CalledProcessError, FileNotFoundError, OSError):
             pass
     return "unknown"

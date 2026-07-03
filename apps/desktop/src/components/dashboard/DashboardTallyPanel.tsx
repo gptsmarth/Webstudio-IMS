@@ -36,7 +36,9 @@ export function DashboardTallyPanel({ tally, loading }: DashboardTallyPanelProps
     <dl className="dash-tally-grid">
       <div className="dash-tally-item">
         <dt>Connected</dt>
-        <dd className={tally.connection_status === 'connected' ? 'dash-tally-ok' : 'dash-tally-warn'}>
+        <dd
+          className={tally.connection_status === 'connected' ? 'dash-tally-ok' : 'dash-tally-warn'}
+        >
           {tally.connection_status === 'connected' ? 'Yes' : 'No'}
         </dd>
       </div>
@@ -50,7 +52,9 @@ export function DashboardTallyPanel({ tally, loading }: DashboardTallyPanelProps
       </div>
       <div className="dash-tally-item">
         <dt>Pending issues</dt>
-        <dd className={tally.pending_issues > 0 ? 'dash-tally-warn' : undefined}>{tally.pending_issues}</dd>
+        <dd className={tally.pending_issues > 0 ? 'dash-tally-warn' : undefined}>
+          {tally.pending_issues}
+        </dd>
       </div>
       <div className="dash-tally-item dash-tally-item--wide">
         <dt>Connection health</dt>

@@ -56,10 +56,20 @@ export function ResetPasswordDialog({
 
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
-      <div className="cat-dialog animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="cat-dialog__header">
           <h2 className="cat-dialog__title">Reset password</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} />
           </button>
         </header>
@@ -67,8 +77,8 @@ export function ResetPasswordDialog({
           <div className="usr-reset-banner">
             <AlertTriangle size={16} aria-hidden />
             <p>
-              Set a temporary password for <strong>{userDisplayName(user)}</strong>. They will be required to change it on
-              next login and all active sessions will be revoked.
+              Set a temporary password for <strong>{userDisplayName(user)}</strong>. They will be
+              required to change it on next login and all active sessions will be revoked.
             </p>
           </div>
           <label className="cat-field">
@@ -88,21 +98,38 @@ export function ResetPasswordDialog({
           </label>
           <div className="usr-strength">
             <div className="usr-strength__bar" aria-hidden>
-              <span className={`usr-strength__fill usr-strength__fill--${strength.score}`} style={{ width: `${strength.percent}%` }} />
+              <span
+                className={`usr-strength__fill usr-strength__fill--${strength.score}`}
+                style={{ width: `${strength.percent}%` }}
+              />
             </div>
             <span className="usr-strength__label">{strength.label}</span>
           </div>
           <label className="cat-field cat-field--checkbox usr-reset-confirm">
-            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(event) => setConfirmed(event.target.checked)}
+            />
             <span>I understand this will force a password change on next login</span>
           </label>
           {error && <p className="cat-dialog__error">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Resetting…' : 'Reset password'}
           </button>
         </footer>

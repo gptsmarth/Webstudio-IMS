@@ -17,15 +17,20 @@ from webstudio_backend.infrastructure.database.enums import (
 )
 from webstudio_backend.infrastructure.database.models.notification import Notification
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
-from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult, paginate
+from webstudio_backend.infrastructure.database.repositories.pagination import (
+    PageParams,
+    PageResult,
+    paginate,
+)
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam, apply_sorting
 from webstudio_backend.infrastructure.repositories.exceptions import (
     NotificationAlreadyResolvedError,
     NotificationNotFoundError,
     RequiredFieldError,
 )
-from webstudio_backend.infrastructure.repositories.notification_filters import NotificationSearchFilters
-
+from webstudio_backend.infrastructure.repositories.notification_filters import (
+    NotificationSearchFilters,
+)
 
 _CATEGORY_BY_TYPE: dict[NotificationType, NotificationCategory] = {
     NotificationType.DUPLICATE_SALE: NotificationCategory.TALLY_SYNC,

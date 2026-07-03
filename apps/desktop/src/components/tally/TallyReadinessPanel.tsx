@@ -46,7 +46,7 @@ export function TallyReadinessPanel({
         <div className="tally-dashboard-widget__metric">
           <span className="tally-dashboard-widget__label">Pending retry</span>
           <span className={`tally-dashboard-widget__value ${pendingRetry ? 'is-warn' : ''}`}>
-            {pendingRetry ? retryLabel ?? 'Waiting' : 'No'}
+            {pendingRetry ? (retryLabel ?? 'Waiting') : 'No'}
           </span>
         </div>
         <div className="tally-dashboard-widget__metric">
@@ -55,7 +55,9 @@ export function TallyReadinessPanel({
         </div>
         <div className="tally-dashboard-widget__metric">
           <span className="tally-dashboard-widget__label">Sync health</span>
-          <span className={`tally-dashboard-widget__value tally-dashboard-widget__value--${health}`}>
+          <span
+            className={`tally-dashboard-widget__value tally-dashboard-widget__value--${health}`}
+          >
             {tallyHealthLabel(health)}
           </span>
         </div>
@@ -76,7 +78,12 @@ export function TallyReadinessPanel({
       )}
 
       {onSync && tally.available && (
-        <button type="button" className="btn btn-secondary btn-sm tally-panel__sync" onClick={onSync} disabled={syncing}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm tally-panel__sync"
+          onClick={onSync}
+          disabled={syncing}
+        >
           <RefreshCw size={14} aria-hidden className={syncing ? 'sales-spin' : undefined} />
           {syncing ? 'Syncing…' : 'Sync now'}
         </button>

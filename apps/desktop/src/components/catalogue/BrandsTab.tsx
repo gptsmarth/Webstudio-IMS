@@ -12,7 +12,12 @@ import {
 } from '../../lib/catalogue';
 import { exportRowsToCsv } from '../../lib/catalogueExport';
 import type { DistributionGroup } from '../../services/api/DashboardService';
-import { BrandService, type Brand, type CreateBrandRequest, type UpdateBrandRequest } from '../../services/api/BrandService';
+import {
+  BrandService,
+  type Brand,
+  type CreateBrandRequest,
+  type UpdateBrandRequest,
+} from '../../services/api/BrandService';
 import type { ProductModel } from '../../services/api/ProductModelService';
 import { BrandFormDialog } from './BrandFormDialog';
 import { CatalogueEmptyState } from './CatalogueEmptyState';
@@ -29,7 +34,12 @@ interface BrandsTabProps {
   onDataChange: () => void;
 }
 
-export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDataChange }: BrandsTabProps): JSX.Element {
+export function BrandsTab({
+  permissions,
+  distributionByBrand,
+  modelCounts,
+  onDataChange,
+}: BrandsTabProps): JSX.Element {
   const [items, setItems] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -79,10 +89,12 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
       const dir = sortDirection === 'asc' ? 1 : -1;
       if (sortField === 'name') return a.name.localeCompare(b.name) * dir;
       if (sortField === 'display_order') return (a.display_order - b.display_order) * dir;
-      if (sortField === 'models') return ((modelCounts.get(a.id) ?? 0) - (modelCounts.get(b.id) ?? 0)) * dir;
+      if (sortField === 'models')
+        return ((modelCounts.get(a.id) ?? 0) - (modelCounts.get(b.id) ?? 0)) * dir;
       const aStock = stockByBrandId.get(String(a.id));
       const bStock = stockByBrandId.get(String(b.id));
-      if (sortField === 'available') return ((aStock?.available ?? 0) - (bStock?.available ?? 0)) * dir;
+      if (sortField === 'available')
+        return ((aStock?.available ?? 0) - (bStock?.available ?? 0)) * dir;
       return 0;
     });
     return rows;
@@ -100,8 +112,13 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
   };
 
   const sortIcon = (field: BrandSortField) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="cat-sort-icon cat-sort-icon--idle" />;
-    return sortDirection === 'asc' ? <ArrowUp size={12} className="cat-sort-icon" /> : <ArrowDown size={12} className="cat-sort-icon" />;
+    if (sortField !== field)
+      return <ArrowUpDown size={12} className="cat-sort-icon cat-sort-icon--idle" />;
+    return sortDirection === 'asc' ? (
+      <ArrowUp size={12} className="cat-sort-icon" />
+    ) : (
+      <ArrowDown size={12} className="cat-sort-icon" />
+    );
   };
 
   const handleSave = async (payload: CreateBrandRequest | UpdateBrandRequest) => {
@@ -145,11 +162,7 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
       ['Name', 'Models', 'Available'],
       filtered.map((brand) => {
         const stock = stockByBrandId.get(String(brand.id));
-        return [
-          brand.name,
-          String(modelCounts.get(brand.id) ?? 0),
-          String(stock?.available ?? 0),
-        ];
+        return [brand.name, String(modelCounts.get(brand.id) ?? 0), String(stock?.available ?? 0)];
       }),
     );
   };
@@ -158,11 +171,17 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
     <div className="cat-tab-panel">
       <CatalogueToolbar
         search={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         searchPlaceholder="Search brands…"
         canWrite={canWrite}
         canExport={canExport}
-        onAdd={() => { setEditing(null); setDialogOpen(true); }}
+        onAdd={() => {
+          setEditing(null);
+          setDialogOpen(true);
+        }}
         addLabel="Add brand"
         onExport={exportCsv}
         onRefresh={() => void refresh()}
@@ -172,9 +191,20 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
       <div className="cat-filters">
         <label className="cat-filters__field">
           <span>Brand</span>
-          <select className="input" value={brandFilter ?? ''} onChange={(e) => { setBrandFilter(e.target.value ? Number(e.target.value) : null); setPage(1); }}>
+          <select
+            className="input"
+            value={brandFilter ?? ''}
+            onChange={(e) => {
+              setBrandFilter(e.target.value ? Number(e.target.value) : null);
+              setPage(1);
+            }}
+          >
             <option value="">All brands</option>
-            {items.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {items.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -187,41 +217,88 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
             <thead className="cat-table__head">
               <tr>
                 <th>Logo</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('name')}>Name {sortIcon('name')}</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('models')}>Models {sortIcon('models')}</th>
-                <th className="cat-table__th-sortable" onClick={() => toggleSort('available')}>Available {sortIcon('available')}</th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('name')}>
+                  Name {sortIcon('name')}
+                </th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('models')}>
+                  Models {sortIcon('models')}
+                </th>
+                <th className="cat-table__th-sortable" onClick={() => toggleSort('available')}>
+                  Available {sortIcon('available')}
+                </th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {loading && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}>{Array.from({ length: 5 }).map((__, j) => <td key={j}><div className="skeleton cat-table__skeleton" /></td>)}</tr>
-              ))}
-              {!loading && pageItems.length === 0 && (
-                <tr><td colSpan={5}><CatalogueEmptyState title="No brands found" description="Add a brand or adjust filters." onClearFilters={() => { setSearch(''); setBrandFilter(null); }} onAdd={() => setDialogOpen(true)} canWrite={canWrite} addLabel="Add brand" /></td></tr>
-              )}
-              {!loading && pageItems.map((brand) => {
-                const stock = stockByBrandId.get(String(brand.id));
-                return (
-                  <tr key={brand.id}>
-                    <td><img src={brandLogoSrc(brand.name, brand.logo_filename)} alt="" className="cat-brand-logo" /></td>
-                    <td>{brand.name}</td>
-                    <td>{modelCounts.get(brand.id) ?? 0}</td>
-                    <td>{stock?.available ?? 0}</td>
-                    <td>
-                      {canWrite && (
-                        <button type="button" className="cat-row-action" aria-label={`Actions for ${brand.name}`} onClick={(e) => setMenu({ brand, rect: e.currentTarget.getBoundingClientRect() })}>
-                          <MoreHorizontal size={14} />
-                        </button>
-                      )}
-                    </td>
+              {loading &&
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 5 }).map((__, j) => (
+                      <td key={j}>
+                        <div className="skeleton cat-table__skeleton" />
+                      </td>
+                    ))}
                   </tr>
-                );
-              })}
+                ))}
+              {!loading && pageItems.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <CatalogueEmptyState
+                      title="No brands found"
+                      description="Add a brand or adjust filters."
+                      onClearFilters={() => {
+                        setSearch('');
+                        setBrandFilter(null);
+                      }}
+                      onAdd={() => setDialogOpen(true)}
+                      canWrite={canWrite}
+                      addLabel="Add brand"
+                    />
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                pageItems.map((brand) => {
+                  const stock = stockByBrandId.get(String(brand.id));
+                  return (
+                    <tr key={brand.id}>
+                      <td>
+                        <img
+                          src={brandLogoSrc(brand.name, brand.logo_filename)}
+                          alt=""
+                          className="cat-brand-logo"
+                        />
+                      </td>
+                      <td>{brand.name}</td>
+                      <td>{modelCounts.get(brand.id) ?? 0}</td>
+                      <td>{stock?.available ?? 0}</td>
+                      <td>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="cat-row-action"
+                            aria-label={`Actions for ${brand.name}`}
+                            onClick={(e) =>
+                              setMenu({ brand, rect: e.currentTarget.getBoundingClientRect() })
+                            }
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
-        <CataloguePagination page={page} pageSize={pageSize} totalItems={filtered.length} onPageChange={setPage} loading={loading} />
+        <CataloguePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+          loading={loading}
+        />
       </div>
 
       {menu && (
@@ -234,7 +311,13 @@ export function BrandsTab({ permissions, distributionByBrand, modelCounts, onDat
         />
       )}
 
-      <BrandFormDialog open={dialogOpen} brand={editing} loading={actionLoading} onClose={() => setDialogOpen(false)} onConfirm={handleSave} />
+      <BrandFormDialog
+        open={dialogOpen}
+        brand={editing}
+        loading={actionLoading}
+        onClose={() => setDialogOpen(false)}
+        onConfirm={handleSave}
+      />
     </div>
   );
 }

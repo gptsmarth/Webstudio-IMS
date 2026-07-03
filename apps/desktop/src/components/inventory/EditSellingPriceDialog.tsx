@@ -56,8 +56,15 @@ export function EditSellingPriceDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="inv-dialog__header">
-          <h2 id="selling-price-dialog-title" className="inv-dialog__title">Edit selling price</h2>
-          <button type="button" className="app-toolbar-icon-btn" onClick={onClose} aria-label="Close">
+          <h2 id="selling-price-dialog-title" className="inv-dialog__title">
+            Edit selling price
+          </h2>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={16} aria-hidden />
           </button>
         </header>
@@ -80,10 +87,20 @@ export function EditSellingPriceDialog({
           {error && <p className="inv-dialog__error">{error}</p>}
         </div>
         <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Saving…' : 'Save'}
           </button>
         </footer>

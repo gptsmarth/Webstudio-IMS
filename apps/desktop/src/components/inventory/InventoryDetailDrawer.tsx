@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Archive, ArchiveRestore, MapPin, Pencil, QrCode, ShoppingBag, Tag, X } from 'lucide-react';
 import {
-  Archive,
-  ArchiveRestore,
-  MapPin,
-  Pencil,
-  QrCode,
-  ShoppingBag,
-  Tag,
-  X,
-} from 'lucide-react';
-import { canMarkSold, canViewPurchasePrice, canWriteInventory, formatInventorySpecs } from '../../lib/inventory';
+  canMarkSold,
+  canViewPurchasePrice,
+  canWriteInventory,
+  formatInventorySpecs,
+} from '../../lib/inventory';
 import { formatInventoryPrice } from '../../lib/inventoryPrice';
 import { buildInventoryLifecycle } from '../../lib/inventoryLifecycle';
 import {
@@ -127,38 +123,68 @@ export function InventoryDetailDrawer({
           <h2 className="inv-drawer__title col-mono">{item.serial_number}</h2>
           <InventoryStatusBadge item={item} />
         </div>
-        <button type="button" className="app-toolbar-icon-btn" onClick={() => workspace.selectItem(null)} aria-label="Close drawer">
+        <button
+          type="button"
+          className="app-toolbar-icon-btn"
+          onClick={() => workspace.selectItem(null)}
+          aria-label="Close drawer"
+        >
           <X size={16} aria-hidden />
         </button>
       </header>
 
       <div className="inv-drawer__actions">
         {writable && !item.is_archived && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onTransfer} disabled={workspace.actionLoading}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onTransfer}
+            disabled={workspace.actionLoading}
+          >
             <MapPin size={14} aria-hidden />
             Transfer
           </button>
         )}
         {markSoldAllowed && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onMarkSold} disabled={workspace.actionLoading}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onMarkSold}
+            disabled={workspace.actionLoading}
+          >
             <ShoppingBag size={14} aria-hidden />
             Mark sold
           </button>
         )}
         {writable && !item.is_archived && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onArchive} disabled={workspace.actionLoading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onArchive}
+            disabled={workspace.actionLoading}
+          >
             <Archive size={14} aria-hidden />
             Archive
           </button>
         )}
         {writable && item.is_archived && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onRestore} disabled={workspace.actionLoading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onRestore}
+            disabled={workspace.actionLoading}
+          >
             <ArchiveRestore size={14} aria-hidden />
             Restore
           </button>
         )}
         {writable && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={editing ? () => void saveEdit() : startEdit} disabled={workspace.actionLoading}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={editing ? () => void saveEdit() : startEdit}
+            disabled={workspace.actionLoading}
+          >
             <Pencil size={14} aria-hidden />
             {editing ? 'Save' : 'Edit unit'}
           </button>
@@ -183,7 +209,11 @@ export function InventoryDetailDrawer({
       {workspace.actionError && (
         <div className="inv-drawer__alert">
           <span>{workspace.actionError}</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={workspace.clearActionError}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={workspace.clearActionError}
+          >
             Dismiss
           </button>
         </div>
@@ -200,17 +230,29 @@ export function InventoryDetailDrawer({
           <>
             <section className="inv-drawer__section">
               <h3 className="inv-drawer__section-title">Inventory information</h3>
-              <p className="inv-drawer__section-lead">Fields unique to this physical laptop (serial-tracked unit).</p>
+              <p className="inv-drawer__section-lead">
+                Fields unique to this physical laptop (serial-tracked unit).
+              </p>
               <dl className="inv-detail-grid">
                 <div>
                   <dt>Serial number</dt>
                   <dd className="col-mono">
-                    {editing ? <input className="input" value={serial} onChange={(event) => setSerial(event.target.value)} /> : item.serial_number}
+                    {editing ? (
+                      <input
+                        className="input"
+                        value={serial}
+                        onChange={(event) => setSerial(event.target.value)}
+                      />
+                    ) : (
+                      item.serial_number
+                    )}
                   </dd>
                 </div>
                 <div>
                   <dt>Status</dt>
-                  <dd><InventoryStatusBadge item={item} /></dd>
+                  <dd>
+                    <InventoryStatusBadge item={item} />
+                  </dd>
                 </div>
                 <div>
                   <dt>Location</dt>
@@ -222,7 +264,17 @@ export function InventoryDetailDrawer({
                 </div>
                 <div>
                   <dt>Unit color</dt>
-                  <dd>{editing ? <input className="input" value={color} onChange={(event) => setColor(event.target.value)} /> : item.color}</dd>
+                  <dd>
+                    {editing ? (
+                      <input
+                        className="input"
+                        value={color}
+                        onChange={(event) => setColor(event.target.value)}
+                      />
+                    ) : (
+                      item.color
+                    )}
+                  </dd>
                 </div>
                 {canViewPurchasePrice(permissions) && workspace.productModel && (
                   <div>
@@ -239,7 +291,9 @@ export function InventoryDetailDrawer({
                 <div>
                   <dt>Sale status</dt>
                   <dd>
-                    <span className={`badge ${saleStatusBadgeClass(item.status, item.is_archived)}`}>
+                    <span
+                      className={`badge ${saleStatusBadgeClass(item.status, item.is_archived)}`}
+                    >
                       {saleStatusLabel(item.status, item.is_archived)}
                     </span>
                   </dd>
@@ -253,15 +307,18 @@ export function InventoryDetailDrawer({
 
             <section className="inv-drawer__section">
               <h3 className="inv-drawer__section-title">Lifecycle</h3>
-              <p className="inv-drawer__section-lead">Received → Available → Transferred → Sold → Tally synced</p>
+              <p className="inv-drawer__section-lead">
+                Received → Available → Transferred → Sold → Tally synced
+              </p>
               <InventoryLifecycleStepper steps={lifecycleSteps} />
             </section>
 
             <section className="inv-drawer__section inv-drawer__section--catalogue">
               <h3 className="inv-drawer__section-title">Product model information</h3>
               <p className="inv-drawer__section-lead">
-                Catalogue entry shared by {workspace.siblingUnits.length || 1} physical unit{(workspace.siblingUnits.length || 1) === 1 ? '' : 's'}.
-                Specifications are maintained once per model.
+                Catalogue entry shared by {workspace.siblingUnits.length || 1} physical unit
+                {(workspace.siblingUnits.length || 1) === 1 ? '' : 's'}. Specifications are
+                maintained once per model.
               </p>
               <ProductImagePanel
                 productModelId={item.product_model_id}
@@ -273,7 +330,9 @@ export function InventoryDetailDrawer({
               <dl className="inv-detail-grid">
                 <div>
                   <dt>Brand</dt>
-                  <dd><InventoryBrandCell brandName={item.brand_name} /></dd>
+                  <dd>
+                    <InventoryBrandCell brandName={item.brand_name} />
+                  </dd>
                 </div>
                 <div>
                   <dt>Model</dt>
@@ -354,7 +413,9 @@ export function InventoryDetailDrawer({
                   </div>
                 </dl>
               ) : (
-                <p className="inv-drawer__muted">{item.status === 'sold' ? 'Sale details unavailable.' : 'Not sold.'}</p>
+                <p className="inv-drawer__muted">
+                  {item.status === 'sold' ? 'Sale details unavailable.' : 'Not sold.'}
+                </p>
               )}
             </section>
 

@@ -9,7 +9,6 @@ from webstudio_backend.services.client_deployment_validation_service import (
     ClientDeploymentValidationService,
 )
 
-
 DESKTOP_CHECK_KEYS = {
     "desktop_install_exe",
     "desktop_install_dmg",

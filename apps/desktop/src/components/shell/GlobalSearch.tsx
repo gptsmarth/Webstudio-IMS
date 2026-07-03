@@ -1,8 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, FileText, Hash, History, MapPin, Package, ScrollText, Search, Tag, X } from 'lucide-react';
+import {
+  Bell,
+  FileText,
+  Hash,
+  History,
+  MapPin,
+  Package,
+  ScrollText,
+  Search,
+  Tag,
+  X,
+} from 'lucide-react';
 import { isRouteAllowedForPermissions } from '../../config/navigation';
 import { useDebounce } from '../../lib/useDebounce';
-import { useAuthStore, useInventoryStore, useNavigationStore, useSearchStore, useStockNavStore } from '../../store';
+import {
+  useAuthStore,
+  useInventoryStore,
+  useNavigationStore,
+  useSearchStore,
+  useStockNavStore,
+} from '../../store';
 import {
   groupSearchResults,
   loadRecentSearches,
@@ -142,7 +159,12 @@ export function GlobalSearch(): JSX.Element | null {
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search query"
           />
-          <button type="button" className="app-toolbar-icon-btn" onClick={close} aria-label="Close search">
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={close}
+            aria-label="Close search"
+          >
             <X size={16} aria-hidden />
           </button>
         </div>
@@ -150,11 +172,17 @@ export function GlobalSearch(): JSX.Element | null {
         <div className="app-search-body">
           {!query.trim() && recent.length > 0 && (
             <div className="app-search-recent">
-              <p className="app-search-recent__title"><History size={12} aria-hidden /> Recent searches</p>
+              <p className="app-search-recent__title">
+                <History size={12} aria-hidden /> Recent searches
+              </p>
               <ul className="app-search-recent__list">
                 {recent.map((entry) => (
                   <li key={entry}>
-                    <button type="button" className="app-search-recent__item" onClick={() => setQuery(entry)}>
+                    <button
+                      type="button"
+                      className="app-search-recent__item"
+                      onClick={() => setQuery(entry)}
+                    >
                       {entry}
                     </button>
                   </li>
@@ -164,7 +192,8 @@ export function GlobalSearch(): JSX.Element | null {
           )}
           {!query.trim() && recent.length === 0 && (
             <p className="app-search-hint">
-              Search serial numbers, brands, product models, locations, invoices, notifications, and audit logs.
+              Search serial numbers, brands, product models, locations, invoices, notifications, and
+              audit logs.
             </p>
           )}
           {query.trim() && loading && <p className="app-search-hint">Searching…</p>}
@@ -174,16 +203,26 @@ export function GlobalSearch(): JSX.Element | null {
           {grouped.map((section) => (
             <div key={section.group} className="app-search-group">
               <p className="app-search-group__title">{section.group}</p>
-              <ul className="app-search-results" role="listbox" aria-label={`${section.group} results`}>
+              <ul
+                className="app-search-results"
+                role="listbox"
+                aria-label={`${section.group} results`}
+              >
                 {section.items.map((result) => {
                   const Icon = TYPE_ICONS[result.type] ?? Package;
                   return (
                     <li key={result.id} role="option">
-                      <button type="button" className="app-search-result" onClick={() => openResult(result)}>
+                      <button
+                        type="button"
+                        className="app-search-result"
+                        onClick={() => openResult(result)}
+                      >
                         <Icon size={14} aria-hidden style={{ color: 'var(--color-primary-500)' }} />
                         <span className="app-search-result-text">
                           <span className="app-search-result-title">{result.title}</span>
-                          {result.subtitle && <span className="app-search-result-subtitle">{result.subtitle}</span>}
+                          {result.subtitle && (
+                            <span className="app-search-result-subtitle">{result.subtitle}</span>
+                          )}
                         </span>
                       </button>
                     </li>

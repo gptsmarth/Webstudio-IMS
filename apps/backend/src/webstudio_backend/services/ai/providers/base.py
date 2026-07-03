@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from webstudio_backend.services.ai.types import (
     AIProviderConfig,
     EnrichmentResult,
-    ProviderTestResult,
     ProviderId,
+    ProviderTestResult,
 )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -62,7 +62,9 @@ class CustomAccessRoleRepository(SqlAlchemyRepository[CustomAccessRole]):
         return sorted(entry.permission for entry in role.permissions)
 
     async def count_users_assigned(self, role_id: int) -> int:
-        statement = select(func.count()).select_from(User).where(User.custom_access_role_id == role_id)
+        statement = (
+            select(func.count()).select_from(User).where(User.custom_access_role_id == role_id)
+        )
         result = await self._session.execute(statement)
         return int(result.scalar_one())
 
@@ -100,7 +102,9 @@ class CustomAccessRoleRepository(SqlAlchemyRepository[CustomAccessRole]):
         if is_active is not None:
             role.is_active = is_active
         if permissions is not None:
-            role.permissions = [CustomAccessRolePermission(permission=p) for p in sorted(permissions)]
+            role.permissions = [
+                CustomAccessRolePermission(permission=p) for p in sorted(permissions)
+            ]
         role.updated_by_user_id = actor_id
         await self._session.flush()
         await self._session.refresh(role, attribute_names=["permissions"])

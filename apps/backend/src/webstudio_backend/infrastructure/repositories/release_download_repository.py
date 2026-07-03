@@ -100,8 +100,7 @@ class ReleaseDownloadRepository:
 
     async def count_by_status(self) -> dict[str, int]:
         result = await self._session.execute(
-            select(ReleaseDownloadJob.status, func.count())
-            .group_by(ReleaseDownloadJob.status),
+            select(ReleaseDownloadJob.status, func.count()).group_by(ReleaseDownloadJob.status),
         )
         return {row[0].value: int(row[1]) for row in result.all()}
 

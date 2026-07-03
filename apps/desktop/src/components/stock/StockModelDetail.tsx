@@ -45,7 +45,9 @@ export function StockModelDetail({
         currency: 'INR',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }).format(model.selling_price).replace('₹', '₹ ')
+      })
+        .format(model.selling_price)
+        .replace('₹', '₹ ')
     : null;
 
   if (loading) {
@@ -65,11 +67,16 @@ export function StockModelDetail({
           readOnly
         />
         <div className="stock-detail__info">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 12,
+            }}
+          >
             <div>
-              {model.brand_name && (
-                <p className="stock-detail__brand">{model.brand_name}</p>
-              )}
+              {model.brand_name && <p className="stock-detail__brand">{model.brand_name}</p>}
               <h2 className="stock-detail__title">{model.model_name}</h2>
             </div>
             {onEditModel && (
@@ -80,9 +87,17 @@ export function StockModelDetail({
             )}
           </div>
           <p className="stock-detail__model-number col-mono">{model.model_number}</p>
-          
+
           {formattedPrice && (
-            <div style={{ margin: '12px 0 16px', padding: '10px 14px', background: 'rgba(234, 88, 12, 0.08)', borderRadius: '6px', border: '1px solid rgba(234, 88, 12, 0.2)' }}>
+            <div
+              style={{
+                margin: '12px 0 16px',
+                padding: '10px 14px',
+                background: 'rgba(234, 88, 12, 0.08)',
+                borderRadius: '6px',
+                border: '1px solid rgba(234, 88, 12, 0.2)',
+              }}
+            >
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ea580c' }}>
                 {formattedPrice}
               </p>
@@ -99,11 +114,36 @@ export function StockModelDetail({
           </dl>
 
           {notesText && (
-            <div style={{ marginTop: '16px', padding: '12px 14px', background: 'var(--color-bg-raised)', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
-              <h4 style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px 14px',
+                background: 'var(--color-bg-raised)',
+                borderRadius: '6px',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <h4
+                style={{
+                  margin: '0 0 6px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--color-text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}
+              >
                 Additional details & description
               </h4>
-              <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap' }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                  color: 'var(--color-text-primary)',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
                 {notesText}
               </p>
             </div>
@@ -118,7 +158,9 @@ export function StockModelDetail({
       <section className="stock-detail__units" aria-labelledby="stock-detail-units-title">
         <header className="stock-detail__units-header">
           <div>
-            <h3 id="stock-detail-units-title" className="stock-detail__units-title">Serial numbers</h3>
+            <h3 id="stock-detail-units-title" className="stock-detail__units-title">
+              Serial numbers
+            </h3>
             <p className="stock-detail__units-subtitle">
               {available.length} active unit{available.length === 1 ? '' : 's'}
             </p>
@@ -135,7 +177,9 @@ export function StockModelDetail({
                   <th scope="col">Serial number</th>
                   <th scope="col">Color</th>
                   <th scope="col">Location</th>
-                  {canTransfer && <th scope="col" className="stock-detail__actions-col" aria-label="Actions" />}
+                  {canTransfer && (
+                    <th scope="col" className="stock-detail__actions-col" aria-label="Actions" />
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -157,9 +201,9 @@ export function StockModelDetail({
                           aria-label={`More options for ${item.serial_number}`}
                           onClick={(event) => {
                             const rect = event.currentTarget.getBoundingClientRect();
-                            setMenu((current) => (
-                              current?.item.id === item.id ? null : { item, rect }
-                            ));
+                            setMenu((current) =>
+                              current?.item.id === item.id ? null : { item, rect },
+                            );
                           }}
                         >
                           <MoreHorizontal size={16} aria-hidden />

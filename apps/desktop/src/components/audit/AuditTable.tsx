@@ -1,6 +1,13 @@
 import { formatDateTime } from '../../lib/datetime';
 import type { AuditWorkspaceState } from '../../hooks/useAuditWorkspace';
-import { auditResultBadgeClass, auditResultLabel, auditSeverityBadgeClass, auditSeverityLabel, formatActorRole, formatAuditEntity } from '../../lib/audit';
+import {
+  auditResultBadgeClass,
+  auditResultLabel,
+  auditSeverityBadgeClass,
+  auditSeverityLabel,
+  formatActorRole,
+  formatAuditEntity,
+} from '../../lib/audit';
 import type { AuditListEntry } from '../../services/api/AuditService';
 
 interface AuditTableProps {
@@ -48,25 +55,41 @@ export function AuditTable({ workspace, onView }: AuditTableProps): JSX.Element 
               workspace.items.map((entry) => (
                 <tr
                   key={entry.id}
-                  className={[
-                    'aud-table__row',
-                    workspace.selectedId === entry.id ? 'aud-table__row--selected' : '',
-                  ].filter(Boolean).join(' ') || undefined}
+                  className={
+                    [
+                      'aud-table__row',
+                      workspace.selectedId === entry.id ? 'aud-table__row--selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                   onClick={() => onView(entry)}
                 >
-                  <td className="aud-table__cell aud-table__cell--time">{formatDateTime(entry.created_at)}</td>
-                  <td className="aud-table__cell aud-table__cell--user">{entry.actor_display_name ?? 'System'}</td>
-                  <td className="aud-table__cell">{entry.actor_role ? formatActorRole(entry.actor_role) : '—'}</td>
+                  <td className="aud-table__cell aud-table__cell--time">
+                    {formatDateTime(entry.created_at)}
+                  </td>
+                  <td className="aud-table__cell aud-table__cell--user">
+                    {entry.actor_display_name ?? 'System'}
+                  </td>
+                  <td className="aud-table__cell">
+                    {entry.actor_role ? formatActorRole(entry.actor_role) : '—'}
+                  </td>
                   <td className="aud-table__cell aud-table__cell--operation">{entry.operation}</td>
                   <td className="aud-table__cell">{entry.module}</td>
-                  <td className="aud-table__cell col-mono aud-table__cell--entity">{formatAuditEntity(entry)}</td>
+                  <td className="aud-table__cell col-mono aud-table__cell--entity">
+                    {formatAuditEntity(entry)}
+                  </td>
                   <td className="aud-table__cell col-mono">{entry.serial_number ?? '—'}</td>
                   <td className="aud-table__cell">{entry.location_name ?? '—'}</td>
                   <td className="aud-table__cell">
-                    <span className={auditSeverityBadgeClass(entry.severity)}>{auditSeverityLabel(entry.severity)}</span>
+                    <span className={auditSeverityBadgeClass(entry.severity)}>
+                      {auditSeverityLabel(entry.severity)}
+                    </span>
                   </td>
                   <td className="aud-table__cell">
-                    <span className={auditResultBadgeClass(entry.result)}>{auditResultLabel(entry.result)}</span>
+                    <span className={auditResultBadgeClass(entry.result)}>
+                      {auditResultLabel(entry.result)}
+                    </span>
                   </td>
                   <td className="aud-table__desc aud-table__cell">{entry.description ?? '—'}</td>
                 </tr>

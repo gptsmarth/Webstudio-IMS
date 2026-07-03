@@ -103,8 +103,9 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
     <div className="stg-backup-admin">
       <Section title="Deployment Center">
         <p className="stg-muted">
-          Enterprise release management for this WEBSTUDIO Server. Downloads come from GitHub via the server only.
-          Deployment always requires administrator approval — packages are never applied automatically.
+          Enterprise release management for this WEBSTUDIO Server. Downloads come from GitHub via
+          the server only. Deployment always requires administrator approval — packages are never
+          applied automatically.
         </p>
 
         {loading && !dashboard ? <p className="stg-loading">Loading deployment status…</p> : null}
@@ -112,10 +113,14 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
         {dashboard && (
           <>
             <div className="stg-backup-admin__dashboard">
-              <div className={`stg-backup-health stg-backup-health--${dashboard.compatibility_status === 'compatible' ? 'healthy' : dashboard.compatibility_status === 'update_available' ? 'warning' : 'degraded'}`}>
+              <div
+                className={`stg-backup-health stg-backup-health--${dashboard.compatibility_status === 'compatible' ? 'healthy' : dashboard.compatibility_status === 'update_available' ? 'warning' : 'degraded'}`}
+              >
                 <ShieldCheck size={16} aria-hidden />
                 <div>
-                  <strong>Compatibility: {dashboard.compatibility_status.replace(/_/g, ' ')}</strong>
+                  <strong>
+                    Compatibility: {dashboard.compatibility_status.replace(/_/g, ' ')}
+                  </strong>
                   <p className="stg-muted">Deployment status: {statusLabel}</p>
                 </div>
               </div>
@@ -125,14 +130,20 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                 <Readonly label="Downloaded version" value={dashboard.downloaded_version ?? '—'} />
                 <Readonly label="Release channel" value={dashboard.release_channel} />
                 <Readonly label="Build number" value={String(dashboard.build_number ?? '—')} />
-                <Readonly label="Git commit" value={dashboard.git_short ?? dashboard.git_commit ?? '—'} />
+                <Readonly
+                  label="Git commit"
+                  value={dashboard.git_short ?? dashboard.git_commit ?? '—'}
+                />
                 <Readonly
                   label="Release date"
                   value={dashboard.release_date ? formatDateTime(dashboard.release_date) : '—'}
                 />
                 <Readonly label="Updates folder" value={dashboard.updates_root} />
                 <Readonly label="GitHub repo" value={dashboard.github_repo || '—'} />
-                <Readonly label="Auto deploy" value={dashboard.auto_deploy ? 'Enabled' : 'Disabled'} />
+                <Readonly
+                  label="Auto deploy"
+                  value={dashboard.auto_deploy ? 'Enabled' : 'Disabled'}
+                />
               </div>
             </div>
 
@@ -152,7 +163,9 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                       type="button"
                       className="btn btn-secondary btn-sm"
                       disabled={!!busy}
-                      onClick={() => void runAction('check', () => DeploymentCenterService.checkUpdates())}
+                      onClick={() =>
+                        void runAction('check', () => DeploymentCenterService.checkUpdates())
+                      }
                     >
                       <Search size={14} /> Check updates
                     </button>
@@ -160,7 +173,9 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                       type="button"
                       className="btn btn-secondary btn-sm"
                       disabled={!!busy}
-                      onClick={() => void runAction('download', () => DeploymentCenterService.download())}
+                      onClick={() =>
+                        void runAction('download', () => DeploymentCenterService.download())
+                      }
                     >
                       <Download size={14} /> Download
                     </button>
@@ -192,27 +207,46 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
               packages={dashboard.downloaded_packages}
               canModify={canModify}
               busy={busy}
-              onValidate={(jobId) => void runAction(`validate-${jobId}`, () => DeploymentCenterService.validate(jobId))}
+              onValidate={(jobId) =>
+                void runAction(`validate-${jobId}`, () => DeploymentCenterService.validate(jobId))
+              }
               onDeploy={(jobId) => openApproval('deploy', jobId)}
               onDelete={(jobId) => openApproval('delete', jobId)}
             />
 
-            <h3 className="stg-subtitle"><History size={14} aria-hidden /> Deployment history</h3>
+            <h3 className="stg-subtitle">
+              <History size={14} aria-hidden /> Deployment history
+            </h3>
             <EventTable events={history} />
 
             {analytics && (
               <>
                 <h3 className="stg-subtitle">Deployment analytics</h3>
                 <p className="stg-muted">
-                  Generated {formatDateTime(analytics.generated_at)} — release downloads, failures, scheduler recovery,
-                  and client version distribution.
+                  Generated {formatDateTime(analytics.generated_at)} — release downloads, failures,
+                  scheduler recovery, and client version distribution.
                 </p>
                 <div className="stg-readonly-grid">
-                  <Readonly label="Pending downloads" value={String(analytics.summary.pending_downloads)} />
-                  <Readonly label="Failed downloads" value={String(analytics.summary.failed_downloads)} />
-                  <Readonly label="Retry queue" value={String(analytics.summary.retry_queue_size)} />
-                  <Readonly label="Failed deployments" value={String(analytics.summary.failed_deployments)} />
-                  <Readonly label="Failed rollbacks" value={String(analytics.summary.failed_rollbacks)} />
+                  <Readonly
+                    label="Pending downloads"
+                    value={String(analytics.summary.pending_downloads)}
+                  />
+                  <Readonly
+                    label="Failed downloads"
+                    value={String(analytics.summary.failed_downloads)}
+                  />
+                  <Readonly
+                    label="Retry queue"
+                    value={String(analytics.summary.retry_queue_size)}
+                  />
+                  <Readonly
+                    label="Failed deployments"
+                    value={String(analytics.summary.failed_deployments)}
+                  />
+                  <Readonly
+                    label="Failed rollbacks"
+                    value={String(analytics.summary.failed_rollbacks)}
+                  />
                   <Readonly
                     label="Last GitHub sync"
                     value={
@@ -225,7 +259,10 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                     label="GitHub sync status"
                     value={analytics.summary.last_github_sync_status ?? '—'}
                   />
-                  <Readonly label="Rollback records" value={String(analytics.summary.rollback_total)} />
+                  <Readonly
+                    label="Rollback records"
+                    value={String(analytics.summary.rollback_total)}
+                  />
                 </div>
 
                 <h4 className="stg-subtitle">Retry queue</h4>
@@ -348,10 +385,16 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
       {approvalAction && (
         <ModalPortal>
           <div className="modal-backdrop" role="presentation">
-            <div className="modal" role="dialog" aria-modal="true" aria-label="Administrator approval">
+            <div
+              className="modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Administrator approval"
+            >
               <h2>Administrator approval required</h2>
               <p className="stg-muted">
-                Confirm that you approve this {approvalAction} action. WEBSTUDIO never deploys releases automatically.
+                Confirm that you approve this {approvalAction} action. WEBSTUDIO never deploys
+                releases automatically.
               </p>
               <label className="stg-field">
                 <input
@@ -359,10 +402,16 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                   checked={approved}
                   onChange={(event) => setApproved(event.target.checked)}
                 />
-                <span className="stg-field__label">I am the administrator and I approve this action</span>
+                <span className="stg-field__label">
+                  I am the administrator and I approve this action
+                </span>
               </label>
               <div className="stg-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setApprovalAction(null)}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setApprovalAction(null)}
+                >
                   Cancel
                 </button>
                 <button
@@ -382,11 +431,20 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
       {logsOpen && (
         <ModalPortal>
           <div className="modal-backdrop" role="presentation">
-            <div className="modal modal--wide" role="dialog" aria-modal="true" aria-label="Deployment logs">
+            <div
+              className="modal modal--wide"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Deployment logs"
+            >
               <h2>Deployment logs</h2>
               <EventTable events={logs} />
               <div className="stg-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLogsOpen(false)}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setLogsOpen(false)}
+                >
                   Close
                 </button>
               </div>

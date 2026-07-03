@@ -29,9 +29,7 @@ export function HierarchyBreadcrumb({
 
   return (
     <div className="hierarchy-breadcrumb-row">
-      {showBack && onBack && (
-        <PageBackButton label={backLabel ?? 'Back'} onClick={onBack} />
-      )}
+      {showBack && onBack && <PageBackButton label={backLabel ?? 'Back'} onClick={onBack} />}
       {!minimal && (
         <nav className="hierarchy-breadcrumb" aria-label="Breadcrumb">
           <button type="button" className="hierarchy-breadcrumb__link" onClick={onRoot}>

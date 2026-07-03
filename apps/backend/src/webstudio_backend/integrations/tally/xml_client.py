@@ -6,8 +6,8 @@ from datetime import date, datetime
 
 import httpx
 
-from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
 from webstudio_backend.integrations.tally.connectivity import map_exception_to_user_message
+from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
 
 
 class TallyConnectionError(Exception):
@@ -41,7 +41,9 @@ class TallyXmlClient:
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise TallyConnectionError(str(exc), user_message=map_exception_to_user_message(exc)) from exc
+            raise TallyConnectionError(
+                str(exc), user_message=map_exception_to_user_message(exc)
+            ) from exc
         return response.text
 
     async def test_connection(self) -> bool:

@@ -19,8 +19,12 @@ from webstudio_backend.infrastructure.database.enums import NotificationType
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
-from webstudio_backend.infrastructure.repositories.notification_filters import NotificationSearchFilters
-from webstudio_backend.infrastructure.repositories.notification_repository import NotificationRepository
+from webstudio_backend.infrastructure.repositories.notification_filters import (
+    NotificationSearchFilters,
+)
+from webstudio_backend.infrastructure.repositories.notification_repository import (
+    NotificationRepository,
+)
 from webstudio_backend.services.backup_alert_service import BackupAlertService
 from webstudio_backend.services.backup_schedule import (
     compute_recovery_readiness,
@@ -97,10 +101,7 @@ async def test_recovery_validation(
         AuditLogSearchFilters(entity_type="system"),
         PageParams(page=1, page_size=50),
     )
-    assert any(
-        log.description and "Recovery validation" in log.description
-        for log in page.items
-    )
+    assert any(log.description and "Recovery validation" in log.description for log in page.items)
 
 
 @pytest.mark.asyncio
@@ -175,19 +176,25 @@ async def test_backup_alerts_setting_patch(
 
 
 def test_compute_recovery_readiness_helpers() -> None:
-    assert compute_recovery_readiness(
-        database_health="ok",
-        backup_health="healthy",
-        has_recent_backup=True,
-        failed_backup_count=0,
-        open_health_issues=0,
-    ) == "ready"
-    assert compute_system_health(
-        database_health="failed",
-        backup_health="healthy",
-        open_critical_issues=0,
-        open_warning_issues=0,
-    ) == "critical"
+    assert (
+        compute_recovery_readiness(
+            database_health="ok",
+            backup_health="healthy",
+            has_recent_backup=True,
+            failed_backup_count=0,
+            open_health_issues=0,
+        )
+        == "ready"
+    )
+    assert (
+        compute_system_health(
+            database_health="failed",
+            backup_health="healthy",
+            open_critical_issues=0,
+            open_warning_issues=0,
+        )
+        == "critical"
+    )
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,10 @@ import type { StorageType, StorageUnit } from '../services/api/InventoryService'
 
 export type CatalogueTab = 'brands' | 'locations';
 
-import { canExportCatalogue as canExportCataloguePermission, canWriteCatalogue as canWriteCataloguePermission } from '../services/PermissionService';
+import {
+  canExportCatalogue as canExportCataloguePermission,
+  canWriteCatalogue as canWriteCataloguePermission,
+} from '../services/PermissionService';
 
 export function canWriteCatalogue(permissions: string[]): boolean {
   return canWriteCataloguePermission(permissions);
@@ -66,8 +69,10 @@ export function catalogueActionErrorMessage(err: unknown): string {
   return api.message ?? 'Unable to complete this action. Try again.';
 }
 
-export function confirmCatalogueRemoval(label: string, kind: 'brand' | 'location' | 'model'): boolean {
-  const noun = kind === 'brand' ? 'brand' : kind === 'location' ? 'location' : 'product model';
+export function confirmCatalogueRemoval(
+  label: string,
+  kind: 'brand' | 'location' | 'model',
+): boolean {
   if (kind === 'brand') {
     return window.confirm(
       `Delete ${label}?\n\nThis permanently removes the brand. Deletion is blocked while product models or inventory still reference it.\n\nPast sales, reports, audit history, and backups are preserved.`,

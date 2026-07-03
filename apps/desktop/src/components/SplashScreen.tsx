@@ -56,10 +56,7 @@ export function SplashScreen({ stage }: SplashScreenProps): JSX.Element {
           aria-label="Loading workspace"
         >
           <div className="startup-splash__progress-track">
-            <div
-              className="startup-splash__progress-fill"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="startup-splash__progress-fill" style={{ width: `${progress}%` }} />
           </div>
           <p className="startup-splash__stage">Loading workspace…</p>
         </div>

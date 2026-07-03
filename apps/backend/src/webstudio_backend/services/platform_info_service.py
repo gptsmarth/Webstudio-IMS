@@ -39,9 +39,7 @@ async def build_version_payload(session: AsyncSession, settings: Settings) -> di
     version_identity = await EnterpriseVersionService(session, settings).build_version_identity()
     schema_version = str(version_identity["database_revision"])
     repo = SystemSettingRepository(session)
-    latest_mobile = (
-        await repo.get_string("mobile_latest_version") or settings.app_version
-    ).strip()
+    latest_mobile = (await repo.get_string("mobile_latest_version") or settings.app_version).strip()
     release_date = (await repo.get_string("mobile_release_date") or "").strip()
     release_notes = (await repo.get_string("mobile_release_notes") or "").strip()
     apk_url = (await repo.get_string("mobile_apk_download_url") or "").strip()

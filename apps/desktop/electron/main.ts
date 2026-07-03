@@ -33,11 +33,16 @@ if (!gotTheLock) {
   const getLogPath = (): string => path.join(app.getPath('userData'), 'webstudio-client.log');
   const getCrashReportsPath = (): string => path.join(app.getPath('userData'), 'crash-reports');
 
-  const writeLog = (channel: string, level: string, message: string, meta?: Record<string, unknown>): void => {
+  const writeLog = (
+    channel: string,
+    level: string,
+    message: string,
+    meta?: Record<string, unknown>,
+  ): void => {
     const timestamp = new Date().toISOString();
     const formattedMeta = meta ? ` | Meta: ${JSON.stringify(meta)}` : '';
     const logLine = `[${timestamp}] [${channel}] [${level.toUpperCase()}] ${message}${formattedMeta}\n`;
-    
+
     console.log(logLine.trim());
     try {
       fs.appendFileSync(getLogPath(), logLine, 'utf-8');
@@ -50,15 +55,8 @@ if (!gotTheLock) {
     writeLog('Main', 'error', `Uncaught Exception: ${error.message}`, { stack: error.stack });
     try {
       fs.mkdirSync(getCrashReportsPath(), { recursive: true });
-      const crashFile = path.join(
-        getCrashReportsPath(),
-        `crash-${Date.now()}.log`,
-      );
-      fs.writeFileSync(
-        crashFile,
-        `${error.stack ?? error.message}\n`,
-        'utf-8',
-      );
+      const crashFile = path.join(getCrashReportsPath(), `crash-${Date.now()}.log`);
+      fs.writeFileSync(crashFile, `${error.stack ?? error.message}\n`, 'utf-8');
     } catch {
       // Ignore crash file write failures
     }
@@ -71,7 +69,8 @@ if (!gotTheLock) {
   // --- File Persistence Helpers ---
   const getConfigPath = (): string => path.join(app.getPath('userData'), 'webstudio_config.json');
   const getStoragePath = (): string => path.join(app.getPath('userData'), 'webstudio_storage.json');
-  const getWindowStatePath = (): string => path.join(app.getPath('userData'), 'webstudio_window_state.json');
+  const getWindowStatePath = (): string =>
+    path.join(app.getPath('userData'), 'webstudio_window_state.json');
 
   const readJson = (filePath: string): Record<string, unknown> => {
     try {
@@ -134,8 +133,17 @@ if (!gotTheLock) {
 
   const resolveBrandingIcon = (): string | undefined => {
     const candidates = [
-      path.join(process.resourcesPath, 'assets', 'webstudio', process.platform === 'darwin' ? 'icon.icns' : 'icon.ico'),
-      path.join(__dirname, '../public/assets/webstudio', process.platform === 'darwin' ? 'icon.icns' : 'icon.ico'),
+      path.join(
+        process.resourcesPath,
+        'assets',
+        'webstudio',
+        process.platform === 'darwin' ? 'icon.icns' : 'icon.ico',
+      ),
+      path.join(
+        __dirname,
+        '../public/assets/webstudio',
+        process.platform === 'darwin' ? 'icon.icns' : 'icon.ico',
+      ),
     ];
     for (const candidate of candidates) {
       if (fs.existsSync(candidate)) {
@@ -237,21 +245,33 @@ if (!gotTheLock) {
       buildNumber: webstudioMeta.buildNumber ?? Number(process.env.WEBSTUDIO_BUILD_NUMBER ?? 1),
       buildVersion: process.env.WEBSTUDIO_BUILD_VERSION ?? app.getVersion(),
       gitCommit:
-        webstudioMeta.gitCommit?.trim()
-        || process.env.VITE_GIT_COMMIT
-        || process.env.WEBSTUDIO_GIT_COMMIT
-        || 'dev-local',
+        webstudioMeta.gitCommit?.trim() ||
+        process.env.VITE_GIT_COMMIT ||
+        process.env.WEBSTUDIO_GIT_COMMIT ||
+        'dev-local',
       buildDate: webstudioMeta.releaseDate?.trim() || new Date().toISOString().split('T')[0],
-      releaseChannel: webstudioMeta.releaseChannel ?? process.env.WEBSTUDIO_RELEASE_CHANNEL ?? 'development',
+      releaseChannel:
+        webstudioMeta.releaseChannel ?? process.env.WEBSTUDIO_RELEASE_CHANNEL ?? 'development',
       electronVersion: process.versions.electron ?? 'unknown',
       chromiumVersion: process.versions.chrome ?? 'unknown',
       nodeVersion: process.versions.node ?? 'unknown',
     };
   });
 
-  ipcMain.handle('system:log', (_event, { channel, level, message, meta }: { channel: string; level: string; message: string; meta?: Record<string, unknown> }) => {
-    writeLog(channel, level, message, meta);
-  });
+  ipcMain.handle(
+    'system:log',
+    (
+      _event,
+      {
+        channel,
+        level,
+        message,
+        meta,
+      }: { channel: string; level: string; message: string; meta?: Record<string, unknown> },
+    ) => {
+      writeLog(channel, level, message, meta);
+    },
+  );
 
   ipcMain.handle('system:reportCrash', (_event, errorDetails: Record<string, unknown>) => {
     writeLog('Renderer', 'error', `Renderer Crash Reported: ${JSON.stringify(errorDetails)}`);
@@ -311,7 +331,12 @@ if (!gotTheLock) {
     new Promise((resolve, reject) => {
       const client = url.startsWith('https://') ? https : http;
       const request = client.get(url, (response) => {
-        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (
+          response.statusCode &&
+          response.statusCode >= 300 &&
+          response.statusCode < 400 &&
+          response.headers.location
+        ) {
           downloadFile(response.headers.location, destination).then(resolve).catch(reject);
           return;
         }

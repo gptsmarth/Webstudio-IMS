@@ -232,7 +232,8 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             entity_clauses = [AuditLog.inventory_item_id.in_(inventory_ids)]
             if filters.brand_id is not None:
                 entity_clauses.append(
-                    (AuditLog.entity_type == "brand") & (AuditLog.entity_id == str(filters.brand_id)),
+                    (AuditLog.entity_type == "brand")
+                    & (AuditLog.entity_id == str(filters.brand_id)),
                 )
             if filters.product_model_id is not None:
                 entity_clauses.append(
@@ -254,16 +255,18 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             AuditLog.__table__.outerjoin(
                 InventoryItem,
                 AuditLog.inventory_item_id == InventoryItem.id,
-            ).outerjoin(
+            )
+            .outerjoin(
                 Location,
                 InventoryItem.current_location_id == Location.id,
-            ).outerjoin(
+            )
+            .outerjoin(
                 ProductModel,
                 InventoryItem.product_model_id == ProductModel.id,
-            ).outerjoin(
+            )
+            .outerjoin(
                 Sale,
-                (AuditLog.entity_type == "sale")
-                & (AuditLog.entity_id == cast(Sale.id, String)),
+                (AuditLog.entity_type == "sale") & (AuditLog.entity_id == cast(Sale.id, String)),
             ),
         )
 
@@ -354,7 +357,8 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
             entity_clauses = [AuditLog.inventory_item_id.in_(inventory_ids)]
             if filters.brand_id is not None:
                 entity_clauses.append(
-                    (AuditLog.entity_type == "brand") & (AuditLog.entity_id == str(filters.brand_id)),
+                    (AuditLog.entity_type == "brand")
+                    & (AuditLog.entity_id == str(filters.brand_id)),
                 )
             if filters.product_model_id is not None:
                 entity_clauses.append(

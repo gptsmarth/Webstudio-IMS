@@ -115,7 +115,8 @@ export function CustomRolesPanel({ onRolesChanged }: CustomRolesPanelProps): JSX
         <div>
           <h2 className="usr-access-roles__title">Custom access roles</h2>
           <p className="usr-access-roles__subtitle">
-            Name a role and choose exactly which sections each user can view, create, edit, or export.
+            Name a role and choose exactly which sections each user can view, create, edit, or
+            export.
           </p>
         </div>
         <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
@@ -131,10 +132,14 @@ export function CustomRolesPanel({ onRolesChanged }: CustomRolesPanelProps): JSX
         </div>
       )}
 
-      {loading ? <p>Loading access roles…</p> : (
+      {loading ? (
+        <p>Loading access roles…</p>
+      ) : (
         <div className="usr-access-roles__list">
           {roles.length === 0 ? (
-            <p className="usr-empty__text">No custom roles yet. Create one to assign granular access.</p>
+            <p className="usr-empty__text">
+              No custom roles yet. Create one to assign granular access.
+            </p>
           ) : (
             roles.map((role) => (
               <div key={role.id} className="usr-access-roles__card">
@@ -147,7 +152,11 @@ export function CustomRolesPanel({ onRolesChanged }: CustomRolesPanelProps): JSX
                   </p>
                 </div>
                 <div className="usr-access-roles__actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openEdit(role)}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void openEdit(role)}
+                  >
                     Edit
                   </button>
                   <button
@@ -166,27 +175,60 @@ export function CustomRolesPanel({ onRolesChanged }: CustomRolesPanelProps): JSX
       )}
 
       {editorOpen && (
-        <div className="cat-dialog-overlay" role="presentation" onClick={() => setEditorOpen(false)}>
-          <div className="cat-dialog cat-dialog--permissions animate-slide-in" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="cat-dialog-overlay"
+          role="presentation"
+          onClick={() => setEditorOpen(false)}
+        >
+          <div
+            className="cat-dialog cat-dialog--permissions animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
             <header className="cat-dialog__header">
-              <h2 className="cat-dialog__title">{editing ? 'Edit access role' : 'New access role'}</h2>
+              <h2 className="cat-dialog__title">
+                {editing ? 'Edit access role' : 'New access role'}
+              </h2>
             </header>
             <div className="cat-dialog__body">
               <label className="cat-field">
                 <span>Role name</span>
-                <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
+                <input
+                  className="input"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
               </label>
               <label className="cat-field">
                 <span>Description</span>
-                <input className="input" value={description} onChange={(event) => setDescription(event.target.value)} />
+                <input
+                  className="input"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                />
               </label>
-              <PermissionMatrixEditor catalog={catalog} selected={permissions} onChange={setPermissions} />
+              <PermissionMatrixEditor
+                catalog={catalog}
+                selected={permissions}
+                onChange={setPermissions}
+              />
             </div>
             <footer className="cat-dialog__footer">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditorOpen(false)} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditorOpen(false)}
+                disabled={saving}
+              >
                 Cancel
               </button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => void save()} disabled={saving || !name.trim()}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void save()}
+                disabled={saving || !name.trim()}
+              >
                 {saving ? 'Saving…' : 'Save role'}
               </button>
             </footer>

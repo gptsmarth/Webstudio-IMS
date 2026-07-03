@@ -71,7 +71,11 @@ interface ListMeta {
 
 export class SalesService {
   static async listSales(params?: SalesListParams): Promise<SalesListResult> {
-    LoggingService.debug('API', 'Fetching sales list', params as unknown as Record<string, unknown>);
+    LoggingService.debug(
+      'API',
+      'Fetching sales list',
+      params as unknown as Record<string, unknown>,
+    );
     const client = await ApiClientProvider.getClient();
     const response = await client.getRaw<SaleListItem[], ListMeta>('/api/v1/sales', {
       page: 1,

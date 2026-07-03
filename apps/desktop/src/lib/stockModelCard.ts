@@ -30,7 +30,11 @@ export function parseNotesSpecLines(notes: string | null | undefined): StockMode
   return lines;
 }
 
-function pushIfPresent(lines: StockModelSpecLine[], label: string, value: string | null | undefined): void {
+function pushIfPresent(
+  lines: StockModelSpecLine[],
+  label: string,
+  value: string | null | undefined,
+): void {
   const trimmed = value?.trim();
   if (trimmed) {
     lines.push({ label, value: trimmed });

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.app import create_app
@@ -19,7 +19,6 @@ from webstudio_backend.infrastructure.database.models.software_release import So
 from webstudio_backend.infrastructure.repositories.software_release_repository import (
     SoftwareReleaseRepository,
 )
-from webstudio_backend.services.release_catalog_loader import release_from_bundle_dir
 
 
 @pytest_asyncio.fixture
@@ -29,8 +28,7 @@ async def release_api_client(
 ) -> AsyncGenerator[AsyncClient, None]:
     settings = test_settings.model_copy(
         update={
-            "release_catalog_root": "",
-            "release_channel": ReleaseChannel.DEVELOPMENT.value,
+            "release_catalog_root": "/tmp/webstudio-release-catalog-test-empty",
             "build_number": 1,
         },
     )
@@ -51,17 +49,8 @@ async def test_releases_current_bootstraps_catalog(
     db_session: AsyncSession,
     test_settings: Settings,
 ) -> None:
-    repo_root = Path(__file__).resolve().parents[4]
-    bundle_dir = repo_root / "release" / "v0.1.0"
-    if bundle_dir.is_dir():
-        release = release_from_bundle_dir(
-            bundle_dir,
-            channel=ReleaseChannel.DEVELOPMENT,
-            mark_current=True,
-        )
-        assert release is not None
-        await SoftwareReleaseRepository(db_session).upsert_release(release)
-        await db_session.commit()
+    await db_session.execute(delete(SoftwareRelease))
+    await db_session.commit()
 
     response = await release_api_client.get("/api/v1/releases/current")
     assert response.status_code == 200
@@ -96,13 +85,17 @@ async def test_releases_latest_and_history(
                 manifest={"release_version": "0.1.0"},
                 checksums={"WEBSTUDIO Desktop Setup.exe": "abc123"},
                 compatibility_matrix={"desktop": {"min_version": "0.1.0"}},
-                supported_platforms=[{"id": "desktop_windows", "artifact": "WEBSTUDIO Desktop Setup.exe"}],
+                supported_platforms=[
+                    {"id": "desktop_windows", "artifact": "WEBSTUDIO Desktop Setup.exe"}
+                ],
                 is_current=build_number == 2,
             ),
         )
     await db_session.commit()
 
-    latest = await release_api_client.get("/api/v1/releases/latest", params={"channel": "development"})
+    latest = await release_api_client.get(
+        "/api/v1/releases/latest", params={"channel": "development"}
+    )
     assert latest.status_code == 200
     assert latest.json()["data"]["build_number"] == 2
 

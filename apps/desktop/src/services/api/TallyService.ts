@@ -124,7 +124,9 @@ export class TallyService {
     }
   }
 
-  static async getSyncHistory(filters: TallySyncHistoryFilters = {}): Promise<TallySyncHistoryEntry[]> {
+  static async getSyncHistory(
+    filters: TallySyncHistoryFilters = {},
+  ): Promise<TallySyncHistoryEntry[]> {
     const client = await ApiClientProvider.getClient();
     const params = new URLSearchParams();
     if (filters.status) params.set('status', filters.status);
@@ -160,15 +162,16 @@ export class TallyService {
 
   static async testConnection(): Promise<TallyConnectionTestResult> {
     const client = await ApiClientProvider.getClient();
-    return client.post<TallyConnectionTestResult>(
-      '/api/v1/integrations/tally/connection/test',
-    );
+    return client.post<TallyConnectionTestResult>('/api/v1/integrations/tally/connection/test');
   }
 
   static async triggerSync(companyName?: string): Promise<void> {
     LoggingService.info('API', 'Triggering manual Tally synchronization');
     const client = await ApiClientProvider.getClient();
-    await client.post('/api/v1/integrations/tally/sync/trigger', companyName ? { company_name: companyName } : {});
+    await client.post(
+      '/api/v1/integrations/tally/sync/trigger',
+      companyName ? { company_name: companyName } : {},
+    );
   }
 
   static async retrySync(): Promise<void> {

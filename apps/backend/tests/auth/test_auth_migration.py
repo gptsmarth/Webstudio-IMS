@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
-from tests.helpers.migrations import assert_at_least_migration
+from helpers.migrations import assert_at_least_migration
 from webstudio_backend.infrastructure.database.session import get_engine
 
 
@@ -29,6 +29,7 @@ async def test_migration_0008_users_authentication(db_session) -> None:
         assert table in tables
 
     async with engine.connect() as connection:
+
         def inspect_users(sync_connection) -> list[str]:
             inspector = inspect(sync_connection)
             return [col["name"] for col in inspector.get_columns("users", schema="webstudio")]
