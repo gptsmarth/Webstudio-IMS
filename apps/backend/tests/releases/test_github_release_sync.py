@@ -95,6 +95,10 @@ async def test_failed_history_lists_failed_jobs(
 ) -> None:
     client, headers = sync_api_client
     repo = ReleaseDownloadRepository(db_session)
+    await db_session.execute(
+        delete(ReleaseDownloadJob).where(ReleaseDownloadJob.github_release_id == 99001),
+    )
+    await db_session.commit()
     await repo.create_job(
         ReleaseDownloadJob(
             github_release_id=99001,
