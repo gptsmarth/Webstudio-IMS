@@ -54,8 +54,8 @@ class TallyRepository {
       parser: (json) {
         final list = json as List<dynamic>? ?? const [];
         return list
-            .whereType<Map>()
-            .map((entry) => TallySyncHistoryEntry.fromJson(Map<String, dynamic>.from(entry)))
+            .whereType<Map<String, dynamic>>()
+            .map(TallySyncHistoryEntry.fromJson)
             .toList();
       },
     );

@@ -172,8 +172,8 @@ class TallyDashboardData extends Equatable {
             ),
       recentSynchronizations: recentRaw is List
           ? recentRaw
-              .whereType<Map>()
-              .map((entry) => TallySyncHistoryEntry.fromJson(Map<String, dynamic>.from(entry)))
+              .whereType<Map<String, dynamic>>()
+              .map(TallySyncHistoryEntry.fromJson)
               .toList()
           : const [],
       lastError: json['last_error'] as String?,

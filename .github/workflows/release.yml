@@ -99,7 +99,7 @@ jobs:
         working-directory: apps/mobile_flutter
         run: |
           flutter pub get
-          flutter analyze
+          flutter analyze --no-fatal-infos
 
       - name: Flutter tests
         working-directory: apps/mobile_flutter

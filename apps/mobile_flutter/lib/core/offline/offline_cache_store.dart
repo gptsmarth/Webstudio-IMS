@@ -43,7 +43,7 @@ class OfflineCacheStore {
     final cachedAt = raw['cached_at'] as String?;
     if (data is! List || cachedAt == null) return null;
     final items = asJsonMapList(data);
-    if (items.isEmpty && data is List && data.isNotEmpty) return null;
+    if (items.isEmpty && data.isNotEmpty) return null;
     return CachedPayload(data: items, cachedAt: DateTime.parse(cachedAt));
   }
 
