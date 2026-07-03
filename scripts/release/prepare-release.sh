@@ -36,19 +36,20 @@ bash "$ROOT/scripts/release/generate-release-notes.sh" "$RELEASE_DIR"
 # Copy built artifacts when present (optional — CI or local packaging)
 copy_if_exists() {
   local src="$1"
-  local name="$2"
+  local dest="$2"
   if [[ -f "$src" ]]; then
-    cp "$src" "$RELEASE_DIR/artifacts/$name"
-    echo "[release] Included artifact: $name"
+    mkdir -p "$(dirname "$dest")"
+    cp "$src" "$dest"
+    echo "[release] Included artifact: $(basename "$dest")"
   fi
 }
 
-copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe" "WEBSTUDIO-Desktop-Setup.exe"
-copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" "WEBSTUDIO-Desktop.dmg"
-copy_if_exists "$ROOT/release/mobile/WEBSTUDIO IMS.apk" "WEBSTUDIO-IMS.apk"
-copy_if_exists "$ROOT/release/server/WEBSTUDIO Server Setup.exe" "WEBSTUDIO-Server-Setup.exe"
-copy_if_exists "$ROOT/release/backend/webstudio-backend-${VERSION}.tar.gz" "webstudio-backend-${VERSION}.tar.gz"
-copy_if_exists "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip" "WEBSTUDIO-IMS.xcarchive.zip"
+copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe" "$RELEASE_DIR/artifacts/WEBSTUDIO-Desktop-Setup.exe"
+copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" "$RELEASE_DIR/artifacts/WEBSTUDIO-Desktop.dmg"
+copy_if_exists "$ROOT/release/mobile/WEBSTUDIO IMS.apk" "$RELEASE_DIR/artifacts/WEBSTUDIO-IMS.apk"
+copy_if_exists "$ROOT/release/server/WEBSTUDIO Server Setup.exe" "$RELEASE_DIR/artifacts/WEBSTUDIO-Server-Setup.exe"
+copy_if_exists "$ROOT/release/backend/webstudio-backend-${VERSION}.tar.gz" "$RELEASE_DIR/artifacts/webstudio-backend-${VERSION}.tar.gz"
+copy_if_exists "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip" "$RELEASE_DIR/artifacts/WEBSTUDIO-IMS.xcarchive.zip"
 
 # Manifest-aligned artifact names at bundle root (M13 enterprise sync)
 copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe" "$RELEASE_DIR/WEBSTUDIO Desktop Setup.exe"
