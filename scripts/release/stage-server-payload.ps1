@@ -93,8 +93,13 @@ Write-Step "Installing backend package into bundled runtime..."
 if ($LASTEXITCODE -ne 0) {
     throw "pip upgrade failed with exit code $LASTEXITCODE"
 }
-# Production bundle: non-editable install (editable requires hatchling in embed runtime).
-& $PythonExe -m pip install $BackendDir --no-warn-script-location
+# Embeddable Python cannot create PEP 517 isolated build envs (no venv).
+# Install hatchling into the runtime, then build without isolation.
+& $PythonExe -m pip install hatchling wheel --no-warn-script-location
+if ($LASTEXITCODE -ne 0) {
+    throw "pip install hatchling/wheel failed with exit code $LASTEXITCODE"
+}
+& $PythonExe -m pip install --no-build-isolation $BackendDir --no-warn-script-location
 if ($LASTEXITCODE -ne 0) {
     throw "pip install apps/backend failed with exit code $LASTEXITCODE"
 }

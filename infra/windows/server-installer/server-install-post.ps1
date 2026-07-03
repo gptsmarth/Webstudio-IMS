@@ -69,7 +69,11 @@ Push-Location "$InstallRoot\apps\backend"
 $importCheck = & $pythonExe -c "import webstudio_backend" 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Step "Bundled backend not importable; installing package..."
-    & $pythonExe -m pip install . --no-warn-script-location
+    & $pythonExe -m pip install hatchling wheel --no-warn-script-location
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip install hatchling/wheel failed with exit code $LASTEXITCODE"
+    }
+    & $pythonExe -m pip install --no-build-isolation . --no-warn-script-location
     if ($LASTEXITCODE -ne 0) {
         throw "pip install failed with exit code $LASTEXITCODE"
     }
