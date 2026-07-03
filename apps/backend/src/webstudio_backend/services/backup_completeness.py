@@ -62,6 +62,28 @@ MANUAL_BACKUP_RECOMMENDATION = (
 
 DATABASE_DUMP_MODE_DATA_ONLY = "data_only"
 DATABASE_DUMP_MODE_FULL = "full"
+ALEMBIC_VERSION_TABLE = "alembic_version"
+
+
+def filter_alembic_version_copy_blocks(sql: str) -> str:
+    """Drop alembic_version COPY blocks from a data-only pg_dump (schema state is not restored)."""
+    lines = sql.splitlines(keepends=True)
+    out: list[str] = []
+    skip = False
+    for line in lines:
+        stripped = line.strip()
+        if not skip and (
+            "Data for Name: alembic_version" in line
+            or (stripped.startswith("COPY ") and "alembic_version" in stripped)
+        ):
+            skip = True
+            continue
+        if skip:
+            if stripped == r"\.":
+                skip = False
+            continue
+        out.append(line)
+    return "".join(out)
 
 
 def use_real_database_dump() -> bool:

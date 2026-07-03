@@ -35,6 +35,7 @@ from webstudio_backend.services.backup_completeness import (
     DATABASE_DUMP_MODE_DATA_ONLY,
     DATABASE_DUMP_MODE_FULL,
     count_local_asset_files,
+    filter_alembic_version_copy_blocks,
     use_real_database_dump,
 )
 from webstudio_backend.services.backup_encryption import get_backup_encryption_provider
@@ -430,6 +431,7 @@ class BackupEngine:
             "--data-only",
             "--no-owner",
             "--no-privileges",
+            f"--exclude-table-data={DATABASE_SCHEMA}.alembic_version",
         ]
         user, _password, _host, _port, db_name = self._postgres_connection()
         if docker_root is not None:
@@ -495,7 +497,19 @@ class BackupEngine:
         self._psql_restore_from_file(path, on_error_stop=False)
 
     def _restore_data_only_sql_file(self, path: Path) -> None:
-        self._psql_restore_from_file(path, on_error_stop=True)
+        sql = filter_alembic_version_copy_blocks(path.read_text(encoding="utf-8"))
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=".sql",
+            delete=False,
+        ) as handle:
+            handle.write(sql)
+            filtered_path = Path(handle.name)
+        try:
+            self._psql_restore_from_file(filtered_path, on_error_stop=True)
+        finally:
+            filtered_path.unlink(missing_ok=True)
 
     def _psql_restore_from_file(self, path: Path, *, on_error_stop: bool) -> None:
         user, password, host, port, db_name = self._postgres_connection()

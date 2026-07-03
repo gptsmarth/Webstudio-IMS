@@ -230,3 +230,37 @@ def test_psql_restore_falls_back_when_docker_compose_unavailable(
     assert calls[1][0] == "psql"
     assert "127.0.0.1" in calls[1]
     assert "webstudio_test" in calls[1]
+
+
+def test_filter_alembic_version_copy_blocks_removes_migration_state() -> None:
+    from webstudio_backend.services.backup_completeness import filter_alembic_version_copy_blocks
+
+    sql = """\
+--
+-- Data for Name: brands; Type: TABLE DATA; Schema: webstudio; Owner: -
+--
+
+COPY webstudio.brands (id, name) FROM stdin;
+1\tDell
+\\.
+
+--
+-- Data for Name: alembic_version; Type: TABLE DATA; Schema: webstudio; Owner: -
+--
+
+COPY webstudio.alembic_version (version_num) FROM stdin;
+0042_deployment_monitoring
+\\.
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: webstudio; Owner: -
+--
+
+COPY webstudio.users (id, username) FROM stdin;
+1\tadmin
+\\.
+"""
+    filtered = filter_alembic_version_copy_blocks(sql)
+    assert "alembic_version" not in filtered
+    assert "COPY webstudio.brands" in filtered
+    assert "COPY webstudio.users" in filtered
