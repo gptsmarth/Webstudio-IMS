@@ -54,6 +54,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "apps/backend[dev]"
 
+      - name: Verify alembic and database migrations
+        run: |
+          python -c "import alembic; print('alembic', alembic.__version__)"
+          bash tools/scripts/alembic.sh current
+
       - name: Backend lint (Ruff)
         run: ruff check apps/backend/src apps/backend/tests database/migrations
 

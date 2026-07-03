@@ -40,6 +40,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e "apps/backend[dev]"
+      - name: Verify alembic and database migrations
+        run: |
+          python -c "import alembic; print('alembic', alembic.__version__)"
+          bash tools/scripts/alembic.sh current
       - run: ruff check apps/backend/src apps/backend/tests database/migrations
       - run: black --check apps/backend/src apps/backend/tests database/migrations
       - run: pytest apps/backend/tests -q
