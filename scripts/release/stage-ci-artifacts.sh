@@ -25,6 +25,9 @@ copy_first() {
 
 copy_first "*/WEBSTUDIO Desktop Setup.exe" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe"
 copy_first "*/WEBSTUDIO Desktop.dmg" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg"
+if [[ ! -f "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" ]]; then
+  copy_first "*/WEBSTUDIO Desktop-arm64.dmg" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg"
+fi
 copy_first "*/WEBSTUDIO IMS.apk" "$ROOT/release/mobile/WEBSTUDIO IMS.apk"
 copy_first "*/WEBSTUDIO Server Setup.exe" "$ROOT/release/server/WEBSTUDIO Server Setup.exe"
 copy_first "*/webstudio-backend-*.tar.gz" "$ROOT/release/backend/"

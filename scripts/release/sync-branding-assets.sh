@@ -12,4 +12,9 @@ cp "$SRC/icon.png" "$DST/icon.png"
 cp "$SRC/logo-dark.svg" "$DST/logo-dark.svg"
 cp "$SRC/splash.svg" "$DST/splash.svg"
 
+if ! file -b "$DST/icon.png" | grep -q "PNG image"; then
+  echo "Synced icon.png is not a valid PNG — regenerate apps/desktop/public/assets/webstudio/icon.png" >&2
+  exit 1
+fi
+
 echo "Branding assets synced to $DST"

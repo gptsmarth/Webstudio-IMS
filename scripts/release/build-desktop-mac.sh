@@ -3,12 +3,5 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$ROOT/apps/desktop"
-
-echo "[release] Building desktop renderer + electron..."
-pnpm build
-
-echo "[release] Packaging DMG..."
-pnpm exec electron-builder --mac --config electron-builder.yml
-
-echo "[release] Output: apps/desktop/release/desktop/"
+bash "$ROOT/scripts/release/validate-branding-icons.sh"
+bash "$ROOT/scripts/release/package-desktop-mac.sh"

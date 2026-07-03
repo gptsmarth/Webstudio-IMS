@@ -12,6 +12,8 @@ Milestone 14 is **complete**. WEBSTUDIO IMS **Version 1.0.0 — PRODUCTION READY
 
 **No new features. No UI redesign. No architecture, database, or API redesign.**
 
+**New customer / two-PC install?** Start here: **[FIRST_TIME_SETUP_MASTER_GUIDE.md](FIRST_TIME_SETUP_MASTER_GUIDE.md)** (networking, server, desktop, phones, Tally, GitHub updates).
+
 Read the binding rules first: **[M14_GLOBAL_RULES.md](M14_GLOBAL_RULES.md)**
 
 ---
@@ -92,6 +94,7 @@ See [PRODUCTION_HANDOVER_REPORT.md](PRODUCTION_HANDOVER_REPORT.md) and [PROJECT_
 
 Guides from 14A–14J:
 
+- [FIRST_TIME_SETUP_MASTER_GUIDE.md](FIRST_TIME_SETUP_MASTER_GUIDE.md) — **start here** (two-PC LAN, networking, full rollout)
 - [INSTALLATION_MANUAL.md](INSTALLATION_MANUAL.md)
 - [PRODUCTION_COMMISSIONING_GUIDE.md](PRODUCTION_COMMISSIONING_GUIDE.md)
 - [FIRST_STARTUP_CHECKLIST.md](FIRST_STARTUP_CHECKLIST.md)
