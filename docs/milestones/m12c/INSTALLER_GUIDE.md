@@ -32,8 +32,12 @@ Guide for building and distributing M12C release artifacts. **No UI changes** â€
 
 ```powershell
 pnpm install
+# After changing icon.png or icon design:
+bash scripts/release/regenerate-branding-icons.sh
 pnpm desktop:package:win
 ```
+
+`desktop:package:win` validates `icon.ico` / `icon.png` before packaging. In-app logos (`logo.svg`, `brand-logos/*`) ship automatically from `apps/desktop/public/assets/` via Vite (`base: './'`).
 
 **Output:** `apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe`
 

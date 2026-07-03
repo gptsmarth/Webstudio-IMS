@@ -39,6 +39,7 @@ apps/mobile/android/app/build/
 apps/mobile/android/.gradle/
 apps/desktop/dist/
 apps/desktop/release/
+apps/desktop/public/assets/webstudio/icon.iconset/
 release/*
 !release/README.md
 !release/STRUCTURE.md
