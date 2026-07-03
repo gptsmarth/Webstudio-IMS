@@ -1,4 +1,4 @@
-"""Final production handover validation for M14J — v1.0.0 go-live."""
+"""Final production handover validation for M14J — production go-live."""
 
 from __future__ import annotations
 
@@ -24,12 +24,20 @@ from webstudio_backend.services.scheduler_runtime_service import (
 )
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
-TARGET_VERSION = "1.0.0"
 TARGET_CHANNEL = "stable"
 TARGET_PRODUCT = "WEBSTUDIO IMS"
 ALEMBIC_HEAD = "0042_deployment_monitoring"
 
 HANDOVER_DOC = "docs/milestones/m14/PRODUCTION_HANDOVER_REPORT.md"
+
+
+def target_release_version() -> str:
+    """Production handover target semver — canonical VERSION.json at validation time."""
+    return load_version_catalog().version
+
+
+def release_version_check_key(version: str) -> str:
+    return f"release_version_{version.replace('.', '_')}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +75,7 @@ class FinalProductionCertification:
             "verified_version": self.verified_version,
             "verified_channel": self.verified_channel,
             "production_ready": self.production_ready,
-            "version_label": f"{TARGET_PRODUCT} v{TARGET_VERSION} — PRODUCTION READY",
+            "version_label": f"{TARGET_PRODUCT} v{self.target_version} — PRODUCTION READY",
             "checks": [asdict(check) for check in self.checks],
             "recommendations": self.recommendations,
             "milestone_completion": self.milestone_completion,
@@ -121,8 +129,9 @@ class FinalProductionHandoverValidationService:
     async def run_handover_validation(self) -> FinalProductionCertification:
         recommendations: list[str] = []
         checks = await self._build_checks(recommendations)
+        target_version = target_release_version()
         version_ok = (
-            self._catalog.version == TARGET_VERSION
+            self._catalog.version == target_version
             and self._catalog.release_channel == TARGET_CHANNEL
         )
         production_ready = _aggregate_status(checks) != "failed" and version_ok
@@ -135,7 +144,7 @@ class FinalProductionHandoverValidationService:
             generated_at=datetime.now(UTC).isoformat(),
             overall_status=_aggregate_status(checks),
             product=self._catalog.product,
-            target_version=TARGET_VERSION,
+            target_version=target_version,
             target_channel=TARGET_CHANNEL,
             verified_version=self._catalog.version,
             verified_channel=self._catalog.release_channel,
@@ -441,29 +450,35 @@ class FinalProductionHandoverValidationService:
             ),
         )
 
-        # Release version 1.0.0
+        # Release version (canonical VERSION.json)
+        target_version = target_release_version()
         version_match = (
-            self._catalog.version == TARGET_VERSION
+            self._catalog.version == target_version
             and self._catalog.release_channel == TARGET_CHANNEL
             and self._catalog.product == TARGET_PRODUCT
         )
         version_status = "passed" if version_match else "failed"
         version_message = (
-            f"{TARGET_PRODUCT} v{TARGET_VERSION} ({TARGET_CHANNEL})"
+            f"{TARGET_PRODUCT} v{target_version} ({TARGET_CHANNEL})"
             if version_match
-            else f"VERSION.json is {self._catalog.version}/{self._catalog.release_channel}; expected {TARGET_VERSION}/{TARGET_CHANNEL}"
+            else (
+                f"VERSION.json is {self._catalog.version}/{self._catalog.release_channel}; "
+                f"expected {target_version}/{TARGET_CHANNEL}"
+            )
         )
         if not version_match:
-            recommendations.append("Bump VERSION.json to 1.0.0 / stable for production handover.")
-        release_notes = _repo_file_exists("release/v1.0.0/RELEASE_NOTES.md") or _repo_file_exists(
+            recommendations.append(
+                f"Bump VERSION.json to {target_version} / {TARGET_CHANNEL} for production handover.",
+            )
+        release_notes = _repo_file_exists(f"release/v{target_version}/RELEASE_NOTES.md") or _repo_file_exists(
             "docs/milestones/m14/RELEASE_NOTES.md",
         )
         if version_match and not release_notes:
             version_status = "warning"
-            recommendations.append("Publish release/v1.0.0/RELEASE_NOTES.md")
+            recommendations.append(f"Publish release/v{target_version}/RELEASE_NOTES.md")
         checks.append(
             HandoverCheck(
-                key="release_version_1_0_0",
+                key=release_version_check_key(target_version),
                 name="Release Version",
                 status=version_status,
                 message=version_message,
