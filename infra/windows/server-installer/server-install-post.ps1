@@ -66,9 +66,15 @@ if (-not (Test-Path $envFile)) {
 
 Write-Step "Installing/updating Python dependencies..."
 Push-Location "$InstallRoot\apps\backend"
-& $pythonExe -m pip install -e . --no-warn-script-location
+$importCheck = & $pythonExe -c "import webstudio_backend" 2>&1
 if ($LASTEXITCODE -ne 0) {
-    throw "pip install failed with exit code $LASTEXITCODE"
+    Write-Step "Bundled backend not importable; installing package..."
+    & $pythonExe -m pip install . --no-warn-script-location
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip install failed with exit code $LASTEXITCODE"
+    }
+} else {
+    Write-Step "Bundled backend runtime already installed."
 }
 Write-Step "Running Alembic migrations..."
 & $pythonExe -m alembic upgrade head

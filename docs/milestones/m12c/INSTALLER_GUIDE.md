@@ -179,7 +179,7 @@ No manual venv or NSSM copy is required on the target server.
 powershell -ExecutionPolicy Bypass -File scripts/release/build-server-setup.ps1
 ```
 
-`build-server-setup.ps1` runs `stage-server-payload.ps1` first (downloads Python embed + NSSM, `pip install -e apps/backend`), then compiles the installer.
+`build-server-setup.ps1` runs `stage-server-payload.ps1` first (downloads Python embed + NSSM, `pip install apps/backend`), then compiles the installer.
 
 **Output:** `release/server/WEBSTUDIO Server Setup.exe`
 

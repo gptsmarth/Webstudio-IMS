@@ -93,9 +93,10 @@ Write-Step "Installing backend package into bundled runtime..."
 if ($LASTEXITCODE -ne 0) {
     throw "pip upgrade failed with exit code $LASTEXITCODE"
 }
-& $PythonExe -m pip install -e $BackendDir --no-warn-script-location
+# Production bundle: non-editable install (editable requires hatchling in embed runtime).
+& $PythonExe -m pip install $BackendDir --no-warn-script-location
 if ($LASTEXITCODE -ne 0) {
-    throw "pip install -e apps/backend failed with exit code $LASTEXITCODE"
+    throw "pip install apps/backend failed with exit code $LASTEXITCODE"
 }
 
 Write-Step "Verifying bundled runtime imports..."
