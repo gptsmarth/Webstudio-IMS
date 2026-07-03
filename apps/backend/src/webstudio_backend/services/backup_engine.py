@@ -492,63 +492,49 @@ class BackupEngine:
         if dump_mode == DATABASE_DUMP_MODE_DATA_ONLY:
             self._restore_data_only_sql_file(path)
             return
-        user, password, host, port, db_name = self._postgres_connection()
-        docker_root = self._find_compose_root()
-        if docker_root is not None:
-            cmd = ["docker", "compose", "exec", "-T", "postgres", "psql", "-U", user, db_name]
-            try:
-                with path.open("r", encoding="utf-8") as handle:
-                    subprocess.run(cmd, check=True, stdin=handle, cwd=docker_root)
-                return
-            except (OSError, subprocess.CalledProcessError) as exc:
-                raise RepositoryError("Restore failed. Check database connectivity.") from exc
-        env = os.environ.copy()
-        if password:
-            env["PGPASSWORD"] = password
-        cmd = ["psql", "-h", host, "-p", port, "-U", user, db_name]
-        with path.open("r", encoding="utf-8") as handle:
-            subprocess.run(cmd, check=True, stdin=handle, env=env)
+        self._psql_restore_from_file(path, on_error_stop=False)
 
     def _restore_data_only_sql_file(self, path: Path) -> None:
+        self._psql_restore_from_file(path, on_error_stop=True)
+
+    def _psql_restore_from_file(self, path: Path, *, on_error_stop: bool) -> None:
         user, password, host, port, db_name = self._postgres_connection()
         docker_root = self._find_compose_root()
         if docker_root is not None:
-            cmd = [
-                "docker",
-                "compose",
-                "exec",
-                "-T",
-                "postgres",
-                "psql",
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-U",
-                user,
-                db_name,
-            ]
+            cmd = ["docker", "compose", "exec", "-T", "postgres", "psql"]
+            if on_error_stop:
+                cmd.extend(["-v", "ON_ERROR_STOP=1"])
+            cmd.extend(["-U", user, db_name])
             try:
                 with path.open("r", encoding="utf-8") as handle:
-                    subprocess.run(cmd, check=True, stdin=handle, cwd=docker_root)
+                    subprocess.run(
+                        cmd,
+                        check=True,
+                        stdin=handle,
+                        cwd=docker_root,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
                 return
-            except (OSError, subprocess.CalledProcessError) as exc:
-                raise RepositoryError("Restore failed. Check database connectivity.") from exc
+            except (OSError, subprocess.CalledProcessError):
+                pass
+
         env = os.environ.copy()
         if password:
             env["PGPASSWORD"] = password
-        cmd = [
-            "psql",
-            "-v",
-            "ON_ERROR_STOP=1",
-            "-h",
-            host,
-            "-p",
-            port,
-            "-U",
-            user,
-            db_name,
-        ]
-        with path.open("r", encoding="utf-8") as handle:
-            subprocess.run(cmd, check=True, stdin=handle, env=env)
+        cmd = ["psql", "-h", host, "-p", port, "-U", user]
+        if on_error_stop:
+            cmd.extend(["-v", "ON_ERROR_STOP=1"])
+        cmd.append(db_name)
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                subprocess.run(cmd, check=True, stdin=handle, env=env, stderr=subprocess.PIPE, text=True)
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or str(exc)).strip()
+            raise RepositoryError(
+                "Restore failed. Check database connectivity. "
+                f"Attempted {user}@{host}:{port}/{db_name}. {detail}",
+            ) from exc
 
     def _copy_managed_assets(self, assets_dir: Path, *, company_logo: str | None) -> int:
         self._copy_brand_logos(assets_dir / "brand-logos")

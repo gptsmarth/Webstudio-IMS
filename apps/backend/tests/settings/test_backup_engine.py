@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
+
 pytest_plugins = ["auth.conftest"]
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -194,3 +197,36 @@ def test_postgres_connection_uses_database_url_and_tcp_host() -> None:
     assert host == "127.0.0.1"
     assert port == "5432"
     assert db_name == "webstudio_dev"
+
+
+def test_psql_restore_falls_back_when_docker_compose_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from webstudio_backend.core.config import Settings
+    from webstudio_backend.services.backup_engine import BackupEngine
+
+    sql_path = tmp_path / "database.sql"
+    sql_path.write_text("SELECT 1;\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append(list(cmd))
+        if cmd[0] == "docker":
+            raise subprocess.CalledProcessError(1, cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    engine = BackupEngine(
+        session=object(),  # type: ignore[arg-type]
+        app_settings=Settings(
+            database_url="postgresql+asyncpg://webstudio_app:secret@localhost:5432/webstudio_test",
+            app_env="test",
+        ),
+    )
+    engine._psql_restore_from_file(sql_path, on_error_stop=True)
+
+    assert calls[0][0] == "docker"
+    assert calls[1][0] == "psql"
+    assert "127.0.0.1" in calls[1]
+    assert "webstudio_test" in calls[1]
