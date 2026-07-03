@@ -60,7 +60,13 @@ $PthFile = Get-ChildItem -Path $RuntimeDir -Filter "python*._pth" | Select-Objec
 if ($null -eq $PthFile) {
     throw "Could not find python*._pth in embedded Python layout."
 }
+$StdlibZip = Get-ChildItem -Path $RuntimeDir -Filter "python*.zip" | Select-Object -First 1
+if ($null -eq $StdlibZip) {
+    throw "Could not find python*.zip stdlib archive in embedded Python layout."
+}
+# Keep python312.zip on the path — required for encodings and the rest of the stdlib.
 $PthContent = @(
+    $StdlibZip.Name
     "."
     "Lib\site-packages"
     "import site"
