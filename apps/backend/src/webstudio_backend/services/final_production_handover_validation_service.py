@@ -470,7 +470,9 @@ class FinalProductionHandoverValidationService:
             recommendations.append(
                 f"Bump VERSION.json to {target_version} / {TARGET_CHANNEL} for production handover.",
             )
-        release_notes = _repo_file_exists(f"release/v{target_version}/RELEASE_NOTES.md") or _repo_file_exists(
+        release_notes = _repo_file_exists(
+            f"release/v{target_version}/RELEASE_NOTES.md"
+        ) or _repo_file_exists(
             "docs/milestones/m14/RELEASE_NOTES.md",
         )
         if version_match and not release_notes:
