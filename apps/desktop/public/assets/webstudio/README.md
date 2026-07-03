@@ -14,14 +14,27 @@ This directory stores the official identity assets for WEBSTUDIO IMS. The deskto
 | `icon.icns` | macOS dock & bundle app icon | Multi-resolution (16px to 1024px)| ICNS (Apple Icon Image) |
 | `icon.png` | High-res fallback icon for Linux / web notifications | 1024x1024px | PNG (Transparent background) |
 
-**Important:** `icon.ico`, `icon.icns`, and `icon.png` must be real binary raster files — not SVG renamed with another extension. CI runs `scripts/release/validate-branding-icons.sh` before packaging. To regenerate from `icon.svg` (macOS dev machine):
+**Important:** `icon.ico`, `icon.icns`, and `icon.png` must be real binary raster files — not SVG renamed with another extension. CI runs `scripts/release/validate-branding-icons.sh` before packaging.
+
+Regenerate all platform icons from the canonical **`icon.png`** master (1024×1024):
 
 ```bash
-pip install cairosvg pillow
-# render PNG + ICNS (see release engineering notes), then:
-cd apps/desktop/public/assets/webstudio && npx png-to-ico icon.png > icon.ico
-bash scripts/release/sync-branding-assets.sh
+bash scripts/release/regenerate-branding-icons.sh
 ```
+
+Replace the master from a new design file:
+
+```bash
+bash scripts/release/regenerate-branding-icons.sh --source /path/to/new-icon.png
+```
+
+Re-render `icon.png` from `icon.svg` instead (vector source):
+
+```bash
+bash scripts/release/regenerate-branding-icons.sh --from-svg
+```
+
+This updates `icon.ico`, `icon.icns`, and syncs `icon.png` to Flutter.
 | `splash.svg` | App boot splash screen artwork | 800x600px canvas | SVG |
 | `favicon.svg` | Web browser tab icon (for web dev builds) | 64x64px canvas | SVG |
 

@@ -5,7 +5,7 @@
 #>
 param(
     [string]$WebstudioServiceName = "WEBSTUDIO Server",
-    [string]$PostgresServiceName = "postgresql-x64-16",
+    [string]$PostgresServiceName = "",
     [switch]$StopPostgreSQL,
     [int]$GracefulWaitSeconds = 45
 )

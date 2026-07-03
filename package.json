@@ -1,6 +1,6 @@
 {
   "name": "webstudio-ims",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "WEBSTUDIO Inventory Management System monorepo",
@@ -39,7 +39,7 @@
   },
   "packageManager": "pnpm@9.15.0",
   "webstudio": {
-    "buildNumber": 1,
+    "buildNumber": 2,
     "releaseChannel": "stable",
     "releaseDate": "2026-07-03",
     "gitCommit": "b6852f86c16db3d28bd39777bf4d0de79a2ef465",

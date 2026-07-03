@@ -5,7 +5,7 @@
 #>
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",
-    [string]$PostgresServiceName = "postgresql-x64-16"
+    [string]$PostgresServiceName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +13,9 @@ $ErrorActionPreference = "Stop"
 function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
 }
+
+$resolvedPostgres = & "$PSScriptRoot\..\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
+Write-Step "Using PostgreSQL service: $resolvedPostgres"
 
 $dirs = @(
     "$InstallRoot\logs",
@@ -23,7 +26,8 @@ $dirs = @(
     "$InstallRoot\exports",
     "$InstallRoot\exports\archive",
     "$InstallRoot\config\env",
-    "$InstallRoot\tools\nssm"
+    "$InstallRoot\tools\nssm",
+    "$InstallRoot\runtime\python"
 )
 
 foreach ($dir in $dirs) {
@@ -33,11 +37,14 @@ foreach ($dir in $dirs) {
 }
 
 Write-Step "Ensuring PostgreSQL..."
-& "$PSScriptRoot\..\ensure-postgresql.ps1" -PostgresServiceName $PostgresServiceName
+& "$PSScriptRoot\..\ensure-postgresql.ps1" -PostgresServiceName $resolvedPostgres
 
-$pythonExe = "$InstallRoot\venv\Scripts\python.exe"
-if (-not (Test-Path $pythonExe)) {
-    throw "Python venv not found at $pythonExe"
+$pythonExe = & "$PSScriptRoot\..\ensure-python-runtime.ps1" -InstallRoot $InstallRoot
+Write-Step "Using Python: $pythonExe"
+
+$nssmPath = "$InstallRoot\tools\nssm\nssm.exe"
+if (-not (Test-Path $nssmPath)) {
+    throw "NSSM not found at $nssmPath. Re-run WEBSTUDIO Server Setup.exe from the latest release build."
 }
 
 $envFile = "$InstallRoot\config\env\.env"
@@ -47,19 +54,37 @@ if (-not (Test-Path $envFile)) {
     if (-not (Test-Path $template)) {
         $template = Join-Path (Split-Path $PSScriptRoot -Parent) "..\..\config\env\.env.production.template"
     }
+    if (-not (Test-Path $template)) {
+        throw "Missing .env.production.template under $InstallRoot\config\env\"
+    }
     Copy-Item $template $envFile -Force
     $jwt = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
-    (Get-Content $envFile) -replace 'JWT_SECRET=GENERATED_BY_INSTALLER', "JWT_SECRET=$jwt" | Set-Content $envFile
+    (Get-Content $envFile) `
+        -replace 'JWT_SECRET=GENERATED_BY_INSTALLER', "JWT_SECRET=$jwt" `
+        -replace 'API_PORT=8443', 'API_PORT=8000' | Set-Content $envFile
 }
 
-Write-Step "Installing Python dependencies..."
+Write-Step "Installing/updating Python dependencies..."
 Push-Location "$InstallRoot\apps\backend"
-& $pythonExe -m pip install -e . --quiet
+& $pythonExe -m pip install -e . --no-warn-script-location
+if ($LASTEXITCODE -ne 0) {
+    throw "pip install failed with exit code $LASTEXITCODE"
+}
 Write-Step "Running Alembic migrations..."
 & $pythonExe -m alembic upgrade head
+if ($LASTEXITCODE -ne 0) {
+    throw @"
+Alembic migration failed. Ensure PostgreSQL database 'webstudio' and user 'webstudio_app' exist,
+and DATABASE_URL in $envFile is correct. Then re-run post-install.
+"@
+}
 Pop-Location
 
 Write-Step "Installing WEBSTUDIO Server Windows Service..."
-& "$PSScriptRoot\..\install-webstudio-service.ps1" -InstallRoot $InstallRoot -PostgresServiceName $PostgresServiceName
+& "$PSScriptRoot\..\install-webstudio-service.ps1" `
+    -InstallRoot $InstallRoot `
+    -PostgresServiceName $resolvedPostgres `
+    -PythonExe $pythonExe `
+    -NssmPath $nssmPath
 
 Write-Step "WEBSTUDIO Server post-install complete."

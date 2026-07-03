@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Server, Clock } from 'lucide-react';
 import { AuthenticationService } from '../services/api/AuthenticationService';
 import { SetupService } from '../services/api/SetupService';
-import { WebstudioAssetRegistry } from '../registries';
+import { BrandLogoRegistry, WebstudioAssetRegistry } from '../registries';
 import { RecoveryKeyPanel } from '../components/onboarding/RecoveryKeyPanel';
 import { sessionFromUser } from '../store/useAuthStore';
 import { parseApiError } from '../lib/apiError';
 import { isSetupRequired, isSetupRequiredApiError } from '../lib/setupGuard';
-import { ASSET_MANIFEST } from '../registries/AssetManifest';
 import { useThemeStore, type AuthSession } from '../store';
 
 interface Props {
@@ -267,7 +266,6 @@ export const LoginPage: React.FC<Props> = ({
           padding: '64px',
           position: 'relative',
         }}
-        className="hidden lg:flex"
       >
         <div
           style={{
@@ -385,17 +383,17 @@ export const LoginPage: React.FC<Props> = ({
               }}
             >
               {[
-                { name: 'apple', src: ASSET_MANIFEST.brandLogos.apple },
-                { name: 'dell', src: ASSET_MANIFEST.brandLogos.dell },
-                { name: 'hp', src: ASSET_MANIFEST.brandLogos.hp },
-                { name: 'lenovo', src: ASSET_MANIFEST.brandLogos.lenovo },
-                { name: 'sandisk', src: ASSET_MANIFEST.brandLogos.sandisk },
-                { name: 'asus', src: ASSET_MANIFEST.brandLogos.asus },
-                { name: 'logitech', src: ASSET_MANIFEST.brandLogos.logitech },
-                { name: 'canon', src: ASSET_MANIFEST.brandLogos.canon },
-              ].map((brand) => (
+                'apple',
+                'dell',
+                'hp',
+                'lenovo',
+                'sandisk',
+                'asus',
+                'logitech',
+                'canon',
+              ].map((name) => (
                 <div
-                  key={brand.name}
+                  key={name}
                   style={{
                     height: 24,
                     width: '100%',
@@ -405,8 +403,8 @@ export const LoginPage: React.FC<Props> = ({
                   }}
                 >
                   <img
-                    src={brand.src}
-                    alt={brand.name}
+                    src={BrandLogoRegistry.getLogo(name)}
+                    alt={name}
                     style={{
                       maxHeight: '100%',
                       maxWidth: '100%',

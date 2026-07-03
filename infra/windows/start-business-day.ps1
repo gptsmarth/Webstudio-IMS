@@ -4,7 +4,7 @@
   Business-day startup: PostgreSQL → WEBSTUDIO Server (delayed auto-start handles API).
 #>
 param(
-    [string]$PostgresServiceName = "postgresql-x64-16",
+    [string]$PostgresServiceName = "",
     [string]$WebstudioServiceName = "WEBSTUDIO Server"
 )
 

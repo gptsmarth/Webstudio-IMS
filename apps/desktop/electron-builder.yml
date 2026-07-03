@@ -32,6 +32,10 @@ win:
   artifactName: WEBSTUDIO Desktop Setup.${ext}
   legalTrademarks: WEBSTUDIO
   requestedExecutionLevel: asInvoker
+  # Authenticode signing when CSC_LINK + CSC_KEY_PASSWORD are set in CI (see INSTALLER_GUIDE.md).
+  signAndEditExecutable: true
+  signingHashAlgorithms:
+    - sha256
 
 nsis:
   oneClick: false

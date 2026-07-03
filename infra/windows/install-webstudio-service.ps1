@@ -6,10 +6,10 @@
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",
     [string]$ServiceName = "WEBSTUDIO Server",
-    [string]$NssmPath = "$InstallRoot\tools\nssm\nssm.exe",
-    [string]$PythonExe = "$InstallRoot\venv\Scripts\python.exe",
+    [string]$NssmPath = "",
+    [string]$PythonExe = "",
     [string]$EnvFile = "$InstallRoot\config\env\.env",
-    [string]$PostgresServiceName = "postgresql-x64-16"
+    [string]$PostgresServiceName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,15 +18,24 @@ function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
 }
 
-if (-not (Test-Path $NssmPath)) {
-    throw "NSSM not found at $NssmPath. Download NSSM and place under $InstallRoot\tools\nssm\"
+if (-not $NssmPath) {
+    $NssmPath = "$InstallRoot\tools\nssm\nssm.exe"
 }
-if (-not (Test-Path $PythonExe)) {
-    throw "Python venv not found at $PythonExe"
+if (-not $PythonExe) {
+    $PythonExe = & "$PSScriptRoot\ensure-python-runtime.ps1" -InstallRoot $InstallRoot
 }
 
+if (-not (Test-Path $NssmPath)) {
+    throw "NSSM not found at $NssmPath. Re-run WEBSTUDIO Server Setup.exe from the latest release build."
+}
+if (-not (Test-Path $PythonExe)) {
+    throw "Python runtime not found at $PythonExe"
+}
+
+$resolvedPostgres = & "$PSScriptRoot\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
+
 Write-Step "Ensuring PostgreSQL is available..."
-& "$PSScriptRoot\ensure-postgresql.ps1" -PostgresServiceName $PostgresServiceName
+& "$PSScriptRoot\ensure-postgresql.ps1" -PostgresServiceName $resolvedPostgres
 
 $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existing) {
@@ -56,6 +65,9 @@ Write-Step "Configuring service recovery (restart on failure)..."
 Write-Step "Running database migrations..."
 Push-Location "$InstallRoot\apps\backend"
 & $PythonExe -m alembic upgrade head
+if ($LASTEXITCODE -ne 0) {
+    throw "Alembic migration failed with exit code $LASTEXITCODE"
+}
 Pop-Location
 
 Write-Step "Starting WEBSTUDIO Server Service..."

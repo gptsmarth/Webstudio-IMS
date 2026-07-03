@@ -128,6 +128,10 @@ jobs:
     name: Build Desktop EXE
     needs: quality-gate
     runs-on: windows-latest
+    env:
+      # Optional — add repository secrets to sign the installer (Smart App Control / SmartScreen).
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

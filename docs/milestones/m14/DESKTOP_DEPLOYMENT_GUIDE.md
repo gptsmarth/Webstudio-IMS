@@ -39,7 +39,11 @@ Distribute from enterprise release catalog on WEBSTUDIO Server — clients **nev
 3. Launch from **Start Menu** or desktop shortcut.
 4. On first launch, allow Windows Firewall if prompted (outbound to server only).
 
-**Pass:** Application opens to connection / login screen without errors.
+**Signed builds (recommended):** Configure `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` in GitHub before release so Smart App Control does not block staff PCs. See [INSTALLER_GUIDE.md](../m12c/INSTALLER_GUIDE.md#windows-code-signing-smart-app-control--smartscreen).
+
+**Unsigned builds (temporary):** Right-click the installer → **Properties** → **Unblock**, or use **More info** → **Run anyway** on first launch. Disable Smart App Control on store PCs only if signing is not yet available.
+
+**Pass:** Application opens to connection / login screen without errors. Production window has **no** File/Edit/View menu bar.
 
 ---
 

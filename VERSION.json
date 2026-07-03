@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "product": "WEBSTUDIO IMS",
-  "version": "1.0.0",
-  "build_number": 1,
+  "version": "1.0.1",
+  "build_number": 2,
   "release_channel": "stable",
   "release_date": "2026-07-03",
   "status": "PRODUCTION READY",

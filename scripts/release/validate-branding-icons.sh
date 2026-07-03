@@ -26,3 +26,10 @@ check_file() {
 check_file "$WEBSTUDIO/icon.ico" "MS Windows icon"
 check_file "$WEBSTUDIO/icon.icns" "Mac OS X icon"
 check_file "$WEBSTUDIO/icon.png" "PNG image"
+
+# Reject generic placeholder PNGs (real WEBSTUDIO mark from icon.svg is ~80KB+ at 1024²).
+png_bytes="$(wc -c <"$WEBSTUDIO/icon.png" | tr -d ' ')"
+if [[ "$png_bytes" -lt 30000 ]]; then
+  echo "icon.png looks like a placeholder (${png_bytes} bytes). Run scripts/release/regenerate-branding-icons.sh" >&2
+  exit 1
+fi

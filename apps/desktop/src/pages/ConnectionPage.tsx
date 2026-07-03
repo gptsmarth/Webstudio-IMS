@@ -28,6 +28,7 @@ const DISCOVERY_MESSAGES = [
 const CANDIDATE_URLS = [
   'http://127.0.0.1:8000',
   'http://localhost:8000',
+  'http://192.168.29.100:8000',
   'http://192.168.1.100:8000',
   'http://192.168.1.1:8000',
 ];

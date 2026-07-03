@@ -4,7 +4,7 @@
   Ensures PostgreSQL Windows service is running before WEBSTUDIO Server starts.
 #>
 param(
-    [string]$PostgresServiceName = "postgresql-x64-16"
+    [string]$PostgresServiceName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,15 +13,14 @@ function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
 }
 
-Write-Step "Verifying PostgreSQL service ($PostgresServiceName)..."
-$service = Get-Service -Name $PostgresServiceName -ErrorAction SilentlyContinue
-if ($null -eq $service) {
-    throw "PostgreSQL service '$PostgresServiceName' not found. Install PostgreSQL 16 and update -PostgresServiceName."
-}
+$resolvedName = & "$PSScriptRoot\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
+
+Write-Step "Verifying PostgreSQL service ($resolvedName)..."
+$service = Get-Service -Name $resolvedName -ErrorAction Stop
 
 if ($service.Status -ne "Running") {
     Write-Step "Starting PostgreSQL..."
-    Start-Service -Name $PostgresServiceName
+    Start-Service -Name $resolvedName
     Start-Sleep -Seconds 5
 }
 

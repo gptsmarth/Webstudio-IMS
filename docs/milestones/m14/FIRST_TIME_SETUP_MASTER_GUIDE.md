@@ -1,474 +1,608 @@
 ---
-Title: First-Time Setup Master Guide — Two-PC LAN Deployment
-Version: 1.0.0
+Title: WEBSTUDIO IMS — Complete Customer Office Setup Guide
+Version: 3.0.0
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-07-03
 Milestone: 14
-Audience: Integrator, store IT, Main Admin
+Site: Customer showroom (Jio + Tenda two-floor LAN)
+Audience: Store owner, integrator, Main Admin
 Related Documents:
-  - docs/milestones/m14/README.md
   - docs/milestones/m14/INSTALLATION_MANUAL.md
-  - docs/milestones/m12j/CUSTOMER_INSTALLATION_WALKTHROUGH.md
+  - docs/milestones/m14/OPERATIONS_MANUAL.md
+  - docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md
 ---
 
-# First-Time Setup Master Guide
+# WEBSTUDIO IMS — Complete Office Setup Guide
 
-**Start here** for a new customer site with:
-
-- **PC 1 — Dedicated server** (WEBSTUDIO Server + PostgreSQL)
-- **PC 2 — Admin / staff desktop** (WEBSTUDIO Desktop)
-- Optional: more desktops, Android/iOS phones, Tally billing laptop
-
-This guide is the **ordered checklist**. Detailed steps live in the linked documents (already written in M12/M14).
+**Read this document top to bottom.** It is written for **your shop** with real network names, IPs, firewall commands, and install steps.
 
 ---
 
-## Topology (your two-PC test)
+## Site handover sheet (print this)
+
+```text
+═══════════════════════════════════════════════════════════
+WEBSTUDIO IMS — YOUR SHOP (PRODUCTION)
+═══════════════════════════════════════════════════════════
+Server URL (all apps):     http://192.168.29.100:8000
+Gateway (Jio router):      192.168.29.1
+Subnet:                    192.168.29.0 / 255.255.255.0
+
+1st floor Wi‑Fi:           JioBharat
+Ground floor Wi‑Fi:        Asus Store  (Tenda AP mode)
+
+WEBSTUDIO Server PC:
+  Computer name:           WEBSTUDIO-SERVER
+  Wi‑Fi:                   JioBharat
+  Fixed IP:                192.168.29.100
+  MAC (for Jio reservation): E0:AD:47:31:CA:0A
+
+Tally laptop:
+  Computer name:           TALLY-LAPTOP
+  IP:                      DHCP (changes — do NOT use IP in settings)
+  Example IP now:          192.168.29.176
+  Tally XML port:          9000
+
+Installers from GitHub:
+  https://github.com/Smarthsingh/WEBSTUDIO-IMS/releases → v1.0.0
+
+Main Admin username:       _______________________
+Recovery key stored at:    _______________________
+Install date:              _______________________
+═══════════════════════════════════════════════════════════
+```
+
+---
+
+## Your network layout
 
 ```
-Office router (e.g. 192.168.1.1)
-├── PC 1 — WEBSTUDIO Server     192.168.1.10  (static or DHCP reservation)
-├── PC 2 — WEBSTUDIO Desktop    192.168.1.20  (DHCP OK)
-├── Tally laptop (later)        192.168.1.30  (billing PC)
-└── Phones (Wi‑Fi, same LAN)    DHCP
+                         INTERNET
+                             │
+                    ┌────────▼────────┐
+                    │   Jio Router    │  192.168.29.1
+                    │  Wi‑Fi: JioBharat│  (1st floor main)
+                    └────────┬────────┘
+                             │ LAN cable
+              ┌──────────────┼──────────────┐
+              │              │              │
+    ┌─────────▼─────────┐    │    ┌─────────▼─────────┐
+    │ WEBSTUDIO Server  │    │    │  Tenda (AP mode)  │
+    │ WEBSTUDIO-SERVER  │    │    │  Wi‑Fi: Asus Store │
+    │ 192.168.29.100    │    │    │  (ground floor)   │
+    │ Wi‑Fi: JioBharat  │    │    └─────────┬─────────┘
+    └───────────────────┘    │              │
+              │              │    ┌─────────▼─────────┐
+    ┌─────────▼─────────┐    │    │ Staff laptops &   │
+    │ TALLY-LAPTOP      │    │    │ phones (GF)       │
+    │ DHCP (.176 etc.)  │    │    │ DHCP automatic    │
+    │ moves 1F ↔ GF     │    │    └───────────────────┘
+    └───────────────────┘    │
+              │              │
+    Staff laptops / phones (1st floor, JioBharat, DHCP)
 ```
 
 | Rule | Detail |
 |------|--------|
-| Desktop **never** talks to GitHub | Only to `http://<server-ip>:8000` |
-| Server **may** talk to GitHub | Optional — for release sync only |
-| PostgreSQL port 5432 | **localhost on server only** — never open to LAN |
+| All devices use **local** IPs `192.168.29.x` | Not public IP `49.43.x.x` |
+| Server URL for **every** app | `http://192.168.29.100:8000` |
+| Staff laptops & phones | **DHCP only** — no static IP |
+| Tally laptop | **DHCP** + hostname **`TALLY-LAPTOP`** in WEBSTUDIO |
+| PostgreSQL port 5432 | **Server localhost only** — never open to LAN |
 
 ---
 
-## Complete document map
+## IPs you must NOT use (already taken)
 
-### Integrator / IT (install & network)
+| IP / range | Used by |
+|------------|---------|
+| `192.168.29.10` | Fixed device / camera (MAC `bc:ad:28:9a:ad:a4`) |
+| `192.168.29.50` – `192.168.29.67` | CCTV cameras (block on Jio router) |
+| `192.168.29.4`, `.9`, etc. | Other fixed LAN devices |
 
-| Order | Document | Path |
-|-------|----------|------|
-| 1 | **This guide** | `docs/milestones/m14/FIRST_TIME_SETUP_MASTER_GUIDE.md` |
-| 2 | Installation manual (14 steps) | `docs/milestones/m14/INSTALLATION_MANUAL.md` |
-| 3 | First startup checklist | `docs/milestones/m14/FIRST_STARTUP_CHECKLIST.md` |
-| 4 | Production commissioning | `docs/milestones/m14/PRODUCTION_COMMISSIONING_GUIDE.md` |
-| 5 | Infrastructure checklist | `docs/milestones/m14/INFRASTRUCTURE_CHECKLIST.md` |
-| 6 | Networking guide | `docs/milestones/m12h/NETWORKING_GUIDE.md` |
-| 7 | Firewall guide | `docs/milestones/m14/FIREWALL_CONFIGURATION_GUIDE.md` |
-| 8 | Server environment (.env) | `docs/milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md` |
-| 9 | Windows service | `docs/milestones/m12b/WINDOWS_SERVICE_GUIDE.md` |
-| 10 | Installer / artifacts | `docs/milestones/m12c/INSTALLER_GUIDE.md` |
-| 11 | Narrative walkthrough (fictional customer) | `docs/milestones/m12j/CUSTOMER_INSTALLATION_WALKTHROUGH.md` |
-
-### Clients (desktop, mobile)
-
-| Document | Path |
-|----------|------|
-| Desktop deployment | `docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md` |
-| Desktop user guide | `docs/milestones/m12h/DESKTOP_GUIDE.md` |
-| Mobile deployment | `docs/milestones/m14/MOBILE_DEPLOYMENT_GUIDE.md` |
-| Android guide | `docs/milestones/m12h/ANDROID_GUIDE.md` |
-| iOS guide | `docs/milestones/m12h/IOS_GUIDE.md` |
-| Client acceptance checklist | `docs/milestones/m14/CLIENT_ACCEPTANCE_CHECKLIST.md` |
-
-### Tally
-
-| Document | Path |
-|----------|------|
-| Tally production guide | `docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md` |
-| Tally validation checklist | `docs/milestones/m14/TALLY_VALIDATION_CHECKLIST.md` |
-| XML verification | `docs/milestones/m14/XML_VERIFICATION_GUIDE.md` |
-| Tally deployment (M12) | `docs/milestones/m12e/TALLY_DEPLOYMENT_GUIDE.md` |
-| Tally operations | `docs/milestones/m12h/TALLY_GUIDE.md` |
-
-### Updates, GitHub, operations
-
-| Document | Path |
-|----------|------|
-| GitHub release sync | `docs/milestones/m13/GITHUB_RELEASE_SYNCHRONIZATION_REPORT.md` |
-| Enterprise release CI | `docs/milestones/m13/CICD_PIPELINE_REPORT.md` |
-| Operations manual (updates §3) | `docs/milestones/m14/OPERATIONS_MANUAL.md` |
-| Operations handover | `docs/milestones/m14/OPERATIONS_HANDOVER.md` |
-| Technical handover | `docs/milestones/m14/TECHNICAL_HANDOVER.md` |
-| Administrator manual | `docs/milestones/m14/ADMINISTRATOR_MANUAL.md` |
-| Backup manual | `docs/milestones/m14/BACKUP_MANUAL.md` |
-| Disaster recovery | `docs/milestones/m14/DISASTER_RECOVERY_GUIDE.md` |
-
-### End users (staff)
-
-| Document | Path |
-|----------|------|
-| Quick start (15 min) | `docs/milestones/m14/QUICK_START_GUIDE.md` |
-| User manual | `docs/milestones/m14/USER_MANUAL.md` |
-| Training guide | `docs/milestones/m14/TRAINING_GUIDE.md` |
-| FAQ | `docs/milestones/m14/FAQ.md` |
-| Employee guide | `docs/milestones/m12h/EMPLOYEE_GUIDE.md` |
-
-### Validation scripts (on server after install)
-
-| Script | Path on server |
-|--------|----------------|
-| Firewall | `D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1` |
-| Network validation | `D:\WEBSTUDIO-IMS\infra\windows\validate-production-network.ps1` |
-| Full handover audit | `D:\WEBSTUDIO-IMS\infra\windows\validate-production-handover.ps1` |
-| Tally validation | `D:\WEBSTUDIO-IMS\infra\windows\validate-production-tally.ps1` |
-| Backup validation | `D:\WEBSTUDIO-IMS\infra\windows\validate-production-backup.ps1` |
+**WEBSTUDIO Server is assigned:** `192.168.29.100` (outside camera range).
 
 ---
 
-## Phase 0 — Developer: publish release on GitHub
+## Public IP vs local IP (do not confuse)
 
-**When:** Before taking installers to the customer site.
-
-1. Merge code → tag release, e.g. `v1.0.0`:
-   ```bash
-   git tag -a v1.0.0 -m "WEBSTUDIO IMS v1.0.0"
-   git push origin v1.0.0
-   ```
-2. Wait for **GitHub Actions → Enterprise Release** to finish (quality gate + builds).
-3. Download from **GitHub → Releases → v1.0.0**:
-   - `WEBSTUDIO Server Setup.exe`
-   - `WEBSTUDIO Desktop Setup.exe`
-   - `WEBSTUDIO IMS.apk` (optional, for phones)
-   - `checksums.sha256` — verify before copy to customer
-
-**Reference:** `docs/milestones/m13/CICD_PIPELINE_REPORT.md`
-
-> Initial testing does **not** require GitHub sync on the server — only the installer files.
+| What you see | Example | Use for WEBSTUDIO? |
+|--------------|---------|-------------------|
+| Google “what is my IP” | `49.43.133.113` | **No** — internet only |
+| Phone/laptop Wi‑Fi details | `192.168.29.x` | **Yes** |
+| Server | `192.168.29.100` | **Yes — this is the app URL host** |
 
 ---
 
-## Phase 1 — Network planning (both PCs on same LAN)
+# PART 0 — Download installers from GitHub
 
-**Reference:** `docs/milestones/m12h/NETWORKING_GUIDE.md`, `docs/milestones/m14/INFRASTRUCTURE_CHECKLIST.md`
+1. Open: **https://github.com/Smarthsingh/WEBSTUDIO-IMS/releases**
+2. Click release **`v1.0.0`**
+3. Under **Assets**, download:
 
-### 1.1 Choose server IP
+| File | Install on |
+|------|------------|
+| **`WEBSTUDIO Server Setup.exe`** | Server PC (`WEBSTUDIO-SERVER`) |
+| **`WEBSTUDIO Desktop Setup.exe`** | Every staff laptop |
+| **`WEBSTUDIO IMS.apk`** | Android phones |
+| **`checksums.sha256`** | Optional verify |
 
-Pick a fixed address, e.g.:
+If Releases is empty, check **Actions → Enterprise Release** finished green, then refresh Releases.
 
-| Setting | Example |
-|---------|---------|
-| Server IP | `192.168.1.10` |
+---
+
+# PART A — NETWORK SETUP
+
+## A1 — Confirm Tenda is AP mode (ground floor)
+
+You already confirmed **Tenda → AP mode** at `tendawifi.com`. Keep:
+
+| Setting | Value |
+|---------|--------|
+| Working mode | **AP** |
+| DHCP on Tenda | **Off** (Jio assigns all IPs) |
+| AP / wireless isolation | **Off** |
+| Cable | Jio **LAN** → Tenda **LAN** (not WAN) |
+
+Opening `http://192.168.29.1` from ground floor showing **Jio admin** is **correct** — one shared network.
+
+## A2 — Jio router checks
+
+Log into **`http://192.168.29.1`**:
+
+| Setting | Action |
+|---------|--------|
+| AP / client isolation (JioBharat) | **Off** |
+| Guest Wi‑Fi | Staff must **not** use for WEBSTUDIO |
+
+## A3 — Reserve server IP on Jio (recommended)
+
+**Settings → DHCP / Address reservation** (name varies):
+
+| Field | Value |
+|-------|--------|
+| MAC address | `E0:AD:47:31:CA:0A` |
+| Reserved IP | `192.168.29.100` |
+| Name | `WEBSTUDIO-SERVER` |
+
+Save → on server PC: disconnect/reconnect **JioBharat** Wi‑Fi or reboot.
+
+Verify on server:
+
+```text
+ipconfig
+```
+
+Under **Wireless LAN adapter Wi‑Fi**:
+
+```text
+IPv4 Address. . . . . . . . . . . : 192.168.29.100
+Default Gateway . . . . . . . . . : 192.168.29.1
+```
+
+> **Note:** `ipconfig /release` may show *"Ethernet 2 media disconnected"* — ignore it. That is an unplugged wired port. Only check **Wi‑Fi** section.
+
+### Alternative — manual static IP on server Wi‑Fi
+
+**Settings → Network & Internet → Wi‑Fi → JioBharat → Properties → IP assignment → Manual:**
+
+| Field | Value |
+|-------|--------|
+| IP address | `192.168.29.100` |
 | Subnet mask | `255.255.255.0` |
-| Gateway | `192.168.1.1` (router) |
-| DNS | `192.168.1.1` or `8.8.8.8` |
+| Gateway | `192.168.29.1` |
+| DNS | `192.168.29.1` |
 
-**Option A — DHCP reservation (recommended):** Reserve `192.168.1.10` for the server MAC address in the router admin UI.
+## A4 — Server PC network profile
 
-**Option B — Static IP on server (Windows 11):**
+**Wi‑Fi JioBharat → Network profile → Private** (not Public).
 
-1. **Settings → Network & Internet → Ethernet** (or Wi‑Fi if wired unavailable).
-2. Click the adapter → **Edit** next to IP assignment → **Manual**.
-3. IPv4 **On**:
-   - IP address: `192.168.1.10`
-   - Subnet mask: `255.255.255.0`
-   - Gateway: `192.168.1.1`
-   - DNS: `192.168.1.1`
-4. Save. Document the IP on the handover sheet.
+## A5 — Staff laptops and phones
 
-### 1.2 PC 2 (desktop)
+| Device | IP setup | Firewall |
+|--------|----------|----------|
+| All staff laptops | **Automatic (DHCP)** | No ping rules needed |
+| All phones | **Automatic (DHCP)** | N/A |
+| TALLY-LAPTOP | **Automatic (DHCP)** | Allow Tally port 9000 (see Part G) |
 
-DHCP is fine. It only needs to reach `http://192.168.1.10:8000`.
+On **each** staff laptop: Wi‑Fi → **Private**. When WEBSTUDIO Desktop asks → **Allow on private networks**.
 
-### 1.3 Wi‑Fi for phones
+## A6 — Network tests before install
 
-Use the **same LAN** as the server. Disable **AP/client isolation** on the router if phones cannot find the server.
+### Test 1 — Same LAN on both floors
 
-### 1.4 Record for handover
+| Location | Wi‑Fi | `ipconfig` IPv4 | Gateway |
+|----------|-------|-----------------|---------|
+| 1st floor laptop | JioBharat | `192.168.29.x` | `192.168.29.1` |
+| Ground floor laptop | Asus Store | `192.168.29.x` | `192.168.29.1` |
 
-| Field | Your site |
-|-------|-----------|
-| Server hostname | e.g. `WEBSTUDIO-SERVER` |
-| Server IP | `192.168.1.10` |
-| API URL | `http://192.168.1.10:8000` |
-| Store subnet | e.g. `192.168.1.0/24` |
+Gateways must **match**.
 
----
+### Test 2 — Reach server (after IP is `.100`)
 
-## Phase 2 — PC 1: Install WEBSTUDIO Server
+From **ground floor** laptop browser:
 
-**Reference:** `docs/milestones/m14/INSTALLATION_MANUAL.md` (steps 1–6)
+```text
+http://192.168.29.100:8000/health/live
+```
 
-1. Windows 11 Pro, updates, NTP/time zone correct.
-2. Install **PostgreSQL 16** (or use bundled installer path).
-3. Run **`WEBSTUDIO Server Setup.exe`** as Administrator.
-4. Install root: `D:\WEBSTUDIO-IMS`.
-5. Post-install creates `.env`, venv, runs migrations, registers service.
+(Works after WEBSTUDIO Server installed; before install = connection refused is normal.)
 
-**Verify:**
+### Test 3 — Ping (optional)
+
+Ping between PCs often fails on Windows even when WEBSTUDIO works. If you need ping for testing, on **server only**:
 
 ```powershell
-Get-Service "WEBSTUDIO Server"
-Get-Service postgresql-x64-16
-curl http://localhost:8000/health/live
-curl http://localhost:8000/health/ready
+New-NetFirewallRule -DisplayName "WEBSTUDIO Test Ping In" -Protocol ICMPv4 -IcmpType 8 -Direction Inbound -Action Allow -Profile Private
+```
+
+Remove later (not required for production):
+
+```powershell
+Remove-NetFirewallRule -DisplayName "WEBSTUDIO Test Ping In"
 ```
 
 ---
 
-## Phase 3 — PC 1: Server `.env` configuration
+# PART B — WINDOWS FIREWALL ON SERVER PC
 
-**There is no full env GUI in the server EXE.** Edit the file:
+Run **PowerShell as Administrator** on **WEBSTUDIO-SERVER**.
 
-`D:\WEBSTUDIO-IMS\config\env\.env`
+## B1 — WEBSTUDIO API rules (required after server install)
 
-Installer seeds from template and generates `JWT_SECRET`.
+```powershell
+cd D:\WEBSTUDIO-IMS\infra\windows
+.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.29.0/24
+```
 
-| Variable | Example / rule |
-|----------|----------------|
-| `APP_ENV` | `production` |
-| `JWT_SECRET` | ≥32 chars (installer-generated) |
-| `DATABASE_URL` | `postgresql+asyncpg://webstudio_app:PASSWORD@localhost:5432/webstudio` |
-| `WEBSTUDIO_DATA_ROOT` | `D:\WEBSTUDIO-IMS` |
-| `API_HOST` | `0.0.0.0` |
-| `API_PORT` | `8000` |
+Creates:
 
-After changes:
+| Rule | Port | Purpose |
+|------|------|---------|
+| WEBSTUDIO IMS API Inbound | TCP **8000** | Desktop + mobile apps |
+| WEBSTUDIO IMS mDNS | UDP **5353** | Auto-discovery on LAN |
+
+## B2 — Before install (if testing port early)
+
+If server is not installed yet but you want to test firewall:
+
+```powershell
+New-NetFirewallRule -DisplayName "WEBSTUDIO API In" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8000 -Profile Private -RemoteAddress 192.168.29.0/24
+New-NetFirewallRule -DisplayName "WEBSTUDIO mDNS" -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -Profile Private -RemoteAddress 192.168.29.0/24
+```
+
+## B3 — Verify firewall rules
+
+```powershell
+Get-NetFirewallRule -DisplayName "WEBSTUDIO IMS*" | Format-Table DisplayName, Enabled, Direction, Action
+```
+
+## B4 — What NOT to open on server
+
+| Port | Action |
+|------|--------|
+| **5432** (PostgreSQL) | **Never** open to LAN |
+| **9000** (Tally) | **Outbound** from server to TALLY-LAPTOP — no inbound rule on server |
+
+## B5 — Staff laptops
+
+**No inbound firewall rules needed.** Outbound to `192.168.29.100:8000` is allowed by default.
+
+---
+
+# PART C — INSTALL WEBSTUDIO SERVER
+
+On **WEBSTUDIO-SERVER** (`192.168.29.100`, Wi‑Fi **JioBharat**).
+
+## C1 — Prepare Windows
+
+1. Windows 11 Pro, updated.
+2. Computer name: **`WEBSTUDIO-SERVER`**
+3. Confirm IP: **`192.168.29.100`** (`ipconfig`)
+4. Wi‑Fi profile: **Private**
+
+## C2 — Run installer
+
+1. **Create PostgreSQL database first** (pgAdmin or psql):
+   - Database: `webstudio`
+   - User: `webstudio_app` with password (note for `.env`)
+2. **`WEBSTUDIO Server Setup.exe`** → **Run as administrator**
+3. Install path: **`D:\WEBSTUDIO-IMS`**
+4. Wait for post-install (bundled Python + NSSM, migrations, Windows service)
+   - Post-install window stays visible; errors log to `logs\install-post.log`
+   - PostgreSQL service name is **auto-detected** (`postgresql-x64-16`, `-18`, etc.)
+
+## C3 — Verify services
+
+```powershell
+Get-Service postgresql*
+Get-Service "WEBSTUDIO Server"
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
+
+## C4 — Edit `.env`
+
+File: **`D:\WEBSTUDIO-IMS\config\env\.env`**
+
+```env
+APP_ENV=production
+API_HOST=0.0.0.0
+API_PORT=8000
+WEBSTUDIO_DATA_ROOT=D:\WEBSTUDIO-IMS
+WEBSTUDIO_DISCOVERY_CANDIDATES=192.168.29.100,WEBSTUDIO-SERVER
+```
+
+Keep installer-generated `JWT_SECRET` and `DATABASE_URL`.
+
+Restart:
 
 ```powershell
 Restart-Service "WEBSTUDIO Server"
 ```
 
-**Reference:** `docs/milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md`, INSTALLATION_MANUAL step 5.
-
----
-
-## Phase 4 — PC 1: Firewall
-
-**Reference:** `docs/milestones/m14/FIREWALL_CONFIGURATION_GUIDE.md`
-
-Elevated PowerShell on **server**:
+## C5 — Run firewall script
 
 ```powershell
 cd D:\WEBSTUDIO-IMS\infra\windows
-.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.1.0/24
+.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.29.0/24
 .\validate-production-network.ps1 -ApiPort 8000
 ```
 
-Opens:
+## C6 — Test from ground floor
 
-- TCP **8000** inbound (API) from store subnet
-- UDP **5353** inbound (mDNS discovery)
-- Does **not** expose PostgreSQL 5432 to LAN
+On laptop connected to **Asus Store**, browser:
 
-**From PC 2**, test:
-
-```powershell
-curl http://192.168.1.10:8000/health/live
+```text
+http://192.168.29.100:8000/health/live
 ```
+
+Must return OK. If yes → both floors reach server.
 
 ---
 
-## Phase 5 — PC 2: Install WEBSTUDIO Desktop
+# PART D — FIRST DESKTOP + SETUP WIZARD
 
-**Reference:** `docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md`
+On any admin laptop (1st or ground floor).
 
-1. Run **`WEBSTUDIO Desktop Setup.exe`** on the **second PC** (not necessarily the server).
-2. Launch from Start Menu.
-3. Connect to server:
-   - Try auto-discovery (mDNS), or
-   - **Manual URL:** `http://192.168.1.10:8000`
-4. Allow Windows Firewall **outbound** to server if prompted.
+## D1 — Install desktop
 
-**Pass:** Connection screen shows server / setup wizard appears.
+1. Run **`WEBSTUDIO Desktop Setup.exe`**
+2. Launch from Start Menu
 
----
+## D2 — Connect
 
-## Phase 6 — First-time setup wizard (PC 2)
+Manual server URL:
 
-**Reference:** `docs/milestones/m14/FIRST_STARTUP_CHECKLIST.md` §6–7, `CUSTOMER_INSTALLATION_WALKTHROUGH.md` Act 2
-
-1. App detects `system_initialized: false` → **Setup Wizard** (not login).
-2. Enter company name, Main Admin username/password.
-3. **Save recovery key** (shown once) — print and store securely.
-4. Confirm recovery key.
-5. Complete **Office Deployment Wizard** (detect network, backup paths, discovery URL).
-
-**Verify:**
-
-```http
-GET http://192.168.1.10:8000/api/v1/setup/status
-→ system_initialized: true
+```text
+http://192.168.29.100:8000
 ```
+
+Allow Windows Firewall if prompted (**Private**).
+
+## D3 — Setup Wizard (one time)
+
+| Step | Action |
+|------|--------|
+| 1 | Company name |
+| 2 | Main Admin username + password |
+| 3 | **Recovery key** — print and store safely |
+| 4 | Confirm recovery key |
+| 5 | Office Deployment Wizard — confirm server URL and backup path |
+
+## D4 — Verify
+
+Browser (any PC):
+
+```text
+http://192.168.29.100:8000/api/v1/setup/status
+```
+
+→ `"system_initialized": true`
 
 Log in as Main Admin.
 
 ---
 
-## Phase 7 — Additional staff desktops / laptops
+# PART E — ALL STAFF LAPTOPS (both floors)
 
-**Reference:** `docs/milestones/m14/DESKTOP_DEPLOYMENT_GUIDE.md`, `CLIENT_ACCEPTANCE_CHECKLIST.md`
+Repeat on every staff PC. Examples from your network (IPs change with DHCP — only server URL is fixed):
 
-For each extra Windows/Mac PC on the LAN:
+| PC name | Typical IP (DHCP) | Wi‑Fi |
+|---------|-------------------|-------|
+| DESKTOP-KCJR6LL | e.g. `.22` | Asus Store or JioBharat |
+| LAPTOP-8JSTAM1P | e.g. `.24` | Either |
+| DESKTOP-AIKQ3P8 | e.g. `.76` | Either |
+| LAPTOP-FP4H6675 | e.g. `.246` | Either |
+| Others | automatic | Either |
 
-1. Install `WEBSTUDIO Desktop Setup.exe` (or DMG on Mac).
-2. Manual server URL: `http://192.168.1.10:8000` (or mDNS if same subnet).
-3. Log in with user accounts created by Main Admin.
-4. Confirm role-based menus (Sales vs Admin).
+**Every laptop:**
 
-No per-PC GitHub or `.env` configuration.
+1. Install **`WEBSTUDIO Desktop Setup.exe`**
+2. Server URL: **`http://192.168.29.100:8000`**
+3. Wi‑Fi → **Private**
+4. Log in with user account (Main Admin creates users in **Settings → Users**)
 
----
-
-## Phase 8 — Mobile phones (Android / iOS)
-
-**Reference:** `docs/milestones/m14/MOBILE_DEPLOYMENT_GUIDE.md`
-
-### Android
-
-1. Copy `WEBSTUDIO IMS.apk` from GitHub Release (or server Deployment Center later).
-2. Enable “Install unknown apps” if sideloading.
-3. Install APK.
-4. First launch → server URL: `http://192.168.1.10:8000`.
-5. Log in.
-
-### iOS
-
-1. Install via TestFlight / App Store path per your distribution plan.
-2. Server URL same as above.
-3. Updates are **notification + App Store** — no direct IPA from server.
-
-**Network:** Phone must be on Wi‑Fi that routes to `192.168.1.10:8000`.
+**No static IP. No GitHub token. No `.env` on laptops.**
 
 ---
 
-## Phase 9 — Tally ERP 9 (billing laptop)
+# PART F — PHONES (Android)
 
-**Reference:** `docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md`
+| Phone (examples) | DHCP IP (changes) |
+|------------------|-------------------|
+| Smarth-s-S22 | e.g. `.233` |
+| Galaxy-M14 | e.g. `.87` |
 
-Typical layout:
-
-- Tally on a **separate billing laptop** (not the WEBSTUDIO server).
-- Tally XML port **9000** on billing PC.
-- WEBSTUDIO Server connects **outbound** to Tally.
-
-Steps:
-
-1. Install Tally ERP 9 on billing PC; enable XML on port 9000.
-2. On **desktop (Main Admin)** → **Settings → Tally**:
-   - Enable integration
-   - Host: billing PC IP (e.g. `192.168.1.30`)
-   - Port: `9000`
-   - Company name as in Tally
-3. Run **Test connection** in Settings.
-4. Validate: `infra/windows/validate-production-tally.ps1` on server.
-
-Until Tally is configured, inventory/sales still work; sync stays offline.
+1. Copy **`WEBSTUDIO IMS.apk`** to phone
+2. Install (allow unknown apps if asked)
+3. Server URL: **`http://192.168.29.100:8000`**
+4. Works on **JioBharat** and **Asus Store**
 
 ---
 
-## Phase 10 — Enable auto-update chain (after basic testing works)
+# PART G — TALLY-LAPTOP (moves 1st floor ↔ ground floor)
 
-Auto-update is **three hops** — none are fully automatic end-to-end:
+## G1 — Your Tally machine
 
-```
-GitHub Release → Server downloads → Admin approves Deploy → Desktops prompted
+| Field | Value |
+|-------|--------|
+| Computer name | **`TALLY-LAPTOP`** (you set this) |
+| Current IP (example) | `192.168.29.176` — **will change** when switching Wi‑Fi |
+| Gateway | `192.168.29.1` |
+| Wi‑Fi | JioBharat or Asus Store |
+
+**Never enter `192.168.29.176` in WEBSTUDIO** — use hostname instead.
+
+## G2 — Tally ERP 9 on TALLY-LAPTOP
+
+1. Install Tally ERP 9
+2. Enable **XML / ODBC** on port **9000**
+3. Note exact **company name** as shown in Tally
+
+## G3 — Firewall on TALLY-LAPTOP
+
+**PowerShell as Administrator** on TALLY-LAPTOP:
+
+```powershell
+New-NetFirewallRule -DisplayName "Tally XML 9000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9000 -Profile Private
 ```
 
-### 10.1 One-time GitHub config (server `.env` only)
+Wi‑Fi on both floors → **Private**.
 
-Add to `D:\WEBSTUDIO-IMS\config\env\.env`:
+## G4 — WEBSTUDIO Tally settings (Main Admin desktop)
+
+**Settings → Tally:**
+
+| Field | Value |
+|-------|--------|
+| Enable integration | **Yes** |
+| Host | **`TALLY-LAPTOP`** |
+| Port | **`9000`** |
+| Company name | Exact name from Tally |
+
+Click **Test connection**.
+
+## G5 — Test moving between floors
+
+1. Connect TALLY-LAPTOP to **JioBharat** → Test connection → pass
+2. Move to ground floor → connect **Asus Store** → `ipconfig` (new IP e.g. `.48`) → Test connection → **still pass** (hostname resolves)
+
+Server validation (on WEBSTUDIO-SERVER):
+
+```powershell
+cd D:\WEBSTUDIO-IMS\infra\windows
+.\validate-production-tally.ps1
+```
+
+---
+
+# PART H — PRODUCTION SETTINGS (after go-live)
+
+## H1 — Backup
+
+Main Admin → **Settings → Backup** → enable schedule → **Test backup**
+
+```powershell
+cd D:\WEBSTUDIO-IMS\infra\windows
+.\validate-production-backup.ps1
+```
+
+## H2 — Optional AI (Add Laptop specs)
+
+Server `.env`:
+
+```env
+GEMINI_API_KEY=your_key
+```
+
+Restart service. Desktop → **Settings → Integrations** → Test AI.
+
+## H3 — Auto-updates (optional, later)
+
+Server `.env` only:
 
 ```env
 WEBSTUDIO_GITHUB_REPO=Smarthsingh/WEBSTUDIO-IMS
-WEBSTUDIO_GITHUB_TOKEN=ghp_xxxxxxxx
-WEBSTUDIO_RELEASE_SYNC_INTERVAL_SECONDS=900
-WEBSTUDIO_RELEASE_UPDATES_ROOT=D:\WEBSTUDIO-IMS\Updates
+WEBSTUDIO_GITHUB_TOKEN=ghp_xxxx
 WEBSTUDIO_RELEASE_SYNC_SCHEDULER=1
 ```
 
-Create PAT on GitHub with **read access to repo/releases** (private repo).
+Main Admin → enable GitHub sync → **Deployment Center** → approve each deploy.
 
-Restart **WEBSTUDIO Server** service.
+Desktops poll server (~6h) — user clicks Install when prompted.
 
-### 10.2 Enable in application settings
+## H4 — Final validation
 
-Main Admin → **Settings** (system setting):
-
-- `github_release_sync_enabled` = **true**
-- `github_release_repo` = `Smarthsingh/WEBSTUDIO-IMS` (if not using env only)
-
-### 10.3 Each new release (your workflow)
-
-1. You push tag `v1.0.1` → CI publishes GitHub Release.
-2. Server polls (~15 min) or **Deployment Center → Check updates**.
-3. Main Admin: **Backup** → **Validate** → **Deploy** (approval checkbox).
-4. Staff desktops: app checks server every ~6h → update dialog → install from server.
-
-**References:**
-
-- `docs/milestones/m13/GITHUB_RELEASE_SYNCHRONIZATION_REPORT.md`
-- `docs/milestones/m14/OPERATIONS_MANUAL.md` §3 Updates
-- `docs/database/github-release-sync.md`
-
-Desktop **never** needs GitHub URL or token.
-
----
-
-## Phase 11 — Post-setup validation
-
-Run on server (elevated PowerShell):
+On server:
 
 ```powershell
 cd D:\WEBSTUDIO-IMS\infra\windows
 .\validate-production-network.ps1 -ApiPort 8000
 .\validate-production-backup.ps1
-.\validate-production-handover.ps1   # needs Main Admin JWT — see script help
 ```
 
-Or from desktop (logged in as Network Admin):
+---
 
-```http
-GET /api/v1/deployment/production-handover
-GET /api/v1/deployment/client-validation
-```
+# PART I — DAILY USE (staff quick reference)
 
-**Checklists:**
-
-- `docs/milestones/m14/CLIENT_ACCEPTANCE_CHECKLIST.md`
-- `docs/milestones/m14/USER_ACCEPTANCE_CHECKLIST.md`
-- `docs/milestones/m14/FIRST_STARTUP_CHECKLIST.md`
+| Task | How |
+|------|-----|
+| Open desktop | Start Menu → **WEBSTUDIO Desktop** → wait **Online** → login |
+| Open mobile | **WEBSTUDIO IMS** app → login |
+| Find laptop | **Ctrl+K** → serial number |
+| Server URL (if asked) | `http://192.168.29.100:8000` |
+| Wi‑Fi | **JioBharat** or **Asus Store** — not mobile data only |
 
 ---
 
-## Phase 12 — Handover to daily operations
+# PART J — TROUBLESHOOTING
 
-| Role | Read |
-|------|------|
-| Main Admin | `ADMINISTRATOR_MANUAL.md`, `OPERATIONS_MANUAL.md` |
-| IT | `MAINTENANCE_GUIDE.md`, `OPERATIONS_HANDOVER.md` |
-| Staff | `QUICK_START_GUIDE.md`, `USER_MANUAL.md` |
-
----
-
-## Quick troubleshooting (two-PC setup)
-
-| Symptom | Check |
-|---------|--------|
-| Desktop cannot find server | Manual URL `http://<server-ip>:8000`; firewall §4; same subnet |
-| `health/ready` fails | PostgreSQL running; `DATABASE_URL`; migrations |
-| Login blocked | Complete setup wizard first (`/api/v1/setup/status`) |
-| Phone offline | Wi‑Fi isolation; use server IP not `localhost` on phone |
-| Tally sync failed | Tally XML on; billing PC IP; firewall on billing PC for port 9000 |
-| Updates not appearing | GitHub sync enabled; Deployment Center approve deploy; server upgraded first |
-
-**Reference:** `docs/milestones/m12h/TROUBLESHOOTING_GUIDE.md`, `docs/milestones/m14/FAQ.md`
+| Problem | Fix |
+|---------|-----|
+| Used public IP `49.43.x.x` | Use `http://192.168.29.100:8000` |
+| Ground floor cannot reach server | Jio/Tenda AP isolation **Off**; server firewall script run |
+| Server IP changed after reboot | Fix Jio DHCP reservation for MAC `E0:AD:47:31:CA:0A` → `.100` |
+| Ping fails between laptops | Normal on Windows — test browser `/health/live` instead |
+| `Ethernet 2 media disconnected` on ipconfig | Ignore — unused wired port |
+| Tally fails after moving floor | Use host **`TALLY-LAPTOP`** not IP; check port 9000 firewall on Tally PC |
+| Desktop Offline | Wi‑Fi Private; correct server URL; server service running |
+| `ipconfig /renew` odd messages | Reconnect Wi‑Fi or set manual static `.100` |
 
 ---
 
-## Summary: what is manual vs automatic
+# PART K — COMPLETE INSTALL CHECKLIST
 
-| Step | Automatic? |
-|------|------------|
-| CI build on git tag | Yes |
-| Server downloads from GitHub | Yes (if sync enabled) |
-| Server deploy new version | **No** — admin approves |
-| Desktop install update | **Prompt** — user clicks install |
-| Tally import | Yes (scheduler) when configured |
-| `.env` / secrets | **Manual** file edit on server |
-| Static IP | **Manual** (router or Windows) |
-| Setup wizard | **Once**, manual on first desktop |
+| # | Task | Done |
+|---|------|------|
+| 1 | Download EXEs from GitHub Releases v1.0.0 | ☐ |
+| 2 | Jio: reserve `192.168.29.100` → MAC `E0:AD:47:31:CA:0A` | ☐ |
+| 3 | Server `ipconfig` shows `.100` on Wi‑Fi | ☐ |
+| 4 | Server Wi‑Fi **Private** | ☐ |
+| 5 | Install WEBSTUDIO Server on WEBSTUDIO-SERVER | ☐ |
+| 6 | Edit `.env` + restart service | ☐ |
+| 7 | Run `configure-firewall.ps1 -Subnet 192.168.29.0/24` | ☐ |
+| 8 | GF laptop: `http://192.168.29.100:8000/health/live` OK | ☐ |
+| 9 | Install Desktop + Setup Wizard + recovery key saved | ☐ |
+| 10 | Install Desktop on all staff laptops | ☐ |
+| 11 | Install APK on phones | ☐ |
+| 12 | TALLY-LAPTOP: XML 9000 + firewall + Settings host name | ☐ |
+| 13 | Create staff users | ☐ |
+| 14 | Backup schedule + validation scripts | ☐ |
 
 ---
 
-*Milestone index: [docs/milestones/m14/README.md](README.md)*
+## Optional deep reference
+
+| Topic | Document |
+|-------|----------|
+| Full server install | `docs/milestones/m14/INSTALLATION_MANUAL.md` |
+| Tally detail | `docs/milestones/m14/TALLY_PRODUCTION_GUIDE.md` |
+| User manual | `docs/milestones/m14/USER_MANUAL.md` |
+| Administrator | `docs/milestones/m14/ADMINISTRATOR_MANUAL.md` |
+| Operations & updates | `docs/milestones/m14/OPERATIONS_MANUAL.md` |
+
+---
+
+*This guide is site-specific for Jio `192.168.29.x` + Tenda AP `Asus Store`. Give staff **Part I** after go-live.*

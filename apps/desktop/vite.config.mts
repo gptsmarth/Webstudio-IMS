@@ -5,6 +5,8 @@ import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 
 export default defineConfig({
+  // Relative base so /assets/* from public/ resolve under file:// in packaged Electron.
+  base: './',
   plugins: [
     tailwindcss(),
     react(),

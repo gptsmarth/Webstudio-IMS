@@ -1,11 +1,12 @@
 import { ASSET_MANIFEST, type WebstudioAssetKey } from './AssetManifest';
+import { resolvePublicAsset } from '../utils/resolvePublicAsset';
 
 export class WebstudioAssetRegistry {
   static getAsset(key: WebstudioAssetKey): string {
     if (key in ASSET_MANIFEST.webstudio) {
-      return ASSET_MANIFEST.webstudio[key];
+      return resolvePublicAsset(ASSET_MANIFEST.webstudio[key]);
     }
-    return ASSET_MANIFEST.webstudio.logo;
+    return resolvePublicAsset(ASSET_MANIFEST.webstudio.logo);
   }
 
   /**
@@ -14,7 +15,7 @@ export class WebstudioAssetRegistry {
    */
   static getLogoForTheme(theme: 'light' | 'dark'): string {
     return theme === 'dark'
-      ? ASSET_MANIFEST.webstudio.logoLight
-      : ASSET_MANIFEST.webstudio.logoDark;
+      ? resolvePublicAsset(ASSET_MANIFEST.webstudio.logoLight)
+      : resolvePublicAsset(ASSET_MANIFEST.webstudio.logoDark);
   }
 }

@@ -43,8 +43,34 @@ pnpm desktop:package:win
 - Start Menu + Desktop shortcuts  
 - Branded with `icon.ico` (WEBSTUDIO)  
 - Uninstaller included  
+- **No File/Edit/View menu bar** in production builds (native app chrome only)
 
-### Install (end user)
+### Windows code signing (Smart App Control / SmartScreen)
+
+Unsigned builds are blocked or warned on Windows 11 **Smart App Control**. Production releases should be **Authenticode-signed**.
+
+1. Purchase a **Windows code signing certificate** (OV or EV from a trusted CA). EV certs gain reputation faster.
+2. Export the certificate as a `.pfx` file.
+3. Base64-encode the PFX for GitHub Actions:
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\webstudio-codesign.pfx")) | Set-Clipboard
+   ```
+4. Add repository secrets:
+   | Secret | Value |
+   |--------|--------|
+   | `WIN_CSC_LINK` | Base64-encoded `.pfx` |
+   | `WIN_CSC_KEY_PASSWORD` | PFX password |
+
+CI (`.github/workflows/release.yml`) passes these to `electron-builder`, which signs `WEBSTUDIO Desktop Setup.exe` automatically when secrets are present. Builds without secrets still compile but remain unsigned.
+
+Local signed build:
+
+```powershell
+$env:CSC_LINK = "C:\path\webstudio-codesign.pfx"
+$env:CSC_KEY_PASSWORD = "your-password"
+pnpm desktop:package:win
+```
+
 
 1. Run `WEBSTUDIO Desktop Setup.exe`  
 2. Launch **WEBSTUDIO Desktop** from Start Menu  
@@ -135,12 +161,12 @@ Optional: place PostgreSQL 16 installer at:
 
 `infra/windows/server-installer/payload/postgresql-installer.exe`
 
-Server release tree must include:
+**CI / release build** (`build-server-setup.ps1`) automatically stages:
 
-- `apps/backend` (Python package)  
-- `database/` (migrations)  
-- Python venv at `{InstallRoot}\venv` (create before or extend installer)  
-- NSSM at `{InstallRoot}\tools\nssm\nssm.exe`  
+- **Embedded Python 3.12** + backend dependencies → `{InstallRoot}\runtime\python\`
+- **NSSM** → `{InstallRoot}\tools\nssm\nssm.exe`
+
+No manual venv or NSSM copy is required on the target server.
 
 ### Build
 
@@ -149,17 +175,24 @@ Server release tree must include:
 powershell -ExecutionPolicy Bypass -File scripts/release/build-server-setup.ps1
 ```
 
+`build-server-setup.ps1` runs `stage-server-payload.ps1` first (downloads Python embed + NSSM, `pip install -e apps/backend`), then compiles the installer.
+
 **Output:** `release/server/WEBSTUDIO Server Setup.exe`
 
 ### Installer actions
 
-1. **Detect PostgreSQL** — Windows service `postgresql-x64-16`  
-2. **Install PostgreSQL** — silent install from payload if bundled and missing  
-3. **Create directories** — `logs`, `backups`, `certs`, `exports`  
-4. **Generate production `.env`** — from template + random JWT secret  
-5. **Run Alembic** — `alembic upgrade head`  
-6. **Configure WEBSTUDIO Server Service** — NSSM, Automatic Delayed Start  
-7. **Configure recovery** — restart on failure  
+1. **Detect PostgreSQL** — any Windows service `postgresql-x64-*` (16, 17, 18, …)
+2. **Install PostgreSQL** — silent install from optional payload if bundled and missing
+3. **Copy bundled runtime** — Python + NSSM (no separate Python install on server)
+4. **Create directories** — `logs`, `backups`, `certs`, `exports`
+5. **Generate production `.env`** — from template + random JWT secret (`API_PORT=8000`)
+6. **Run Alembic** — `alembic upgrade head` (requires existing `webstudio` database)
+7. **Configure WEBSTUDIO Server Service** — NSSM, Automatic Delayed Start
+8. **Configure recovery** — restart on failure
+
+Post-install runs **visibly**; failures are logged to `logs\install-post.log`.
+
+**Administrator prerequisite:** PostgreSQL installed with `webstudio` database and `webstudio_app` user before or after setup (migrations need a reachable database).
 
 See [M12B Windows Service Guide](../m12b/WINDOWS_SERVICE_GUIDE.md).
 

@@ -5,12 +5,12 @@ See [docs/milestones/m12c/INSTALLER_GUIDE.md](../docs/milestones/m12c/INSTALLER_
 ## Build installers
 
 ```bash
-pnpm release:sync-branding
+pnpm release:sync-branding   # copies + validates; run regenerate-branding-icons.sh if icon.svg changed
 pnpm desktop:package:win    # Windows
 pnpm desktop:package:mac    # macOS
 pnpm release:android
 pnpm release:backend
-powershell scripts/release/build-server-setup.ps1
+powershell scripts/release/build-server-setup.ps1   # stages Python+NSSM, then Inno Setup
 ```
 
 ## Enterprise CI (tag push)

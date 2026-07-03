@@ -29,9 +29,14 @@ if ($service) {
     Write-Host "[WEBSTUDIO] WARNING: WEBSTUDIO Server service not registered"
 }
 
-$pg = Get-Service -Name "postgresql-x64-16" -ErrorAction SilentlyContinue
-if ($pg) {
-    Write-Host "[WEBSTUDIO] PostgreSQL service: $($pg.Status)"
+try {
+    $pgName = & "$PSScriptRoot\resolve-postgresql-service.ps1"
+    $pg = Get-Service -Name $pgName -ErrorAction SilentlyContinue
+    if ($pg) {
+        Write-Host "[WEBSTUDIO] PostgreSQL service ($pgName): $($pg.Status)"
+    }
+} catch {
+    Write-Host "[WEBSTUDIO] WARNING: PostgreSQL service not found"
 }
 
 if (-not $BearerToken) {

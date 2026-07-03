@@ -8,6 +8,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { MdnsBrowser } from './mdns-discovery';
+import { configureApplicationMenu } from './menu';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -390,6 +391,7 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    configureApplicationMenu();
     writeLog('Main', 'info', 'Application bootstrap started');
     createWindow();
 
