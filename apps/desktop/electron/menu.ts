@@ -18,11 +18,7 @@ export function configureApplicationMenu(): void {
     if (isDev) {
       template.push({
         label: 'View',
-        submenu: [
-          { role: 'reload' },
-          { role: 'forceReload' },
-          { role: 'toggleDevTools' },
-        ],
+        submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
       });
     }
 
@@ -35,11 +31,7 @@ export function configureApplicationMenu(): void {
       Menu.buildFromTemplate([
         {
           label: 'View',
-          submenu: [
-            { role: 'reload' },
-            { role: 'forceReload' },
-            { role: 'toggleDevTools' },
-          ],
+          submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
         },
       ]),
     );

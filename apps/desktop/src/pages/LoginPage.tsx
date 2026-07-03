@@ -382,46 +382,39 @@ export const LoginPage: React.FC<Props> = ({
                 justifyItems: 'center',
               }}
             >
-              {[
-                'apple',
-                'dell',
-                'hp',
-                'lenovo',
-                'sandisk',
-                'asus',
-                'logitech',
-                'canon',
-              ].map((name) => (
-                <div
-                  key={name}
-                  style={{
-                    height: 24,
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <img
-                    src={BrandLogoRegistry.getLogo(name)}
-                    alt={name}
+              {['apple', 'dell', 'hp', 'lenovo', 'sandisk', 'asus', 'logitech', 'canon'].map(
+                (name) => (
+                  <div
+                    key={name}
                     style={{
-                      maxHeight: '100%',
-                      maxWidth: '100%',
-                      objectFit: 'contain',
-                      filter: 'brightness(0) invert(1)',
-                      opacity: 0.65,
-                      transition: 'opacity 0.2s ease',
+                      height: 24,
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.opacity = '1';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.opacity = '0.65';
-                    }}
-                  />
-                </div>
-              ))}
+                  >
+                    <img
+                      src={BrandLogoRegistry.getLogo(name)}
+                      alt={name}
+                      style={{
+                        maxHeight: '100%',
+                        maxWidth: '100%',
+                        objectFit: 'contain',
+                        filter: 'brightness(0) invert(1)',
+                        opacity: 0.65,
+                        transition: 'opacity 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '0.65';
+                      }}
+                    />
+                  </div>
+                ),
+              )}
             </div>
           </div>
         </div>
