@@ -75,6 +75,11 @@ def sync_catalog(root: Path, *, version: str | None = None, build_number: int | 
     write_version_file(root, resolved_version)
     sync_package_json(root / "package.json", resolved_version, catalog)
     sync_package_json(root / "apps/desktop/package.json", resolved_version, catalog)
+    for package_json in (root / "packages").glob("*/package.json"):
+        sync_package_json(package_json, resolved_version, catalog)
+    mobile_pkg = root / "apps/mobile/package.json"
+    if mobile_pkg.is_file():
+        sync_package_json(mobile_pkg, resolved_version, catalog)
     sync_pubspec(root / "apps/mobile_flutter/pubspec.yaml", resolved_version, resolved_build)
     sync_inno_setup(
         root / "infra/windows/server-installer/WEBSTUDIO-Server-Setup.iss",

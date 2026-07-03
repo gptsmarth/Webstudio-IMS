@@ -26,6 +26,7 @@ def _envelope(request: Request, data: dict) -> dict:
 
 
 @router.get("/health/live")
+@router.get("/api/v1/health/live")
 async def health_live(request: Request) -> dict:
     settings = request.app.state.settings
     return _envelope(
@@ -40,6 +41,7 @@ async def health_live(request: Request) -> dict:
 
 
 @router.get("/health")
+@router.get("/api/v1/health")
 async def health_alias(request: Request) -> dict:
     return await health_live(request)
 
@@ -61,6 +63,7 @@ async def health_version(request: Request) -> dict:
 
 
 @router.get("/health/ready")
+@router.get("/api/v1/health/ready")
 async def health_ready(request: Request) -> JSONResponse:
     settings = request.app.state.settings
     checks: dict[str, str] = {
