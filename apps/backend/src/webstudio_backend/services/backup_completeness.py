@@ -205,6 +205,8 @@ async def collect_business_snapshot(
 def compare_business_snapshots(
     before: BusinessSnapshot,
     after: BusinessSnapshot,
+    *,
+    exclude_fields: frozenset[str] | None = None,
 ) -> list[str]:
     mismatches: list[str] = []
     before_dict = before.as_dict()
@@ -224,6 +226,8 @@ def compare_business_snapshots(
         ("tally_company_name", "Tally company name"),
         ("gemini_model", "Gemini model"),
     ):
+        if exclude_fields and key in exclude_fields:
+            continue
         if before_dict[key] != after_dict[key]:
             mismatches.append(f"{label}: expected {before_dict[key]!r}, got {after_dict[key]!r}")
     if list(before.serial_numbers) != list(after.serial_numbers):
@@ -232,6 +236,21 @@ def compare_business_snapshots(
             f"got {len(after.serial_numbers)}",
         )
     return mismatches
+
+
+RESTORE_OPERATION_COUNT_FIELDS = frozenset({"audit_log_count", "notification_count"})
+
+
+def compare_restored_business_snapshots(
+    before: BusinessSnapshot,
+    after: BusinessSnapshot,
+) -> list[str]:
+    """Compare business data after restore; restore writes new audit/notification rows."""
+    return compare_business_snapshots(
+        before,
+        after,
+        exclude_fields=RESTORE_OPERATION_COUNT_FIELDS,
+    )
 
 
 async def truncate_webstudio_data(session: AsyncSession) -> None:

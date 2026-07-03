@@ -370,7 +370,7 @@ class RestoreEngine:
         filename: str,
         restore_scope: str = "entire_database",
         source: str = "local",
-        create_emergency_backup: bool = True,
+        create_emergency_backup: bool | None = None,
         confirmed: bool = False,
         actor_user_id: int | None = None,
         actor_display_name: str | None = None,
@@ -399,26 +399,40 @@ class RestoreEngine:
         from webstudio_backend.services.backup_alert_service import BackupAlertService
 
         alerts = BackupAlertService(self._session)
-        await alerts.notify_restore_started(filename=filename, restore_scope=restore_scope)
+        data_only_restore = False
+        if restore_scope == "entire_database":
+            manifest = await self._load_manifest(filename)
+            data_only_restore = manifest.get("database_dump_mode") == DATABASE_DUMP_MODE_DATA_ONLY
 
-        run = await self._runs.create_run(
-            filename=filename,
-            source=source,
-            restore_scope=restore_scope,
-            actor_user_id=actor_user_id,
-            actor_display_name=actor_display_name,
-        )
-        run_snapshot = RestoreRunSnapshot(
-            id=run.id,
-            filename=filename,
-            source=source,
-            restore_scope=restore_scope,
-            actor_user_id=actor_user_id,
-            actor_display_name=actor_display_name,
-        )
+        if create_emergency_backup is None:
+            create_emergency_backup = restore_scope == "entire_database" and not rollback
 
-        if restore_scope == "entire_database" and not rollback:
-            create_emergency_backup = True
+        run_snapshot: RestoreRunSnapshot | None = None
+
+        async def _begin_restore_run() -> None:
+            nonlocal run_snapshot
+            await alerts.notify_restore_started(
+                filename=filename,
+                restore_scope=restore_scope,
+            )
+            run = await self._runs.create_run(
+                filename=filename,
+                source=source,
+                restore_scope=restore_scope,
+                actor_user_id=actor_user_id,
+                actor_display_name=actor_display_name,
+            )
+            run_snapshot = RestoreRunSnapshot(
+                id=run.id,
+                filename=filename,
+                source=source,
+                restore_scope=restore_scope,
+                actor_user_id=actor_user_id,
+                actor_display_name=actor_display_name,
+            )
+
+        if not data_only_restore:
+            await _begin_restore_run()
 
         try:
             if create_emergency_backup:
@@ -432,11 +446,12 @@ class RestoreEngine:
                 warnings.append(f"Emergency backup created: {emergency_filename}")
 
             if restore_scope == "entire_database":
-                manifest = await self._load_manifest(filename)
-                if manifest.get("database_dump_mode") == DATABASE_DUMP_MODE_DATA_ONLY:
+                if data_only_restore:
                     await truncate_webstudio_data(self._session)
                 self._backup_engine.restore_backup(filename)
                 self._session.expire_all()
+                if data_only_restore:
+                    await _begin_restore_run()
             elif restore_scope in {"settings_only", "company_config"}:
                 await self._restore_settings_from_archive(filename, restore_scope)
             else:
@@ -463,6 +478,7 @@ class RestoreEngine:
                 for c in verification_checks
             ]
 
+            assert run_snapshot is not None
             await self._runs.mark_completed(
                 run_snapshot,
                 emergency_backup_filename=emergency_filename,
@@ -511,6 +527,9 @@ class RestoreEngine:
             )
         except Exception as exc:
             errors.append(str(exc))
+            if run_snapshot is None:
+                await _begin_restore_run()
+            assert run_snapshot is not None
             await self._runs.mark_completed(
                 run_snapshot,
                 emergency_backup_filename=emergency_filename,

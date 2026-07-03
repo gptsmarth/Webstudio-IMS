@@ -31,7 +31,7 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.services.backup_completeness import (
     collect_business_snapshot,
-    compare_business_snapshots,
+    compare_restored_business_snapshots,
     truncate_webstudio_data,
 )
 from webstudio_backend.services.backup_engine import BackupEngine
@@ -44,6 +44,13 @@ pytestmark = pytest.mark.skipif(
     shutil.which("pg_dump") is None or shutil.which("psql") is None,
     reason="pg_dump and psql are required for disaster recovery integration test",
 )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def disaster_recovery_isolated_db(db_session: AsyncSession) -> None:
+    """Each DR test starts from an empty webstudio schema (shared CI database)."""
+    await truncate_webstudio_data(db_session)
+    db_session.expire_all()
 
 
 @pytest_asyncio.fixture
@@ -165,7 +172,7 @@ async def test_disaster_recovery_full_business_state(
 
     db_session.expire_all()
     after = await collect_business_snapshot(db_session, settings_repo)
-    mismatches = compare_business_snapshots(before, after)
+    mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Business state mismatch after restore: {mismatches}"
 
 
@@ -205,5 +212,5 @@ async def test_disaster_recovery_clean_database_restore(
 
     db_session.expire_all()
     after = await collect_business_snapshot(db_session, settings_repo)
-    mismatches = compare_business_snapshots(before, after)
+    mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Clean-database restore mismatch: {mismatches}"
