@@ -198,3 +198,48 @@ async def test_users_only_scope_not_implemented(
     restore = RestoreEngine(db_session, test_settings, backup_dir=tmp_path)
     preview = await restore.preview_restore(created.filename, restore_scope="users_only")
     assert preview.scope_implemented is False
+
+
+@pytest.mark.asyncio
+async def test_mark_completed_reinserts_when_restore_run_row_missing(
+    db_session: AsyncSession,
+) -> None:
+    from sqlalchemy import delete
+
+    from webstudio_backend.infrastructure.database.models.restore_run import RestoreRun
+    from webstudio_backend.infrastructure.repositories.restore_run_repository import (
+        RestoreRunRepository,
+        RestoreRunSnapshot,
+    )
+
+    repo = RestoreRunRepository(db_session)
+    run = await repo.create_run(
+        filename="webstudio-backup-test.tar.gz",
+        source="local",
+        restore_scope="entire_database",
+        actor_user_id=None,
+        actor_display_name="System",
+    )
+    snapshot = RestoreRunSnapshot(
+        id=run.id,
+        filename=run.filename,
+        source=run.source,
+        restore_scope=run.restore_scope,
+        actor_user_id=run.actor_user_id,
+        actor_display_name=run.actor_display_name,
+    )
+    await db_session.execute(delete(RestoreRun).where(RestoreRun.id == run.id))
+    await db_session.flush()
+
+    completed = await repo.mark_completed(
+        snapshot,
+        emergency_backup_filename=None,
+        duration_ms=42,
+        verification_status="success",
+        warnings=[],
+        errors=[],
+    )
+    assert completed.status == "completed"
+    assert completed.verification_status == "success"
+    assert completed.duration_ms == 42
+    assert completed.id != snapshot.id

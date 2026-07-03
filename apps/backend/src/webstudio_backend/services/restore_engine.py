@@ -21,6 +21,7 @@ from webstudio_backend.infrastructure.repositories.backup_run_repository import 
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.infrastructure.repositories.restore_run_repository import (
     RestoreRunRepository,
+    RestoreRunSnapshot,
 )
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
@@ -407,6 +408,14 @@ class RestoreEngine:
             actor_user_id=actor_user_id,
             actor_display_name=actor_display_name,
         )
+        run_snapshot = RestoreRunSnapshot(
+            id=run.id,
+            filename=filename,
+            source=source,
+            restore_scope=restore_scope,
+            actor_user_id=actor_user_id,
+            actor_display_name=actor_display_name,
+        )
 
         if restore_scope == "entire_database" and not rollback:
             create_emergency_backup = True
@@ -455,7 +464,7 @@ class RestoreEngine:
             ]
 
             await self._runs.mark_completed(
-                run,
+                run_snapshot,
                 emergency_backup_filename=emergency_filename,
                 duration_ms=duration_ms,
                 verification_status=verification_status,
@@ -503,7 +512,7 @@ class RestoreEngine:
         except Exception as exc:
             errors.append(str(exc))
             await self._runs.mark_completed(
-                run,
+                run_snapshot,
                 emergency_backup_filename=emergency_filename,
                 duration_ms=int((time.perf_counter() - started) * 1000),
                 verification_status="failed",
