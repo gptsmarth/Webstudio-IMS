@@ -21,6 +21,7 @@ dist-electron/
 !config/env/.env.testing
 !config/env/.env.staging
 !config/env/.env.production
+!config/env/.env.production.template
 
 # Local database dumps (tools/scripts/backup-db.sh)
 backups/

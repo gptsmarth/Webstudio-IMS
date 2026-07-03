@@ -16,5 +16,13 @@ if (-not (Test-Path $InnoSetupCompiler)) {
 
 $IssFile = Join-Path $RepoRoot "infra\windows\server-installer\WEBSTUDIO-Server-Setup.iss"
 & $InnoSetupCompiler $IssFile
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup compile failed with exit code $LASTEXITCODE"
+}
 
-Write-Host "[release] Output: $RepoRoot\release\server\WEBSTUDIO Server Setup.exe"
+$OutputExe = Join-Path $RepoRoot "release\server\WEBSTUDIO Server Setup.exe"
+if (-not (Test-Path $OutputExe)) {
+    throw "Expected installer not found at $OutputExe"
+}
+
+Write-Host "[release] Output: $OutputExe"
