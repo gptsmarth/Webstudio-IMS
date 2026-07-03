@@ -6,7 +6,7 @@ inputs:
     required: false
     default: "true"
   install-node:
-    description: Install Node.js 20 and pnpm
+    description: Install Node.js 22 and pnpm
     required: false
     default: "true"
   install-flutter:
@@ -23,13 +23,11 @@ runs:
 
     - if: inputs.install-node == 'true'
       uses: pnpm/action-setup@v4
-      with:
-        version: 9
 
     - if: inputs.install-node == 'true'
       uses: actions/setup-node@v4
       with:
-        node-version: "20"
+        node-version: "22"
         cache: pnpm
 
     - if: inputs.install-node == 'true'
