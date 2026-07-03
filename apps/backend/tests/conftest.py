@@ -10,6 +10,7 @@ from urllib.parse import urlparse, urlunparse
 
 import pytest
 import pytest_asyncio
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings, get_settings
@@ -84,3 +85,26 @@ async def db_session(database_engine: None) -> AsyncGenerator[AsyncSession, None
     async with factory() as session:
         yield session
         await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def api_client(
+    database_engine: None,
+    test_settings: Settings,
+    db_session: AsyncSession,
+) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP client for lightweight API tests on the pytest asyncio event loop."""
+    from httpx import ASGITransport, AsyncClient
+
+    from webstudio_backend.app import create_app
+    from webstudio_backend.core.dependencies import get_db_session
+
+    app = create_app(test_settings)
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client

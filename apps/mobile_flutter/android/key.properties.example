@@ -1,0 +1,8 @@
+# Android release signing — copy to key.properties (never commit).
+# Generate keystore:
+#   keytool -genkey -v -keystore webstudio-release.keystore -alias webstudio -keyalg RSA -keysize 2048 -validity 10000
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=webstudio
+storeFile=../keystores/webstudio-release.keystore

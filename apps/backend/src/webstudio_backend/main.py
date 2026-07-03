@@ -18,6 +18,7 @@ def run() -> None:
         reload=settings.is_development,
         ssl_keyfile=settings.tls_key_path or None,
         ssl_certfile=settings.tls_cert_path or None,
+        timeout_graceful_shutdown=settings.graceful_shutdown_seconds,
     )
 
 

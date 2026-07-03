@@ -32,6 +32,7 @@ Instructions for AI assistants (Cursor, ChatGPT, Antigravity, and others) workin
 | Mobile | [docs/development/platform-guides/mobile.md](docs/development/platform-guides/mobile.md) |
 | Tally Integration | [docs/integrations/tally-erp9/](docs/integrations/tally-erp9/) |
 | Excel Sync | [docs/integrations/excel/](docs/integrations/excel/) |
+| **M14 Production (FINAL)** | [docs/milestones/m14/M14_GLOBAL_RULES.md](docs/milestones/m14/M14_GLOBAL_RULES.md) — deployment & handover only; no new features |
 
 ## Rules
 

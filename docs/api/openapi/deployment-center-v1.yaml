@@ -1,0 +1,128 @@
+openapi: 3.1.0
+info:
+  title: WEBSTUDIO IMS — Deployment Center API
+  version: 1.0.0
+paths:
+  /api/v1/deployment/center/analytics:
+    get:
+      summary: Enterprise deployment monitoring analytics
+      tags: [deployment]
+      responses:
+        "200":
+          description: Aggregated deployment analytics envelope
+  /api/v1/deployment/center/dashboard:
+    get:
+      summary: Deployment Center dashboard
+      tags: [deployment]
+      responses:
+        "200":
+          description: Dashboard envelope
+  /api/v1/deployment/center/history:
+    get:
+      summary: Deployment event history
+      tags: [deployment]
+      responses:
+        "200":
+          description: History envelope
+  /api/v1/deployment/center/logs:
+    get:
+      summary: Deployment operation logs
+      tags: [deployment]
+      responses:
+        "200":
+          description: Logs envelope
+  /api/v1/deployment/center/check-updates:
+    post:
+      summary: Check GitHub for newer releases
+      tags: [deployment]
+      responses:
+        "200":
+          description: Check result envelope
+  /api/v1/deployment/center/download:
+    post:
+      summary: Download release packages
+      tags: [deployment]
+      responses:
+        "200":
+          description: Download result envelope
+  /api/v1/deployment/center/validate:
+    post:
+      summary: Validate downloaded package
+      tags: [deployment]
+      responses:
+        "200":
+          description: Validation result envelope
+  /api/v1/deployment/center/runs/latest:
+    get:
+      summary: Latest deployment run status
+      tags: [deployment]
+      responses:
+        "200":
+          description: Deployment run envelope
+        "404":
+          description: No runs found
+  /api/v1/deployment/center/runs/{run_id}:
+    get:
+      summary: Deployment run step progress
+      tags: [deployment]
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deployment run envelope
+        "404":
+          description: Run not found
+  /api/v1/deployment/center/deploy:
+    post:
+      summary: Deploy release (administrator approval required)
+      tags: [deployment]
+      responses:
+        "200":
+          description: Deploy result envelope
+  /api/v1/deployment/center/rollback:
+    post:
+      summary: Rollback release (administrator approval required)
+      tags: [deployment]
+      responses:
+        "200":
+          description: Rollback result envelope
+  /api/v1/deployment/center/rollback/history:
+    get:
+      summary: Permanent enterprise rollback history
+      tags: [deployment]
+      responses:
+        "200":
+          description: Rollback history envelope
+  /api/v1/deployment/center/rollback/runs/{run_id}:
+    get:
+      summary: Enterprise rollback run detail
+      tags: [deployment]
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rollback run envelope
+        "404":
+          description: Run not found
+  /api/v1/deployment/center/delete-package:
+    post:
+      summary: Delete downloaded package (administrator approval required)
+      tags: [deployment]
+      responses:
+        "200":
+          description: Delete result envelope
+  /api/v1/deployment/center/refresh:
+    post:
+      summary: Refresh dashboard
+      tags: [deployment]
+      responses:
+        "200":
+          description: Dashboard envelope

@@ -112,6 +112,58 @@ export function App(): JSX.Element {
   }, [clearSession]);
 
   useEffect(() => {
+    if (activeView !== 'workspace') return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const { ApiClientProvider } = await import('./services/api/ApiClientProvider');
+        const client = await ApiClientProvider.getClient();
+        await client.getHealthLive();
+        if (!cancelled) setConnectionStatus('online');
+      } catch {
+        if (!cancelled) {
+          setConnectionStatus('offline');
+          const { attemptAutomaticReconnect } = await import('./services/ConnectionReconnectService');
+          const restored = await attemptAutomaticReconnect();
+          if (restored && !cancelled) {
+            setConnectionStatus('online');
+            return;
+          }
+          void evaluateServerState();
+        }
+      }
+    };
+
+    void poll();
+    const interval = setInterval(() => void poll(), 15_000);
+    const onOnline = () => void poll();
+    window.addEventListener('online', onOnline);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [activeView, evaluateServerState]);
+
+  useEffect(() => {
+    if (activeView !== 'workspace') return;
+
+    let cancelled = false;
+    void (async () => {
+      const { startClientUpdatePolling, stopClientUpdatePolling } = await import('./services/UpdateCheckLifecycle');
+      if (!cancelled) startClientUpdatePolling();
+    })();
+
+    return () => {
+      cancelled = true;
+      void import('./services/UpdateCheckLifecycle').then(({ stopClientUpdatePolling }) => stopClientUpdatePolling());
+    };
+  }, [activeView]);
+
+  useEffect(() => {
     const onFocus = () => {
       if (activeView === 'login' || activeView === 'workspace') {
         void evaluateServerState();

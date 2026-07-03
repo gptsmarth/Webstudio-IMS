@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/network/server_reconnect_lifecycle.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
@@ -16,14 +17,16 @@ class WebstudioImsApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return VersionCheckLifecycleObserver(
-      child: MandatoryUpdateGate(
-        child: MaterialApp.router(
-          title: 'WEBSTUDIO IMS',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
-          darkTheme: AppTheme.dark(),
-          themeMode: themeMode,
-          routerConfig: router,
+      child: ServerReconnectLifecycleObserver(
+        child: MandatoryUpdateGate(
+          child: MaterialApp.router(
+            title: 'WEBSTUDIO IMS',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: themeMode,
+            routerConfig: router,
+          ),
         ),
       ),
     );

@@ -2,6 +2,7 @@
 abstract final class ApiPaths {
   static const healthLive = '/health/live';
   static const version = '/api/v1/version';
+  static const clientUpdatesCheck = '/api/v1/client-updates/check';
   static const capabilities = '/api/v1/capabilities';
 
   static const login = '/api/v1/auth/login';

@@ -17,6 +17,10 @@ dist-electron/
 .env
 .env.*
 !config/env/.env.example
+!config/env/.env.development
+!config/env/.env.testing
+!config/env/.env.staging
+!config/env/.env.production
 
 # Local database dumps (tools/scripts/backup-db.sh)
 backups/
@@ -33,6 +37,14 @@ backups/
 apps/mobile/android/app/build/
 apps/mobile/android/.gradle/
 apps/desktop/dist/
+apps/desktop/release/
+release/*
+!release/README.md
+!release/STRUCTURE.md
+apps/mobile_flutter/android/key.properties
+apps/mobile_flutter/android/keystores/
+*.keystore
+*.jks
 
 # Logs
 *.log

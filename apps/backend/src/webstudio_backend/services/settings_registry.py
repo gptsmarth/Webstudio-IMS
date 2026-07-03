@@ -70,4 +70,12 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "mobile_release_notes": ("", SettingValueType.STRING),
     "mobile_apk_download_url": ("", SettingValueType.STRING),
     "mobile_release_channel": ("stable", SettingValueType.STRING),
+    "github_release_sync_enabled": ("false", SettingValueType.BOOLEAN),
+    "github_release_repo": ("", SettingValueType.STRING),
+    "office_deployment_completed": ("false", SettingValueType.BOOLEAN),
+    "office_deployment_completed_at": ("", SettingValueType.STRING),
+    "office_deployment_summary": ("{}", SettingValueType.JSON),
+    "office_server_url": ("", SettingValueType.STRING),
+    "office_discovery_urls": ("[]", SettingValueType.JSON),
+    "product_image_storage_path": ("", SettingValueType.STRING),
 }

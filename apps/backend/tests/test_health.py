@@ -3,30 +3,12 @@
 from __future__ import annotations
 
 import pytest
-from starlette.testclient import TestClient
-
-from webstudio_backend.app import create_app
-from webstudio_backend.core.config import Settings
+from httpx import AsyncClient
 
 
-@pytest.fixture
-def health_test_settings() -> Settings:
-    return Settings(
-        app_env="test",
-        database_url="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test",
-        log_json=True,
-    )
-
-
-@pytest.fixture
-def client(health_test_settings: Settings) -> TestClient:
-    app = create_app(health_test_settings)
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-def test_health_live(client: TestClient) -> None:
-    response = client.get("/health/live")
+@pytest.mark.asyncio
+async def test_health_live(api_client: AsyncClient) -> None:
+    response = await api_client.get("/health/live")
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["status"] == "ok"
@@ -35,13 +17,15 @@ def test_health_live(client: TestClient) -> None:
     assert "X-Correlation-ID" in response.headers
 
 
-def test_health_version(client: TestClient) -> None:
-    response = client.get("/health/version")
+@pytest.mark.asyncio
+async def test_health_version(api_client: AsyncClient) -> None:
+    response = await api_client.get("/health/version")
     assert response.status_code == 200
     assert response.json()["data"]["api_version"] == "1.0"
 
 
-def test_metadata_info(client: TestClient) -> None:
-    response = client.get("/metadata/info")
+@pytest.mark.asyncio
+async def test_metadata_info(api_client: AsyncClient) -> None:
+    response = await api_client.get("/metadata/info")
     assert response.status_code == 200
     assert response.json()["data"]["service"] == "webstudio-ims-api"

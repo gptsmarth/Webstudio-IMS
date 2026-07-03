@@ -60,7 +60,7 @@ class TallyConnectivityService:
                     "event": "tally.sync.workstation_offline",
                     "configured_host": diagnostics.configured_host,
                     "resolved_ip": diagnostics.resolved_ip,
-                    "message": diagnostics.user_message,
+                    "user_message": diagnostics.user_message,
                 },
             )
         return diagnostics

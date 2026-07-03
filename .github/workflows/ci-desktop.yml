@@ -1,10 +1,29 @@
 # WEBSTUDIO IMS — ci-desktop
-# Workflow to be configured when development begins
 name: ci-desktop
+
 on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/desktop/**"
+      - "packages/**"
+      - ".github/workflows/ci-desktop.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "packages/**"
   workflow_dispatch:
+
 jobs:
-  placeholder:
+  desktop:
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'Workflow placeholder'
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-build-env
+        with:
+          install-python: "false"
+          install-flutter: "false"
+      - run: pnpm format:check
+      - run: pnpm --filter @webstudio/desktop lint
+      - run: pnpm --filter @webstudio/desktop typecheck
+      - run: pnpm --filter @webstudio/desktop test

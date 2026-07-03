@@ -1,7 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, crashReporter, ipcMain, shell } from 'electron';
+import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 import { MdnsBrowser } from './mdns-discovery';
 
@@ -16,8 +20,18 @@ if (!gotTheLock) {
   const API_BASE_URL = process.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
   const APP_MODE = (process.env.NODE_ENV as 'development' | 'production' | 'test') ?? 'development';
 
+  if (APP_MODE === 'production') {
+    crashReporter.start({
+      productName: 'WEBSTUDIO Desktop',
+      companyName: 'WEBSTUDIO',
+      submitURL: '',
+      uploadToServer: false,
+    });
+  }
+
   // --- Centralized Logging Architecture ---
   const getLogPath = (): string => path.join(app.getPath('userData'), 'webstudio-client.log');
+  const getCrashReportsPath = (): string => path.join(app.getPath('userData'), 'crash-reports');
 
   const writeLog = (channel: string, level: string, message: string, meta?: Record<string, unknown>): void => {
     const timestamp = new Date().toISOString();
@@ -34,6 +48,20 @@ if (!gotTheLock) {
 
   process.on('uncaughtException', (error) => {
     writeLog('Main', 'error', `Uncaught Exception: ${error.message}`, { stack: error.stack });
+    try {
+      fs.mkdirSync(getCrashReportsPath(), { recursive: true });
+      const crashFile = path.join(
+        getCrashReportsPath(),
+        `crash-${Date.now()}.log`,
+      );
+      fs.writeFileSync(
+        crashFile,
+        `${error.stack ?? error.message}\n`,
+        'utf-8',
+      );
+    } catch {
+      // Ignore crash file write failures
+    }
   });
 
   process.on('unhandledRejection', (reason) => {
@@ -104,8 +132,22 @@ if (!gotTheLock) {
     }
   });
 
+  const resolveBrandingIcon = (): string | undefined => {
+    const candidates = [
+      path.join(process.resourcesPath, 'assets', 'webstudio', process.platform === 'darwin' ? 'icon.icns' : 'icon.ico'),
+      path.join(__dirname, '../public/assets/webstudio', process.platform === 'darwin' ? 'icon.icns' : 'icon.ico'),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  };
+
   function createWindow(): void {
     const windowState = getSavedWindowState();
+    const brandingIcon = resolveBrandingIcon();
 
     mainWindow = new BrowserWindow({
       width: windowState.width,
@@ -115,7 +157,8 @@ if (!gotTheLock) {
       minWidth: 1024,
       minHeight: 768,
       show: false,
-      title: 'WEBSTUDIO IMS',
+      title: 'WEBSTUDIO Desktop',
+      icon: brandingIcon,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -167,15 +210,44 @@ if (!gotTheLock) {
     apiBaseUrl: API_BASE_URL,
   }));
 
-  ipcMain.handle('system:getVersionInfo', () => ({
-    appVersion: app.getVersion(),
-    buildVersion: '0.1.0-mvp',
-    gitCommit: process.env.VITE_GIT_COMMIT ?? 'dev-local',
-    buildDate: new Date().toISOString().split('T')[0],
-    electronVersion: process.versions.electron ?? 'unknown',
-    chromiumVersion: process.versions.chrome ?? 'unknown',
-    nodeVersion: process.versions.node ?? 'unknown',
-  }));
+  ipcMain.handle('system:getVersionInfo', () => {
+    let webstudioMeta: {
+      buildNumber?: number;
+      releaseChannel?: string;
+      releaseDate?: string;
+      gitCommit?: string;
+    } = {};
+    try {
+      const pkgPath = path.join(app.getAppPath(), 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
+        webstudio?: {
+          buildNumber?: number;
+          releaseChannel?: string;
+          releaseDate?: string;
+          gitCommit?: string;
+        };
+      };
+      webstudioMeta = pkg.webstudio ?? {};
+    } catch {
+      // Fall back to environment metadata when package.json is unavailable.
+    }
+
+    return {
+      appVersion: app.getVersion(),
+      buildNumber: webstudioMeta.buildNumber ?? Number(process.env.WEBSTUDIO_BUILD_NUMBER ?? 1),
+      buildVersion: process.env.WEBSTUDIO_BUILD_VERSION ?? app.getVersion(),
+      gitCommit:
+        webstudioMeta.gitCommit?.trim()
+        || process.env.VITE_GIT_COMMIT
+        || process.env.WEBSTUDIO_GIT_COMMIT
+        || 'dev-local',
+      buildDate: webstudioMeta.releaseDate?.trim() || new Date().toISOString().split('T')[0],
+      releaseChannel: webstudioMeta.releaseChannel ?? process.env.WEBSTUDIO_RELEASE_CHANNEL ?? 'development',
+      electronVersion: process.versions.electron ?? 'unknown',
+      chromiumVersion: process.versions.chrome ?? 'unknown',
+      nodeVersion: process.versions.node ?? 'unknown',
+    };
+  });
 
   ipcMain.handle('system:log', (_event, { channel, level, message, meta }: { channel: string; level: string; message: string; meta?: Record<string, unknown> }) => {
     writeLog(channel, level, message, meta);
@@ -233,6 +305,63 @@ if (!gotTheLock) {
         message: error instanceof Error ? error.message : String(error),
       };
     }
+  });
+
+  const downloadFile = (url: string, destination: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const client = url.startsWith('https://') ? https : http;
+      const request = client.get(url, (response) => {
+        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          downloadFile(response.headers.location, destination).then(resolve).catch(reject);
+          return;
+        }
+        if (response.statusCode !== 200) {
+          reject(new Error(`Download failed with status ${response.statusCode ?? 'unknown'}`));
+          return;
+        }
+        const file = fs.createWriteStream(destination);
+        response.pipe(file);
+        file.on('finish', () => file.close(() => resolve()));
+        file.on('error', reject);
+      });
+      request.on('error', reject);
+    });
+
+  const verifySha256 = (filePath: string, expected: string): boolean => {
+    const digest = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+    return digest.toLowerCase() === expected.trim().toLowerCase();
+  };
+
+  ipcMain.handle(
+    'update:downloadArtifact',
+    async (_event, request: { url: string; fileName: string; expectedSha256?: string }) => {
+      const updatesDir = path.join(app.getPath('userData'), 'updates');
+      fs.mkdirSync(updatesDir, { recursive: true });
+      const destination = path.join(updatesDir, request.fileName);
+      writeLog('Main', 'info', `Downloading client update artifact from ${request.url}`);
+      await downloadFile(request.url, destination);
+      if (request.expectedSha256 && !verifySha256(destination, request.expectedSha256)) {
+        fs.unlinkSync(destination);
+        throw new Error('Downloaded artifact failed SHA256 verification');
+      }
+      return destination;
+    },
+  );
+
+  ipcMain.handle('update:installAndRestart', async (_event, installerPath: string) => {
+    writeLog('Main', 'info', `Installing client update from ${installerPath}`);
+    if (process.platform === 'win32') {
+      spawn(installerPath, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+      app.quit();
+      return;
+    }
+    if (process.platform === 'darwin') {
+      await shell.openPath(installerPath);
+      app.quit();
+      return;
+    }
+    await shell.openPath(installerPath);
+    app.quit();
   });
 
   app.whenReady().then(() => {

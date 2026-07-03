@@ -1,0 +1,60 @@
+openapi: 3.1.0
+info:
+  title: WEBSTUDIO IMS — Client Update Platform API
+  version: 1.0.0
+paths:
+  /api/v1/client-updates/check:
+    get:
+      summary: Check for client updates
+      tags: [client-updates]
+      parameters:
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [desktop_windows, desktop_macos, mobile_android, mobile_ios]
+        - name: current_version
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [development, beta, stable]
+      responses:
+        "200":
+          description: Update check envelope
+  /api/v1/client-updates/download:
+    get:
+      summary: Download client update artifact
+      tags: [client-updates]
+      parameters:
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [desktop_windows, desktop_macos, mobile_android]
+        - name: release_version
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: build_number
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [development, beta, stable]
+      responses:
+        "200":
+          description: Artifact binary stream
+        "404":
+          description: Artifact not found

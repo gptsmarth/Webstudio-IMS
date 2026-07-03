@@ -41,7 +41,7 @@ Permanent metadata for WEBSTUDIO IMS. Update this table when release, ownership,
 | **Owner** | WEBSTUDIO IMS Team |
 | **Deployment Model** | On-premise (initial); cloud deployment **TBD** — see [future architecture](architecture/future/cloud-deployment.md) |
 | **License Type** | Proprietary — see [legal/LICENSE](../legal/LICENSE) |
-| **Current Release** | 0.1.0 — Pre-development |
+| **Current Release** | 1.0.0 — Production Ready |
 | **Document Version** | 1.3 (this Bible) |
 | **Target Users** | Store staff, warehouse staff, managers |
 | **Project Type** | Commercial internal platform (laptop retail inventory) |

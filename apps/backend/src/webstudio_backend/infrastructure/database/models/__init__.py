@@ -11,6 +11,14 @@ from webstudio_backend.infrastructure.database.models.product_model import Produ
 from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
 from webstudio_backend.infrastructure.database.models.restore_run import RestoreRun
 from webstudio_backend.infrastructure.database.models.sale import Sale
+from webstudio_backend.infrastructure.database.models.client_version_observation import ClientVersionObservation
+from webstudio_backend.infrastructure.database.models.release_deployment_run import ReleaseDeploymentRun
+from webstudio_backend.infrastructure.database.models.release_download_job import (
+    ReleaseDownloadArtifact,
+    ReleaseDownloadJob,
+)
+from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import SchedulerRuntimeState
+from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
 from webstudio_backend.infrastructure.database.models.system_setting import SystemSetting
 from webstudio_backend.infrastructure.database.models.custom_access_role import (
     CustomAccessRole,
@@ -32,6 +40,14 @@ __all__ = [
     "RefreshToken",
     "RestoreRun",
     "Sale",
+    "ClientVersionObservation",
+    "EnterpriseRollbackRun",
+    "ReleaseDeploymentEvent",
+    "ReleaseDeploymentRun",
+    "ReleaseDownloadArtifact",
+    "ReleaseDownloadJob",
+    "SchedulerRuntimeState",
+    "SoftwareRelease",
     "SystemSetting",
     "User",
 ]

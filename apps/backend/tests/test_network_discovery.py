@@ -3,32 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from starlette.testclient import TestClient
+from httpx import AsyncClient
 
-from webstudio_backend.app import create_app
 from webstudio_backend.core.config import Settings
 from webstudio_backend.core.network.host_validation import (
     HostValidationError,
     normalize_server_host,
 )
 from webstudio_backend.services.mdns_advertisement_service import MdnsAdvertisementService
-
-
-@pytest.fixture
-def discovery_test_settings() -> Settings:
-    return Settings(
-        app_env="test",
-        database_url="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test",
-        log_json=True,
-        mdns_enabled=False,
-    )
-
-
-@pytest.fixture
-def client(discovery_test_settings: Settings) -> TestClient:
-    app = create_app(discovery_test_settings)
-    with TestClient(app) as test_client:
-        yield test_client
 
 
 def test_normalize_accepts_ipv4() -> None:
@@ -48,8 +30,9 @@ def test_normalize_rejects_empty() -> None:
         normalize_server_host("   ")
 
 
-def test_discovery_health(client: TestClient) -> None:
-    response = client.get("/api/v1/discovery/health")
+@pytest.mark.asyncio
+async def test_discovery_health(api_client: AsyncClient) -> None:
+    response = await api_client.get("/api/v1/discovery/health")
     assert response.status_code == 200
     data = response.json()["data"]
     assert "online" in data
@@ -60,16 +43,18 @@ def test_discovery_health(client: TestClient) -> None:
     assert "secret" not in response.text.lower()
 
 
-def test_validate_host_endpoint(client: TestClient) -> None:
-    response = client.get("/api/v1/discovery/validate-host", params={"host": "127.0.0.1"})
+@pytest.mark.asyncio
+async def test_validate_host_endpoint(api_client: AsyncClient) -> None:
+    response = await api_client.get("/api/v1/discovery/validate-host", params={"host": "127.0.0.1"})
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["valid"] is True
     assert body["host"] == "127.0.0.1"
 
 
-def test_validate_host_rejects_invalid(client: TestClient) -> None:
-    response = client.get("/api/v1/discovery/validate-host", params={"host": "bad host!"})
+@pytest.mark.asyncio
+async def test_validate_host_rejects_invalid(api_client: AsyncClient) -> None:
+    response = await api_client.get("/api/v1/discovery/validate-host", params={"host": "bad host!"})
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["valid"] is False

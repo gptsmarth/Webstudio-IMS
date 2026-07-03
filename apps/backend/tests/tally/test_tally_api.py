@@ -158,3 +158,7 @@ async def test_tally_dashboard_for_admin(
     assert "voucher_types" in payload
     assert "Sales" in payload["voucher_types"]
     assert "NEW SALE" in payload["voucher_types"]
+    assert "operational" in payload
+    operational = payload["operational"]
+    assert "sync_health" in operational
+    assert "imported_today" in operational

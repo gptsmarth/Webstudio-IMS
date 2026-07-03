@@ -1,10 +1,28 @@
 # WEBSTUDIO IMS — ci-mobile
-# Workflow to be configured when development begins
 name: ci-mobile
+
 on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/mobile_flutter/**"
+      - ".github/workflows/ci-mobile.yml"
+  pull_request:
+    paths:
+      - "apps/mobile_flutter/**"
   workflow_dispatch:
+
 jobs:
-  placeholder:
+  flutter:
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'Workflow placeholder'
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-build-env
+        with:
+          install-python: "false"
+          install-node: "false"
+          install-flutter: "true"
+      - working-directory: apps/mobile_flutter
+        run: flutter analyze
+      - working-directory: apps/mobile_flutter
+        run: flutter test

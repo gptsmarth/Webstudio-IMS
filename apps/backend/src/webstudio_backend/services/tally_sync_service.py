@@ -58,6 +58,10 @@ from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 _sync_lock = asyncio.Lock()
 
 
+def is_tally_sync_active() -> bool:
+    return _sync_lock.locked()
+
+
 @dataclass(slots=True)
 class TallySyncCounters:
     vouchers_processed: int = 0
@@ -502,6 +506,8 @@ class TallySyncService:
         consecutive_failures: int,
         success: bool,
     ) -> None:
+        if not await self._get_bool("tally_alerts_enabled", True):
+            return
         if counters.invoices_imported > 0:
             await self._notifications.create_notification(
                 notification_type=NotificationType.TALLY_SYNC_COMPLETED,

@@ -12,6 +12,14 @@
     "test": "pnpm -r test",
     "desktop:dev": "pnpm --filter @webstudio/desktop dev",
     "desktop:build": "pnpm --filter @webstudio/desktop build",
+    "desktop:package:win": "pnpm --filter @webstudio/desktop package:win",
+    "desktop:package:mac": "pnpm --filter @webstudio/desktop package:mac",
+    "release:sync-branding": "bash scripts/release/sync-branding-assets.sh",
+    "release:android": "bash scripts/release/build-android-apk.sh",
+    "release:prepare": "bash scripts/release/prepare-release.sh",
+    "release:backend": "bash scripts/release/package-backend.sh",
+    "release:checksums": "bash scripts/release/generate-checksums.sh",
+    "release:manifest": "python3 scripts/release/lib/generate_manifest.py",
     "mobile:start": "pnpm --filter @webstudio/mobile start",
     "mobile:typecheck": "pnpm --filter @webstudio/mobile typecheck",
     "mobile:flutter:setup": "cd apps/mobile_flutter && bash scripts/setup_platforms.sh",
@@ -29,5 +37,12 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "webstudio": {
+    "buildNumber": 1,
+    "releaseChannel": "development",
+    "releaseDate": "2026-06-27",
+    "gitCommit": "",
+    "gitShort": ""
+  }
 }

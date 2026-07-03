@@ -19,8 +19,14 @@ describe('settings helpers', () => {
     const ids = SETTINGS_CATEGORIES.map((item) => item.id);
     expect(ids).toContain('general');
     expect(ids).toContain('backup');
+    expect(ids).toContain('deployment');
     expect(ids).toContain('about');
-    expect(ids).toHaveLength(12);
+    expect(ids).toHaveLength(13);
+  });
+
+  it('shows deployment category when settings view is granted', () => {
+    const visible = visibleSettingsCategories(['settings:view']).map((entry) => entry.id);
+    expect(visible).toContain('deployment');
   });
 
   it('hides backup category unless backup or restore view is granted', () => {

@@ -14,9 +14,21 @@ class VersionAboutSection extends ConsumerWidget {
     final installed = ref.watch(appConfigProvider).clientVersion;
     final repository = ref.watch(versionRepositoryProvider);
     final checkState = ref.watch(versionCheckControllerProvider);
+    final platformVersion = ref.watch(platformVersionProvider);
     final latestRemote = checkState.outcome?.remote ?? repository.cachedRemote;
     final lastCheck = repository.lastCheckAt;
     final formatter = DateFormat.yMMMd().add_jm();
+
+    final identity = platformVersion.maybeWhen(
+      data: (value) => value,
+      orElse: () => null,
+    );
+    final version = installed;
+    final buildNumber = _installedBuildNumber(installed);
+    final gitCommit = identity?.gitCommit ?? '—';
+    final releaseDate = identity?.releaseDate ?? latestRemote?.releaseDate ?? '—';
+    final releaseChannel = _channelLabel(identity?.releaseChannel ?? latestRemote?.releaseChannel);
+    final databaseRevision = identity?.databaseRevision ?? '—';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -27,23 +39,38 @@ class VersionAboutSection extends ConsumerWidget {
         ),
         ListTile(
           leading: const Icon(Icons.info_outline),
-          title: const Text('Current app version'),
-          subtitle: Text(installed),
+          title: const Text('Version'),
+          subtitle: Text(version),
+        ),
+        ListTile(
+          leading: const Icon(Icons.tag_outlined),
+          title: const Text('Build number'),
+          subtitle: Text(buildNumber),
+        ),
+        ListTile(
+          leading: const Icon(Icons.source_outlined),
+          title: const Text('Git commit'),
+          subtitle: Text(gitCommit),
+        ),
+        ListTile(
+          leading: const Icon(Icons.event_outlined),
+          title: const Text('Release date'),
+          subtitle: Text(releaseDate),
+        ),
+        ListTile(
+          leading: const Icon(Icons.layers_outlined),
+          title: const Text('Release channel'),
+          subtitle: Text(releaseChannel),
+        ),
+        ListTile(
+          leading: const Icon(Icons.storage_outlined),
+          title: const Text('Database revision'),
+          subtitle: Text(databaseRevision),
         ),
         ListTile(
           leading: const Icon(Icons.system_update_alt_outlined),
           title: const Text('Latest available version'),
           subtitle: Text(latestRemote?.latestVersion ?? '—'),
-        ),
-        ListTile(
-          leading: const Icon(Icons.dns_outlined),
-          title: const Text('Backend version'),
-          subtitle: Text(latestRemote?.backendVersion ?? '—'),
-        ),
-        ListTile(
-          leading: const Icon(Icons.layers_outlined),
-          title: const Text('Release channel'),
-          subtitle: Text(_channelLabel(latestRemote?.releaseChannel)),
         ),
         ListTile(
           leading: const Icon(Icons.schedule_outlined),
@@ -74,9 +101,16 @@ class VersionAboutSection extends ConsumerWidget {
     );
   }
 
+  String _installedBuildNumber(String installed) {
+    final parts = installed.split('+');
+    if (parts.length < 2) return '—';
+    return parts.last.trim().isEmpty ? '—' : parts.last.trim();
+  }
+
   String _channelLabel(String? channel) {
     if (channel == null || channel.isEmpty) return '—';
     if (channel.toLowerCase() == 'beta') return 'Beta';
+    if (channel.toLowerCase() == 'development') return 'Development';
     return 'Stable';
   }
 }

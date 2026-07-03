@@ -10,9 +10,11 @@ export class VersionService {
 
     return {
       appVersion: '0.1.0',
+      buildNumber: 1,
       buildVersion: '0.1.0-web-fallback',
       gitCommit: import.meta.env.MODE === 'development' ? 'dev-local' : 'unknown',
       buildDate: new Date().toISOString().split('T')[0],
+      releaseChannel: 'development',
       electronVersion: 'web-browser',
       chromiumVersion: 'web-browser',
       nodeVersion: 'web-browser',

@@ -19,6 +19,7 @@ import {
   type IntegrationServiceType,
 } from '../../services/api/IntegrationKeyService';
 import { VersionService } from '../../services/VersionService';
+import { PlatformService, type PlatformVersionInfo } from '../../services/api/PlatformService';
 import type { SettingsWorkspace, BackupSettingsUpdate } from '../../services/api/SettingsService';
 import { SettingsService } from '../../services/api/SettingsService';
 import {
@@ -30,8 +31,11 @@ import { useAuthStore } from '../../store';
 import { TallySettingsForm } from './TallySettingsForm';
 import { RestoreWizard } from './RestoreWizard';
 import { BackupAdminCenter } from './BackupAdminCenter';
+import { DeploymentCenter } from './DeploymentCenter';
 import { RecoveryCenter } from './RecoveryCenter';
+import { OfficeDeploymentWizard } from './OfficeDeploymentWizard';
 import { RecoveryWizard } from './RecoveryWizard';
+import { NetworkAdminWizard } from './NetworkAdminWizard';
 import type { Location } from '../../services/api/LocationService';
 import { useThemeStore, type ThemeMode } from '../../store';
 import { Field, Readonly, SaveButton, Section } from './settingsShared';
@@ -1052,6 +1056,8 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreFilename, setRestoreFilename] = useState<string | null>(null);
   const [recoveryWizardOpen, setRecoveryWizardOpen] = useState(false);
+  const [networkWizardOpen, setNetworkWizardOpen] = useState(false);
+  const [officeDeploymentOpen, setOfficeDeploymentOpen] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -1242,6 +1248,8 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
           canViewRestore={canOpenRestore}
           canExecuteRestore={canRestoreActions}
           onOpenWizard={() => setRecoveryWizardOpen(true)}
+          onOpenNetworkWizard={() => setNetworkWizardOpen(true)}
+          onOpenOfficeDeploymentWizard={() => setOfficeDeploymentOpen(true)}
           onOpenRestore={() => {
             setRestoreFilename(null);
             setRestoreOpen(true);
@@ -1305,6 +1313,15 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
           setRestoreOpen(true);
         }}
         onRunBackup={runBackup}
+        onComplete={workspace.refresh}
+      />
+      <NetworkAdminWizard
+        open={networkWizardOpen}
+        onClose={() => setNetworkWizardOpen(false)}
+      />
+      <OfficeDeploymentWizard
+        open={officeDeploymentOpen}
+        onClose={() => setOfficeDeploymentOpen(false)}
         onComplete={workspace.refresh}
       />
     </>
@@ -1381,6 +1398,12 @@ export function AppearancePanel(): JSX.Element {
   );
 }
 
+export function DeploymentPanel(): JSX.Element {
+  const permissions = useAuthStore((state) => state.session?.permissions ?? []);
+  const canModify = permissions.includes('settings:modify');
+  return <DeploymentCenter canModify={canModify} />;
+}
+
 export function SystemPanel({ workspace, data }: PanelProps): JSX.Element {
   const sys = data.system;
   const [clientMeta, setClientMeta] = useState<Awaited<
@@ -1425,14 +1448,32 @@ export function SystemPanel({ workspace, data }: PanelProps): JSX.Element {
   );
 }
 
+function formatReleaseChannel(channel: string | null | undefined): string {
+  if (!channel) return '—';
+  if (channel.toLowerCase() === 'beta') return 'Beta';
+  if (channel.toLowerCase() === 'development') return 'Development';
+  return 'Stable';
+}
+
 export function AboutPanel({ data }: { data: SettingsWorkspace }): JSX.Element {
   const [clientMeta, setClientMeta] = useState<Awaited<
     ReturnType<typeof VersionService.getVersionInfo>
   > | null>(null);
+  const [serverVersion, setServerVersion] = useState<PlatformVersionInfo | null>(null);
 
   useEffect(() => {
     void VersionService.getVersionInfo().then(setClientMeta).catch(() => setClientMeta(null));
+    void PlatformService.getVersion().then(setServerVersion).catch(() => setServerVersion(null));
   }, []);
+
+  const version = clientMeta?.appVersion ?? serverVersion?.version ?? data.system.app_version;
+  const buildNumber = clientMeta?.buildNumber ?? serverVersion?.build_number ?? '—';
+  const gitCommit = clientMeta?.gitCommit ?? serverVersion?.git_commit ?? '—';
+  const releaseDate = clientMeta?.buildDate ?? serverVersion?.release_date ?? '—';
+  const releaseChannel = formatReleaseChannel(
+    clientMeta?.releaseChannel ?? serverVersion?.release_channel,
+  );
+  const databaseRevision = serverVersion?.database_revision ?? '—';
 
   return (
     <Section title="Version & license">
@@ -1440,7 +1481,14 @@ export function AboutPanel({ data }: { data: SettingsWorkspace }): JSX.Element {
         <p>
           <strong>WEBSTUDIO IMS</strong> — Inventory Management System
         </p>
-        <p>Version {clientMeta?.appVersion ?? data.system.app_version}</p>
+        <div className="stg-readonly-grid">
+          <Readonly label="Version" value={version} />
+          <Readonly label="Build number" value={String(buildNumber)} />
+          <Readonly label="Git commit" value={gitCommit} />
+          <Readonly label="Release date" value={releaseDate} />
+          <Readonly label="Release channel" value={releaseChannel} />
+          <Readonly label="Database revision" value={databaseRevision} />
+        </div>
         <p className="stg-muted">Developed by WEBSTUDIO</p>
         <Readonly label="License" value="Not activated (enterprise licensing coming soon)" />
         <h3 className="stg-subtitle">Credits</h3>

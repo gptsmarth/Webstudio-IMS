@@ -6,23 +6,15 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tests.helpers.migrations import assert_at_least_migration
+
 
 @pytest.mark.asyncio
 async def test_migration_0004_inventory_items_exist(db_session: AsyncSession) -> None:
     current_revision = await db_session.scalar(
         text("SELECT version_num FROM webstudio.alembic_version"),
     )
-    assert current_revision in {
-        "0004_inventory_item",
-        "0005_audit_logs",
-        "0006_audit_log_description",
-        "0007_audit_log_source",
-        "0009_main_admin_recovery_key",
-        "0010_inventory_sprint_2a",
-        "0011_sales",
-        "0013_notifications",
-        "0014_reference_apis_expansion",
-    }
+    assert_at_least_migration(current_revision, "0004_inventory_item")
 
     connection = await db_session.connection()
 

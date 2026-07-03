@@ -5,6 +5,7 @@ import {
   Database,
   HardDrive,
   HeartPulse,
+  Server,
   ShieldCheck,
   Wand2,
 } from 'lucide-react';
@@ -21,6 +22,8 @@ interface RecoveryCenterProps {
   canViewRestore: boolean;
   canExecuteRestore: boolean;
   onOpenWizard: () => void;
+  onOpenNetworkWizard: () => void;
+  onOpenOfficeDeploymentWizard: () => void;
   onOpenRestore: () => void;
   onRunBackup: () => Promise<void>;
 }
@@ -49,6 +52,8 @@ export function RecoveryCenter({
   canViewRestore,
   canExecuteRestore,
   onOpenWizard,
+  onOpenNetworkWizard,
+  onOpenOfficeDeploymentWizard,
   onOpenRestore,
   onRunBackup,
 }: RecoveryCenterProps): JSX.Element {
@@ -94,6 +99,17 @@ export function RecoveryCenter({
               <button type="button" className="btn btn-primary btn-sm" onClick={onOpenWizard}>
                 <Wand2 size={14} aria-hidden />
                 Recovery wizard
+              </button>
+            )}
+            {canExecuteRestore && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenNetworkWizard}>
+                Network wizard
+              </button>
+            )}
+            {canExecuteRestore && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={onOpenOfficeDeploymentWizard}>
+                <Server size={14} aria-hidden />
+                Office deployment
               </button>
             )}
           </div>

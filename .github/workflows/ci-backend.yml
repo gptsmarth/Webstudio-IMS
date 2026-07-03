@@ -1,10 +1,30 @@
 # WEBSTUDIO IMS — ci-backend
-# Workflow to be configured when development begins
 name: ci-backend
+
 on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/backend/**"
+      - "database/**"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    paths:
+      - "apps/backend/**"
+      - "database/**"
   workflow_dispatch:
+
 jobs:
-  placeholder:
+  backend:
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'Workflow placeholder'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "apps/backend[dev]"
+      - run: ruff check apps/backend/src apps/backend/tests database/migrations
+      - run: black --check apps/backend/src apps/backend/tests database/migrations
+      - run: pytest apps/backend/tests -q
+        env:
+          APP_ENV: test

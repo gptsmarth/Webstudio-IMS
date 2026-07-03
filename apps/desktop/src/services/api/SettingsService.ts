@@ -246,6 +246,32 @@ export interface RecoveryValidationResult {
   checks: RecoveryValidationCheck[];
 }
 
+export interface NetworkValidationCheck {
+  key: string;
+  name: string;
+  status: string;
+  message: string;
+  detail?: string;
+}
+
+export interface NetworkValidationResult {
+  generated_at: string;
+  overall_status: string;
+  topology: string;
+  checks: NetworkValidationCheck[];
+  recommendations: string[];
+}
+
+export interface NetworkReport extends NetworkValidationResult {
+  server_lan_ip: string;
+  mdns_enabled: boolean;
+  mdns_active: boolean;
+  discovery_candidates: string[];
+  api_port: number;
+  data_root: string;
+  multi_ssid_guidance: string;
+}
+
 export interface RecoveryFailureAnalysis {
   reason: string;
   count: number;
@@ -611,5 +637,15 @@ export class SettingsService {
   static async getRecoveryReports(): Promise<RecoveryReports> {
     const client = await ApiClientProvider.getClient();
     return client.get<RecoveryReports>('/api/v1/settings/recovery/reports');
+  }
+
+  static async runNetworkValidation(): Promise<NetworkValidationResult> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<NetworkValidationResult>('/api/v1/network/admin/validate');
+  }
+
+  static async getNetworkReport(): Promise<NetworkReport> {
+    const client = await ApiClientProvider.getClient();
+    return client.get<NetworkReport>('/api/v1/network/admin/report');
   }
 }

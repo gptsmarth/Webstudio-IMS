@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 
 from sqlalchemy import text
@@ -36,6 +37,16 @@ async def build_discovery_health_payload(
         disk_status = "unknown"
 
     online = database_status == "ok"
+    stored_urls: list[str] = []
+    stored_raw = await repo.get_string("office_discovery_urls")
+    if stored_raw:
+        try:
+            parsed = json.loads(stored_raw)
+            if isinstance(parsed, list):
+                stored_urls = [str(item).rstrip("/") for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            stored_urls = []
+    candidate_urls = list(dict.fromkeys([*stored_urls, *settings.discovery_candidate_urls()]))
     return {
         "online": online,
         "server_name": settings.mdns_server_name or None,
@@ -49,4 +60,5 @@ async def build_discovery_health_payload(
         "disk_status": disk_status,
         "discovery_protocol": "mdns",
         "service_type": "_webstudio-ims._tcp.local.",
+        "discovery_candidate_urls": candidate_urls,
     }

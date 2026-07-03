@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NAV_GROUPS, navItemsForPermissions, type WorkspaceRoute } from '../config/navigation';
 import { useSessionManager } from '../hooks/useSessionManager';
 import { PermissionService, P } from '../services/PermissionService';
 import { TallyService } from '../services/api/TallyService';
+import { DeploymentService } from '../services/api/DeploymentService';
 import { useAuthStore, useNavigationStore, useSearchStore } from '../store';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
+import { OfficeDeploymentWizard } from '../components/settings/OfficeDeploymentWizard';
 import {
   GlobalSearch,
   Sidebar,
@@ -30,6 +32,8 @@ export function AppShell({ companyName, appVersion, connectionStatus, onLogout }
   const { unreadCount: notificationCount } = useNotificationCenter();
 
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(15);
+  const [officeDeploymentOpen, setOfficeDeploymentOpen] = useState(false);
+  const officeDeploymentPrompted = useRef(false);
 
   useGlobalSearchShortcut(openSearch);
 
@@ -57,6 +61,24 @@ export function AppShell({ companyName, appVersion, connectionStatus, onLogout }
   const permissionService = PermissionService.from(permissions);
   const canViewTally = permissionService.has(P.tally.viewStatus);
   const canViewNotifications = permissionService.has(P.notifications.view);
+  const canRunOfficeDeployment = permissionService.hasAny(
+    P.settings.view,
+    P.dashboard.systemStatus,
+  );
+
+  useEffect(() => {
+    if (!session || !canRunOfficeDeployment || officeDeploymentPrompted.current) return;
+    officeDeploymentPrompted.current = true;
+    void DeploymentService.getStatus()
+      .then((status) => {
+        if (!status.completed) {
+          setOfficeDeploymentOpen(true);
+        }
+      })
+      .catch(() => {
+        /* deployment status optional on first login */
+      });
+  }, [session, canRunOfficeDeployment]);
 
   useEffect(() => {
     if (!canViewTally) return;
@@ -131,6 +153,13 @@ export function AppShell({ companyName, appVersion, connectionStatus, onLogout }
       </div>
 
       <GlobalSearch />
+
+      {canRunOfficeDeployment && (
+        <OfficeDeploymentWizard
+          open={officeDeploymentOpen}
+          onClose={() => setOfficeDeploymentOpen(false)}
+        />
+      )}
     </div>
   );
 }

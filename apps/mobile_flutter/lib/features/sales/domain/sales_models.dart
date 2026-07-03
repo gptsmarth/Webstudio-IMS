@@ -113,8 +113,6 @@ class SaleDetail extends Equatable {
     this.tallyCompanyName,
     this.tallyVoucherNumber,
     this.printedInvoiceNumber,
-    this.tallyVoucherGuid,
-    this.tallyMasterId,
     this.tallyVoucherType,
     required this.createdAt,
   });
@@ -147,8 +145,6 @@ class SaleDetail extends Equatable {
   final String? tallyCompanyName;
   final String? tallyVoucherNumber;
   final String? printedInvoiceNumber;
-  final String? tallyVoucherGuid;
-  final String? tallyMasterId;
   final String? tallyVoucherType;
   final String createdAt;
 
@@ -186,8 +182,6 @@ class SaleDetail extends Equatable {
         tallyCompanyName: json['tally_company_name'] as String?,
         tallyVoucherNumber: json['tally_voucher_number'] as String?,
         printedInvoiceNumber: json['printed_invoice_number'] as String?,
-        tallyVoucherGuid: json['tally_voucher_guid'] as String?,
-        tallyMasterId: json['tally_master_id'] as String?,
         tallyVoucherType: json['tally_voucher_type'] as String?,
         createdAt: json['created_at'] as String,
       );

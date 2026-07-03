@@ -45,6 +45,7 @@ from webstudio_backend.services.system_info_service import SystemInfoService
 from webstudio_backend.integrations.tally.connectivity import normalize_tally_host, validate_tally_port
 from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS
 from webstudio_backend.integrations.tally.incremental_sync import clamp_sync_interval_seconds
+from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 
 _SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key", "groq_api_key", "openrouter_api_key"})
 
@@ -266,6 +267,9 @@ class SettingsService:
             clamp_sync_interval_seconds(payload.sync_interval_seconds),
             actor_id=actor_id,
         )
+        interval = clamp_sync_interval_seconds(payload.sync_interval_seconds)
+        runtime = SchedulerRuntimeService(self._session)
+        await runtime.sync_interval("tally_sync", interval)
         workspace = await self.get_workspace()
         return workspace.tally
 

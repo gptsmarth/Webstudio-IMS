@@ -67,6 +67,7 @@ from webstudio_backend.infrastructure.repositories.backup_run_filters import Bac
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.services.backup_admin_service import BackupAdminService
 from webstudio_backend.services.backup_engine import BackupEngine
+from webstudio_backend.services.backup_production_validation_service import BackupProductionValidationService
 from webstudio_backend.services.recovery_service import RecoveryService
 from webstudio_backend.services.restore_engine import RestoreEngine
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
@@ -558,6 +559,24 @@ async def rollback_backup(
             ],
         ).model_dump(),
     )
+
+
+@router.get(
+    "/backups/production-validation",
+    summary="Run M14D production backup and disaster recovery validation",
+)
+async def backup_production_validation(
+    request: Request,
+    current: BackupOrRestoreViewDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    _ = current
+    settings_service = SettingsService(db_session, app_settings)
+    backup_dir = await settings_service.get_backup_folder_path()
+    service = BackupProductionValidationService(db_session, app_settings, backup_dir=backup_dir)
+    payload = await service.build_production_report()
+    return _envelope(request, payload)
 
 
 @router.get("/recovery/center")

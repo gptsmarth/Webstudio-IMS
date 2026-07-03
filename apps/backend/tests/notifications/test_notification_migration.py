@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
+from tests.helpers.migrations import assert_at_least_migration
 from webstudio_backend.infrastructure.database.session import get_engine
 
 
@@ -16,7 +17,7 @@ async def test_migration_0013_notifications(db_session) -> None:
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision in {"0013_notifications", "0014_reference_apis_expansion"}
+        assert_at_least_migration(current_revision, "0013_notifications")
 
         def inspect_schema(sync_connection) -> tuple[list[str], set[str]]:
             inspector = inspect(sync_connection)

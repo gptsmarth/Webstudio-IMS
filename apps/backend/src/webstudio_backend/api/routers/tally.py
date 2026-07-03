@@ -16,6 +16,7 @@ from webstudio_backend.core.request_context import get_correlation_id, get_reque
 from webstudio_backend.integrations.tally.connectivity import TallyHostValidationError
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 from webstudio_backend.services.tally_dashboard_service import TallyDashboardService
+from webstudio_backend.services.tally_production_validation_service import TallyProductionValidationService
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 router = APIRouter(prefix="/api/v1/integrations/tally", tags=["tally"])
@@ -68,6 +69,21 @@ async def tally_health(
     _ = current
     data = await TallyConnectivityService(db_session).build_health_payload()
     return _envelope(request, data)
+
+
+@router.get(
+    "/production-validation",
+    summary="Run M14C production Tally integration validation",
+)
+async def tally_production_validation(
+    request: Request,
+    current: TallyViewStatusDep,
+    db_session=DbSessionDep,
+) -> dict:
+    _ = current
+    service = TallyProductionValidationService(db_session)
+    payload = await service.build_production_report(assume_live_tally=True)
+    return _envelope(request, payload)
 
 
 @router.get("/sync/history")

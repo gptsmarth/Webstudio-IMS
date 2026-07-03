@@ -14,9 +14,11 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface VersionInfo {
   appVersion: string;
+  buildNumber: number;
   buildVersion: string;
   gitCommit: string;
   buildDate: string;
+  releaseChannel: string;
   electronVersion: string;
   chromiumVersion: string;
   nodeVersion: string;
@@ -78,10 +80,22 @@ interface NetworkNamespace {
   resolveHost: (host: string) => Promise<HostResolutionResult>;
 }
 
+interface UpdateDownloadRequest {
+  url: string;
+  fileName: string;
+  expectedSha256?: string;
+}
+
+interface UpdateNamespace {
+  downloadArtifact: (request: UpdateDownloadRequest) => Promise<string>;
+  installAndRestart: (installerPath: string) => Promise<void>;
+}
+
 interface Window {
   api?: ApiNamespace;
   config?: ConfigNamespace;
   system?: SystemNamespace;
   storage?: StorageNamespace;
   network?: NetworkNamespace;
+  update?: UpdateNamespace;
 }

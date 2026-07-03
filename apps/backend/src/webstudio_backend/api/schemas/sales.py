@@ -77,8 +77,6 @@ class SaleDetailResponse(BaseModel):
     tally_company_name: str | None
     tally_voucher_number: str | None
     printed_invoice_number: str | None
-    tally_voucher_guid: str | None
-    tally_master_id: str | None
     tally_voucher_type: str | None
     created_at: datetime
 
@@ -113,8 +111,6 @@ class SaleDetailResponse(BaseModel):
             tally_company_name=row.tally_company_name,
             tally_voucher_number=row.tally_voucher_number,
             printed_invoice_number=row.printed_invoice_number,
-            tally_voucher_guid=row.tally_voucher_guid,
-            tally_master_id=row.tally_master_id,
             tally_voucher_type=row.tally_voucher_type,
             created_at=row.created_at,
         )

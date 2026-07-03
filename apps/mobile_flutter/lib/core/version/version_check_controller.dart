@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/app_config_provider.dart';
+import 'client_update_installer.dart';
 import 'version_models.dart';
 import 'version_repository.dart';
 
@@ -65,7 +70,7 @@ class VersionCheckController extends StateNotifier<VersionCheckState> {
       case VersionUpdateKind.mandatoryUpdate:
         state = state.copyWith(mandatoryBlocked: true);
         if (showDialogs && context != null && context.mounted) {
-          await showMandatoryUpdateDialog(context, outcome: outcome);
+          await showMandatoryUpdateDialog(context, outcome: outcome, ref: _ref);
         }
         break;
       case VersionUpdateKind.optionalUpdate:
@@ -73,7 +78,7 @@ class VersionCheckController extends StateNotifier<VersionCheckState> {
           return outcome;
         }
         if (showDialogs && context != null && context.mounted) {
-          await showOptionalUpdateDialog(context, outcome: outcome, repository: _repository);
+          await showOptionalUpdateDialog(context, outcome: outcome, repository: _repository, ref: _ref);
         }
         break;
       case VersionUpdateKind.upToDate:
@@ -94,6 +99,7 @@ Future<void> showOptionalUpdateDialog(
   BuildContext context, {
   required VersionCheckOutcome outcome,
   required VersionRepository repository,
+  required Ref ref,
 }) {
   final remote = outcome.remote!;
   return showDialog<void>(
@@ -105,7 +111,7 @@ Future<void> showOptionalUpdateDialog(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('A new version of WEBSTUDIO IMS is available.'),
+            Text(_updateIntro(remote)),
             const SizedBox(height: 12),
             Text('Current version: ${outcome.installedVersion}'),
             Text('Latest version: ${remote.latestVersion}'),
@@ -129,10 +135,9 @@ Future<void> showOptionalUpdateDialog(
         ),
         FilledButton(
           onPressed: () async {
-            await launchApkDownloadUrl(remote.apkDownloadUrl);
-            if (dialogContext.mounted) Navigator.pop(dialogContext);
+            await _performClientUpdate(ref, remote, dialogContext);
           },
-          child: const Text('Update Now'),
+          child: Text(remote.isAppStoreNotification ? 'View in App Store' : 'Update Now'),
         ),
       ],
     ),
@@ -142,6 +147,7 @@ Future<void> showOptionalUpdateDialog(
 Future<void> showMandatoryUpdateDialog(
   BuildContext context, {
   required VersionCheckOutcome outcome,
+  required Ref ref,
 }) {
   final remote = outcome.remote!;
   return showDialog<void>(
@@ -155,7 +161,7 @@ Future<void> showMandatoryUpdateDialog(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('This version of WEBSTUDIO IMS is no longer supported.'),
+            Text(_updateIntro(remote)),
             const SizedBox(height: 12),
             Text('Installed: ${outcome.installedVersion}'),
             Text('Minimum supported: ${remote.minSupportedVersion}'),
@@ -164,13 +170,53 @@ Future<void> showMandatoryUpdateDialog(
         ),
         actions: [
           FilledButton(
-            onPressed: () => launchApkDownloadUrl(remote.apkDownloadUrl),
-            child: const Text('Update Now'),
+            onPressed: () => _performClientUpdate(ref, remote, dialogContext),
+            child: Text(remote.isAppStoreNotification ? 'Open App Store' : 'Update Now'),
           ),
         ],
       ),
     ),
   );
+}
+
+String _updateIntro(MobileVersionInfo remote) {
+  if (remote.isAppStoreNotification) {
+    return 'A newer version of WEBSTUDIO IMS is available on the App Store. '
+        'Install updates through the App Store — direct IPA installation is not supported.';
+  }
+  return 'A new version of WEBSTUDIO IMS is available from your WEBSTUDIO Server.';
+}
+
+Future<void> _performClientUpdate(Ref ref, MobileVersionInfo remote, BuildContext dialogContext) async {
+  try {
+    if (remote.isAppStoreNotification || (!kIsWeb && Platform.isIOS)) {
+      await launchAppStoreUrl(remote.appStoreUrl);
+    } else if (!kIsWeb && Platform.isAndroid) {
+      final installer = ClientUpdateInstaller(config: ref.read(appConfigProvider));
+      await installer.installAndroidUpdate(remote);
+    } else {
+      await launchApkDownloadUrl(remote.apkDownloadUrl);
+    }
+    if (dialogContext.mounted) Navigator.pop(dialogContext);
+  } catch (error) {
+    if (dialogContext.mounted) {
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+}
+
+Future<void> launchAppStoreUrl(String? url) async {
+  final target = url?.trim();
+  if (target == null || target.isEmpty) {
+    throw StateError('App Store URL is not configured on the server.');
+  }
+  final uri = Uri.tryParse(target);
+  if (uri == null) {
+    throw StateError('Invalid App Store URL.');
+  }
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 Future<void> launchApkDownloadUrl(String? url) async {

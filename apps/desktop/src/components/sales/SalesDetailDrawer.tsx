@@ -180,12 +180,6 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                       <dd>{detail.tally_voucher_type}</dd>
                     </div>
                   )}
-                  {detail.tally_voucher_guid && (
-                    <div>
-                      <dt>GUID</dt>
-                      <dd className="col-mono">{detail.tally_voucher_guid}</dd>
-                    </div>
-                  )}
                 </dl>
               ) : tallyLogs.length > 0 ? (
                 <ul className="sales-audit-list">

@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: WEBSTUDIO IMS — Enterprise Releases API
+  version: 1.0.0
+paths:
+  /api/v1/releases/current:
+    get:
+      summary: Currently installed / active server release
+      tags: [releases]
+      responses:
+        "200":
+          description: Release metadata envelope including version_identity
+  /api/v1/releases/latest:
+    get:
+      summary: Latest published release for a channel
+      tags: [releases]
+      parameters:
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum: [development, beta, stable]
+      responses:
+        "200":
+          description: Release metadata envelope including database_revision and release_date
+  /api/v1/releases/history:
+    get:
+      summary: Paginated release history
+      tags: [releases]
+      parameters:
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum: [development, beta, stable]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Release history envelope
+  /api/v1/releases/sync/status:
+    get:
+      summary: GitHub release synchronization status
+      tags: [releases]
+      responses:
+        "200":
+          description: Sync status envelope
+  /api/v1/releases/sync/history:
+    get:
+      summary: Completed GitHub release download history
+      tags: [releases]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Download history envelope
+  /api/v1/releases/sync/failures:
+    get:
+      summary: Failed GitHub release download history
+      tags: [releases]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Failed download history envelope

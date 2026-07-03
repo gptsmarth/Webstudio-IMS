@@ -1,0 +1,12 @@
+# Logrotate example for WEBSTUDIO IMS server logs (Linux / WSL reference)
+# Install: sudo cp logrotate-webstudio.conf.example /etc/logrotate.d/webstudio
+
+/var/log/webstudio/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

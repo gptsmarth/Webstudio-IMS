@@ -62,25 +62,41 @@ async def health_version(request: Request) -> dict:
 
 @router.get("/health/ready")
 async def health_ready(request: Request) -> JSONResponse:
+    settings = request.app.state.settings
     checks: dict[str, str] = {
         "database": "unknown",
         "migrations": "ok",
         "disk_space": "unknown",
+        "startup": "unknown",
     }
 
     try:
         engine = get_engine()
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
+            migration_result = await connection.execute(
+                text("SELECT version_num FROM webstudio.alembic_version"),
+            )
+            migration_version = migration_result.scalar_one_or_none()
         checks["database"] = "ok"
+        checks["migrations"] = "ok" if migration_version else "failed"
     except Exception:
         checks["database"] = "failed"
+        checks["migrations"] = "failed"
 
-    usage = shutil.disk_usage("/")
+    from webstudio_backend.services.startup_orchestrator import _storage_path
+
+    usage = shutil.disk_usage(str(_storage_path(settings)))
     free_ratio = usage.free / usage.total if usage.total else 0
     checks["disk_space"] = "ok" if free_ratio >= 0.05 else "failed"
 
-    ready = all(value == "ok" for value in checks.values())
+    startup_report = getattr(request.app.state, "startup_report", None)
+    if startup_report is not None:
+        checks["startup"] = "ok" if startup_report.ready else "degraded"
+    else:
+        checks["startup"] = "ok"
+
+    ready = checks["database"] == "ok" and checks["disk_space"] == "ok"
     payload = _envelope(
         request,
         {

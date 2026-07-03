@@ -36,20 +36,20 @@ Desktop runtime registry: `apps/desktop/src/registries/AssetManifest.ts`, `Webst
 
 | Requirement | Canonical asset | Consumer | Status | M12 action |
 |-------------|-----------------|----------|--------|------------|
-| Windows EXE installer | `icon.ico` + NSIS banner | `electron-builder` (to add) | ⏳ Not configured | Add `electron-builder` + NSIS branding |
-| macOS DMG | `icon.icns` + DMG background | `electron-builder` (to add) | ⏳ Not configured | Add DMG target + volume icon |
-| Desktop app icon | `icon.ico` / `icon.icns` | Electron `BrowserWindow` / bundle | ⚠️ Partial | Wire `electron-builder` `icon` fields |
-| Taskbar icon | Same as app icon | Electron main process | ⚠️ Partial | Verify packaged `.exe` embeds ICO |
-| Start Menu icon | Installer + shortcut | NSIS | ⏳ | Installer shortcut icon from ICO |
-| Splash screen | `splash.svg` + white bg | `SplashScreen.tsx` | ✅ Uses registry | Ensure splash uses **logo-dark on white** only (no layout change) |
-| About screen | `logo-dark.svg` | Settings / About panel | ✅ Registry exists | Asset swap only if needed |
-| Android launcher | Derived from `icon.png` | `mipmap-*/ic_launcher.png` | ⚠️ Flutter defaults | Regenerate from registry via `flutter_launcher_icons` |
-| Android splash | White + logo-dark | `launch_background.xml` / native splash | ⏳ | Add `flutter_native_splash` config |
-| iOS app icon | Derived from `icon.png` | `AppIcon.appiconset` | ⚠️ Flutter defaults | Regenerate icon set from registry |
-| iOS launch screen | White + logo-dark | `LaunchScreen.storyboard` / assets | ⏳ | Native splash generation |
-| Installer graphics | Logo-dark on white PNG/SVG | NSIS / DMG | ⏳ | Export installer banners from registry |
-| Uninstaller | Same as installer | NSIS | ⏳ | Branded uninstaller with `electron-builder` |
-| Version information | Product name + semver | `package.json`, Electron, Gradle, Xcode | ⚠️ 0.1.0 scattered | Unified version bump script (M12 C3) |
+| Windows EXE installer | `icon.ico` + NSIS banner | `electron-builder` | ✅ Configured | `apps/desktop/electron-builder.yml` |
+| macOS DMG | `icon.icns` + DMG background | `electron-builder` | ✅ Configured | `apps/desktop/electron-builder.yml` |
+| Desktop app icon | `icon.ico` / `icon.icns` | Electron `BrowserWindow` / bundle | ✅ Configured | `electron/main.ts` + builder |
+| Taskbar icon | Same as app icon | Electron main process | ✅ Configured | Packaged `.exe` embeds ICO |
+| Start Menu icon | Installer + shortcut | NSIS | ✅ Configured | electron-builder nsis |
+| Splash screen | `splash.svg` + white bg | `SplashScreen.tsx` | ✅ Uses registry | Asset swap only |
+| About screen | `logo-dark.svg` | Settings / About panel | ✅ Registry exists | Asset swap only |
+| Android launcher | Derived from `icon.png` | `mipmap-*/ic_launcher.png` | ✅ Configured | `flutter_launcher_icons` in pubspec |
+| Android splash | White + logo-dark | `flutter_native_splash` | ✅ Configured | pubspec + sync script |
+| iOS app icon | Derived from `icon.png` | `AppIcon.appiconset` | ✅ Configured | `flutter_launcher_icons` |
+| iOS launch screen | White + logo-dark | `flutter_native_splash` | ✅ Configured | pubspec |
+| Installer graphics | Logo-dark on white PNG/SVG | NSIS / DMG / Inno Setup | ✅ Configured | ICO/ICNS wired |
+| Uninstaller | Same as installer | NSIS | ✅ Configured | electron-builder |
+| Version information | Product name + semver | `VERSION`, package.json | ✅ Configured | `scripts/release/bump-version.sh` |
 
 ---
 
@@ -57,10 +57,11 @@ Desktop runtime registry: `apps/desktop/src/registries/AssetManifest.ts`, `Webst
 
 | Artifact | Build command (target) | Status |
 |----------|------------------------|--------|
-| `WEBSTUDIO Desktop Setup.exe` | `pnpm --filter @webstudio/desktop package:win` | ⏳ Script not yet added |
-| `WEBSTUDIO Desktop.dmg` | `pnpm --filter @webstudio/desktop package:mac` | ⏳ Script not yet added |
-| `WEBSTUDIO IMS.apk` | `flutter build apk --release` | ⏳ Signing config pending |
-| iOS Release / IPA | Xcode Archive / `flutter build ipa` | ⏳ Provisioning pending |
+| `WEBSTUDIO Desktop Setup.exe` | `pnpm desktop:package:win` | ✅ Configured |
+| `WEBSTUDIO Desktop.dmg` | `pnpm desktop:package:mac` | ✅ Configured |
+| `WEBSTUDIO IMS.apk` | `pnpm release:android` | ✅ Configured |
+| iOS Release / IPA | `scripts/release/build-ios-ipa.sh` | ✅ Configured |
+| `WEBSTUDIO Server Setup.exe` | `scripts/release/build-server-setup.ps1` | ✅ Configured |
 
 ---
 

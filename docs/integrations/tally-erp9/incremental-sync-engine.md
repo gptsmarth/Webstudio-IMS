@@ -4,12 +4,12 @@ Version: 1.0.0
 Status: Active
 Owner: WEBSTUDIO IMS Team
 Last Updated: 2026-07-02
-Related Documents: docs/integrations/tally-erp9/sync-strategy.md
+Related Documents: docs/integrations/tally-erp9/sync-strategy.md, docs/milestones/m12e/README.md
 ---
 
 # Tally Incremental Sync Engine
 
-Enterprise incremental synchronization implemented in migration `0034_tally_incremental_sync`.
+Enterprise incremental synchronization implemented in migration `0034_tally_incremental_sync`. Production deployment procedures: [M12E Tally Deployment Guide](../milestones/m12e/TALLY_DEPLOYMENT_GUIDE.md).
 
 ## Behaviour
 
@@ -29,9 +29,10 @@ Enterprise incremental synchronization implemented in migration `0034_tally_incr
 
 - `last_successful_sync_at`
 - `last_processed_guid` (last imported GUID cursor)
+- `last_processed_master_id` (stored for traceability; never shown in UI)
 - `last_imported_voucher_date`
 
-Dashboard and settings APIs omit GUID cursors.
+Dashboard, settings, sync history, and sales detail APIs omit GUID, MasterID, and AlterID. Developer XML reference: [xml-developer-guide.md](xml-developer-guide.md).
 
 ## Client surfaces
 

@@ -3,6 +3,7 @@ import {
   AboutPanel,
   AppearancePanel,
   BackupPanel,
+  DeploymentPanel,
   ExcelPanel,
   GeneralPanel,
   IntegrationsPanel,
@@ -46,6 +47,8 @@ export function SettingsCategoryPanel({ workspace }: SettingsCategoryPanelProps)
       return <NotificationsPanel {...panelProps} />;
     case 'backup':
       return <BackupPanel {...panelProps} />;
+    case 'deployment':
+      return <DeploymentPanel />;
     case 'appearance':
       return <AppearancePanel />;
     case 'system':

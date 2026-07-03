@@ -34,7 +34,10 @@ def resolve_build_version(settings: Settings) -> str:
 
 
 async def build_version_payload(session: AsyncSession, settings: Settings) -> dict[str, object]:
-    schema_version = await resolve_schema_version(session)
+    from webstudio_backend.services.enterprise_version_service import EnterpriseVersionService
+
+    version_identity = await EnterpriseVersionService(session, settings).build_version_identity()
+    schema_version = str(version_identity["database_revision"])
     repo = SystemSettingRepository(session)
     latest_mobile = (
         await repo.get_string("mobile_latest_version") or settings.app_version
@@ -47,7 +50,15 @@ async def build_version_payload(session: AsyncSession, settings: Settings) -> di
     min_mobile = (settings.min_mobile_version or settings.min_client_version).strip()
 
     return {
-        "backend_version": settings.app_version,
+        "version": version_identity["version"],
+        "build_number": version_identity["build_number"],
+        "git_commit": version_identity["git_commit"],
+        "git_short": version_identity["git_short"],
+        "release_date": version_identity["release_date"],
+        "release_channel": version_identity["release_channel"],
+        "database_revision": version_identity["database_revision"],
+        "version_identity": version_identity,
+        "backend_version": version_identity["version"],
         "schema_version": schema_version,
         "api_version": settings.api_version,
         "build_version": resolve_build_version(settings),
@@ -58,10 +69,10 @@ async def build_version_payload(session: AsyncSession, settings: Settings) -> di
         "mobile": {
             "latest_version": latest_mobile,
             "min_supported_version": min_mobile,
-            "release_date": release_date or None,
+            "release_date": release_date or version_identity["release_date"],
             "release_notes": release_notes or None,
             "apk_download_url": apk_url or None,
-            "release_channel": release_channel,
+            "release_channel": release_channel or version_identity["release_channel"],
         },
     }
 

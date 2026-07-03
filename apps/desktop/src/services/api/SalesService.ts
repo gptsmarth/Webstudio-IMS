@@ -33,8 +33,6 @@ export interface SaleDetail extends SaleListItem {
   tally_company_name: string | null;
   tally_voucher_number: string | null;
   printed_invoice_number: string | null;
-  tally_voucher_guid: string | null;
-  tally_master_id: string | null;
   tally_voucher_type: string | null;
   created_at: string;
 }

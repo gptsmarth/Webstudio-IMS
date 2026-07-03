@@ -14,6 +14,7 @@ export type SettingsCategory =
   | 'excel'
   | 'notifications'
   | 'backup'
+  | 'deployment'
   | 'appearance'
   | 'system'
   | 'about';
@@ -29,6 +30,7 @@ export const SETTINGS_CATEGORIES: { id: SettingsCategory; label: string }[] = [
   { id: 'excel', label: 'Excel' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'backup', label: 'Backup' },
+  { id: 'deployment', label: 'Deployment' },
   { id: 'system', label: 'System' },
   { id: 'about', label: 'Version' },
 ];
@@ -51,6 +53,9 @@ export function visibleSettingsCategories(
   return SETTINGS_CATEGORIES.filter((category) => {
     if (category.id === 'backup') {
       return canAccessBackupModule(permissions);
+    }
+    if (category.id === 'deployment') {
+      return canReadSettings(permissions);
     }
     return true;
   });

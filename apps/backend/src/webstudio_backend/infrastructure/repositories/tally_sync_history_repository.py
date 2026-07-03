@@ -56,6 +56,19 @@ class TallySyncHistoryRepository(SqlAlchemyRepository[TallySyncHistory]):
         await self._session.flush()
         return history
 
+    async def get_open_for_company(self, company_sync_id: int) -> TallySyncHistory | None:
+        statement = (
+            select(TallySyncHistory)
+            .where(
+                TallySyncHistory.tally_company_sync_id == company_sync_id,
+                TallySyncHistory.completed_at.is_(None),
+            )
+            .order_by(desc(TallySyncHistory.started_at))
+            .limit(1)
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
     async def recent_runs(
         self,
         *,

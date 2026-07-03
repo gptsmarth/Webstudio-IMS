@@ -18,6 +18,7 @@ from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repos
 from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import TallySyncHistoryRepository
 from webstudio_backend.infrastructure.repositories.tally_sync_log_repository import TallySyncLogRepository
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
+from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 
@@ -56,7 +57,7 @@ class TallyDashboardService:
             last_failed_connection_at = company.last_failed_connection_at
 
         last_sync = company.last_successful_sync_at if company and company.last_successful_sync_at else None
-        next_sync = (last_sync + timedelta(seconds=interval)) if last_sync else datetime.now(UTC) + timedelta(seconds=interval)
+        next_sync = await self._resolve_next_scheduled_sync(last_sync=last_sync, interval=interval)
 
         pending_notifications = await self._pending_notification_count()
         recent_history = (
@@ -125,6 +126,20 @@ class TallyDashboardService:
             "operational": operational,
             "recent_synchronizations": [self._history_entry(entry) for entry in recent_history],
         }
+
+    async def _resolve_next_scheduled_sync(
+        self,
+        *,
+        last_sync: datetime | None,
+        interval: int,
+    ) -> datetime:
+        runtime = SchedulerRuntimeService(self._session)
+        persisted = await runtime.get_next_run_at("tally_sync")
+        if persisted is not None and persisted > datetime.now(UTC):
+            return persisted
+        if last_sync is not None:
+            return last_sync + timedelta(seconds=interval)
+        return datetime.now(UTC) + timedelta(seconds=interval)
 
     async def _build_operational_summary(
         self,

@@ -229,6 +229,11 @@ TallyConfigureDep = Annotated[AuthenticatedUser, Depends(require_permission("tal
 TallyRunSyncDep = Annotated[AuthenticatedUser, Depends(require_permission("tally:run_sync"))]
 TallyRetrySyncDep = Annotated[AuthenticatedUser, Depends(require_permission("tally:retry_sync"))]
 
+NetworkAdminDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_any_permission("settings:view", "dashboard:system_status")),
+]
+
 # Backward-compatible aliases (prefer module deps above in new code)
 AuditReadDep = AuditViewDep
 SettingsReadDep = SettingsViewDep

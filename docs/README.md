@@ -31,6 +31,9 @@ Central documentation hub for WEBSTUDIO Inventory Management System.
 | Integrations | Tally ERP 9, Excel | [integrations/](integrations/) |
 | Development | Setup, conventions, guides | [development/](development/) |
 | Deployment | Install, upgrade, rollback | [deployment/](deployment/) |
+| **Production (M12H)** | **Complete operator & IT guides** | **[milestones/m12h/](milestones/m12h/)** |
+| **Production validation (M12I)** | **RC sign-off, checklists, known issues** | **[milestones/m12i/](milestones/m12i/)** |
+| **Customer install simulation (M12J)** | **Greenfield walkthrough & pilot sign-off** | **[milestones/m12j/](milestones/m12j/)** |
 | Testing | Strategy, plans, automation | [testing/](testing/) |
 | Security | Threat model, auth, compliance | [security/](security/) |
 | Operations | Runbooks, monitoring, support | [operations/](operations/) |

@@ -1,2 +1,10 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// Release / IPA generation (M12C)
+// Set DEVELOPMENT_TEAM in Xcode or export DEVELOPMENT_TEAM before archive.
+// CODE_SIGNING_ALLOWED=YES scripts/release/build-ios-ipa.sh
+
+DEVELOPMENT_TEAM=
+CODE_SIGN_STYLE = Automatic
+IPHONEOS_DEPLOYMENT_TARGET = 13.0

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,8 +19,13 @@ final versionRepositoryProvider = Provider<VersionRepository>((ref) {
     apiClient: ref.watch(apiClientProvider),
     prefs: ref.watch(sharedPreferencesProvider),
     installedVersion: () => ref.read(appConfigProvider).clientVersion,
+    clientPlatform: () => ref.read(appConfigProvider).clientPlatform,
     isOnline: () => ref.read(connectivityProvider).maybeWhen(data: (value) => value, orElse: () => true),
   );
+});
+
+final platformVersionProvider = FutureProvider<PlatformVersionIdentity?>((ref) {
+  return ref.watch(versionRepositoryProvider).fetchPlatformVersion();
 });
 
 class VersionRepository {
@@ -25,15 +33,18 @@ class VersionRepository {
     required ApiClient apiClient,
     required SharedPreferences prefs,
     required String Function() installedVersion,
+    required String Function() clientPlatform,
     required bool Function() isOnline,
   })  : _api = apiClient,
         _prefs = prefs,
         _installedVersion = installedVersion,
+        _clientPlatform = clientPlatform,
         _isOnline = isOnline;
 
   final ApiClient _api;
   final SharedPreferences _prefs;
   final String Function() _installedVersion;
+  final String Function() _clientPlatform;
   final bool Function() _isOnline;
 
   DateTime? get lastCheckAt {
@@ -60,7 +71,24 @@ class VersionRepository {
         releaseNotes: parts.length > 4 && parts[4].isNotEmpty ? parts[4] : null,
         apkDownloadUrl: parts.length > 5 && parts[5].isNotEmpty ? parts[5] : null,
         releaseChannel: parts.length > 6 && parts[6].isNotEmpty ? parts[6] : 'stable',
+        distributionMode: parts.length > 7 && parts[7].isNotEmpty ? parts[7] : 'apk_sideload',
+        appStoreUrl: parts.length > 8 && parts[8].isNotEmpty ? parts[8] : null,
+        updateAvailable: parts.length > 9 && parts[9] == '1',
+        mandatory: parts.length > 10 && parts[10] == '1',
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<PlatformVersionIdentity?> fetchPlatformVersion() async {
+    if (!_isOnline()) return null;
+    try {
+      final payload = await _api.get<Map<String, dynamic>>(
+        ApiPaths.version,
+        parser: (json) => Map<String, dynamic>.from(json! as Map),
+      );
+      return PlatformVersionIdentity.fromJson(payload);
     } catch (_) {
       return null;
     }
@@ -86,10 +114,14 @@ class VersionRepository {
 
     try {
       final payload = await _api.get<Map<String, dynamic>>(
-        ApiPaths.version,
+        ApiPaths.clientUpdatesCheck,
+        queryParameters: {
+          'platform': _resolveUpdatePlatform(),
+          'current_version': installed,
+        },
         parser: (json) => Map<String, dynamic>.from(json! as Map),
       );
-      final remote = MobileVersionInfo.fromPayload(payload);
+      final remote = MobileVersionInfo.fromClientUpdateCheck(payload);
       await _prefs.setString(_lastCheckKey, DateTime.now().toIso8601String());
       await _prefs.setString(_cachedRemoteKey, _serializeRemote(remote));
       final kind = resolveUpdateKind(installedVersion: installed, remote: remote);
@@ -131,6 +163,15 @@ class VersionRepository {
     return DateTime.now().difference(last) >= const Duration(hours: 24);
   }
 
+  String _resolveUpdatePlatform() {
+    if (kIsWeb) return 'mobile_android';
+    if (Platform.isIOS) return 'mobile_ios';
+    if (Platform.isAndroid) return 'mobile_android';
+    final platform = _clientPlatform().toLowerCase();
+    if (platform.contains('ios')) return 'mobile_ios';
+    return 'mobile_android';
+  }
+
   static const _cachedRemoteKey = 'webstudio_version_cached_remote';
 
   String _serializeRemote(MobileVersionInfo remote) {
@@ -142,6 +183,10 @@ class VersionRepository {
       remote.releaseNotes ?? '',
       remote.apkDownloadUrl ?? '',
       remote.releaseChannel,
+      remote.distributionMode,
+      remote.appStoreUrl ?? '',
+      remote.updateAvailable ? '1' : '0',
+      remote.mandatory ? '1' : '0',
     ].join('|');
   }
 }

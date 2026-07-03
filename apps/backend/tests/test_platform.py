@@ -3,50 +3,41 @@
 from __future__ import annotations
 
 import pytest
-from starlette.testclient import TestClient
-
-from webstudio_backend.app import create_app
-from webstudio_backend.core.config import Settings
+from httpx import AsyncClient
 
 
-@pytest.fixture
-def platform_test_settings() -> Settings:
-    return Settings(
-        app_env="test",
-        database_url="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test",
-        log_json=True,
-    )
-
-
-@pytest.fixture
-def client(platform_test_settings: Settings) -> TestClient:
-    app = create_app(platform_test_settings)
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-def test_api_version(client: TestClient) -> None:
-    response = client.get("/api/v1/version")
+@pytest.mark.asyncio
+async def test_api_version(api_client: AsyncClient) -> None:
+    response = await api_client.get("/api/v1/version")
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["backend_version"] == "0.1.0"
-    assert body["data"]["api_version"] == "1.0"
-    assert "schema_version" in body["data"]
-    assert "build_version" in body["data"]
-    assert "min_desktop_version" in body["data"]
-    assert "min_mobile_version" in body["data"]
-    assert "mobile" in body["data"]
-    mobile = body["data"]["mobile"]
+    data = body["data"]
+    assert data["backend_version"] == "0.1.0"
+    assert data["version"] == "0.1.0"
+    assert data["api_version"] == "1.0"
+    assert "schema_version" in data
+    assert "build_version" in data
+    assert "build_number" in data
+    assert "git_commit" in data
+    assert "release_channel" in data
+    assert "database_revision" in data
+    assert "version_identity" in data
+    assert data["version_identity"]["version"] == "0.1.0"
+    assert "min_desktop_version" in data
+    assert "min_mobile_version" in data
+    assert "mobile" in data
+    mobile = data["mobile"]
     assert mobile["latest_version"]
     assert mobile["min_supported_version"]
-    assert mobile["release_channel"] in {"stable", "beta"}
+    assert mobile["release_channel"] in {"stable", "beta", "development"}
     assert body["request_id"]
     assert body["correlation_id"]
     assert body["timestamp"]
 
 
-def test_api_capabilities(client: TestClient) -> None:
-    response = client.get("/api/v1/capabilities")
+@pytest.mark.asyncio
+async def test_api_capabilities(api_client: AsyncClient) -> None:
+    response = await api_client.get("/api/v1/capabilities")
     assert response.status_code == 200
     body = response.json()
     data = body["data"]

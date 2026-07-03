@@ -13,4 +13,6 @@ export * from './DashboardService';
 export * from './TallyService';
 export * from './AuthenticationService';
 export * from './SetupService';
+export * from './DeploymentService';
+export * from './DeploymentCenterService';
 export * from './SettingsService';

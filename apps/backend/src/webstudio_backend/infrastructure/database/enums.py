@@ -155,6 +155,22 @@ class TallyLineOutcome(StrEnum):
     ERROR = "error"
 
 
+class ReleaseChannel(StrEnum):
+    DEVELOPMENT = "development"
+    BETA = "beta"
+    STABLE = "stable"
+
+
+class ReleaseDownloadStatus(StrEnum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    VERIFYING = "verifying"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 HUMAN_USER_ROLES = frozenset({UserRole.MAIN_ADMIN, UserRole.ADMIN, UserRole.SALESPERSON})
 
 LOCATION_TYPE_ENUM_NAME = "location_type"
@@ -177,6 +193,8 @@ TALLY_PROCESSING_STATUS_ENUM_NAME = "tally_processing_status"
 TALLY_SYNC_RUN_STATUS_ENUM_NAME = "tally_sync_run_status"
 TALLY_LINE_STATUS_ENUM_NAME = "tally_line_status"
 TALLY_LINE_OUTCOME_ENUM_NAME = "tally_line_outcome"
+RELEASE_CHANNEL_ENUM_NAME = "release_channel"
+RELEASE_DOWNLOAD_STATUS_ENUM_NAME = "release_download_status"
 
 __all__ = [
     "AUDIT_ACTION_ENUM_NAME",
@@ -215,6 +233,10 @@ __all__ = [
     "TALLY_SYNC_RUN_STATUS_ENUM_NAME",
     "LocationType",
     "ProductModelStatus",
+    "ReleaseChannel",
+    "RELEASE_CHANNEL_ENUM_NAME",
+    "ReleaseDownloadStatus",
+    "RELEASE_DOWNLOAD_STATUS_ENUM_NAME",
     "SettingValueType",
     "StorageType",
     "StorageUnit",

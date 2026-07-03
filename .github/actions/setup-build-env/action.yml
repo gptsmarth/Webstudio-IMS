@@ -1,7 +1,43 @@
 name: Setup Build Environment
-description: Reusable build environment setup for WEBSTUDIO IMS
+description: Reusable build environment setup for WEBSTUDIO IMS enterprise CI
+inputs:
+  install-python:
+    description: Install Python 3.12
+    required: false
+    default: "true"
+  install-node:
+    description: Install Node.js 20 and pnpm
+    required: false
+    default: "true"
+  install-flutter:
+    description: Install Flutter stable
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
-    - run: echo 'Build environment setup — to be configured'
+    - if: inputs.install-python == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - if: inputs.install-node == 'true'
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
+
+    - if: inputs.install-node == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: pnpm
+
+    - if: inputs.install-node == 'true'
       shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - if: inputs.install-flutter == 'true'
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        cache: true

@@ -10,11 +10,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
-from webstudio_backend.api.routers import access_roles, audit_logs, auth, brands, dashboard, discovery, health, integration_keys, inventory, locations, metadata, notifications, platform, product_images, product_models, reports, sales, search, security, settings as settings_router, setup, sync, tally, users
+from webstudio_backend.api.routers import access_roles, audit_logs, auth, brands, client_deployment, client_updates, dashboard, deployment, deployment_center, discovery, health, integration_keys, inventory, locations, metadata, network, notifications, platform, product_images, product_models, releases, reports, sales, search, security, settings as settings_router, setup, sync, tally, users
 from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.exceptions import register_exception_handlers
 from webstudio_backend.core.logging import configure_logging
@@ -24,37 +25,124 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import TallyCompanySyncRepository
 from webstudio_backend.services.audit_retention_scheduler import audit_retention_loop, maybe_purge_audit_logs
 from webstudio_backend.services.backup_scheduler import backup_scheduler_loop
+from webstudio_backend.services.maintenance_scheduler import maintenance_scheduler_loop
 from webstudio_backend.services.mdns_advertisement_service import MdnsAdvertisementService
+from webstudio_backend.services.notification_scheduler import notification_scheduler_loop
+from webstudio_backend.services.scheduler_runtime_service import (
+    SchedulerRuntimeService,
+    is_shutdown_requested,
+    reset_shutdown_flag,
+    sleep_until_next_run,
+)
+from webstudio_backend.services.release_sync_scheduler import release_sync_loop
+from webstudio_backend.services.shutdown_orchestrator import run_graceful_shutdown
+from webstudio_backend.services.startup_orchestrator import run_startup_orchestration
+from webstudio_backend.services.tally_connectivity_scheduler import tally_connectivity_probe_loop
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 _tally_scheduler_task: asyncio.Task | None = None
 _backup_scheduler_task: asyncio.Task | None = None
 _audit_retention_task: asyncio.Task | None = None
+_notification_scheduler_task: asyncio.Task | None = None
+_maintenance_scheduler_task: asyncio.Task | None = None
+_tally_connectivity_probe_task: asyncio.Task | None = None
+_release_sync_task: asyncio.Task | None = None
+_scheduler_persist_task: asyncio.Task | None = None
 _mdns_service: MdnsAdvertisementService | None = None
 
 
+async def _persist_scheduler_state_loop(settings: Settings) -> None:
+    interval = max(settings.scheduler_state_persist_seconds, 15)
+    while not is_shutdown_requested():
+        try:
+            async with session_scope() as session:
+                await SchedulerRuntimeService(session).snapshot_for_shutdown()
+                await session.commit()
+        except Exception:
+            pass
+        try:
+            await asyncio.wait_for(asyncio.sleep(interval), timeout=interval)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+
+
 async def _tally_scheduler_loop() -> None:
-    while True:
+    while not is_shutdown_requested():
+        async with session_scope() as session:
+            sync_service = TallySyncService(session)
+            if not await sync_service.is_enabled():
+                runtime = SchedulerRuntimeService(session)
+                await runtime.record_run("tally_sync", status="disabled", interval_seconds=60)
+                await session.commit()
+                if not await sleep_until_next_run("tally_sync", interval_seconds=60):
+                    break
+                continue
+            _, _, _, interval = await sync_service.get_connection_config()
+            await session.commit()
+
+        if not await sleep_until_next_run("tally_sync", interval_seconds=interval):
+            break
+        if is_shutdown_requested():
+            break
+        status = "completed"
         try:
             async with session_scope() as session:
                 sync_service = TallySyncService(session)
                 if not await sync_service.is_enabled():
-                    await asyncio.sleep(60)
+                    await session.commit()
                     continue
                 _, _, _, interval = await sync_service.get_connection_config()
                 await sync_service.run_sync(correlation_id=str(uuid.uuid4()))
-                await asyncio.sleep(interval)
+                runtime = SchedulerRuntimeService(session)
+                await runtime.record_run("tally_sync", status=status, interval_seconds=interval)
+                await session.commit()
         except asyncio.CancelledError:
             raise
         except Exception:
-            await asyncio.sleep(60)
+            status = "failed"
+            try:
+                async with session_scope() as session:
+                    runtime = SchedulerRuntimeService(session)
+                    await runtime.record_run("tally_sync", status=status, interval_seconds=300)
+                    await session.commit()
+            except Exception:
+                pass
+
+
+async def _cancel_task(task: asyncio.Task | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _tally_scheduler_task, _backup_scheduler_task, _audit_retention_task, _mdns_service
+    global _tally_scheduler_task, _backup_scheduler_task, _audit_retention_task
+    global _notification_scheduler_task, _maintenance_scheduler_task, _scheduler_persist_task
+    global _tally_connectivity_probe_task
+    global _release_sync_task
+    global _mdns_service
+
     settings: Settings = app.state.settings
+    reset_shutdown_flag()
     await init_db(settings)
+
+    if settings.is_test:
+        from webstudio_backend.services.startup_orchestrator import StartupReport
+
+        startup_report = StartupReport(ready=True)
+    else:
+        startup_report = await run_startup_orchestration(settings)
+    app.state.startup_report = startup_report
+    if not startup_report.ready and settings.is_production:
+        logger.error("Startup orchestration failed — service may not accept traffic safely")
+
     company_name = ""
     if not settings.is_test:
         try:
@@ -66,6 +154,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _mdns_service = MdnsAdvertisementService(settings)
         app.state.mdns_service = _mdns_service
         _mdns_service.start(company_name=company_name)
+
     scheduler_enabled = (
         not settings.is_test and os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
     )
@@ -75,6 +164,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     audit_retention_enabled = (
         not settings.is_test and os.getenv("WEBSTUDIO_AUDIT_RETENTION_SCHEDULER", "1") == "1"
     )
+    notification_scheduler_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_NOTIFICATION_SCHEDULER", "1") == "1"
+    )
+    maintenance_scheduler_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_MAINTENANCE_SCHEDULER", "1") == "1"
+    )
+    tally_probe_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_TALLY_CONNECTIVITY_PROBE", "1") == "1"
+    )
+    release_sync_enabled = (
+        not settings.is_test and os.getenv("WEBSTUDIO_RELEASE_SYNC_SCHEDULER", "1") == "1"
+    )
+
     if scheduler_enabled:
         try:
             async with session_scope() as session:
@@ -91,32 +193,47 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:
             pass
         _audit_retention_task = asyncio.create_task(audit_retention_loop())
+    if notification_scheduler_enabled:
+        _notification_scheduler_task = asyncio.create_task(notification_scheduler_loop())
+    if maintenance_scheduler_enabled:
+        _maintenance_scheduler_task = asyncio.create_task(maintenance_scheduler_loop())
+    if tally_probe_enabled:
+        _tally_connectivity_probe_task = asyncio.create_task(tally_connectivity_probe_loop())
+    if release_sync_enabled:
+        _release_sync_task = asyncio.create_task(release_sync_loop())
+    if not settings.is_test:
+        _scheduler_persist_task = asyncio.create_task(_persist_scheduler_state_loop(settings))
+
     yield
+
+    if settings.is_production:
+        await run_graceful_shutdown(wait_for_sync_seconds=float(settings.graceful_shutdown_seconds))
+    else:
+        reset_shutdown_flag()
+
     if _mdns_service is not None:
         _mdns_service.stop()
         _mdns_service = None
-    if _audit_retention_task is not None:
-        _audit_retention_task.cancel()
-        try:
-            await _audit_retention_task
-        except asyncio.CancelledError:
-            pass
-        _audit_retention_task = None
-    if _backup_scheduler_task is not None:
-        _backup_scheduler_task.cancel()
-        try:
-            await _backup_scheduler_task
-        except asyncio.CancelledError:
-            pass
-        _backup_scheduler_task = None
-    if _tally_scheduler_task is not None:
-        _tally_scheduler_task.cancel()
-        try:
-            await _tally_scheduler_task
-        except asyncio.CancelledError:
-            pass
-        _tally_scheduler_task = None
-    await close_db()
+    await _cancel_task(_scheduler_persist_task)
+    _scheduler_persist_task = None
+    await _cancel_task(_maintenance_scheduler_task)
+    _maintenance_scheduler_task = None
+    await _cancel_task(_tally_connectivity_probe_task)
+    _tally_connectivity_probe_task = None
+    await _cancel_task(_release_sync_task)
+    _release_sync_task = None
+    await _cancel_task(_notification_scheduler_task)
+    _notification_scheduler_task = None
+    await _cancel_task(_audit_retention_task)
+    _audit_retention_task = None
+    await _cancel_task(_backup_scheduler_task)
+    _backup_scheduler_task = None
+    await _cancel_task(_tally_scheduler_task)
+    _tally_scheduler_task = None
+    # Test suite keeps a session-scoped engine via tests/conftest.py; closing here
+    # would break later tests that share the same process-global session factory.
+    if not settings.is_test:
+        await close_db()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -151,7 +268,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(metadata.router)
     app.include_router(platform.router)
+    app.include_router(releases.router)
+    app.include_router(client_updates.router)
     app.include_router(discovery.router)
+    app.include_router(deployment.router)
+    app.include_router(client_deployment.router)
+    app.include_router(deployment_center.router)
+    app.include_router(network.router)
     app.include_router(sync.router)
     app.include_router(search.router)
     app.include_router(setup.router)

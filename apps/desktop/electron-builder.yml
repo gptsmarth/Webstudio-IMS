@@ -1,0 +1,80 @@
+# WEBSTUDIO IMS — Electron Builder configuration (M12C)
+# Canonical branding: apps/desktop/public/assets/webstudio/
+
+appId: com.webstudio.desktop
+productName: WEBSTUDIO Desktop
+copyright: Copyright © WEBSTUDIO
+
+directories:
+  output: release/desktop
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+  - "!**/*.map"
+
+extraResources:
+  - from: public/assets/webstudio
+    to: assets/webstudio
+    filter:
+      - "**/*"
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: public/assets/webstudio/icon.ico
+  artifactName: WEBSTUDIO Desktop Setup.${ext}
+  legalTrademarks: WEBSTUDIO
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  installerIcon: public/assets/webstudio/icon.ico
+  uninstallerIcon: public/assets/webstudio/icon.ico
+  installerHeaderIcon: public/assets/webstudio/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: WEBSTUDIO Desktop
+  uninstallDisplayName: WEBSTUDIO Desktop
+  menuCategory: WEBSTUDIO
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: public/assets/webstudio/icon.icns
+  artifactName: WEBSTUDIO Desktop.${ext}
+  category: public.app-category.business
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  title: WEBSTUDIO Desktop ${version}
+  icon: public/assets/webstudio/icon.icns
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+publish: null

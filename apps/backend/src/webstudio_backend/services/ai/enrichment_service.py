@@ -249,15 +249,18 @@ class ProductEnrichmentService:
         brand_name: str | None,
     ) -> dict[str, Any]:
         payload = result.to_dict()
-        image_url = await resolve_product_image(
-            model_number=model_number,
-            brand_name=brand_name,
-            model_name=result.model_name,
-            candidate_url=result.product_image_url,
-            grounding_body=result.grounding_body,
-            image_search_query=result.image_search_query,
-        )
-        payload["product_image_url"] = image_url
+        if self._app_settings.is_test:
+            payload["product_image_url"] = result.product_image_url
+        else:
+            image_url = await resolve_product_image(
+                model_number=model_number,
+                brand_name=brand_name,
+                model_name=result.model_name,
+                candidate_url=result.product_image_url,
+                grounding_body=result.grounding_body,
+                image_search_query=result.image_search_query,
+            )
+            payload["product_image_url"] = image_url
         payload["source"] = result.source
         payload["provider"] = result.provider
         return payload

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
+from tests.helpers.migrations import assert_at_least_migration
 from webstudio_backend.infrastructure.database.session import get_engine
 
 
@@ -16,18 +17,7 @@ async def test_migration_0002_reference_tables_exist(database_engine: None) -> N
         current_revision = await connection.scalar(
             text("SELECT version_num FROM webstudio.alembic_version"),
         )
-        assert current_revision in {
-            "0002_reference_data",
-            "0003_product_model",
-            "0004_inventory_item",
-            "0005_audit_logs",
-            "0006_audit_log_description",
-            "0007_audit_log_source",
-            "0010_inventory_sprint_2a",
-            "0011_sales",
-            "0013_notifications",
-            "0014_reference_apis_expansion",
-        }
+        assert_at_least_migration(current_revision, "0002_reference_data")
 
         def inspect_schema(sync_connection) -> tuple[list[str], list[str], list[str]]:
             inspector = inspect(sync_connection)
