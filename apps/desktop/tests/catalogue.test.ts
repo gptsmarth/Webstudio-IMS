@@ -35,6 +35,7 @@ describe('catalogue utilities', () => {
     expect(brandLogoSrc('Dell')).toContain('assets/brand-logos/');
     expect(brandLogoSrc('Dell', 'hp.svg')).toContain('assets/brand-logos/hp.svg');
     expect(brandLogoSrc('ASUS Laptops')).toContain('assets/brand-logos/asus.svg');
+    expect(brandLogoSrc('Dell')).toMatch(/\.svg$/);
   });
 
   it('counts active models per brand only', () => {

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { extractAppRelativePath } from './app-asset-path';
+
 /** Must run before app.whenReady(). */
 export function registerAppScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -24,13 +26,9 @@ function resolveDistRoot(): string {
 }
 
 function resolveDistFilePath(requestUrl: string): string | null {
-  const parsed = new URL(requestUrl);
-  let relativePath = decodeURIComponent(parsed.pathname);
-  if (relativePath.startsWith('/')) {
-    relativePath = relativePath.slice(1);
-  }
-  if (!relativePath || relativePath === '.') {
-    relativePath = 'index.html';
+  const relativePath = extractAppRelativePath(requestUrl);
+  if (!relativePath) {
+    return null;
   }
 
   const distRoot = path.resolve(resolveDistRoot());
@@ -43,12 +41,8 @@ function resolveDistFilePath(requestUrl: string): string | null {
 
 /** Packaged installers also copy static assets to resources/assets/ via extraResources. */
 function resolveExtraResourceFilePath(requestUrl: string): string | null {
-  const parsed = new URL(requestUrl);
-  let relativePath = decodeURIComponent(parsed.pathname);
-  if (relativePath.startsWith('/')) {
-    relativePath = relativePath.slice(1);
-  }
-  if (!relativePath.startsWith('assets/')) {
+  const relativePath = extractAppRelativePath(requestUrl);
+  if (!relativePath?.startsWith('assets/')) {
     return null;
   }
 

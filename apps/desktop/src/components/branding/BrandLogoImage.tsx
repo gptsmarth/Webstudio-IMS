@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { brandLogoSrc } from '../../lib/catalogue';
 import { BrandLogoRegistry } from '../../registries/BrandLogoRegistry';
 import { OFFICIAL_SHOWCASE_BRANDS } from '../../registries/AssetManifest';
+import { assetUrlsEquivalent } from '../../utils/resolvePublicAsset';
 
 interface BrandLogoImageProps {
   brand: string;
@@ -39,7 +40,7 @@ export function BrandLogoImage({
           img.src = BrandLogoRegistry.getFallbackLogo(brand);
           return;
         }
-        if (stage === 'png' && img.src !== defaultLogo) {
+        if (stage === 'png' && !assetUrlsEquivalent(img.src, defaultLogo)) {
           img.dataset.fallbackStage = 'default';
           img.src = defaultLogo;
           return;
