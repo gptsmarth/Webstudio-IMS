@@ -103,14 +103,22 @@ def test_default_ai_config_uses_gemini_primary() -> None:
 
     config = AIProviderConfig()
     assert DEFAULT_PRIMARY_PROVIDER == "gemini"
-    assert DEFAULT_FALLBACK_CHAIN == ["gemini"]
+    assert DEFAULT_FALLBACK_CHAIN == ["gemini", "openai"]
     assert config.primary_provider == "gemini"
     assert config.fallback_chain == ["gemini"]
 
 
 def test_parse_fallback_chain_defaults_to_gemini() -> None:
-    assert _parse_fallback_chain(None) == ["gemini"]
-    assert _parse_fallback_chain("") == ["gemini"]
+    assert _parse_fallback_chain(None) == ["gemini", "openai"]
+    assert _parse_fallback_chain("") == ["gemini", "openai"]
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_test_connection_without_key() -> None:
+    provider = create_provider("openai", AIProviderConfig())
+    result = await provider.test_connection()
+    assert result.success is False
+    assert result.provider == "openai"
 
 
 @pytest.mark.asyncio

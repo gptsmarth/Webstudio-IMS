@@ -20,7 +20,7 @@ import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { P, PermissionService } from '../../services/PermissionService';
 import { canEditStockProductModel } from '../../lib/inventory';
-import { brandLogoSrc } from '../../lib/catalogue';
+import { BrandLogoImage } from '../../components/branding/BrandLogoImage';
 
 export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
@@ -169,9 +169,9 @@ export function StockPage(): JSX.Element {
           />
           {nav.level === 'models' && nav.brandName && (
             <div className="stock-page__brand-logo" data-brand={nav.brandName.trim().toLowerCase()}>
-              <img
-                src={brandLogoSrc(nav.brandName, brandSummary?.logoFilename ?? null)}
-                alt=""
+              <BrandLogoImage
+                brand={nav.brandName}
+                logoFilename={brandSummary?.logoFilename ?? null}
                 className="stock-page__brand-logo-img"
               />
             </div>

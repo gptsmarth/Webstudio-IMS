@@ -50,6 +50,7 @@ from webstudio_backend.services.backup_manifest import (
     finalize_manifest,
 )
 from webstudio_backend.services.backup_storage import create_storage_backend
+from webstudio_backend.services.postgres_cli import resolve_postgres_tool
 
 INCREMENTAL_NOT_IMPLEMENTED = (
     "Incremental backup is not yet implemented; a full backup was created instead."
@@ -482,11 +483,17 @@ class BackupEngine:
         env = os.environ.copy()
         if password:
             env["PGPASSWORD"] = password
-        cmd = ["pg_dump", "-h", host, "-p", port, "-U", user, *(extra_args or []), db_name]
-        with output_path.open("w", encoding="utf-8") as handle:
-            subprocess.run(
-                cmd, check=True, stdout=handle, env=env, stderr=subprocess.PIPE, text=True
-            )
+        pg_dump = resolve_postgres_tool("pg_dump", postgres_bin=self._settings.postgres_bin)
+        cmd = [pg_dump, "-h", host, "-p", port, "-U", user, *(extra_args or []), db_name]
+        try:
+            with output_path.open("w", encoding="utf-8") as handle:
+                subprocess.run(
+                    cmd, check=True, stdout=handle, env=env, stderr=subprocess.PIPE, text=True
+                )
+        except OSError as exc:
+            raise RepositoryError(
+                f"Could not run pg_dump at {pg_dump}. Set POSTGRES_BIN and restart the server."
+            ) from exc
 
     def _restore_sql_file(self, path: Path, *, dump_mode: str = DATABASE_DUMP_MODE_FULL) -> None:
         if self._settings.is_test and not use_real_database_dump():
@@ -536,7 +543,8 @@ class BackupEngine:
         env = os.environ.copy()
         if password:
             env["PGPASSWORD"] = password
-        cmd = ["psql", "-h", host, "-p", port, "-U", user]
+        psql = resolve_postgres_tool("psql", postgres_bin=self._settings.postgres_bin)
+        cmd = [psql, "-h", host, "-p", port, "-U", user]
         if on_error_stop:
             cmd.extend(["-v", "ON_ERROR_STOP=1"])
         cmd.append(db_name)
@@ -545,6 +553,10 @@ class BackupEngine:
                 subprocess.run(
                     cmd, check=True, stdin=handle, env=env, stderr=subprocess.PIPE, text=True
                 )
+        except OSError as exc:
+            raise RepositoryError(
+                f"Could not run psql at {psql}. Set POSTGRES_BIN and restart the server."
+            ) from exc
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or str(exc)).strip()
             raise RepositoryError(

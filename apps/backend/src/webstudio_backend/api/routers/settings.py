@@ -250,7 +250,7 @@ async def test_ai_provider_connection(
 ) -> dict:
     del current
     provider = body.provider.strip().lower()
-    if provider not in {"gemini", "groq", "openrouter", "mock"}:
+    if provider not in {"gemini", "openai", "groq", "openrouter", "mock"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported AI provider."
         )

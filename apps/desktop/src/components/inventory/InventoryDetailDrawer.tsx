@@ -276,6 +276,12 @@ export function InventoryDetailDrawer({
                     )}
                   </dd>
                 </div>
+                {canViewPurchasePrice(permissions) && (
+                  <div>
+                    <dt>Purchase price (unit)</dt>
+                    <dd>{formatInventoryPrice(item.purchase_price)}</dd>
+                  </div>
+                )}
                 {canViewPurchasePrice(permissions) && workspace.productModel && (
                   <div>
                     <dt>Purchase price (model)</dt>

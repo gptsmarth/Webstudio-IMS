@@ -6,11 +6,13 @@ from webstudio_backend.services.ai.providers.base import AIProvider
 from webstudio_backend.services.ai.providers.gemini import GeminiProvider
 from webstudio_backend.services.ai.providers.groq import GroqProvider
 from webstudio_backend.services.ai.providers.mock import MockProvider
+from webstudio_backend.services.ai.providers.openai import OpenAIProvider
 from webstudio_backend.services.ai.providers.openrouter import OpenRouterProvider
 from webstudio_backend.services.ai.types import AIProviderConfig, ProviderId
 
 _PROVIDER_CLASSES: dict[ProviderId, type[AIProvider]] = {
     "gemini": GeminiProvider,
+    "openai": OpenAIProvider,
     "groq": GroqProvider,
     "openrouter": OpenRouterProvider,
     "mock": MockProvider,

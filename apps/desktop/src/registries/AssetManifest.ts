@@ -68,6 +68,27 @@ export const ASSET_MANIFEST = {
 } as const;
 
 export type BrandLogoKey = keyof typeof ASSET_MANIFEST.brandLogos;
+
+/** All bundled brand logos (catalogue picker, inventory) — excludes default. */
+export const BUNDLED_BRAND_LOGO_KEYS = (
+  Object.keys(ASSET_MANIFEST.brandLogos) as BrandLogoKey[]
+).filter((key) => key !== 'default');
+
+/**
+ * Login / setup wizard left panel — SHUKRANA official brands only (display order).
+ * Bundled in desktop .exe and .dmg via the same AssetManifest + public/assets/brand-logos/.
+ */
+/** Login / setup left panel — SHUKRANA official brands (display order, 4×2 grid). */
+export const OFFICIAL_SHOWCASE_BRANDS = [
+  'apple',
+  'dell',
+  'hp',
+  'lenovo',
+  'sandisk',
+  'asus',
+  'logitech',
+  'canon',
+] as const satisfies readonly BrandLogoKey[];
 export type WebstudioAssetKey = keyof typeof ASSET_MANIFEST.webstudio;
 export type PlaceholderAssetKey = keyof typeof ASSET_MANIFEST.placeholders;
 export type IllustrationAssetKey = keyof typeof ASSET_MANIFEST.illustrations;

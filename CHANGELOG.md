@@ -16,11 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.0.2] - 2026-07-04
 
-- Milestone 12G release engineering: version manifest, checksums, env profiles, migration packaging
+### Fixed
 
-## [0.1.0] - 2026-07-02
+- **Tally Prime sync:** use **Day Book** XML export instead of legacy `Vouchers` collection (fixes 0 invoices imported on Tally Prime)
+- **Tally company name:** document and support full Tally Prime company names (e.g. `WEBSTUDIO - (from 1-Apr-…)`)
+- **Windows NSSM:** registry-backed `AppEnvironmentExtra` apply; skip empty env vars; default `-EnvFile` path; avoid `DATABASE_URL=` override crash
+- **Schedulers:** read `WEBSTUDIO_*_SCHEDULER` from Settings `.env` via `get_settings()` (fixes “Manual sync only” banner when NSSM incomplete)
+- **Backup:** `POSTGRES_BIN` resolution for Windows service (`pg_dump` on PATH)
+- **Deployment Center:** clearer check/download messages when no newer GitHub release exists
+- **Gemini AI:** default model `gemini-2.5-flash-lite`; improved error messages
+- **Android:** manual server URL entry; barcode scanner error handling
+- **Tally sync history:** display start/end times in **local timezone** (was UTC)
+
+### Changed
+
+- Tally production validation expects Day Book export template
+
+## [1.0.1] - 2026-07-03
+
+### Fixed
+
+- Initial production shop deployment fixes (server installer, finalize scripts)
+
+## [1.0.0] - 2026-07-02
 
 ### Added
 

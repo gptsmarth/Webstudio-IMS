@@ -57,7 +57,9 @@ from webstudio_backend.services.security_alert_service import SecurityAlertServi
 from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 from webstudio_backend.services.system_info_service import SystemInfoService
 
-_SENSITIVE_SETTING_KEYS = frozenset({"gemini_api_key", "groq_api_key", "openrouter_api_key"})
+_SENSITIVE_SETTING_KEYS = frozenset(
+    {"gemini_api_key", "openai_api_key", "groq_api_key", "openrouter_api_key"}
+)
 
 
 def _setting_category(key: str) -> str:
@@ -348,6 +350,12 @@ class SettingsService:
                 "openrouter_api_key", payload.openrouter_api_key.strip(), actor_id=actor_id
             )
 
+        await self._set_str("openai_model", payload.openai_model.strip(), actor_id=actor_id)
+        if payload.clear_openai_api_key:
+            await self._set_str("openai_api_key", "", actor_id=actor_id)
+        elif payload.openai_api_key is not None and payload.openai_api_key.strip():
+            await self._set_str("openai_api_key", payload.openai_api_key.strip(), actor_id=actor_id)
+
         workspace = await self.get_workspace()
         return workspace.integrations
 
@@ -454,6 +462,7 @@ class SettingsService:
 
         configured_map = {
             "gemini": bool(config.gemini.api_key),
+            "openai": bool(config.openai.api_key),
             "groq": bool(config.groq.api_key),
             "openrouter": bool(config.openrouter.api_key),
             "mock": True,
@@ -464,7 +473,7 @@ class SettingsService:
                     provider, configured=configured_map[provider]
                 ).to_dict()
             )
-            for provider in ("gemini", "groq", "openrouter", "mock")
+            for provider in ("gemini", "openai", "groq", "openrouter", "mock")
         ]
         return IntegrationsSettings(
             gemini_model=config.gemini.model,
@@ -481,6 +490,9 @@ class SettingsService:
             openrouter_model=config.openrouter.model,
             openrouter_configured=bool(config.openrouter.api_key),
             openrouter_api_key_hint=mask_api_key(config.openrouter.api_key),
+            openai_model=config.openai.model,
+            openai_configured=bool(config.openai.api_key),
+            openai_api_key_hint=mask_api_key(config.openai.api_key),
             ai_provider_health=health,
         )
 

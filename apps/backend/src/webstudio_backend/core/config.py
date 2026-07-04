@@ -62,11 +62,14 @@ class Settings(BaseSettings):
     slow_request_threshold_ms: int = 750
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
 
     webstudio_data_root: str = Field(default="", validation_alias="WEBSTUDIO_DATA_ROOT")
+    postgres_bin: str = Field(default="", validation_alias="POSTGRES_BIN")
     graceful_shutdown_seconds: int = Field(
         default=30, validation_alias="WEBSTUDIO_GRACEFUL_SHUTDOWN_SECONDS"
     )
@@ -91,6 +94,48 @@ class Settings(BaseSettings):
         validation_alias="WEBSTUDIO_RELEASE_SYNC_INTERVAL_SECONDS",
     )
     release_updates_root: str = Field(default="", validation_alias="WEBSTUDIO_RELEASE_UPDATES_ROOT")
+
+    webstudio_tally_scheduler: bool = Field(default=True, validation_alias="WEBSTUDIO_TALLY_SCHEDULER")
+    webstudio_backup_scheduler: bool = Field(default=True, validation_alias="WEBSTUDIO_BACKUP_SCHEDULER")
+    webstudio_audit_retention_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_AUDIT_RETENTION_SCHEDULER"
+    )
+    webstudio_notification_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_NOTIFICATION_SCHEDULER"
+    )
+    webstudio_maintenance_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_MAINTENANCE_SCHEDULER"
+    )
+    webstudio_tally_connectivity_probe: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_TALLY_CONNECTIVITY_PROBE"
+    )
+    webstudio_release_sync_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_RELEASE_SYNC_SCHEDULER"
+    )
+
+    @field_validator(
+        "webstudio_tally_scheduler",
+        "webstudio_backup_scheduler",
+        "webstudio_audit_retention_scheduler",
+        "webstudio_notification_scheduler",
+        "webstudio_maintenance_scheduler",
+        "webstudio_tally_connectivity_probe",
+        "webstudio_release_sync_scheduler",
+        mode="before",
+    )
+    @classmethod
+    def parse_scheduler_env_flag(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        if isinstance(value, str):
+            token = value.strip().lower()
+            if token in {"0", "false", "no", "off", ""}:
+                return False
+            if token in {"1", "true", "yes", "on"}:
+                return True
+        return bool(value)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

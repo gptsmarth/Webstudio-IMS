@@ -1,6 +1,8 @@
 import { FileDown, FileText, Printer, X } from 'lucide-react';
 import { formatDateTime } from '../../lib/datetime';
 import { formatSaleSpecs, formatSaleAmount, saleSourceLabel } from '../../lib/sales';
+import { canViewPurchasePrice } from '../../lib/inventory';
+import { useAuthStore } from '../../store';
 import type { SalesWorkspaceState } from '../../hooks/useSalesWorkspace';
 import type { AuditLogEntry } from '../../services/api/AuditService';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
@@ -27,6 +29,8 @@ function AuditRow({ log }: { log: AuditLogEntry }): JSX.Element {
 }
 
 export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.Element | null {
+  const session = useAuthStore((state) => state.session);
+  const showPurchasePrice = session ? canViewPurchasePrice(session.permissions) : false;
   const item = workspace.selectedItem;
   const detail = workspace.saleDetail;
 
@@ -98,6 +102,12 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                   <dt>Sale amount</dt>
                   <dd>{formatSaleAmount(detail?.sale_amount ?? item.sale_amount)}</dd>
                 </div>
+                {showPurchasePrice && (
+                  <div>
+                    <dt>Purchase price</dt>
+                    <dd>{formatSaleAmount(detail?.purchase_price ?? item.purchase_price)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Sale source</dt>
                   <dd>{saleSourceLabel(detail?.sale_source ?? item.sale_source)}</dd>

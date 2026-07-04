@@ -1,21 +1,10 @@
-import { ASSET_MANIFEST } from '../../registries/AssetManifest';
 import { WebstudioAssetRegistry } from '../../registries';
+import { BrandLogoImage, OFFICIAL_SHOWCASE_BRANDS } from '../branding/BrandLogoImage';
 
 interface OnboardingBrandPanelProps {
   appVersion: string;
   footerRight?: string;
 }
-
-const BRAND_LOGOS = [
-  { name: 'apple', src: ASSET_MANIFEST.brandLogos.apple },
-  { name: 'dell', src: ASSET_MANIFEST.brandLogos.dell },
-  { name: 'hp', src: ASSET_MANIFEST.brandLogos.hp },
-  { name: 'lenovo', src: ASSET_MANIFEST.brandLogos.lenovo },
-  { name: 'asus', src: ASSET_MANIFEST.brandLogos.asus },
-  { name: 'sandisk', src: ASSET_MANIFEST.brandLogos.sandisk },
-  { name: 'logitech', src: ASSET_MANIFEST.brandLogos.logitech },
-  { name: 'canon', src: ASSET_MANIFEST.brandLogos.canon },
-] as const;
 
 export function OnboardingBrandPanel({
   appVersion,
@@ -60,13 +49,9 @@ export function OnboardingBrandPanel({
         <div className="onboarding-brand-panel__brands">
           <p className="onboarding-brand-panel__brands-label">Official Brands</p>
           <div className="onboarding-brand-panel__brands-grid">
-            {BRAND_LOGOS.map((brand) => (
-              <div key={brand.name} className="onboarding-brand-panel__brand-cell">
-                <img
-                  src={brand.src}
-                  alt={brand.name}
-                  className="onboarding-brand-panel__brand-logo"
-                />
+            {OFFICIAL_SHOWCASE_BRANDS.map((name) => (
+              <div key={name} className="onboarding-brand-panel__brand-cell">
+                <BrandLogoImage brand={name} className="onboarding-brand-panel__brand-logo" />
               </div>
             ))}
           </div>

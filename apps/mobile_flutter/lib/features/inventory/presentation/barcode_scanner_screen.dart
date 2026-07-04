@@ -178,7 +178,43 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                MobileScanner(controller: _controller, onDetect: _onDetect),
+                MobileScanner(
+                  controller: _controller,
+                  onDetect: _onDetect,
+                  errorBuilder: (context, error) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.camera_alt_outlined, size: 48, color: Theme.of(context).colorScheme.error),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Camera unavailable',
+                            style: Theme.of(context).textTheme.titleMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            error.errorDetails?.message ??
+                                'Allow camera access in Android Settings, then tap Retry.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: () async {
+                              await _controller.start();
+                              if (mounted) setState(() {});
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry camera'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 if (_paused)
                   Container(
                     color: Colors.black54,

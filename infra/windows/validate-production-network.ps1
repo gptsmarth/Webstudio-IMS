@@ -84,7 +84,7 @@ $staticHint = if ($dhcp) { "warning" } else { "passed" }
 $results += [pscustomobject]@{
     Key = "static_server_ip"
     Status = $staticHint
-    Message = if ($dhcp) { "Primary interface uses DHCP — prefer reservation for production." } else { "Primary interface appears statically addressed." }
+    Message = if ($dhcp) { "Primary interface uses DHCP - prefer reservation for production." } else { "Primary interface appears statically addressed." }
 }
 
 $lanTcp = Test-TcpPort $lanIp $ApiPort

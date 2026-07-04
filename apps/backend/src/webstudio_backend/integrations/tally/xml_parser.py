@@ -69,6 +69,51 @@ def _extract_serials_from_line(line: ET.Element) -> list[str]:
     return list(dict.fromkeys(serials))
 
 
+def _parse_tally_money(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip().replace(",", "")
+    if "/" in cleaned:
+        cleaned = cleaned.split("/", 1)[0].strip()
+    try:
+        amount = abs(Decimal(cleaned))
+        return str(amount.quantize(Decimal("0.01")))
+    except InvalidOperation:
+        return None
+
+
+def _line_amount(line: ET.Element) -> str | None:
+    """Sale value for one inventory line (AMOUNT or RATE from Tally export)."""
+    direct = _parse_tally_money(_child_text(line, "AMOUNT"))
+    if direct:
+        return direct
+    rate = _parse_tally_money(_child_text(line, "RATE"))
+    if rate:
+        return rate
+    amounts: list[Decimal] = []
+    for child in line.iter():
+        if _local_name(child.tag).upper() != "AMOUNT":
+            continue
+        parsed = _parse_tally_money(child.text)
+        if parsed:
+            amounts.append(Decimal(parsed))
+    if not amounts:
+        return None
+    return str(max(amounts).quantize(Decimal("0.01")))
+
+
+def resolve_inventory_line_sale_amount(
+    line: TallyInventoryLine,
+    voucher: TallyVoucher,
+) -> float | None:
+    """Best-effort selling price for a synced sale row."""
+    if line.amount:
+        return float(line.amount)
+    if len(voucher.inventory_lines) == 1 and voucher.amount:
+        return float(voucher.amount)
+    return None
+
+
 def _parse_inventory_line(line: ET.Element, index: int) -> TallyInventoryLine:
     stock_item = _child_text(line, "STOCKITEMNAME") or ""
     quantity = _child_text(line, "ACTUALQTY") or _child_text(line, "BILLEDQTY") or "1"
@@ -79,6 +124,7 @@ def _parse_inventory_line(line: ET.Element, index: int) -> TallyInventoryLine:
         quantity=quantity,
         serial_number=serials[0] if serials else None,
         batch_allocations=serials,
+        amount=_line_amount(line),
     )
 
 

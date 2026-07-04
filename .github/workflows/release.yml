@@ -90,6 +90,9 @@ jobs:
       - name: Desktop unit tests
         run: pnpm --filter @webstudio/desktop test
 
+      - name: Desktop production build
+        run: pnpm --filter @webstudio/desktop build
+
       - name: Validate branding icons
         run: bash scripts/release/validate-branding-icons.sh
 

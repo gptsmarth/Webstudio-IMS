@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Wrapper for server post-install — surfaces errors instead of failing silently.
+  Wrapper for server post-install - surfaces errors instead of failing silently.
 #>
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",

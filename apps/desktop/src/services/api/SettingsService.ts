@@ -90,6 +90,9 @@ export interface IntegrationsSettings {
   openrouter_model: string;
   openrouter_configured: boolean;
   openrouter_api_key_hint: string | null;
+  openai_model: string;
+  openai_configured: boolean;
+  openai_api_key_hint: string | null;
   ai_provider_health: AIProviderHealthEntry[];
 }
 
@@ -108,6 +111,9 @@ export interface IntegrationsSettingsUpdate {
   openrouter_model?: string;
   openrouter_api_key?: string | null;
   clear_openrouter_api_key?: boolean;
+  openai_model?: string;
+  openai_api_key?: string | null;
+  clear_openai_api_key?: boolean;
 }
 
 export interface AIProviderTestResponse {

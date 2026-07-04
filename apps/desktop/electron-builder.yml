@@ -20,6 +20,17 @@ extraResources:
     to: assets/webstudio
     filter:
       - "**/*"
+  - from: public/assets/brand-logos
+    to: assets/brand-logos
+    filter:
+      - "**/*"
+      - "!README.md"
+  - from: public/assets/product-images
+    to: assets/product-images
+    filter:
+      - "**/*"
+      - "!README.md"
+      - "!.gitkeep"
 
 asar: true
 

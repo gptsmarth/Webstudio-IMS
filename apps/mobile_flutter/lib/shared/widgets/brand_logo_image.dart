@@ -22,17 +22,24 @@ class BrandLogoImage extends StatefulWidget {
 }
 
 class _BrandLogoImageState extends State<BrandLogoImage> {
-  late final List<String> _candidates = BrandLogoRegistry.assetCandidates(
-    brandName: widget.brandName,
-    logoFilename: widget.logoFilename,
-  );
+  late List<String> _candidates = _buildCandidates();
   int _candidateIndex = 0;
+
+  List<String> _buildCandidates() {
+    return BrandLogoRegistry.assetCandidates(
+      brandName: widget.brandName,
+      logoFilename: widget.logoFilename,
+    );
+  }
 
   @override
   void didUpdateWidget(covariant BrandLogoImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.brandName != widget.brandName || oldWidget.logoFilename != widget.logoFilename) {
-      setState(() => _candidateIndex = 0);
+      setState(() {
+        _candidates = _buildCandidates();
+        _candidateIndex = 0;
+      });
     }
   }
 

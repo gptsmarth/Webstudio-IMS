@@ -14,7 +14,13 @@ dart run flutter_launcher_icons
 dart run flutter_native_splash:create
 
 echo "[release] Building Android APK..."
-flutter build apk --release
+DART_DEFINES=()
+# Optional: WEBSTUDIO_DEFAULT_API_URL=http://192.168.29.100:8000 pnpm release:android
+if [[ -n "${WEBSTUDIO_DEFAULT_API_URL:-}" ]]; then
+  DART_DEFINES+=(--dart-define="WEBSTUDIO_DEFAULT_API_URL=${WEBSTUDIO_DEFAULT_API_URL}")
+  echo "[release] Default API URL: ${WEBSTUDIO_DEFAULT_API_URL}"
+fi
+flutter build apk --release "${DART_DEFINES[@]}"
 
 mkdir -p "$RELEASE_DIR"
 APK_SRC="$FLUTTER_DIR/build/app/outputs/flutter-apk/app-release.apk"

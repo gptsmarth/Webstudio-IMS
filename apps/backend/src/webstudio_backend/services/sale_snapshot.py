@@ -28,6 +28,7 @@ class SaleProductSnapshot:
     storage_unit: str
     storage_type: str
     location_name: str
+    purchase_price: Decimal | None = None
 
     @classmethod
     def from_detail(cls, detail: InventoryItemDetailRow) -> SaleProductSnapshot:
@@ -56,6 +57,7 @@ class SaleProductSnapshot:
                 else str(model.storage_type)
             ),
             location_name=detail.location.name,
+            purchase_price=item.purchase_price,
         )
 
     def apply_to(self, sale: Sale) -> None:
@@ -73,3 +75,4 @@ class SaleProductSnapshot:
         sale.snapshot_storage_unit = self.storage_unit
         sale.snapshot_storage_type = self.storage_type
         sale.snapshot_location_name = self.location_name
+        sale.snapshot_purchase_price = self.purchase_price

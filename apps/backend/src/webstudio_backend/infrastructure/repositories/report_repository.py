@@ -130,6 +130,7 @@ class SalesReportRow:
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None
+    purchase_price: float | None
     sale_source: str
     sold_at: datetime
     recorded_by_user_id: int | None
@@ -462,6 +463,7 @@ class ReportRepository:
                 Sale.customer_name,
                 Sale.payment_mode,
                 Sale.sale_amount,
+                Sale.snapshot_purchase_price,
                 Sale.sale_source,
                 Sale.sold_at,
                 Sale.recorded_by_user_id,
@@ -489,6 +491,7 @@ class ReportRepository:
             Sale.customer_name,
             Sale.payment_mode,
             Sale.sale_amount,
+            Sale.snapshot_purchase_price,
             Sale.sale_source,
             Sale.sold_at,
             Sale.recorded_by_user_id,
@@ -941,6 +944,7 @@ class ReportRepository:
             customer_name,
             payment_mode,
             sale_amount,
+            purchase_price,
             sale_source,
             sold_at,
             recorded_by_user_id,
@@ -958,6 +962,7 @@ class ReportRepository:
             customer_name=customer_name,
             payment_mode=payment_mode,
             sale_amount=float(sale_amount) if sale_amount is not None else None,
+            purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,
             recorded_by_user_id=recorded_by_user_id,
@@ -981,6 +986,7 @@ class ReportRepository:
             customer_name,
             payment_mode,
             sale_amount,
+            purchase_price,
             sale_source,
             sold_at,
             recorded_by_user_id,
@@ -1012,6 +1018,7 @@ class ReportRepository:
             customer_name=customer_name,
             payment_mode=payment_mode,
             sale_amount=float(sale_amount) if sale_amount is not None else None,
+            purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,
             recorded_by_user_id=recorded_by_user_id,

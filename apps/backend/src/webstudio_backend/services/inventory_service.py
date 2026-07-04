@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +50,7 @@ class InventoryService:
         current_location_id: int,
         status: InventoryStatus,
         purchase_date: date | None = None,
+        purchase_price: Decimal | None = None,
         actor: AuditActor,
     ) -> InventoryItemDetailRow:
         item = await self._repo.create(
@@ -58,6 +60,7 @@ class InventoryService:
             current_location_id=current_location_id,
             status=status,
             purchase_date=purchase_date,
+            purchase_price=purchase_price,
             actor=actor,
         )
         detail = await self._repo.get_detail(item.id)
@@ -75,6 +78,8 @@ class InventoryService:
         status: InventoryStatus | None = None,
         purchase_date: date | None = None,
         set_purchase_date: bool = False,
+        purchase_price: Decimal | None = None,
+        set_purchase_price: bool = False,
     ) -> InventoryItemDetailRow:
         item = await self._repo.require_by_id(item_id)
         await self._repo.update(
@@ -85,6 +90,8 @@ class InventoryService:
             status=status,
             purchase_date=purchase_date,
             set_purchase_date=set_purchase_date,
+            purchase_price=purchase_price,
+            set_purchase_price=set_purchase_price,
             actor=actor,
         )
         detail = await self._repo.get_detail(item_id)

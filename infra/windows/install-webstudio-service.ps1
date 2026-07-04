@@ -8,16 +8,21 @@ param(
     [string]$ServiceName = "WEBSTUDIO Server",
     [string]$NssmPath = "",
     [string]$PythonExe = "",
-    [string]$EnvFile = "$InstallRoot\config\env\.env",
-    [string]$PostgresServiceName = ""
+    [string]$EnvFile = "",
+    [string]$PostgresServiceName = "",
+    [switch]$SkipMigrations
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\webstudio-env.ps1"
 
 function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
 }
 
+if (-not $EnvFile) {
+    $EnvFile = "$InstallRoot\config\env\.env"
+}
 if (-not $NssmPath) {
     $NssmPath = "$InstallRoot\tools\nssm\nssm.exe"
 }
@@ -31,11 +36,17 @@ if (-not (Test-Path $NssmPath)) {
 if (-not (Test-Path $PythonExe)) {
     throw "Python runtime not found at $PythonExe"
 }
+if (-not (Test-Path $EnvFile)) {
+    throw "Missing env file: $EnvFile"
+}
 
 $resolvedPostgres = & "$PSScriptRoot\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
 
 Write-Step "Ensuring PostgreSQL is available..."
 & "$PSScriptRoot\ensure-postgresql.ps1" -PostgresServiceName $resolvedPostgres
+
+Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $EnvFile
+Sync-BackendEnvFile -InstallRoot $InstallRoot
 
 $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existing) {
@@ -48,9 +59,8 @@ Write-Step "Installing $ServiceName..."
 & $NssmPath install $ServiceName $PythonExe "-m" "webstudio_backend.main"
 & $NssmPath set $ServiceName AppDirectory "$InstallRoot\apps\backend"
 & $NssmPath set $ServiceName DisplayName "WEBSTUDIO Server Service"
-& $NssmPath set $ServiceName Description "WEBSTUDIO IMS API — business-hours inventory server"
+& $NssmPath set $ServiceName Description "WEBSTUDIO IMS API - business-hours inventory server"
 & $NssmPath set $ServiceName Start SERVICE_DELAYED_AUTO_START
-& $NssmPath set $ServiceName AppEnvironmentExtra "APP_ENV=production" "WEBSTUDIO_DATA_ROOT=$InstallRoot" "WEBSTUDIO_TALLY_SCHEDULER=1" "WEBSTUDIO_BACKUP_SCHEDULER=1" "WEBSTUDIO_NOTIFICATION_SCHEDULER=1" "WEBSTUDIO_MAINTENANCE_SCHEDULER=1"
 & $NssmPath set $ServiceName AppStdout "$InstallRoot\logs\webstudio-api.log"
 & $NssmPath set $ServiceName AppStderr "$InstallRoot\logs\webstudio-api-error.log"
 & $NssmPath set $ServiceName AppRotateFiles 1
@@ -59,16 +69,16 @@ Write-Step "Installing $ServiceName..."
 & $NssmPath set $ServiceName AppExit Default Restart
 & $NssmPath set $ServiceName AppRestartDelay 5000
 
+Write-Step "Applying production environment to service..."
+Apply-NssmServiceEnvironment -InstallRoot $InstallRoot -ServiceName $ServiceName -EnvFile $EnvFile -NssmPath $NssmPath
+
 Write-Step "Configuring service recovery (restart on failure)..."
 & "$PSScriptRoot\configure-service-recovery.ps1" -ServiceName $ServiceName
 
-Write-Step "Running database migrations..."
-Push-Location "$InstallRoot\apps\backend"
-& $PythonExe -m alembic upgrade head
-if ($LASTEXITCODE -ne 0) {
-    throw "Alembic migration failed with exit code $LASTEXITCODE"
+if (-not $SkipMigrations) {
+    Write-Step "Running database migrations..."
+    & "$PSScriptRoot\run-alembic-upgrade.ps1" -InstallRoot $InstallRoot -PythonExe $PythonExe
 }
-Pop-Location
 
 Write-Step "Starting WEBSTUDIO Server Service..."
 Start-Service -Name $ServiceName

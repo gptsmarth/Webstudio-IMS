@@ -710,6 +710,13 @@ const GEMINI_MODELS = [
   'gemini-flash-lite-latest',
 ];
 
+const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'];
+
+const AI_PROVIDERS = [
+  { id: 'gemini', label: 'Google Gemini (recommended — live web search)' },
+  { id: 'openai', label: 'OpenAI ChatGPT (knowledge + fallback)' },
+] as const;
+
 function providerStatusLabel(status: string): string {
   switch (status) {
     case 'healthy':
@@ -728,50 +735,66 @@ function providerStatusLabel(status: string): string {
 export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element {
   const integrations = data.integrations;
   const geminiHealth = integrations.ai_provider_health.find((entry) => entry.provider === 'gemini');
+  const openaiHealth = integrations.ai_provider_health.find((entry) => entry.provider === 'openai');
   const [form, setForm] = useState({
     gemini_model: integrations.gemini_model,
+    openai_model: integrations.openai_model,
+    ai_primary_provider: integrations.ai_primary_provider,
     ai_enrichment_enabled: integrations.ai_enrichment_enabled,
     ai_timeout_seconds: integrations.ai_timeout_seconds,
     ai_retry_count: integrations.ai_retry_count,
   });
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [clearGeminiKey, setClearGeminiKey] = useState(false);
+  const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
-  const [testingProvider, setTestingProvider] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
   useEffect(() => {
     setForm({
       gemini_model: integrations.gemini_model,
+      openai_model: integrations.openai_model,
+      ai_primary_provider: integrations.ai_primary_provider,
       ai_enrichment_enabled: integrations.ai_enrichment_enabled,
       ai_timeout_seconds: integrations.ai_timeout_seconds,
       ai_retry_count: integrations.ai_retry_count,
     });
     setGeminiApiKey('');
+    setOpenaiApiKey('');
     setClearGeminiKey(false);
+    setClearOpenaiKey(false);
   }, [integrations]);
 
-  const handleTestGemini = async () => {
-    setTestingProvider(true);
+  const buildFallbackChain = (primary: string): string[] => {
+    const ordered = primary === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
+    return ordered.filter((provider, index) => ordered.indexOf(provider) === index);
+  };
+
+  const handleTestProvider = async (provider: 'gemini' | 'openai') => {
+    setTestingProvider(provider);
     setTestMessage(null);
     try {
-      const result = await SettingsService.testAiProvider('gemini');
+      const result = await SettingsService.testAiProvider(provider);
       const latency = result.latency_ms != null ? ` (${result.latency_ms} ms)` : '';
       setTestMessage(`${result.message}${latency}`);
     } catch (err: unknown) {
       const message = err as { message?: string };
-      setTestMessage(message.message ?? 'Could not test Gemini connection.');
+      setTestMessage(message.message ?? `Could not test ${provider} connection.`);
     } finally {
-      setTestingProvider(false);
+      setTestingProvider(null);
     }
   };
 
   return (
     <>
       <IntegrationApiKeysSection />
-      <Section title="AI product enrichment (Gemini)">
+      <Section title="AI product enrichment">
         <p className="stg-section__lead">
-          Add Laptop auto-fetch uses Google Gemini with web search first, then a knowledge fallback.
-          Product images are resolved from official pages and web search — not guessed by the model.
+          Add Laptop auto-fetch uses your primary AI provider first, then falls back to the other
+          if needed. Gemini searches the live web for exact SKUs (best for Indian model numbers).
+          OpenAI ChatGPT fills gaps from training data. Product images are resolved separately via
+          web search — never guessed by the model.
         </p>
         {geminiHealth && (
           <Readonly
@@ -779,16 +802,26 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
             value={`${providerStatusLabel(geminiHealth.status)} · ${geminiHealth.requests} requests · ${geminiHealth.failures} failures · ${geminiHealth.rate_limits} rate limits`}
           />
         )}
+        {openaiHealth && (
+          <Readonly
+            label="OpenAI status"
+            value={`${providerStatusLabel(openaiHealth.status)} · ${openaiHealth.requests} requests · ${openaiHealth.failures} failures · ${openaiHealth.rate_limits} rate limits`}
+          />
+        )}
         <form
           className="stg-form"
           onSubmit={(e) => {
             e.preventDefault();
+            const primary = form.ai_primary_provider;
             void workspace.saveIntegrations({
               gemini_model: form.gemini_model,
+              openai_model: form.openai_model,
               gemini_api_key: geminiApiKey.trim() || null,
+              openai_api_key: openaiApiKey.trim() || null,
               clear_gemini_api_key: clearGeminiKey,
-              ai_primary_provider: 'gemini',
-              ai_fallback_chain: ['gemini'],
+              clear_openai_api_key: clearOpenaiKey,
+              ai_primary_provider: primary,
+              ai_fallback_chain: buildFallbackChain(primary),
               ai_enrichment_enabled: form.ai_enrichment_enabled,
               ai_timeout_seconds: form.ai_timeout_seconds,
               ai_retry_count: form.ai_retry_count,
@@ -804,6 +837,24 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
             />
             Enable AI enrichment
           </label>
+          <Field label="Primary provider">
+            <select
+              className="input"
+              value={form.ai_primary_provider}
+              disabled={!workspace.canWrite}
+              onChange={(e) => setForm({ ...form, ai_primary_provider: e.target.value })}
+            >
+              {AI_PROVIDERS.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Readonly
+            label="Fallback order"
+            value={buildFallbackChain(form.ai_primary_provider).join(' → ')}
+          />
           <Field label="Timeout (seconds)">
             <input
               className="input"
@@ -819,7 +870,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
           </Field>
           <Field
             label="Lookup attempts"
-            hint="Total tries per spec lookup. Use 1 to conserve Gemini web-search quota; use 2 for one retry."
+            hint="Total tries per spec lookup. Use 1 to conserve API quota; use 2 for one retry."
           >
             <input
               className="input"
@@ -889,10 +940,73 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            disabled={!workspace.canWrite || testingProvider}
-            onClick={() => void handleTestGemini()}
+            disabled={!workspace.canWrite || testingProvider !== null}
+            onClick={() => void handleTestProvider('gemini')}
           >
-            {testingProvider ? 'Testing Gemini…' : 'Test Gemini connection'}
+            {testingProvider === 'gemini' ? 'Testing Gemini…' : 'Test Gemini connection'}
+          </button>
+
+          <h3 className="stg-subheading">OpenAI API (ChatGPT)</h3>
+          <Readonly
+            label="OpenAI API key status"
+            value={
+              integrations.openai_configured
+                ? `Configured (${integrations.openai_api_key_hint ?? '••••'})`
+                : 'Not configured'
+            }
+          />
+          <Field label="OpenAI model" hint="gpt-4o-mini is the best cost/accuracy balance.">
+            <select
+              className="input"
+              value={form.openai_model}
+              onChange={(e) => setForm({ ...form, openai_model: e.target.value })}
+              disabled={!workspace.canWrite}
+            >
+              {OPENAI_MODELS.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="OpenAI API key"
+            hint={
+              integrations.openai_configured
+                ? 'Leave blank to keep the current key.'
+                : 'Get a key at platform.openai.com/api-keys'
+            }
+          >
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder={integrations.openai_configured ? '••••••••••••' : 'sk-…'}
+              value={openaiApiKey}
+              disabled={!workspace.canWrite || clearOpenaiKey}
+              onChange={(e) => setOpenaiApiKey(e.target.value)}
+            />
+          </Field>
+          {integrations.openai_configured && workspace.canWrite && (
+            <label className="stg-check">
+              <input
+                type="checkbox"
+                checked={clearOpenaiKey}
+                onChange={(e) => {
+                  setClearOpenaiKey(e.target.checked);
+                  if (e.target.checked) setOpenaiApiKey('');
+                }}
+              />
+              Remove stored OpenAI API key
+            </label>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!workspace.canWrite || testingProvider !== null}
+            onClick={() => void handleTestProvider('openai')}
+          >
+            {testingProvider === 'openai' ? 'Testing OpenAI…' : 'Test OpenAI connection'}
           </button>
 
           {testMessage && <p className="stg-muted">{testMessage}</p>}

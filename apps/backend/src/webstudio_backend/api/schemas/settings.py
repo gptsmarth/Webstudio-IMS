@@ -86,7 +86,7 @@ class AIProviderHealthEntry(BaseModel):
 
 
 class IntegrationsSettings(BaseModel):
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
     gemini_configured: bool = False
     gemini_api_key_hint: str | None = None
     ai_primary_provider: str = "gemini"
@@ -100,11 +100,14 @@ class IntegrationsSettings(BaseModel):
     openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
     openrouter_configured: bool = False
     openrouter_api_key_hint: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    openai_configured: bool = False
+    openai_api_key_hint: str | None = None
     ai_provider_health: list[AIProviderHealthEntry] = Field(default_factory=list)
 
 
 class IntegrationsSettingsUpdate(BaseModel):
-    gemini_model: str = Field(default="gemini-2.5-flash", min_length=1, max_length=64)
+    gemini_model: str = Field(default="gemini-2.5-flash-lite", min_length=1, max_length=64)
     gemini_api_key: str | None = Field(default=None, max_length=256)
     clear_gemini_api_key: bool = False
     ai_primary_provider: str = Field(default="gemini", min_length=1, max_length=32)
@@ -122,6 +125,9 @@ class IntegrationsSettingsUpdate(BaseModel):
     )
     openrouter_api_key: str | None = Field(default=None, max_length=256)
     clear_openrouter_api_key: bool = False
+    openai_model: str = Field(default="gpt-4o-mini", min_length=1, max_length=128)
+    openai_api_key: str | None = Field(default=None, max_length=256)
+    clear_openai_api_key: bool = False
 
 
 class AIProviderTestRequest(BaseModel):

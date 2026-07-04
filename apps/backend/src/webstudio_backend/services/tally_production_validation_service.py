@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
     TallyCompanySyncRepository,
 )
@@ -116,9 +116,9 @@ def _xml_request_has_required_fields(payload: str) -> bool:
         "<ENVELOPE>",
         "TALLYREQUEST>Export",
         "SVCURRENTCOMPANY>",
-        "VOUCHERTYPENAME>",
         "SVFROMDATE>",
         "SVTODATE>",
+        "Day Book",
     )
     return all(token in payload for token in required)
 
@@ -169,10 +169,8 @@ class TallyProductionValidationService:
 
         # XML request generation
         sample_client = TallyXmlClient(host or "127.0.0.1", port or "9000")
-        voucher_type = MONITORED_VOUCHER_TYPES[0]
-        sample_xml = sample_client._export_request(  # noqa: SLF001
+        sample_xml = sample_client._day_book_export_request(  # noqa: SLF001
             company_name=company_name or "WEBSTUDIO",
-            voucher_type=voucher_type,
             from_date=date.today(),
             to_date=date.today(),
         )
@@ -182,8 +180,9 @@ class TallyProductionValidationService:
                 key="xml_request_generation",
                 name="XML request generation",
                 status="passed" if xml_ok else "failed",
-                message=f"Export request template valid for {voucher_type}.",
-                detail="Monitored types: " + ", ".join(MONITORED_VOUCHER_TYPES),
+                message="Day Book export template valid (Tally Prime compatible).",
+                detail="Monitored voucher types filtered server-side: "
+                + ", ".join(MONITORED_VOUCHER_TYPES),
             ),
         )
 
@@ -254,7 +253,7 @@ class TallyProductionValidationService:
         )
 
         # Recovery after server restart
-        scheduler_env = os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
+        scheduler_env = get_settings().webstudio_tally_scheduler
         runtime_row = await self._runtime.get_state("tally_sync")
         restart_status = "passed" if scheduler_env and runtime_row is not None else "warning"
         restart_message = (
@@ -275,7 +274,7 @@ class TallyProductionValidationService:
         )
 
         # Recovery after Tally restart
-        probe_env = os.getenv("WEBSTUDIO_TALLY_CONNECTIVITY_PROBE", "0") == "1"
+        probe_env = get_settings().webstudio_tally_connectivity_probe
         probe_row = await self._runtime.get_state("tally_connectivity_probe")
         tally_restart_status = "passed" if probe_env else "warning"
         checks.append(

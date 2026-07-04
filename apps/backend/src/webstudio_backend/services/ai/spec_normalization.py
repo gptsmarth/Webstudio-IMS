@@ -137,7 +137,7 @@ def product_line_matches_sku(
     return True
 
 
-_UNGROUNDED_PROVIDERS = frozenset({"groq", "openrouter"})
+_UNGROUNDED_PROVIDERS = frozenset({"openai", "groq", "openrouter"})
 
 
 def validate_enrichment_payload(

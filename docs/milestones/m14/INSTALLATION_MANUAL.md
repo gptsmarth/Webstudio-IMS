@@ -102,16 +102,26 @@ Get-Service postgresql-x64-16
 Post-install script (`server-install-post.ps1`) runs automatically:
 
 - Creates `logs`, `backups`, `certs`, `exports`, `config\env`
-- Ensures PostgreSQL
-- Creates Python venv dependencies (`pip install -e .`)
-- Runs Alembic (step 6)
-- Registers Windows Service (step 4)
+- Ensures PostgreSQL (auto-detects `postgresql-x64-16` / `-18`, etc.)
+- Uses bundled Python at `{InstallRoot}\runtime\python\python.exe`
+- **Prompts for `webstudio_app` password** and writes `DATABASE_URL` to `.env`
+- Clears TLS cert paths when files are absent (HTTP on port **8000**)
+- Syncs `.env` into `apps\backend\config\env\.env`
+- Runs Alembic via `run-alembic-upgrade.ps1` from `database\migrations`
+- Registers Windows Service via NSSM with full environment from `.env`
+
+If post-install cannot complete (unattended install), run once:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\finalize-server-setup.ps1"
+```
 
 **Validation**
 
 - [ ] `D:\WEBSTUDIO-IMS\apps\backend` exists
-- [ ] `D:\WEBSTUDIO-IMS\venv\Scripts\python.exe` exists
+- [ ] `D:\WEBSTUDIO-IMS\runtime\python\python.exe` exists
 - [ ] `D:\WEBSTUDIO-IMS\config\env\.env` exists (generated if absent)
+- [ ] `curl.exe http://127.0.0.1:8000/health/ready` returns **200**
 
 ---
 
@@ -124,9 +134,10 @@ Normally performed by installer via `install-webstudio-service.ps1`.
 | Service name | `WEBSTUDIO Server` |
 | Startup | Automatic (Delayed Start) |
 | Wrapper | NSSM |
-| Executable | `{InstallRoot}\venv\Scripts\python.exe` |
+| Executable | `{InstallRoot}\runtime\python\python.exe` |
 | Arguments | `-m webstudio_backend.main` |
 | Working directory | `{InstallRoot}\apps\backend` |
+| Environment | Loaded from `config\env\.env` via `Apply-NssmServiceEnvironment` |
 
 **Manual re-install (if needed)**
 
@@ -158,7 +169,8 @@ Edit **`D:\WEBSTUDIO-IMS\config\env\.env`** (installer seeds from `.env.producti
 |----------|----------------|
 | `APP_ENV` | `production` |
 | `JWT_SECRET` | ≥32 bytes random (installer-generated) |
-| `DATABASE_URL` | `postgresql+asyncpg://user:pass@localhost:5432/webstudio` |
+| `DATABASE_URL` | `postgresql+asyncpg://webstudio_app:pass@127.0.0.1:5432/webstudio` |
+| `TLS_CERT_PATH` / `TLS_KEY_PATH` | Leave **empty** for HTTP LAN (port 8000) |
 | `WEBSTUDIO_DATA_ROOT` | `D:\WEBSTUDIO-IMS` |
 | `API_HOST` | `0.0.0.0` |
 | `API_PORT` | `8000` |
@@ -394,7 +406,7 @@ API flow:
 
 | Symptom | Action |
 |---------|--------|
-| Service won't start | Check `logs\webstudio-api-error.log`, PostgreSQL running, `DATABASE_URL` |
+| Service won't start | Check `logs\webstudio-api-error.log`; empty `TLS_CERT_PATH`; run `finalize-server-setup.ps1` |
 | `/health/ready` fails DB | Re-run Alembic; verify PostgreSQL credentials |
 | Wizard won't appear | Confirm `system_initialized` is false; check API URL in desktop |
 | Schedulers not running | Verify env flags; restart service; check `scheduler_runtime_state` |

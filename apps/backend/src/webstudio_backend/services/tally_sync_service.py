@@ -64,7 +64,11 @@ from webstudio_backend.integrations.tally.incremental_sync import (
 )
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
-from webstudio_backend.integrations.tally.xml_parser import models_equivalent, parse_vouchers_xml
+from webstudio_backend.integrations.tally.xml_parser import (
+    models_equivalent,
+    parse_vouchers_xml,
+    resolve_inventory_line_sale_amount,
+)
 from webstudio_backend.services.notification_service import NotificationService
 from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
@@ -760,9 +764,10 @@ class TallySyncService:
             tally_voucher_type=voucher.voucher_type,
             mapped_location_id=mapped_location_id,
             notes=voucher.narration,
-            idempotency_key=idempotency_key,
-            snapshot=snapshot,
-        )
+        idempotency_key=idempotency_key,
+        snapshot=snapshot,
+        sale_amount=resolve_inventory_line_sale_amount(line, voucher),
+    )
 
         actor = AuditActor.system(display_name="Tally Sync", role="system")
         await self._recorder.record_inventory_status_change(

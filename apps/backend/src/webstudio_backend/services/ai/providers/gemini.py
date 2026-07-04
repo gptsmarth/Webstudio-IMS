@@ -29,7 +29,7 @@ from webstudio_backend.services.ai.types import (
     ProviderTestResult,
 )
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 # flash-lite has a separate quota and often succeeds when flash models are rate-limited.
 GROUNDED_MODELS = (
     "gemini-2.5-flash-lite",
@@ -340,9 +340,10 @@ class GeminiProvider(AIProvider):
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
+            detail = _error_message(response) or f"HTTP {response.status_code}"
             raise AIProviderError(
                 "API_ERROR",
-                "Gemini request failed.",
+                f"Gemini request failed ({detail}).",
                 provider="gemini",
             ) from exc
         return response.json()

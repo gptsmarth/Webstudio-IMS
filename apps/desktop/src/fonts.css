@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Inter';
-  src: url('/assets/fonts/Inter-Variable.ttf') format('truetype-variations'),
+  src: url('../public/assets/fonts/Inter-Variable.ttf') format('truetype-variations'),
        local('Inter'),
        local('Inter-Regular');
   font-weight: 100 900;
@@ -10,7 +10,7 @@
 
 @font-face {
   font-family: 'JetBrains Mono';
-  src: url('/assets/fonts/JetBrainsMono-Variable.ttf') format('truetype-variations'),
+  src: url('../public/assets/fonts/JetBrainsMono-Variable.ttf') format('truetype-variations'),
        local('JetBrains Mono'),
        local('JetBrainsMono-Regular');
   font-weight: 100 800;

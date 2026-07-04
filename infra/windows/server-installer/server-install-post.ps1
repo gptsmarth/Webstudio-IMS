@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\..\webstudio-env.ps1"
 
 function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
@@ -26,6 +27,7 @@ $dirs = @(
     "$InstallRoot\exports",
     "$InstallRoot\exports\archive",
     "$InstallRoot\config\env",
+    "$InstallRoot\apps\backend\config\env",
     "$InstallRoot\tools\nssm",
     "$InstallRoot\runtime\python"
 )
@@ -61,40 +63,48 @@ if (-not (Test-Path $envFile)) {
     $jwt = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
     (Get-Content $envFile) `
         -replace 'JWT_SECRET=GENERATED_BY_INSTALLER', "JWT_SECRET=$jwt" `
-        -replace 'API_PORT=8443', 'API_PORT=8000' | Set-Content $envFile
+        -replace 'API_PORT=8443', 'API_PORT=8000' `
+        -replace '@localhost:5432', '@127.0.0.1:5432' | Set-Content $envFile
 }
+
+Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $envFile
+Sync-BackendEnvFile -InstallRoot $InstallRoot
 
 Write-Step "Installing/updating Python dependencies..."
 Push-Location "$InstallRoot\apps\backend"
-$importCheck = & $pythonExe -c "import webstudio_backend" 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Step "Bundled backend not importable; installing package..."
-    & $pythonExe -m pip install hatchling wheel --no-warn-script-location
+try {
+    $importCheck = & $pythonExe -c "import webstudio_backend" 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "pip install hatchling/wheel failed with exit code $LASTEXITCODE"
+        Write-Step "Bundled backend not importable; installing package..."
+        & $pythonExe -m pip install hatchling wheel --no-warn-script-location
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install hatchling/wheel failed with exit code $LASTEXITCODE"
+        }
+        & $pythonExe -m pip install --no-build-isolation . --no-warn-script-location
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install failed with exit code $LASTEXITCODE"
+        }
+    } else {
+        Write-Step "Bundled backend runtime already installed."
     }
-    & $pythonExe -m pip install --no-build-isolation . --no-warn-script-location
-    if ($LASTEXITCODE -ne 0) {
-        throw "pip install failed with exit code $LASTEXITCODE"
-    }
-} else {
-    Write-Step "Bundled backend runtime already installed."
+} finally {
+    Pop-Location
 }
+
+Write-Step "Configuring database connection (pgAdmin user webstudio_app)..."
+Ensure-DatabaseUrlConfigured -InstallRoot $InstallRoot -EnvFile $envFile -PromptIfPlaceholder | Out-Null
+Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $envFile
+Sync-BackendEnvFile -InstallRoot $InstallRoot
+
 Write-Step "Running Alembic migrations..."
-& $pythonExe -m alembic upgrade head
-if ($LASTEXITCODE -ne 0) {
-    throw @"
-Alembic migration failed. Ensure PostgreSQL database 'webstudio' and user 'webstudio_app' exist,
-and DATABASE_URL in $envFile is correct. Then re-run post-install.
-"@
-}
-Pop-Location
+& "$PSScriptRoot\..\run-alembic-upgrade.ps1" -InstallRoot $InstallRoot -PythonExe $pythonExe
 
 Write-Step "Installing WEBSTUDIO Server Windows Service..."
 & "$PSScriptRoot\..\install-webstudio-service.ps1" `
     -InstallRoot $InstallRoot `
     -PostgresServiceName $resolvedPostgres `
     -PythonExe $pythonExe `
-    -NssmPath $nssmPath
+    -NssmPath $nssmPath `
+    -SkipMigrations
 
 Write-Step "WEBSTUDIO Server post-install complete."

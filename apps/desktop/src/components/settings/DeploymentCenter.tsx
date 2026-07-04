@@ -11,6 +11,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { parseApiError } from '../../lib/apiError';
 import { formatDateTime } from '../../lib/datetime';
 import {
   DeploymentCenterService,
@@ -63,15 +64,68 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
     void load();
   }, [load]);
 
-  const runAction = async (key: string, action: () => Promise<unknown>) => {
+  const runAction = async (
+    key: string,
+    action: () => Promise<unknown>,
+    formatSuccess?: (result: unknown) => string,
+  ) => {
     setBusy(key);
     setMessage(null);
     try {
-      await action();
+      const result = await action();
       await load();
-      setMessage('Action completed successfully.');
-    } catch {
-      setMessage('Action failed. Check server logs for details.');
+      setMessage(formatSuccess ? formatSuccess(result) : 'Action completed successfully.');
+    } catch (err) {
+      setMessage(parseApiError(err, 'Action failed. Check server logs for details.'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const formatCheckUpdatesMessage = (result: unknown): string => {
+    const payload = result as { updates_found?: number; releases?: Array<{ release_version?: string }> };
+    const count = payload.updates_found ?? 0;
+    if (count <= 0) {
+      return 'No newer releases on GitHub. The server is already on the latest published version (or GitHub has no newer tag).';
+    }
+    const versions = (payload.releases ?? [])
+      .map((item) => item.release_version)
+      .filter(Boolean)
+      .join(', ');
+    return `Found ${count} newer release(s) on GitHub${versions ? `: ${versions}` : ''}. Click Download next.`;
+  };
+
+  const formatDownloadMessage = (result: unknown): string => {
+    const payload = result as {
+      status?: string;
+      discovered?: number;
+      queued?: number;
+      completed?: number;
+      failed?: number;
+      detail?: string;
+    };
+    if (payload.status === 'disabled') {
+      return 'GitHub sync is disabled. Enable github_release_sync_enabled in the database and restart the server.';
+    }
+    if (payload.status === 'failed') {
+      return `Download failed: ${payload.detail ?? 'Check server logs.'}`;
+    }
+    const discovered = payload.discovered ?? 0;
+    const completed = payload.completed ?? 0;
+    if (discovered === 0 && completed === 0) {
+      return 'Nothing new to download. GitHub has no release newer than the server catalog, or the release is already downloaded.';
+    }
+    return `Download finished — discovered ${discovered}, completed ${completed}, failed ${payload.failed ?? 0}. Review Downloaded packages below.`;
+  };
+
+  const openLogs = async () => {
+    setBusy('logs');
+    try {
+      const logRows = await DeploymentCenterService.getLogs(1, 50);
+      setLogs(logRows.items);
+      setLogsOpen(true);
+    } catch (err) {
+      setMessage(parseApiError(err, 'Unable to load deployment logs.'));
     } finally {
       setBusy(null);
     }
@@ -112,6 +166,22 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
 
         {dashboard && (
           <>
+            {!dashboard.github_repo && (
+              <p className="stg-backup-warning">
+                GitHub is not configured on this server. Add{' '}
+                <code>WEBSTUDIO_GITHUB_REPO</code> and <code>WEBSTUDIO_GITHUB_TOKEN</code> to the
+                server <code>.env</code>, restart the WEBSTUDIO Server service, then enable GitHub
+                sync in system settings. Check updates and download will not work until then.
+              </p>
+            )}
+            {dashboard.github_repo && !dashboard.sync_enabled && (
+              <p className="stg-backup-warning">
+                GitHub repo is set ({dashboard.github_repo}) but automatic sync is disabled. Enable{' '}
+                <code>github_release_sync_enabled</code> in system settings, or use Check updates /
+                Download manually from here.
+              </p>
+            )}
+
             <div className="stg-backup-admin__dashboard">
               <div
                 className={`stg-backup-health stg-backup-health--${dashboard.compatibility_status === 'compatible' ? 'healthy' : dashboard.compatibility_status === 'update_available' ? 'warning' : 'degraded'}`}
@@ -164,7 +234,11 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                       className="btn btn-secondary btn-sm"
                       disabled={!!busy}
                       onClick={() =>
-                        void runAction('check', () => DeploymentCenterService.checkUpdates())
+                        void runAction(
+                          'check',
+                          () => DeploymentCenterService.checkUpdates(),
+                          formatCheckUpdatesMessage,
+                        )
                       }
                     >
                       <Search size={14} /> Check updates
@@ -174,18 +248,14 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                       className="btn btn-secondary btn-sm"
                       disabled={!!busy}
                       onClick={() =>
-                        void runAction('download', () => DeploymentCenterService.download())
+                        void runAction(
+                          'download',
+                          () => DeploymentCenterService.download(),
+                          formatDownloadMessage,
+                        )
                       }
                     >
                       <Download size={14} /> Download
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={!!busy}
-                      onClick={() => setLogsOpen(true)}
-                    >
-                      <FileText size={14} /> View logs
                     </button>
                     <button
                       type="button"
@@ -197,6 +267,14 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={!!busy}
+                  onClick={() => void openLogs()}
+                >
+                  <FileText size={14} /> View logs
+                </button>
               </div>
             </div>
 
@@ -384,14 +462,19 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
 
       {approvalAction && (
         <ModalPortal>
-          <div className="modal-backdrop" role="presentation">
+          <div
+            className="stg-restore-overlay"
+            role="presentation"
+            onClick={() => setApprovalAction(null)}
+          >
             <div
-              className="modal"
+              className="stg-backup-detail animate-slide-in"
               role="dialog"
               aria-modal="true"
               aria-label="Administrator approval"
+              onClick={(event) => event.stopPropagation()}
             >
-              <h2>Administrator approval required</h2>
+              <h3>Administrator approval required</h3>
               <p className="stg-muted">
                 Confirm that you approve this {approvalAction} action. WEBSTUDIO never deploys
                 releases automatically.
@@ -430,19 +513,26 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
 
       {logsOpen && (
         <ModalPortal>
-          <div className="modal-backdrop" role="presentation">
+          <div
+            className="stg-restore-overlay"
+            role="presentation"
+            onClick={() => setLogsOpen(false)}
+          >
             <div
-              className="modal modal--wide"
+              className="stg-backup-detail stg-backup-detail--wide animate-slide-in"
               role="dialog"
               aria-modal="true"
               aria-label="Deployment logs"
+              onClick={(event) => event.stopPropagation()}
             >
-              <h2>Deployment logs</h2>
-              <EventTable events={logs} />
+              <h3>Deployment logs</h3>
+              <div className="stg-backup-detail__body">
+                <EventTable events={logs} />
+              </div>
               <div className="stg-actions">
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-primary btn-sm"
                   onClick={() => setLogsOpen(false)}
                 >
                   Close

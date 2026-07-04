@@ -130,6 +130,8 @@ Replace `{COMPANY}`, `{VOUCHER_TYPE}`, `{FROM_YYYYMMDD}`, `{TO_YYYYMMDD}`:
 
 Monitored voucher types: `Sales`, `NEW SALE` (see `integrations/tally/constants.py`).
 
+**Tally Prime:** use **Day Book** export (`<ID>Day Book</ID>`) — the legacy `Vouchers` collection returns empty/error on Tally Prime. WEBSTUDIO filters Sales / NEW SALE server-side after parse.
+
 ---
 
 ## 3. Sample XML response
@@ -181,6 +183,7 @@ From test fixture `tests/tally/fixtures/sample_vouchers.py`:
 | `PARTYLEDGERNAME` | Customer name + fallback fingerprint | Customer name |
 | `STOCKITEMNAME` | Model matching | — |
 | `SERIALNUMBER` / `BASICUSERDESCRIPTION` | Inventory serial lookup | Serial on sale record |
+| `AMOUNT` / `RATE` (inventory line) | Selling price on sale record | **Sale amount** (Sales workspace) |
 | `NARRATION` | Optional context | — |
 
 Parser: `integrations/tally/xml_parser.py`

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import { useDebounce } from '../../lib/useDebounce';
 import {
-  brandLogoSrc,
   canExportCatalogue,
   canWriteCatalogue,
   catalogueActionErrorMessage,
@@ -10,6 +9,7 @@ import {
   matchesSearch,
   paginateItems,
 } from '../../lib/catalogue';
+import { BrandLogoImage } from '../branding/BrandLogoImage';
 import { exportRowsToCsv } from '../../lib/catalogueExport';
 import type { DistributionGroup } from '../../services/api/DashboardService';
 import {
@@ -263,9 +263,9 @@ export function BrandsTab({
                   return (
                     <tr key={brand.id}>
                       <td>
-                        <img
-                          src={brandLogoSrc(brand.name, brand.logo_filename)}
-                          alt=""
+                        <BrandLogoImage
+                          brand={brand.name}
+                          logoFilename={brand.logo_filename}
                           className="cat-brand-logo"
                         />
                       </td>

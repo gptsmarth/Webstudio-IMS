@@ -79,7 +79,7 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
   ConnectionController(this._ref)
       : super(
           ServerConnectionState(
-            manualUrl: _ref.read(appConfigProvider).apiBaseUrl,
+            manualUrl: AppConfig.suggestedManualServerUrl(),
             savedServers: _ref.read(serverRepositoryProvider).savedServers(),
           ),
         );
@@ -105,9 +105,11 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
   Future<void> startAutoDiscovery() async {
     _cancelled = false;
     _messageTimer?.cancel();
+    final suggestedUrl = _suggestedManualUrl();
     state = state.copyWith(
       phase: ConnectionPhase.searching,
       messageIndex: 0,
+      manualUrl: suggestedUrl,
       clearError: true,
       clearResult: true,
       clearDiagnostics: true,
@@ -136,7 +138,7 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
       state = state.copyWith(
         phase: ConnectionPhase.manual,
         discoveredServers: mdnsServers,
-        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : AppConfig.defaultApiBaseUrl(),
+        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : suggestedUrl,
       );
       return;
     }
@@ -149,33 +151,51 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
     if (_cancelled) return;
 
     if (probeResult != null) {
+      final discovered = DiscoveredServer(
+        id: 'probe-${probeResult.url}',
+        serverName: probeResult.companyName ?? 'WEBSTUDIO Server',
+        companyName: probeResult.companyName ?? 'WEBSTUDIO',
+        backendVersion: probeResult.backendVersion ?? 'unknown',
+        apiVersion: '1.0',
+        buildVersion: '',
+        environment: 'local',
+        port: Uri.parse(probeResult.url).port,
+        host: Uri.parse(probeResult.url).host,
+        url: probeResult.url,
+        lastSeen: DateTime.now(),
+        status: 'online',
+      );
       state = state.copyWith(
         phase: ConnectionPhase.manual,
-        discoveredServers: [
-          DiscoveredServer(
-            id: 'probe-${probeResult.url}',
-            serverName: probeResult.companyName ?? 'WEBSTUDIO Server',
-            companyName: probeResult.companyName ?? 'WEBSTUDIO',
-            backendVersion: probeResult.backendVersion ?? 'unknown',
-            apiVersion: '1.0',
-            buildVersion: '',
-            environment: 'local',
-            port: Uri.parse(probeResult.url).port,
-            host: Uri.parse(probeResult.url).host,
-            url: probeResult.url,
-            lastSeen: DateTime.now(),
-            status: 'online',
-          ),
-        ],
+        discoveredServers: [discovered],
         manualUrl: probeResult.url,
       );
+      await connectToUrl(probeResult.url);
       return;
     }
 
     state = state.copyWith(
       phase: ConnectionPhase.manual,
-      manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : AppConfig.defaultApiBaseUrl(),
+      manualUrl: suggestedUrl,
     );
+  }
+
+  void skipToManualEntry() {
+    cancelDiscovery();
+    state = state.copyWith(
+      phase: ConnectionPhase.manual,
+      manualUrl: _suggestedManualUrl(),
+      clearError: true,
+      clearDiagnostics: true,
+    );
+  }
+
+  String _suggestedManualUrl() {
+    final current = _ref.read(appConfigProvider).apiBaseUrl.trim();
+    if (current.isNotEmpty && !AppConfig.isEmulatorLoopbackUrl(current)) {
+      return current;
+    }
+    return AppConfig.suggestedManualServerUrl();
   }
 
   void cancelDiscovery() {
@@ -184,6 +204,7 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
   }
 
   Future<ConnectionTestResult?> connectToUrl(String url) async {
+    cancelDiscovery();
     state = state.copyWith(
       phase: ConnectionPhase.testing,
       clearError: true,

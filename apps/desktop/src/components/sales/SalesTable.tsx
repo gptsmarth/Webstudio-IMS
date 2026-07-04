@@ -8,6 +8,8 @@ import {
   saleStatusLabel,
 } from '../../lib/sales';
 import { hasActiveSalesFilters } from '../../lib/salesExport';
+import { canViewPurchasePrice } from '../../lib/inventory';
+import { useAuthStore } from '../../store';
 import type { SalesSortField, SalesWorkspaceState } from '../../hooks/useSalesWorkspace';
 import type { SaleListItem } from '../../services/api/SalesService';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
@@ -63,7 +65,8 @@ const COLUMNS: ColumnDef[] = [
     defaultWidth: 110,
   },
   { id: 'soldBy', label: 'Sold By', minWidth: 120, defaultWidth: 140 },
-  { id: 'amount', label: 'Amount', minWidth: 90, defaultWidth: 100 },
+  { id: 'purchasePrice', label: 'Purchase Price', minWidth: 110, defaultWidth: 120 },
+  { id: 'amount', label: 'Sale Amount', minWidth: 90, defaultWidth: 100 },
   { id: 'status', label: 'Status', minWidth: 100, defaultWidth: 110 },
   { id: 'actions', label: '', minWidth: 48, defaultWidth: 48 },
 ];
@@ -111,10 +114,15 @@ interface SalesTableProps {
 }
 
 export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element {
+  const session = useAuthStore((state) => state.session);
+  const showPurchasePrice = session ? canViewPurchasePrice(session.permissions) : false;
+  const columns = showPurchasePrice
+    ? COLUMNS
+    : COLUMNS.filter((column) => column.id !== 'purchasePrice');
   const [widths, setWidths] = useState<Record<string, number>>(() => {
     const saved = loadWidths();
     return Object.fromEntries(
-      COLUMNS.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]),
+      columns.map((column) => [column.id, saved[column.id] ?? column.defaultWidth]),
     );
   });
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -127,7 +135,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
   const onResizeMove = useCallback((event: MouseEvent) => {
     const state = resizeRef.current;
     if (!state) return;
-    const column = COLUMNS.find((entry) => entry.id === state.columnId);
+    const column = columns.find((entry) => entry.id === state.columnId);
     if (!column) return;
     const next = Math.max(column.minWidth, state.startWidth + (event.clientX - state.startX));
     setWidths((current) => ({ ...current, [state.columnId]: next }));
@@ -208,7 +216,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
         <table className="table-root sales-table">
           <thead className="sales-table__head">
             <tr>
-              {COLUMNS.map((column) => (
+              {columns.map((column) => (
                 <th
                   key={column.id}
                   style={{ width: widths[column.id], minWidth: column.minWidth }}
@@ -238,7 +246,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
             {workspace.loading &&
               Array.from({ length: 8 }).map((_, index) => (
                 <tr key={`sk-${index}`} className="sales-table__row-skeleton">
-                  {COLUMNS.map((column) => (
+                  {columns.map((column) => (
                     <td key={column.id}>
                       <div className="skeleton sales-table__skeleton" />
                     </td>
@@ -248,7 +256,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
 
             {!workspace.loading && workspace.items.length === 0 && (
               <tr className="sales-table__empty-row">
-                <td colSpan={COLUMNS.length}>
+                <td colSpan={columns.length}>
                   <SalesEmptyState
                     hasFilters={hasFilters}
                     onClearFilters={workspace.resetFilters}
@@ -293,6 +301,11 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
                   <td>{sale.payment_mode ?? '—'}</td>
                   <td className="sales-table__source">{saleSourceLabel(sale.sale_source)}</td>
                   <td>{sale.recorded_by_display_name ?? '—'}</td>
+                  {showPurchasePrice && (
+                    <td className="sales-table__amount">
+                      {formatSaleAmount(sale.purchase_price)}
+                    </td>
+                  )}
                   <td className="sales-table__amount">{formatSaleAmount(sale.sale_amount)}</td>
                   <td>
                     <span className={`badge ${saleStatusBadgeClass(sale.sale_source)}`}>

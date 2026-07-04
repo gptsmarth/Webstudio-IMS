@@ -50,11 +50,13 @@ Distribute from enterprise release catalog on WEBSTUDIO Server — clients **nev
 ## 3. macOS — install DMG
 
 1. Open `WEBSTUDIO Desktop.dmg`.
-2. Drag **WEBSTUDIO Desktop** to **Applications**.
-3. First launch: right-click → Open if Gatekeeper blocks unsigned builds (sign with `CSC_LINK` for production).
+2. Drag **WEBSTUDIO Desktop** to **Applications** (not `webstudio_ims` — that is the Flutter mobile build).
+3. First launch: right-click → **Open** if Gatekeeper blocks unsigned builds (sign with `CSC_LINK` for production).
 4. Universal binary supports **Intel and Apple Silicon**.
 
-**Pass:** App launches from Applications folder.
+**Pass:** App launches from Applications folder and shows the blue WEBSTUDIO splash or connection screen.
+
+**Blank window on macOS only:** Older DMGs loaded the UI via `file://`, which macOS Chromium blocks for ES module scripts. Rebuild with v1.0.2+ (uses `app://` protocol). Client log: `~/Library/Application Support/WEBSTUDIO Desktop/webstudio-client.log` (packaged) or `~/Library/Application Support/@webstudio/desktop/` (dev).
 
 ---
 

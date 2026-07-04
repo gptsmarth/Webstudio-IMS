@@ -1,6 +1,6 @@
 import { ChevronRight, Package } from 'lucide-react';
-import { brandLogoSrc } from '../../lib/catalogue';
 import type { BrandInventorySummary } from '../../lib/inventoryHierarchy';
+import { BrandLogoImage } from '../branding/BrandLogoImage';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
 
 interface StockBrandGridProps {
@@ -58,7 +58,10 @@ export function StockBrandGrid({
             onClick={() => onSelect(summary.brandId, summary.brandName)}
           >
             <div className="hierarchy-card__head">
-              <InventoryBrandCell brandName={summary.brandName} />
+              <InventoryBrandCell
+                brandName={summary.brandName}
+                logoFilename={summary.logoFilename}
+              />
               <ChevronRight size={16} aria-hidden className="hierarchy-card__chevron" />
             </div>
             <dl className="hierarchy-card__stats">
@@ -95,9 +98,7 @@ export function StockBrandGrid({
 
   return (
     <div className="stock-brand-grid">
-      {summaries.map((summary) => {
-        const logoSrc = brandLogoSrc(summary.brandName, summary.logoFilename);
-        return (
+      {summaries.map((summary) => (
           <button
             key={summary.brandId}
             type="button"
@@ -106,12 +107,15 @@ export function StockBrandGrid({
             aria-label={`Browse ${summary.brandName} models`}
           >
             <span className="stock-brand-tile__logo-wrap">
-              <img src={logoSrc} alt="" className="stock-brand-tile__logo" loading="lazy" />
+              <BrandLogoImage
+                brand={summary.brandName}
+                logoFilename={summary.logoFilename}
+                className="stock-brand-tile__logo"
+              />
             </span>
             <span className="stock-brand-tile__name">{summary.brandName}</span>
           </button>
-        );
-      })}
+        ))}
     </div>
   );
 }

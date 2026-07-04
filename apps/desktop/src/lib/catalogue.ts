@@ -1,4 +1,5 @@
 import { BrandLogoRegistry } from '../registries/BrandLogoRegistry';
+import { resolvePublicAsset } from '../utils/resolvePublicAsset';
 import type { StorageType, StorageUnit } from '../services/api/InventoryService';
 
 export type CatalogueTab = 'brands' | 'locations';
@@ -17,10 +18,12 @@ export function canExportCatalogue(permissions: string[]): boolean {
 }
 
 export function brandLogoSrc(name: string, logoFilename?: string | null): string {
-  if (logoFilename?.trim()) {
-    const file = logoFilename.trim();
-    if (file.startsWith('/')) return file;
-    return `/assets/brand-logos/${file}`;
+  const file = BrandLogoRegistry.resolveLogoFilename(name, logoFilename);
+  if (file) {
+    if (file.startsWith('/')) {
+      return resolvePublicAsset(file);
+    }
+    return resolvePublicAsset(`/assets/brand-logos/${file}`);
   }
   return BrandLogoRegistry.getLogo(name);
 }

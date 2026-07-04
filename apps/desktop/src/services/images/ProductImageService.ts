@@ -1,4 +1,5 @@
 import { ProductPlaceholderRegistry } from '../../registries/ProductPlaceholderRegistry';
+import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import { ProductSpecService } from '../api/ProductSpecService';
 
 const CACHE_PREFIX = 'webstudio.product-image.';
@@ -73,7 +74,19 @@ export class ProductImageService {
 
     let remoteUrl = options?.remoteUrl?.trim() || null;
     if (remoteUrl?.startsWith('/assets/')) {
-      return { src: remoteUrl, source: 'remote', canUpload: true };
+      const bundledSrc = resolvePublicAsset(remoteUrl);
+      if (await this.tryDirectImage(bundledSrc)) {
+        return { src: bundledSrc, source: 'remote', canUpload: true };
+      }
+      const proxied = await this.loadViaBackendProxy(productModelId, remoteUrl);
+      if (proxied) {
+        return proxied;
+      }
+      return {
+        src: ProductPlaceholderRegistry.getPlaceholder(category),
+        source: 'placeholder',
+        canUpload: true,
+      };
     }
     if (!remoteUrl?.startsWith('https://')) {
       try {

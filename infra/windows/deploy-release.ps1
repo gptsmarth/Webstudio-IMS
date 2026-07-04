@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  External helper for Enterprise Deployment Engine — stop/start WEBSTUDIO Server during release swap.
+  External helper for Enterprise Deployment Engine - stop/start WEBSTUDIO Server during release swap.
 .DESCRIPTION
   Invoked by deployment_platform_adapter when the in-process API cannot restart itself.
 #>

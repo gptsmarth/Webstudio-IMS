@@ -7,8 +7,11 @@ import https from 'node:https';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+import { APP_INDEX_URL, registerAppProtocol, registerAppScheme } from './app-protocol';
 import { MdnsBrowser } from './mdns-discovery';
-import { configureApplicationMenu } from './menu';
+import { configureApplicationMenu, shouldAutoHideMenuBar } from './menu';
+
+registerAppScheme();
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -168,6 +171,7 @@ if (!gotTheLock) {
       show: false,
       title: 'WEBSTUDIO Desktop',
       icon: brandingIcon,
+      autoHideMenuBar: shouldAutoHideMenuBar(),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
@@ -192,8 +196,28 @@ if (!gotTheLock) {
     if (process.env.VITE_DEV_SERVER_URL) {
       void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     } else {
-      void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+      writeLog('Main', 'info', `Loading renderer from ${APP_INDEX_URL}`);
+      void mainWindow.loadURL(APP_INDEX_URL);
     }
+
+    mainWindow.webContents.on('did-finish-load', () => {
+      writeLog('Main', 'info', `Renderer loaded: ${mainWindow?.webContents.getURL()}`);
+    });
+
+    mainWindow.webContents.on(
+      'did-fail-load',
+      (_event, errorCode, errorDescription, validatedURL) => {
+        writeLog(
+          'Main',
+          'error',
+          `Renderer failed to load ${validatedURL}: ${errorDescription} (${errorCode})`,
+        );
+      },
+    );
+
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      writeLog('Main', 'error', `Renderer process gone: ${details.reason}`);
+    });
   }
 
   // --- IPC Handlers ---
@@ -391,6 +415,7 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    registerAppProtocol();
     configureApplicationMenu();
     writeLog('Main', 'info', 'Application bootstrap started');
     createWindow();

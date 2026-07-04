@@ -22,6 +22,17 @@ const STATUS_OPTIONS = [
   { value: 'running', label: 'Running' },
 ];
 
+function formatLocalTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return '—';
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(timestamp);
+}
+
 export function TallySyncHistoryPanel({
   open,
   onClose,
@@ -178,8 +189,8 @@ export function TallySyncHistoryPanel({
                 {entries.map((entry) => (
                   <tr key={`${entry.started_at}-${entry.start_time}`}>
                     <td>{entry.sync_date}</td>
-                    <td>{entry.start_time}</td>
-                    <td>{entry.end_time ?? '—'}</td>
+                    <td>{formatLocalTime(entry.started_at)}</td>
+                    <td>{formatLocalTime(entry.completed_at)}</td>
                     <td>{entry.duration_label}</td>
                     <td>{entry.invoices_checked}</td>
                     <td>{entry.invoices_imported}</td>

@@ -1,4 +1,4 @@
-import { BrandLogoRegistry } from '../../registries/BrandLogoRegistry';
+import { BrandLogoImage } from '../branding/BrandLogoImage';
 import type { DistributionGroup } from '../../services/api/DashboardService';
 import { DashboardEmptyState } from './DashboardWidget';
 
@@ -55,11 +55,7 @@ export function DashboardBrandDistribution({
             <tr key={brand.id}>
               <td>
                 <span className="dash-brand-table__brand">
-                  <img
-                    src={BrandLogoRegistry.getLogo(brand.name)}
-                    alt=""
-                    className="dash-brand-table__logo"
-                  />
+                  <BrandLogoImage brand={brand.name} className="dash-brand-table__logo" />
                   <span>{brand.name}</span>
                 </span>
               </td>

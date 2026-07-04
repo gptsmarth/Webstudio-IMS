@@ -23,7 +23,7 @@ if ($service -and $service.Status -eq "Running") {
         Start-Sleep -Seconds 2
     }
     if ($service.Status -ne "Stopped") {
-        Write-Warning "Service did not stop within ${GracefulWaitSeconds}s — forcing stop."
+        Write-Warning "Service did not stop within ${GracefulWaitSeconds}s - forcing stop."
         Stop-Service -Name $WebstudioServiceName -Force
     }
     Write-Host "[WEBSTUDIO] WEBSTUDIO Server stopped."

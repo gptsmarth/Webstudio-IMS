@@ -114,7 +114,7 @@ class BackupProductionValidationService:
         recommendations: list[str] = []
 
         schedule = await self._system.get_string("backup_schedule") or "manual"
-        backup_env = os.getenv("WEBSTUDIO_BACKUP_SCHEDULER", "0") == "1"
+        backup_env = self._settings.webstudio_backup_scheduler
         folder = await self._system.get_string("backup_folder") or str(self._backup_root)
         retention = await self._system.get_string("backup_retention_policy") or "last_30"
         summary = await self._runs.count_summary()

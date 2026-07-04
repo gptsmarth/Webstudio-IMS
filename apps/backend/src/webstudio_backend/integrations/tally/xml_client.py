@@ -68,6 +68,34 @@ class TallyXmlClient:
             return False
         return bool(result.strip())
 
+    def _day_book_export_request(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> str:
+        from_str = from_date.strftime("%Y%m%d")
+        to_str = to_date.strftime("%Y%m%d")
+        return f"""<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Day Book</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVCURRENTCOMPANY>{company_name}</SVCURRENTCOMPANY>
+        <SVFROMDATE>{from_str}</SVFROMDATE>
+        <SVTODATE>{to_str}</SVTODATE>
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>"""
+
     def _export_request(
         self,
         *,
@@ -105,6 +133,21 @@ class TallyXmlClient:
   </BODY>
 </ENVELOPE>"""
 
+    async def export_day_book(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date | None = None,
+    ) -> str:
+        resolved_to = to_date or datetime.now().date()
+        payload = self._day_book_export_request(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=resolved_to,
+        )
+        return await self.post_xml(payload)
+
     async def export_vouchers(
         self,
         *,
@@ -129,12 +172,31 @@ class TallyXmlClient:
         from_date: date,
         to_date: date | None = None,
     ) -> dict[str, str]:
+        """Export vouchers for sync.
+
+        Tally Prime rejects the legacy ``Vouchers`` collection export (469-byte LINEERROR).
+        Day Book returns full voucher XML and is filtered server-side by voucher type.
+        """
+        resolved_to = to_date or datetime.now().date()
+        day_book_xml = await self.export_day_book(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=resolved_to,
+        )
+        if not _xml_response_has_line_error(day_book_xml):
+            return {"day_book": day_book_xml}
+
         results: dict[str, str] = {}
         for voucher_type in MONITORED_VOUCHER_TYPES:
             results[voucher_type] = await self.export_vouchers(
                 company_name=company_name,
                 voucher_type=voucher_type,
                 from_date=from_date,
-                to_date=to_date,
+                to_date=resolved_to,
             )
         return results
+
+
+def _xml_response_has_line_error(xml_text: str) -> bool:
+    upper = xml_text.upper()
+    return "<LINEERROR>" in upper or "<STATUS>0</STATUS>" in upper

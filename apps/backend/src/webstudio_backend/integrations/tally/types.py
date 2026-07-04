@@ -13,6 +13,7 @@ class TallyInventoryLine:
     quantity: str
     serial_number: str | None
     batch_allocations: list[str] = field(default_factory=list)
+    amount: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

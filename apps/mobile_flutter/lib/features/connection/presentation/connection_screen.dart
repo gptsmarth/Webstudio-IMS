@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/config/app_config_provider.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -27,7 +28,9 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final connection = ref.read(connectionControllerProvider);
-      _urlController.text = connection.manualUrl;
+      _urlController.text = connection.manualUrl.isNotEmpty
+          ? connection.manualUrl
+          : AppConfig.suggestedManualServerUrl();
       ref.read(connectionControllerProvider.notifier).startAutoDiscovery();
     });
   }
@@ -94,8 +97,23 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
           ],
           const SizedBox(height: AppSpacing.xl),
           _StatusCard(connection: connection),
+          if (connection.phase != ConnectionPhase.found)
+            _ManualForm(
+              controller: _urlController,
+              focusNode: _urlFocus,
+              busy: connection.phase == ConnectionPhase.testing,
+              compact: connection.phase == ConnectionPhase.searching,
+              errorMessage: connection.errorMessage,
+              diagnosticStages: connection.diagnosticStages,
+              onSubmit: () =>
+                  ref.read(connectionControllerProvider.notifier).connectToUrl(_urlController.text.trim()),
+              onRetryDiscovery: () => ref.read(connectionControllerProvider.notifier).startAutoDiscovery(),
+              onSkipDiscovery: connection.phase == ConnectionPhase.searching
+                  ? () => ref.read(connectionControllerProvider.notifier).skipToManualEntry()
+                  : null,
+            ),
           if (connection.discoveredServers.isNotEmpty &&
-              (connection.phase == ConnectionPhase.manual || connection.phase == ConnectionPhase.testing)) ...[
+              connection.phase == ConnectionPhase.manual) ...[
             const SizedBox(height: AppSpacing.lg),
             Text('Discovered on your network', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
@@ -119,16 +137,6 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
               ),
             ),
           ],
-          if (connection.phase == ConnectionPhase.manual || connection.phase == ConnectionPhase.testing)
-            _ManualForm(
-              controller: _urlController,
-              focusNode: _urlFocus,
-              busy: connection.phase == ConnectionPhase.testing,
-              errorMessage: connection.errorMessage,
-              diagnosticStages: connection.diagnosticStages,
-              onSubmit: () => ref.read(connectionControllerProvider.notifier).connectToUrl(_urlController.text.trim()),
-              onRetryDiscovery: () => ref.read(connectionControllerProvider.notifier).startAutoDiscovery(),
-            ),
           if (connection.savedServers.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xl),
             Text('Saved servers', style: Theme.of(context).textTheme.titleSmall),
@@ -259,6 +267,8 @@ class _ManualForm extends StatelessWidget {
     required this.busy,
     required this.onSubmit,
     required this.onRetryDiscovery,
+    this.compact = false,
+    this.onSkipDiscovery,
     this.errorMessage,
     this.diagnosticStages,
   });
@@ -266,10 +276,12 @@ class _ManualForm extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool compact;
   final String? errorMessage;
   final List<ConnectionStageResult>? diagnosticStages;
   final VoidCallback onSubmit;
   final VoidCallback onRetryDiscovery;
+  final VoidCallback? onSkipDiscovery;
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +289,12 @@ class _ManualForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.lg),
+        if (compact)
+          Text(
+            'Or enter the server address manually while we search your network.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        if (compact) const SizedBox(height: AppSpacing.sm),
         if (errorMessage != null) ...[
           Material(
             color: Theme.of(context).colorScheme.errorContainer,
@@ -317,8 +335,8 @@ class _ManualForm extends StatelessWidget {
           focusNode: focusNode,
           decoration: const InputDecoration(
             labelText: 'Server address',
-            hintText: '192.168.1.10 or WEBSTUDIO-SERVER.local',
-            helperText: 'IPv4, hostname, or .local mDNS name.',
+            hintText: 'http://192.168.29.100:8000',
+            helperText: 'Use your shop server IP (not 10.0.2.2 — emulator only). Hostname or .local also works.',
           ),
           keyboardType: TextInputType.url,
           enabled: !busy,
@@ -343,6 +361,11 @@ class _ManualForm extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: AppSpacing.sm),
+        if (onSkipDiscovery != null)
+          TextButton(
+            onPressed: busy ? null : onSkipDiscovery,
+            child: const Text('Stop searching — use manual address only'),
+          ),
         TextButton.icon(
           onPressed: busy ? null : onRetryDiscovery,
           icon: const Icon(Icons.refresh, size: 16),

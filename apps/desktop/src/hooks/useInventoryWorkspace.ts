@@ -438,6 +438,7 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
             color: unit.color.trim(),
             current_location_id: unit.current_location_id,
             status: payload.status,
+            purchase_price: unit.purchase_price ?? undefined,
           });
         }
 

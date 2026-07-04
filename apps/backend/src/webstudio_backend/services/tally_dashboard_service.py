@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -28,6 +27,7 @@ from webstudio_backend.infrastructure.repositories.tally_sync_log_repository imp
     TallySyncLogRepository,
 )
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
+from webstudio_backend.core.config import get_settings
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
@@ -208,7 +208,7 @@ class TallyDashboardService:
             and connection_status == "connected"
             and connectivity_status not in {"offline", "xml_error"}
         )
-        scheduler_env = os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
+        scheduler_env = get_settings().webstudio_tally_scheduler
         sync_in_progress = bool(company and company.sync_in_progress)
 
         if not enabled:

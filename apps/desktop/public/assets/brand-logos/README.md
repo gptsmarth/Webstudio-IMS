@@ -21,6 +21,10 @@ All filenames MUST be strictly **lowercase**. The application queries logos thro
 - `brother.svg` / `brother.png`
 - `default.svg` / `default.png` (Fallback logo for unknown brands)
 
+### Login / setup showcase (SHUKRANA)
+Only these nine appear on the login and setup wizard left panel (`OFFICIAL_SHOWCASE_BRANDS` in `AssetManifest.ts`):
+asus, hp, dell, lenovo, acer, logitech, sandisk, canon, epson.
+
 ## Format Guidelines
 1. **SVG Preference**: Always use vector `.svg` whenever available for crisp rendering across Retina displays and arbitrary scaling.
 2. **PNG Fallback**: If vector graphics are unavailable, provide transparent `.png` files with identical base naming (minimum resolution 256x256px).

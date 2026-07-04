@@ -12,11 +12,12 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 )
 from webstudio_backend.services.ai.types import AIProviderConfig, ProviderCredentials, ProviderId
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_PRIMARY_PROVIDER: ProviderId = "gemini"
-DEFAULT_FALLBACK_CHAIN: list[ProviderId] = ["gemini"]
+DEFAULT_FALLBACK_CHAIN: list[ProviderId] = ["gemini", "openai"]
 
 
 def mask_api_key(api_key: str) -> str | None:
@@ -28,7 +29,7 @@ def mask_api_key(api_key: str) -> str | None:
     return f"{'•' * 8}{trimmed[-4:]}"
 
 
-VALID_PROVIDERS: tuple[ProviderId, ...] = ("gemini", "groq", "openrouter", "mock")
+VALID_PROVIDERS: tuple[ProviderId, ...] = ("gemini", "openai", "groq", "openrouter", "mock")
 
 
 def _parse_provider(
@@ -79,6 +80,15 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
         await repo.get_string("openrouter_model") or ""
     ).strip() or DEFAULT_OPENROUTER_MODEL
 
+    openai_key = (
+        await repo.get_string("openai_api_key") or ""
+    ).strip() or app_settings.openai_api_key.strip()
+    openai_model = (
+        (await repo.get_string("openai_model") or "").strip()
+        or app_settings.openai_model.strip()
+        or DEFAULT_OPENAI_MODEL
+    )
+
     primary = _parse_provider(await repo.get_string("ai_primary_provider"))
     fallback = _parse_fallback_chain(await repo.get_string("ai_fallback_chain"))
     if primary not in fallback:
@@ -114,6 +124,7 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
             api_key=openrouter_key,
             model=openrouter_model,
         ),
+        openai=ProviderCredentials(provider="openai", api_key=openai_key, model=openai_model),
     )
 
 

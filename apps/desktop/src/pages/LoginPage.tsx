@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Server, Clock } from 'lucide-react';
 import { AuthenticationService } from '../services/api/AuthenticationService';
 import { SetupService } from '../services/api/SetupService';
-import { BrandLogoRegistry, WebstudioAssetRegistry } from '../registries';
+import { WebstudioAssetRegistry } from '../registries';
+import { BrandLogoImage, OFFICIAL_SHOWCASE_BRANDS } from '../components/branding/BrandLogoImage';
 import { RecoveryKeyPanel } from '../components/onboarding/RecoveryKeyPanel';
 import { sessionFromUser } from '../store/useAuthStore';
 import { parseApiError } from '../lib/apiError';
@@ -360,7 +361,7 @@ export const LoginPage: React.FC<Props> = ({
           </div>
 
           {/* Multibrand Logos Grid */}
-          <div style={{ width: '100%', marginTop: 12 }}>
+          <div style={{ width: '100%', marginTop: 20, padding: '0 8px' }}>
             <p
               style={{
                 fontSize: 11,
@@ -368,7 +369,7 @@ export const LoginPage: React.FC<Props> = ({
                 color: 'rgba(255,255,255,0.5)',
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
-                marginBottom: 20,
+                marginBottom: 28,
               }}
             >
               Official Brands
@@ -377,26 +378,28 @@ export const LoginPage: React.FC<Props> = ({
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '24px 16px',
+                gap: '44px 36px',
                 alignItems: 'center',
                 justifyItems: 'center',
+                padding: '4px 12px 8px',
               }}
             >
-              {['apple', 'dell', 'hp', 'lenovo', 'sandisk', 'asus', 'logitech', 'canon'].map(
-                (name) => (
+              {OFFICIAL_SHOWCASE_BRANDS.map((name) => (
                   <div
                     key={name}
                     style={{
-                      height: 24,
+                      height: 28,
                       width: '100%',
+                      maxWidth: 96,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <img
-                      src={BrandLogoRegistry.getLogo(name)}
+                    <BrandLogoImage
+                      brand={name}
                       alt={name}
+                      loading="eager"
                       style={{
                         maxHeight: '100%',
                         maxWidth: '100%',
@@ -405,16 +408,9 @@ export const LoginPage: React.FC<Props> = ({
                         opacity: 0.65,
                         transition: 'opacity 0.2s ease',
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '0.65';
-                      }}
                     />
                   </div>
-                ),
-              )}
+                ))}
             </div>
           </div>
         </div>

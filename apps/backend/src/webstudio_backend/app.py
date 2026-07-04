@@ -202,25 +202,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.mdns_service = _mdns_service
         _mdns_service.start(company_name=company_name)
 
-    scheduler_enabled = not settings.is_test and os.getenv("WEBSTUDIO_TALLY_SCHEDULER", "0") == "1"
-    backup_scheduler_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_BACKUP_SCHEDULER", "1") == "1"
-    )
+    scheduler_enabled = not settings.is_test and settings.webstudio_tally_scheduler
+    backup_scheduler_enabled = not settings.is_test and settings.webstudio_backup_scheduler
     audit_retention_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_AUDIT_RETENTION_SCHEDULER", "1") == "1"
+        not settings.is_test and settings.webstudio_audit_retention_scheduler
     )
     notification_scheduler_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_NOTIFICATION_SCHEDULER", "1") == "1"
+        not settings.is_test and settings.webstudio_notification_scheduler
     )
     maintenance_scheduler_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_MAINTENANCE_SCHEDULER", "1") == "1"
+        not settings.is_test and settings.webstudio_maintenance_scheduler
     )
-    tally_probe_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_TALLY_CONNECTIVITY_PROBE", "1") == "1"
-    )
-    release_sync_enabled = (
-        not settings.is_test and os.getenv("WEBSTUDIO_RELEASE_SYNC_SCHEDULER", "1") == "1"
-    )
+    tally_probe_enabled = not settings.is_test and settings.webstudio_tally_connectivity_probe
+    release_sync_enabled = not settings.is_test and settings.webstudio_release_sync_scheduler
 
     if scheduler_enabled:
         try:

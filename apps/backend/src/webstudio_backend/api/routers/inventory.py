@@ -33,7 +33,7 @@ from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import InventoryStatus
+from webstudio_backend.infrastructure.database.enums import InventoryStatus, UserRole
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
@@ -78,8 +78,15 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
     )
 
 
-def _item_payload(row) -> dict:
-    return InventoryItemDetail.from_row(row).model_dump()
+def _can_view_purchase_price(current: AuthenticatedUser) -> bool:
+    return current.user.role in {UserRole.MAIN_ADMIN, UserRole.ADMIN}
+
+
+def _item_payload(row, *, current: AuthenticatedUser | None = None) -> dict:
+    include_purchase = current is None or _can_view_purchase_price(current)
+    response = InventoryItemDetail.from_row(row, include_purchase_price=include_purchase)
+    exclude = set() if include_purchase else {"purchase_price"}
+    return response.model_dump(exclude=exclude)
 
 
 def _parse_sort(sort: str | None) -> list[SortParam]:
@@ -157,7 +164,7 @@ async def list_inventory(
     )
     return _envelope(
         request,
-        [_item_payload(row) for row in result.items],
+        [_item_payload(row, current=current) for row in result.items],
         _page_meta(result.page, result.page_size, result.total_items, result.total_pages),
     )
 
@@ -177,11 +184,12 @@ async def create_inventory(
             current_location_id=body.current_location_id,
             status=body.status,
             purchase_date=body.purchase_date,
+            purchase_price=body.purchase_price,
             actor=_actor(current),
         )
     except Exception as exc:
         raise_inventory_error(exc)
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.get("/by-serial/{serial_number}")
@@ -198,7 +206,7 @@ async def get_inventory_by_serial(
             "Inventory item not found for serial number.",
             status_code=404,
         )
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.get("/{inventory_id}")
@@ -215,7 +223,7 @@ async def get_inventory(
             "Inventory item not found.",
             status_code=404,
         )
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.patch("/{inventory_id}")
@@ -243,10 +251,12 @@ async def update_inventory(
             status=body.status,
             purchase_date=body.purchase_date,
             set_purchase_date="purchase_date" in fields_set,
+            purchase_price=body.purchase_price,
+            set_purchase_price="purchase_price" in fields_set,
         )
     except Exception as exc:
         raise_inventory_error(exc)
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.post("/{inventory_id}/archive")
@@ -263,7 +273,7 @@ async def archive_inventory(
         )
     except Exception as exc:
         raise_inventory_error(exc)
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.post("/{inventory_id}/restore")
@@ -280,7 +290,7 @@ async def restore_inventory(
         )
     except Exception as exc:
         raise_inventory_error(exc)
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.patch("/{inventory_id}/location")
@@ -299,7 +309,7 @@ async def transfer_inventory_location(
         )
     except Exception as exc:
         raise_inventory_error(exc)
-    return _envelope(request, _item_payload(detail))
+    return _envelope(request, _item_payload(detail, current=current))
 
 
 @router.patch("/{inventory_id}/mark-sold")
@@ -324,11 +334,18 @@ async def mark_inventory_sold(
     except Exception as exc:
         raise_inventory_error(exc)
 
+    include_purchase = _can_view_purchase_price(current)
     response = MarkSoldResponse(
-        inventory=InventoryItemDetail.from_row(result.inventory),
+        inventory=InventoryItemDetail.from_row(
+            result.inventory,
+            include_purchase_price=include_purchase,
+        ),
         sale=SaleDetail.from_model(
             result.sale,
             serial_number=result.inventory.item.serial_number,
         ),
     )
-    return _envelope(request, response.model_dump())
+    payload = response.model_dump()
+    if not include_purchase:
+        payload["inventory"].pop("purchase_price", None)
+    return _envelope(request, payload)

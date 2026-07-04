@@ -8,13 +8,13 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import SalesViewDep
+from webstudio_backend.api.dependencies.auth import AuthenticatedUser, SalesViewDep
 from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.sales import SaleDetailResponse, SaleListItem
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
-from webstudio_backend.infrastructure.database.enums import SaleSource
+from webstudio_backend.infrastructure.database.enums import SaleSource, UserRole
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters
 from webstudio_backend.services.report_service import ReportService
@@ -34,6 +34,24 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
     return build_page_meta(page, page_size, total_items, total_pages)
+
+
+def _can_view_purchase_price(current: AuthenticatedUser) -> bool:
+    return current.user.role in {UserRole.MAIN_ADMIN, UserRole.ADMIN}
+
+
+def _sale_list_payload(row, *, current: AuthenticatedUser) -> dict:
+    include_purchase = _can_view_purchase_price(current)
+    response = SaleListItem.from_row(row, include_purchase_price=include_purchase)
+    exclude = set() if include_purchase else {"purchase_price"}
+    return response.model_dump(exclude=exclude)
+
+
+def _sale_detail_payload(row, *, current: AuthenticatedUser) -> dict:
+    include_purchase = _can_view_purchase_price(current)
+    response = SaleDetailResponse.from_row(row, include_purchase_price=include_purchase)
+    exclude = set() if include_purchase else {"purchase_price"}
+    return response.model_dump(exclude=exclude)
 
 
 def _parse_legacy_sort(sort: str | None) -> tuple[str | None, str | None]:
@@ -67,7 +85,6 @@ async def list_sales(
     sort_field: str | None = None,
     sort_direction: str | None = None,
 ) -> dict:
-    del current
     legacy_field, legacy_direction = _parse_legacy_sort(sort)
     filters = ReportFilters(
         date_from=date_from,
@@ -89,7 +106,7 @@ async def list_sales(
     )
     return _envelope(
         request,
-        [SaleListItem.from_row(row).model_dump() for row in result.items],
+        [_sale_list_payload(row, current=current) for row in result.items],
         _page_meta(result.page, result.page_size, result.total_items, result.total_pages),
     )
 
@@ -101,8 +118,7 @@ async def get_sale(
     current: SalesViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    del current
     row = await ReportService(db_session).get_sale_detail(sale_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found.")
-    return _envelope(request, SaleDetailResponse.from_row(row).model_dump())
+    return _envelope(request, _sale_detail_payload(row, current=current))

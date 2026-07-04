@@ -56,6 +56,28 @@ def test_resolve_incremental_from_date_first_sync_uses_today() -> None:
     assert resolve_incremental_from_date(company, today=today) == today
 
 
+def test_parse_inventory_line_amount() -> None:
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER>
+      <GUID>line-amount-guid</GUID>
+      <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+      <VOUCHERNUMBER>88</VOUCHERNUMBER>
+      <DATE>20260627</DATE>
+      <LEDGERENTRIES.LIST><AMOUNT>-89999.00</AMOUNT></LEDGERENTRIES.LIST>
+      <ALLINVENTORYENTRIES.LIST>
+        <STOCKITEMNAME>HP Laptop 15</STOCKITEMNAME>
+        <ACTUALQTY>1</ACTUALQTY>
+        <AMOUNT>89999.00</AMOUNT>
+        <BATCHALLOCATIONS.LIST><SERIALNUMBER>SN-AMT-001</SERIALNUMBER></BATCHALLOCATIONS.LIST>
+      </ALLINVENTORYENTRIES.LIST>
+    </VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>"""
+    vouchers = parse_vouchers_xml(xml)
+    assert len(vouchers) == 1
+    line = vouchers[0].inventory_lines[0]
+    assert line.amount == "89999.00"
+    assert line.serial_number == "SN-AMT-001"
+
+
 def test_parse_voucher_amount() -> None:
     xml = """<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER>

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-ProviderId = Literal["gemini", "groq", "openrouter", "mock"]
+ProviderId = Literal["gemini", "openai", "groq", "openrouter", "mock"]
 
 ProviderErrorCode = Literal[
     "NOT_CONFIGURED",
@@ -37,6 +37,7 @@ class AIProviderConfig:
     openrouter: ProviderCredentials = field(
         default_factory=lambda: ProviderCredentials("openrouter")
     )
+    openai: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("openai"))
 
 
 @dataclass

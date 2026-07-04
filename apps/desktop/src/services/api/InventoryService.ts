@@ -25,6 +25,7 @@ export interface InventoryItemDetail {
   status: InventoryStatus;
   is_archived: boolean;
   purchase_date: string | null;
+  purchase_price: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +74,7 @@ export interface CreateInventoryItemRequest {
   current_location_id: number;
   status?: InventoryStatus;
   purchase_date?: string | null;
+  purchase_price?: number | null;
 }
 
 export interface UpdateInventoryItemRequest {
@@ -81,6 +83,7 @@ export interface UpdateInventoryItemRequest {
   color?: string;
   status?: InventoryStatus;
   purchase_date?: string | null;
+  purchase_price?: number | null;
 }
 
 export interface MarkSoldRequest {

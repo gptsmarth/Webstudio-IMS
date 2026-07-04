@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { ASSET_MANIFEST } from '../../registries/AssetManifest';
+import { BrandLogoImage } from '../branding/BrandLogoImage';
+import { BrandLogoRegistry } from '../../registries/BrandLogoRegistry';
 import type {
   Brand,
   CreateBrandRequest,
@@ -15,7 +16,7 @@ interface BrandFormDialogProps {
   onConfirm: (payload: CreateBrandRequest | UpdateBrandRequest) => Promise<void>;
 }
 
-const LOGO_OPTIONS = Object.keys(ASSET_MANIFEST.brandLogos).filter((key) => key !== 'default');
+const BUNDLED_LOGO_KEYS = BrandLogoRegistry.listBundledBrandKeys();
 
 export function BrandFormDialog({
   open,
@@ -27,6 +28,7 @@ export function BrandFormDialog({
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [logoFilename, setLogoFilename] = useState('');
+  const [logoManuallySet, setLogoManuallySet] = useState(false);
   const [displayOrder, setDisplayOrder] = useState('0');
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +38,19 @@ export function BrandFormDialog({
     setName(brand?.name ?? '');
     setShortName(brand?.short_name ?? '');
     setLogoFilename(brand?.logo_filename ?? '');
+    setLogoManuallySet(Boolean(brand?.logo_filename));
     setDisplayOrder(String(brand?.display_order ?? 0));
     setIsActive(brand?.is_active ?? true);
     setError(null);
   }, [open, brand]);
+
+  useEffect(() => {
+    if (!open || logoManuallySet || !name.trim()) return;
+    const suggested = BrandLogoRegistry.logoFilenameForBrand(name);
+    if (suggested) {
+      setLogoFilename(suggested);
+    }
+  }, [open, name, logoManuallySet]);
 
   if (!open) return null;
 
@@ -49,11 +60,15 @@ export function BrandFormDialog({
       return;
     }
     setError(null);
+    const resolvedLogo =
+      logoFilename.trim() ||
+      BrandLogoRegistry.logoFilenameForBrand(name.trim()) ||
+      null;
     try {
       await onConfirm({
         name: name.trim(),
         short_name: shortName.trim() || null,
-        logo_filename: logoFilename || null,
+        logo_filename: resolvedLogo,
         display_order: Number(displayOrder) || 0,
         is_active: isActive,
       });
@@ -64,10 +79,15 @@ export function BrandFormDialog({
     }
   };
 
+  const selectLogo = (filename: string) => {
+    setLogoManuallySet(true);
+    setLogoFilename(filename);
+  };
+
   return (
     <div className="cat-dialog-overlay" role="presentation" onClick={onClose}>
       <div
-        className="cat-dialog animate-slide-in"
+        className="cat-dialog cat-dialog--wide animate-slide-in"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
@@ -101,21 +121,46 @@ export function BrandFormDialog({
               onChange={(e) => setShortName(e.target.value)}
             />
           </label>
-          <label className="cat-field">
+          <div className="cat-field cat-field--full">
             <span>Logo</span>
-            <select
-              className="input"
-              value={logoFilename}
-              onChange={(e) => setLogoFilename(e.target.value)}
-            >
-              <option value="">Default</option>
-              {LOGO_OPTIONS.map((key) => (
-                <option key={key} value={`${key}.svg`}>
-                  {key}
-                </option>
-              ))}
-            </select>
-          </label>
+            <p className="cat-logo-picker__hint">
+              Pick a bundled logo below, or leave Default to match by brand name.
+            </p>
+            <div className="cat-logo-picker" role="listbox" aria-label="Brand logo">
+              <button
+                type="button"
+                role="option"
+                aria-selected={!logoFilename}
+                className={`cat-logo-picker__item${!logoFilename ? ' cat-logo-picker__item--selected' : ''}`}
+                onClick={() => selectLogo('')}
+              >
+                <BrandLogoImage brand="default" className="cat-logo-picker__img" alt="Default" />
+                <span className="cat-logo-picker__label">Default</span>
+              </button>
+              {BUNDLED_LOGO_KEYS.map((key) => {
+                const filename = `${key}.svg`;
+                const selected = logoFilename === filename;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`cat-logo-picker__item${selected ? ' cat-logo-picker__item--selected' : ''}`}
+                    onClick={() => selectLogo(filename)}
+                  >
+                    <BrandLogoImage
+                      brand={key}
+                      logoFilename={filename}
+                      className="cat-logo-picker__img"
+                      alt={key}
+                    />
+                    <span className="cat-logo-picker__label">{key}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label className="cat-field">
             <span>Display order</span>
             <input

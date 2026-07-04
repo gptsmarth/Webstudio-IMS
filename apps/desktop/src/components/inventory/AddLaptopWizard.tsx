@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { STORAGE_TYPES, STORAGE_UNITS } from '../../lib/catalogue';
 import { composeModelNotes } from '../../lib/modelNotes';
+import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import {
   fetchProductSpecFromInternet,
   findModelByNumber,
@@ -15,6 +16,7 @@ import type {
   ProductModel,
 } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
+import { formatInventoryPrice, parsePriceInput } from '../../lib/inventoryPrice';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 import { ProductSpecService } from '../../services/api/ProductSpecService';
 
@@ -22,6 +24,14 @@ export interface SerialUnitEntry {
   serial_number: string;
   current_location_id: number;
   color: string;
+  purchase_price: string;
+}
+
+export interface AddLaptopWizardUnit {
+  serial_number: string;
+  current_location_id: number;
+  color: string;
+  purchase_price: number | null;
 }
 
 export interface AddLaptopWizardRequest {
@@ -29,7 +39,7 @@ export interface AddLaptopWizardRequest {
   mode: 'existing' | 'new';
   productModelId?: string;
   newProductModel?: CreateProductModelRequest;
-  units: SerialUnitEntry[];
+  units: AddLaptopWizardUnit[];
   status?: InventoryStatus;
 }
 
@@ -80,7 +90,7 @@ export function AddLaptopWizard({
   const [fetchMessage, setFetchMessage] = useState<string | null>(null);
   const [unitCount, setUnitCount] = useState(1);
   const [units, setUnits] = useState<SerialUnitEntry[]>([
-    { serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '' },
+    { serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '', purchase_price: '' },
   ]);
   const [status, setStatus] = useState<InventoryStatus>('available');
   const [cpu, setCpu] = useState('');
@@ -115,7 +125,7 @@ export function AddLaptopWizard({
     setChecking(false);
     setFetching(false);
     setUnitCount(1);
-    setUnits([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '' }]);
+    setUnits([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '', purchase_price: '' }]);
     setStatus('available');
     setCpu('');
     setGpu('');
@@ -143,6 +153,7 @@ export function AddLaptopWizard({
           serial_number: '',
           current_location_id: locations[0]?.id ?? 0,
           color: next[0]?.color ?? '',
+          purchase_price: next[0]?.purchase_price ?? '',
         });
       }
       return next.slice(0, count);
@@ -243,7 +254,7 @@ export function AddLaptopWizard({
       return;
     }
     if (productImageUrl.startsWith('/assets/')) {
-      setProductImagePreview(productImageUrl);
+      setProductImagePreview(resolvePublicAsset(productImageUrl));
       return;
     }
     if (!productImageUrl.startsWith('https://')) {
@@ -308,9 +319,21 @@ export function AddLaptopWizard({
   };
 
   const submit = async () => {
-    const validUnits = units.filter(
-      (unit) => unit.serial_number.trim() && unit.color.trim() && unit.current_location_id,
-    );
+    const validUnits: Array<SerialUnitEntry & { parsedPurchasePrice: number | null }> = [];
+    for (const unit of units) {
+      if (!unit.serial_number.trim() || !unit.color.trim() || !unit.current_location_id) {
+        continue;
+      }
+      let parsedPurchase: number | null = null;
+      if (unit.purchase_price.trim()) {
+        parsedPurchase = parsePriceInput(unit.purchase_price);
+        if (parsedPurchase === null) {
+          setError(`Invalid purchase price for serial ${unit.serial_number.trim()}.`);
+          return;
+        }
+      }
+      validUnits.push({ ...unit, parsedPurchasePrice: parsedPurchase });
+    }
     if (validUnits.length === 0) {
       setError('Enter at least one serial number, color, and location.');
       return;
@@ -332,7 +355,12 @@ export function AddLaptopWizard({
       brandId,
       mode,
       productModelId: mode === 'existing' ? productModelId : undefined,
-      units: validUnits,
+      units: validUnits.map((unit) => ({
+        serial_number: unit.serial_number.trim(),
+        color: unit.color.trim(),
+        current_location_id: unit.current_location_id,
+        purchase_price: unit.parsedPurchasePrice,
+      })),
       status,
       newProductModel:
         mode === 'new'
@@ -641,9 +669,10 @@ export function AddLaptopWizard({
                   <span>Serial</span>
                   <span>Color</span>
                   <span>Location</span>
+                  <span>Purchase price</span>
                 </div>
                 {units.map((unit, index) => (
-                  <div key={index} className="add-laptop-wizard__unit-row">
+                  <div key={index} className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices">
                     <input
                       className="input col-mono"
                       placeholder={`Serial ${index + 1}`}
@@ -687,6 +716,19 @@ export function AddLaptopWizard({
                         </option>
                       ))}
                     </select>
+                    <input
+                      className="input inv-price-input"
+                      placeholder="Purchase price"
+                      inputMode="decimal"
+                      value={unit.purchase_price}
+                      onChange={(e) =>
+                        setUnits((current) =>
+                          current.map((row, i) =>
+                            i === index ? { ...row, purchase_price: e.target.value } : row,
+                          ),
+                        )
+                      }
+                    />
                   </div>
                 ))}
               </div>
@@ -735,6 +777,11 @@ export function AddLaptopWizard({
                       <span className="col-mono">{unit.serial_number}</span>
                       <span>{unit.color}</span>
                       <span>{locations.find((l) => l.id === unit.current_location_id)?.name}</span>
+                      <span>
+                        {unit.purchase_price.trim()
+                          ? formatInventoryPrice(parsePriceInput(unit.purchase_price))
+                          : '—'}
+                      </span>
                     </li>
                   ))}
               </ul>

@@ -25,13 +25,14 @@ class SaleListItem(BaseModel):
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None = None
+    purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
     recorded_by_user_id: int | None
     recorded_by_display_name: str | None
 
     @classmethod
-    def from_row(cls, row: SalesReportRow) -> SaleListItem:
+    def from_row(cls, row: SalesReportRow, *, include_purchase_price: bool = True) -> SaleListItem:
         return cls(
             id=row.id,
             inventory_item_id=row.inventory_item_id,
@@ -44,6 +45,7 @@ class SaleListItem(BaseModel):
             customer_name=row.customer_name,
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
+            purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,
             recorded_by_user_id=row.recorded_by_user_id,
@@ -72,6 +74,7 @@ class SaleDetailResponse(BaseModel):
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None = None
+    purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
     recorded_by_user_id: int | None
@@ -84,7 +87,7 @@ class SaleDetailResponse(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_row(cls, row: SaleDetailRow) -> SaleDetailResponse:
+    def from_row(cls, row: SaleDetailRow, *, include_purchase_price: bool = True) -> SaleDetailResponse:
         return cls(
             id=row.id,
             inventory_item_id=row.inventory_item_id,
@@ -106,6 +109,7 @@ class SaleDetailResponse(BaseModel):
             customer_name=row.customer_name,
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
+            purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,
             recorded_by_user_id=row.recorded_by_user_id,

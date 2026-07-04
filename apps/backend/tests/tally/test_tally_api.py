@@ -20,6 +20,7 @@ from webstudio_backend.infrastructure.database.enums import InventoryStatus, Set
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
 )
+from webstudio_backend.infrastructure.repositories.sale_repository import SaleRepository
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
@@ -152,6 +153,10 @@ async def test_tally_xml_processing_creates_sale(
     item = await inventory_repo.find_by_serial_number("SN-TALLY-001")
     assert item is not None
     assert item.status is InventoryStatus.SOLD
+
+    sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
+    assert sale is not None
+    assert sale.sale_amount == 125000.0
 
 
 @pytest.mark.asyncio

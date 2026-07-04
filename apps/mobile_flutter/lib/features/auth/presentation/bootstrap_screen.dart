@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/config/app_config_provider.dart';
 import '../../../core/network/connectivity_provider.dart';
 import '../../../core/network/api_client.dart';
@@ -63,8 +64,19 @@ class _BootstrapScreenState extends ConsumerState<BootstrapScreen> {
     }
 
     setState(() => _status = 'Checking server connection…');
+    final config = ref.read(appConfigProvider);
     final client = ref.read(apiClientProvider);
-    final healthy = await client.checkHealthLive();
+
+    if (AppConfig.shouldOpenConnectionSetupFirst(config.apiBaseUrl)) {
+      setState(() => _status = 'Finding WEBSTUDIO Server on your Wi‑Fi…');
+      if (!mounted) return;
+      context.go(AppRoutes.connection);
+      return;
+    }
+
+    final healthy = await client
+        .checkHealthLive()
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
     if (!mounted) return;
 
     if (!healthy) {

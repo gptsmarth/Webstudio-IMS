@@ -27,3 +27,4 @@ jobs:
       - run: pnpm --filter @webstudio/desktop lint
       - run: pnpm --filter @webstudio/desktop typecheck
       - run: pnpm --filter @webstudio/desktop test
+      - run: pnpm --filter @webstudio/desktop build

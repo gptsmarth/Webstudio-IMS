@@ -209,9 +209,10 @@ class ApiClient {
       final response = await _dio.get<dynamic>(
         '$baseUrl${ApiPaths.healthLive}',
         options: Options(
-          sendTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 8),
-        ),
+        connectTimeout: const Duration(seconds: 4),
+        sendTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 4),
+      ),
       );
       return response.statusCode == 200;
     } on DioException {
