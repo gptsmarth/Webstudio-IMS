@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { SetupService } from '../services/api/SetupService';
-import { WebstudioAssetRegistry } from '../registries';
 import { OnboardingBrandPanel } from '../components/onboarding/OnboardingBrandPanel';
+import { WebstudioLogoImage } from '../components/branding/WebstudioLogoImage';
 import { RecoveryKeyPanel } from '../components/onboarding/RecoveryKeyPanel';
 import { SetupStepper } from '../components/onboarding/SetupStepper';
 
@@ -27,7 +27,6 @@ export function SetupWizardPage({
 }: Props): JSX.Element {
   const [step, setStep] = useState<1 | 2 | 3>(initialRecoveryKey ? 3 : 1);
   const [isOfflineDemo, setIsOfflineDemo] = useState(Boolean(isDemoMode));
-  const [logoError, setLogoError] = useState(false);
 
   const [companyName, setCompanyName] = useState('');
   const [mainAdminName, setMainAdminName] = useState('');
@@ -43,7 +42,6 @@ export function SetupWizardPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const logoPath = WebstudioAssetRegistry.getAsset('logo');
   const isDemo = isOfflineDemo || recoveryKey === 'DEMO-PREVIEW-MODE-BACKEND-UNAVAILABLE';
 
   const handleStep1Submit = (e: React.FormEvent) => {
@@ -140,11 +138,7 @@ export function SetupWizardPage({
           <header className="setup-wizard__header">
             <div className="setup-wizard__mobile-logo lg:hidden">
               <div className="setup-wizard__mobile-logo-box">
-                {!logoError ? (
-                  <img src={logoPath} alt="WEBSTUDIO" onError={() => setLogoError(true)} />
-                ) : (
-                  <span>WS</span>
-                )}
+                <WebstudioLogoImage variant="light" alt="WEBSTUDIO" fallbackText="WS" />
               </div>
               <span>WEBSTUDIO IMS</span>
             </div>

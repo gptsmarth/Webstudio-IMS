@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { WebstudioAssetRegistry } from '../../registries';
+import { WebstudioLogoImage } from '../branding/WebstudioLogoImage';
 
 interface StartupBrandPanelProps {
   appVersion?: string;
@@ -14,27 +13,15 @@ export function StartupBrandPanel({
   footerRight,
   compact = false,
 }: StartupBrandPanelProps): JSX.Element {
-  const [logoError, setLogoError] = useState(false);
-  const logoLightPath = WebstudioAssetRegistry.getAsset('logoLight');
-  const logoPath = WebstudioAssetRegistry.getAsset('logo');
-
   return (
     <div className={`startup-brand ${compact ? 'startup-brand--compact' : ''}`}>
       <div className="startup-brand__content">
         <div className="startup-brand__logo-wrap">
-          {!logoError ? (
-            <img
-              src={logoLightPath}
-              alt="WEBSTUDIO"
-              className="startup-brand__logo"
-              onError={(e) => {
-                e.currentTarget.src = logoPath;
-                e.currentTarget.onerror = () => setLogoError(true);
-              }}
-            />
-          ) : (
-            <span className="startup-brand__logo-fallback">WEBSTUDIO</span>
-          )}
+          <WebstudioLogoImage
+            variant="onDarkPanel"
+            alt="WEBSTUDIO"
+            className="startup-brand__logo"
+          />
         </div>
 
         <div className="startup-brand__intro">

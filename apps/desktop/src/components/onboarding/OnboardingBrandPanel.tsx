@@ -1,4 +1,4 @@
-import { WebstudioAssetRegistry } from '../../registries';
+import { WebstudioLogoImage } from '../branding/WebstudioLogoImage';
 import { BrandLogoImage, OFFICIAL_SHOWCASE_BRANDS } from '../branding/BrandLogoImage';
 
 interface OnboardingBrandPanelProps {
@@ -10,20 +10,14 @@ export function OnboardingBrandPanel({
   appVersion,
   footerRight = 'SECURE CONNECTION ACTIVE',
 }: OnboardingBrandPanelProps): JSX.Element {
-  const logoLightPath = WebstudioAssetRegistry.getAsset('logoLight');
-  const logoPath = WebstudioAssetRegistry.getAsset('logo');
-
   return (
     <aside className="onboarding-brand-panel" aria-hidden="true">
       <div className="onboarding-brand-panel__content">
         <div className="onboarding-brand-panel__logo-wrap">
-          <img
-            src={logoLightPath}
+          <WebstudioLogoImage
+            variant="onDarkPanel"
             alt="WEBSTUDIO"
             className="onboarding-brand-panel__logo"
-            onError={(e) => {
-              e.currentTarget.src = logoPath;
-            }}
           />
         </div>
 

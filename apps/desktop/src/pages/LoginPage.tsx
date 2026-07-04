@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Server, Clock } from 'lucide-react';
 import { AuthenticationService } from '../services/api/AuthenticationService';
 import { SetupService } from '../services/api/SetupService';
-import { WebstudioAssetRegistry } from '../registries';
 import { BrandLogoImage, OFFICIAL_SHOWCASE_BRANDS } from '../components/branding/BrandLogoImage';
+import { WebstudioLogoImage } from '../components/branding/WebstudioLogoImage';
 import { RecoveryKeyPanel } from '../components/onboarding/RecoveryKeyPanel';
 import { sessionFromUser } from '../store/useAuthStore';
 import { parseApiError } from '../lib/apiError';
@@ -26,7 +26,6 @@ export const LoginPage: React.FC<Props> = ({
   onSetupRequired,
 }) => {
   const { resolvedTheme, toggleTheme } = useThemeStore();
-  const [logoError, setLogoError] = useState(false);
 
   // Login form states
   const [username, setUsername] = useState('');
@@ -53,8 +52,6 @@ export const LoginPage: React.FC<Props> = ({
   const [keyConfirmed, setKeyConfirmed] = useState(false);
 
   const usernameRef = useRef<HTMLInputElement>(null);
-  const logoPath = WebstudioAssetRegistry.getAsset('logo');
-  const logoLightPath = WebstudioAssetRegistry.getAsset('logoLight');
 
   // Load saved username
   useEffect(() => {
@@ -280,13 +277,10 @@ export const LoginPage: React.FC<Props> = ({
         >
           {/* Big Webstudio Logo */}
           <div style={{ width: 340, display: 'flex', justifyContent: 'center' }}>
-            <img
-              src={logoLightPath}
+            <WebstudioLogoImage
+              variant="onDarkPanel"
               alt="WEBSTUDIO"
               style={{ width: '100%', height: 'auto', maxHeight: 110, objectFit: 'contain' }}
-              onError={(e) => {
-                e.currentTarget.src = logoPath;
-              }}
             />
           </div>
 
@@ -465,20 +459,12 @@ export const LoginPage: React.FC<Props> = ({
                   padding: 6,
                 }}
               >
-                {!logoError ? (
-                  <img
-                    src={logoPath}
-                    alt="WS"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    onError={() => setLogoError(true)}
-                  />
-                ) : (
-                  <span
-                    style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary-600)' }}
-                  >
-                    WS
-                  </span>
-                )}
+                <WebstudioLogoImage
+                  variant="light"
+                  alt="WS"
+                  fallbackText="WS"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
               </div>
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                 WEBSTUDIO IMS

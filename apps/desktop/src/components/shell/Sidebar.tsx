@@ -1,8 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/cn';
-import { WebstudioAssetRegistry } from '../../registries';
-import { useThemeStore } from '../../store';
+import { WebstudioLogoImage } from '../branding/WebstudioLogoImage';
 
 interface SidebarItemProps {
   label: string;
@@ -44,40 +43,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ companyName, children }: SidebarProps): JSX.Element {
-  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
-  const [logoFailed, setLogoFailed] = useState(false);
-  const logoSrc = WebstudioAssetRegistry.getLogoForTheme(resolvedTheme);
-  const logoFallbackSrc = WebstudioAssetRegistry.getLogoForTheme(
-    resolvedTheme === 'dark' ? 'light' : 'dark',
-  );
-
-  useEffect(() => {
-    setLogoFailed(false);
-  }, [resolvedTheme, logoSrc]);
-
   return (
     <aside className="app-sidebar" aria-label="Primary navigation">
       <div className="app-sidebar-header">
         <div className="app-sidebar-brand">
-          {!logoFailed ? (
-            <img
-              key={logoSrc}
-              src={logoSrc}
-              alt="WEBSTUDIO"
-              className="app-sidebar-logo"
-              onError={(event) => {
-                const img = event.currentTarget;
-                if (img.dataset.fallback === '1') {
-                  setLogoFailed(true);
-                  return;
-                }
-                img.dataset.fallback = '1';
-                img.src = logoFallbackSrc;
-              }}
-            />
-          ) : (
-            <span className="app-sidebar-logo-fallback">WEBSTUDIO</span>
-          )}
+          <WebstudioLogoImage
+            variant="auto"
+            alt="WEBSTUDIO"
+            className="app-sidebar-logo"
+            fallbackText="WEBSTUDIO"
+          />
         </div>
         <p className="app-sidebar-company" title={companyName}>
           {companyName}
