@@ -6,8 +6,6 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from decimal import Decimal
-
 from sqlalchemy import BigInteger, Boolean, Date, Enum, ForeignKey, Numeric, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime

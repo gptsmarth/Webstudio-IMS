@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.database.enums import NotificationCategory
 from webstudio_backend.infrastructure.database.models.notification import Notification
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
@@ -27,7 +28,6 @@ from webstudio_backend.infrastructure.repositories.tally_sync_log_repository imp
     TallySyncLogRepository,
 )
 from webstudio_backend.integrations.tally.constants import MONITORED_VOUCHER_TYPES
-from webstudio_backend.core.config import get_settings
 from webstudio_backend.services.scheduler_runtime_service import SchedulerRuntimeService
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
