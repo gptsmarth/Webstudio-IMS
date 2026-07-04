@@ -92,7 +92,12 @@ async def verify_ai_configuration(session: AsyncSession, settings: Settings) -> 
     try:
         config = await resolve_ai_config(session, settings)
         if config.enrichment_enabled and not any(
-            [config.gemini.api_key, config.openai.api_key, config.groq.api_key, config.openrouter.api_key],
+            [
+                config.gemini.api_key,
+                config.openai.api_key,
+                config.groq.api_key,
+                config.openrouter.api_key,
+            ],
         ):
             return StartupCheckResult(
                 name="ai_configuration",

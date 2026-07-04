@@ -87,7 +87,9 @@ class SaleDetailResponse(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_row(cls, row: SaleDetailRow, *, include_purchase_price: bool = True) -> SaleDetailResponse:
+    def from_row(
+        cls, row: SaleDetailRow, *, include_purchase_price: bool = True
+    ) -> SaleDetailResponse:
         return cls(
             id=row.id,
             inventory_item_id=row.inventory_item_id,

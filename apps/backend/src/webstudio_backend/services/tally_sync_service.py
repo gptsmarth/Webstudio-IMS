@@ -764,10 +764,10 @@ class TallySyncService:
             tally_voucher_type=voucher.voucher_type,
             mapped_location_id=mapped_location_id,
             notes=voucher.narration,
-        idempotency_key=idempotency_key,
-        snapshot=snapshot,
-        sale_amount=resolve_inventory_line_sale_amount(line, voucher),
-    )
+            idempotency_key=idempotency_key,
+            snapshot=snapshot,
+            sale_amount=resolve_inventory_line_sale_amount(line, voucher),
+        )
 
         actor = AuditActor.system(display_name="Tally Sync", role="system")
         await self._recorder.record_inventory_status_change(

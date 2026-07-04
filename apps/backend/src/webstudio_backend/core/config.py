@@ -95,8 +95,12 @@ class Settings(BaseSettings):
     )
     release_updates_root: str = Field(default="", validation_alias="WEBSTUDIO_RELEASE_UPDATES_ROOT")
 
-    webstudio_tally_scheduler: bool = Field(default=True, validation_alias="WEBSTUDIO_TALLY_SCHEDULER")
-    webstudio_backup_scheduler: bool = Field(default=True, validation_alias="WEBSTUDIO_BACKUP_SCHEDULER")
+    webstudio_tally_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_TALLY_SCHEDULER"
+    )
+    webstudio_backup_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_BACKUP_SCHEDULER"
+    )
     webstudio_audit_retention_scheduler: bool = Field(
         default=True, validation_alias="WEBSTUDIO_AUDIT_RETENTION_SCHEDULER"
     )

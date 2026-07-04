@@ -75,7 +75,9 @@ class OpenAIProvider(AIProvider):
                     "OpenAI returned an unreadable response.",
                     provider="openai",
                 )
-            normalized = normalize_spec(parsed_raw, fallback_name=model_name or sku, source="openai")
+            normalized = normalize_spec(
+                parsed_raw, fallback_name=model_name or sku, source="openai"
+            )
             if not validate_enrichment_payload(
                 normalized,
                 model_number=sku,
@@ -189,7 +191,9 @@ class OpenAIProvider(AIProvider):
                 "TIMEOUT", "OpenAI request timed out.", provider="openai"
             ) from exc
         except httpx.HTTPError as exc:
-            raise AIProviderError("API_ERROR", "Could not reach OpenAI.", provider="openai") from exc
+            raise AIProviderError(
+                "API_ERROR", "Could not reach OpenAI.", provider="openai"
+            ) from exc
 
         if response.status_code == 429:
             raise AIProviderError("RATE_LIMITED", "OpenAI rate limit reached.", provider="openai")

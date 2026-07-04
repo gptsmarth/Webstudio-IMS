@@ -203,9 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     scheduler_enabled = not settings.is_test and settings.webstudio_tally_scheduler
     backup_scheduler_enabled = not settings.is_test and settings.webstudio_backup_scheduler
-    audit_retention_enabled = (
-        not settings.is_test and settings.webstudio_audit_retention_scheduler
-    )
+    audit_retention_enabled = not settings.is_test and settings.webstudio_audit_retention_scheduler
     notification_scheduler_enabled = (
         not settings.is_test and settings.webstudio_notification_scheduler
     )
