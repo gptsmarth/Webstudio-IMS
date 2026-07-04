@@ -61,9 +61,7 @@ export function BrandFormDialog({
     }
     setError(null);
     const resolvedLogo =
-      logoFilename.trim() ||
-      BrandLogoRegistry.logoFilenameForBrand(name.trim()) ||
-      null;
+      logoFilename.trim() || BrandLogoRegistry.logoFilenameForBrand(name.trim()) || null;
     try {
       await onConfirm({
         name: name.trim(),

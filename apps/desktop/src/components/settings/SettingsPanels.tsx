@@ -791,8 +791,8 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
       <IntegrationApiKeysSection />
       <Section title="AI product enrichment">
         <p className="stg-section__lead">
-          Add Laptop auto-fetch uses your primary AI provider first, then falls back to the other
-          if needed. Gemini searches the live web for exact SKUs (best for Indian model numbers).
+          Add Laptop auto-fetch uses your primary AI provider first, then falls back to the other if
+          needed. Gemini searches the live web for exact SKUs (best for Indian model numbers).
           OpenAI ChatGPT fills gaps from training data. Product images are resolved separately via
           web search — never guessed by the model.
         </p>

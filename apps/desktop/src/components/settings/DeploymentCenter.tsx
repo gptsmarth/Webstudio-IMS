@@ -83,7 +83,10 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
   };
 
   const formatCheckUpdatesMessage = (result: unknown): string => {
-    const payload = result as { updates_found?: number; releases?: Array<{ release_version?: string }> };
+    const payload = result as {
+      updates_found?: number;
+      releases?: Array<{ release_version?: string }>;
+    };
     const count = payload.updates_found ?? 0;
     if (count <= 0) {
       return 'No newer releases on GitHub. The server is already on the latest published version (or GitHub has no newer tag).';
@@ -168,10 +171,10 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
           <>
             {!dashboard.github_repo && (
               <p className="stg-backup-warning">
-                GitHub is not configured on this server. Add{' '}
-                <code>WEBSTUDIO_GITHUB_REPO</code> and <code>WEBSTUDIO_GITHUB_TOKEN</code> to the
-                server <code>.env</code>, restart the WEBSTUDIO Server service, then enable GitHub
-                sync in system settings. Check updates and download will not work until then.
+                GitHub is not configured on this server. Add <code>WEBSTUDIO_GITHUB_REPO</code> and{' '}
+                <code>WEBSTUDIO_GITHUB_TOKEN</code> to the server <code>.env</code>, restart the
+                WEBSTUDIO Server service, then enable GitHub sync in system settings. Check updates
+                and download will not work until then.
               </p>
             )}
             {dashboard.github_repo && !dashboard.sync_enabled && (

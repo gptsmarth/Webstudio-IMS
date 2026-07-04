@@ -18,9 +18,7 @@ export class BrandLogoRegistry {
       return trimmed as BrandLogoKey;
     }
 
-    const firstToken = trimmed
-      .split(/[\s\-_/]+/)
-      .find((part) => part.length > 0);
+    const firstToken = trimmed.split(/[\s\-_/]+/).find((part) => part.length > 0);
     if (firstToken && KNOWN_BRAND_KEYS.has(firstToken as BrandLogoKey)) {
       return firstToken as BrandLogoKey;
     }

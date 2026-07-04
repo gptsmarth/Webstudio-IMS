@@ -99,23 +99,23 @@ export function StockBrandGrid({
   return (
     <div className="stock-brand-grid">
       {summaries.map((summary) => (
-          <button
-            key={summary.brandId}
-            type="button"
-            className="stock-brand-tile"
-            onClick={() => onSelect(summary.brandId, summary.brandName)}
-            aria-label={`Browse ${summary.brandName} models`}
-          >
-            <span className="stock-brand-tile__logo-wrap">
-              <BrandLogoImage
-                brand={summary.brandName}
-                logoFilename={summary.logoFilename}
-                className="stock-brand-tile__logo"
-              />
-            </span>
-            <span className="stock-brand-tile__name">{summary.brandName}</span>
-          </button>
-        ))}
+        <button
+          key={summary.brandId}
+          type="button"
+          className="stock-brand-tile"
+          onClick={() => onSelect(summary.brandId, summary.brandName)}
+          aria-label={`Browse ${summary.brandName} models`}
+        >
+          <span className="stock-brand-tile__logo-wrap">
+            <BrandLogoImage
+              brand={summary.brandName}
+              logoFilename={summary.logoFilename}
+              className="stock-brand-tile__logo"
+            />
+          </span>
+          <span className="stock-brand-tile__name">{summary.brandName}</span>
+        </button>
+      ))}
     </div>
   );
 }

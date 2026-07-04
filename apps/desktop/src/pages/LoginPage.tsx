@@ -385,32 +385,32 @@ export const LoginPage: React.FC<Props> = ({
               }}
             >
               {OFFICIAL_SHOWCASE_BRANDS.map((name) => (
-                  <div
-                    key={name}
+                <div
+                  key={name}
+                  style={{
+                    height: 28,
+                    width: '100%',
+                    maxWidth: 96,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <BrandLogoImage
+                    brand={name}
+                    alt={name}
+                    loading="eager"
                     style={{
-                      height: 28,
-                      width: '100%',
-                      maxWidth: 96,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      maxHeight: '100%',
+                      maxWidth: '100%',
+                      objectFit: 'contain',
+                      filter: 'brightness(0) invert(1)',
+                      opacity: 0.65,
+                      transition: 'opacity 0.2s ease',
                     }}
-                  >
-                    <BrandLogoImage
-                      brand={name}
-                      alt={name}
-                      loading="eager"
-                      style={{
-                        maxHeight: '100%',
-                        maxWidth: '100%',
-                        objectFit: 'contain',
-                        filter: 'brightness(0) invert(1)',
-                        opacity: 0.65,
-                        transition: 'opacity 0.2s ease',
-                      }}
-                    />
-                  </div>
-                ))}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -90,7 +90,12 @@ export function AddLaptopWizard({
   const [fetchMessage, setFetchMessage] = useState<string | null>(null);
   const [unitCount, setUnitCount] = useState(1);
   const [units, setUnits] = useState<SerialUnitEntry[]>([
-    { serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '', purchase_price: '' },
+    {
+      serial_number: '',
+      current_location_id: locations[0]?.id ?? 0,
+      color: '',
+      purchase_price: '',
+    },
   ]);
   const [status, setStatus] = useState<InventoryStatus>('available');
   const [cpu, setCpu] = useState('');
@@ -125,7 +130,14 @@ export function AddLaptopWizard({
     setChecking(false);
     setFetching(false);
     setUnitCount(1);
-    setUnits([{ serial_number: '', current_location_id: locations[0]?.id ?? 0, color: '', purchase_price: '' }]);
+    setUnits([
+      {
+        serial_number: '',
+        current_location_id: locations[0]?.id ?? 0,
+        color: '',
+        purchase_price: '',
+      },
+    ]);
     setStatus('available');
     setCpu('');
     setGpu('');
@@ -672,7 +684,10 @@ export function AddLaptopWizard({
                   <span>Purchase price</span>
                 </div>
                 {units.map((unit, index) => (
-                  <div key={index} className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices">
+                  <div
+                    key={index}
+                    className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices"
+                  >
                     <input
                       className="input col-mono"
                       placeholder={`Serial ${index + 1}`}

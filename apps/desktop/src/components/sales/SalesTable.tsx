@@ -302,9 +302,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
                   <td className="sales-table__source">{saleSourceLabel(sale.sale_source)}</td>
                   <td>{sale.recorded_by_display_name ?? '—'}</td>
                   {showPurchasePrice && (
-                    <td className="sales-table__amount">
-                      {formatSaleAmount(sale.purchase_price)}
-                    </td>
+                    <td className="sales-table__amount">{formatSaleAmount(sale.purchase_price)}</td>
                   )}
                   <td className="sales-table__amount">{formatSaleAmount(sale.sale_amount)}</td>
                   <td>
