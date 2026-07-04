@@ -237,6 +237,7 @@ def test_m12j_windows_service_scripts_present() -> None:
         root / "infra/windows/stop-business-day.ps1",
         root / "infra/windows/configure-firewall.ps1",
         root / "infra/windows/server-installer/WEBSTUDIO-Server-Setup.iss",
+        root / "infra/windows/vendor/nssm/win64/nssm.exe",
     ]
     missing = [str(p.relative_to(root)) for p in required if not p.is_file()]
     assert not missing, f"Missing installer artifacts: {missing}"
@@ -248,3 +249,7 @@ def test_m12j_windows_service_scripts_present() -> None:
     assert "SERVICE_DELAYED_AUTO_START" in install_script
     assert "run-alembic-upgrade.ps1" in install_script
     assert "upgrade head" in alembic_script
+
+    stage_script = (root / "scripts/release/stage-server-payload.ps1").read_text(encoding="utf-8")
+    assert "fawno/nssm.cc" in stage_script
+    assert "vendor\\nssm\\win64\\nssm.exe" in stage_script
