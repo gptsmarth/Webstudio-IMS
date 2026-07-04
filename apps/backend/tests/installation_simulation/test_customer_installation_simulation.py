@@ -232,6 +232,7 @@ def test_m12j_windows_service_scripts_present() -> None:
     root = Path(__file__).resolve().parents[4]
     required = [
         root / "infra/windows/install-webstudio-service.ps1",
+        root / "infra/windows/run-alembic-upgrade.ps1",
         root / "infra/windows/start-business-day.ps1",
         root / "infra/windows/stop-business-day.ps1",
         root / "infra/windows/configure-firewall.ps1",
@@ -243,5 +244,7 @@ def test_m12j_windows_service_scripts_present() -> None:
     install_script = (root / "infra/windows/install-webstudio-service.ps1").read_text(
         encoding="utf-8"
     )
+    alembic_script = (root / "infra/windows/run-alembic-upgrade.ps1").read_text(encoding="utf-8")
     assert "SERVICE_DELAYED_AUTO_START" in install_script
-    assert "alembic upgrade head" in install_script
+    assert "run-alembic-upgrade.ps1" in install_script
+    assert "upgrade head" in alembic_script

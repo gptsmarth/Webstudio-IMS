@@ -52,8 +52,9 @@ class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice
             statement = statement.where(TallyProcessedInvoice.voucher_amount.is_(None))
         else:
             statement = statement.where(TallyProcessedInvoice.voucher_amount == normalized_amount)
+        statement = statement.order_by(TallyProcessedInvoice.id.desc()).limit(1)
         result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_or_create_pending(
         self,

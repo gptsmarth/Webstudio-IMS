@@ -217,6 +217,10 @@ def test_psql_restore_falls_back_when_docker_compose_unavailable(
         return subprocess.CompletedProcess(cmd, 0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "webstudio_backend.services.backup_engine.resolve_postgres_tool",
+        lambda name, postgres_bin="": name,
+    )
     engine = BackupEngine(
         session=object(),  # type: ignore[arg-type]
         app_settings=Settings(
@@ -227,7 +231,7 @@ def test_psql_restore_falls_back_when_docker_compose_unavailable(
     engine._psql_restore_from_file(sql_path, on_error_stop=True)
 
     assert calls[0][0] == "docker"
-    assert calls[1][0] == "psql"
+    assert Path(calls[1][0]).name == "psql"
     assert "127.0.0.1" in calls[1]
     assert "webstudio_test" in calls[1]
 
