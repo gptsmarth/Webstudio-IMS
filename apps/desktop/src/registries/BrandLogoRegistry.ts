@@ -1,26 +1,24 @@
-import { ASSET_MANIFEST, BUNDLED_BRAND_LOGO_KEYS, type BrandLogoKey } from './AssetManifest';
+import { ASSET_MANIFEST, BUNDLED_BRAND_LOGO_KEYS, type BundledBrandLogoKey } from './AssetManifest';
 import { resolvePublicAsset } from '../utils/resolvePublicAsset';
 
-const KNOWN_BRAND_KEYS = new Set(
-  (Object.keys(ASSET_MANIFEST.brandLogos) as BrandLogoKey[]).filter((key) => key !== 'default'),
-);
+const KNOWN_BRAND_KEYS = new Set<BundledBrandLogoKey>(BUNDLED_BRAND_LOGO_KEYS);
 
 export class BrandLogoRegistry {
   /** All bundled brand logo keys shipped with the desktop app (excludes default). */
-  static listBundledBrandKeys(): BrandLogoKey[] {
+  static listBundledBrandKeys(): BundledBrandLogoKey[] {
     return [...BUNDLED_BRAND_LOGO_KEYS];
   }
 
   /** Normalize catalogue / inventory brand names to bundled asset keys. */
-  static normalizeBrandKey(brandName: string): BrandLogoKey | 'default' {
+  static normalizeBrandKey(brandName: string): BundledBrandLogoKey | 'default' {
     const trimmed = brandName.trim().toLowerCase();
-    if (KNOWN_BRAND_KEYS.has(trimmed as BrandLogoKey)) {
-      return trimmed as BrandLogoKey;
+    if (KNOWN_BRAND_KEYS.has(trimmed as BundledBrandLogoKey)) {
+      return trimmed as BundledBrandLogoKey;
     }
 
     const firstToken = trimmed.split(/[\s\-_/]+/).find((part) => part.length > 0);
-    if (firstToken && KNOWN_BRAND_KEYS.has(firstToken as BrandLogoKey)) {
-      return firstToken as BrandLogoKey;
+    if (firstToken && KNOWN_BRAND_KEYS.has(firstToken as BundledBrandLogoKey)) {
+      return firstToken as BundledBrandLogoKey;
     }
 
     for (const key of KNOWN_BRAND_KEYS) {
