@@ -14,9 +14,9 @@ from webstudio_backend.api.sales_errors import raise_sale_error
 from webstudio_backend.api.schemas.inventory import InventoryItemDetail
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
 from webstudio_backend.api.schemas.sales import (
+    CancelledSaleSummary,
     CancelSaleRequest,
     CancelSaleResponse,
-    CancelledSaleSummary,
     SaleDetailResponse,
     SaleListItem,
 )
