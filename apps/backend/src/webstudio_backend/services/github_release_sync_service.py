@@ -69,7 +69,7 @@ async def ensure_github_release_sync_enabled(
 
     await settings_repo.set_value(
         "github_release_sync_enabled",
-        True,
+        "true",
         value_type=SettingValueType.BOOLEAN,
     )
     logger.info("github.release_sync.auto_enabled", repo=repo)

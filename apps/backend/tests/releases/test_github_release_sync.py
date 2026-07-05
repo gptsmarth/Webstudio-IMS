@@ -188,7 +188,13 @@ async def test_ensure_github_release_sync_enabled_when_repo_configured(
         SystemSettingRepository,
     )
 
-    settings = test_settings.model_copy(update={"github_repo": "webstudio/ims"})
+    settings = test_settings.model_copy(
+        update={
+            "github_repo": "webstudio/ims",
+            "app_env": "production",
+            "webstudio_release_sync_scheduler": True,
+        },
+    )
     enabled = await ensure_github_release_sync_enabled(db_session, settings)
     await db_session.commit()
 
