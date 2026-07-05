@@ -498,9 +498,7 @@ def _append_image_candidate(
         return
     ranked.append(
         (
-            score_image_candidate_url(
-                normalized, brand_name=brand_name, model_number=model_number
-            )
+            score_image_candidate_url(normalized, brand_name=brand_name, model_number=model_number)
             + bonus,
             normalized,
         )

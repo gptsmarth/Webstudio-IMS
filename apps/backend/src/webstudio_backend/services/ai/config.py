@@ -35,7 +35,9 @@ def provider_has_api_key(config: AIProviderConfig, provider_id: ProviderId) -> b
 
 def filter_configured_fallback_chain(config: AIProviderConfig) -> list[ProviderId]:
     """Only providers with API keys participate in spec lookup."""
-    chain = [provider for provider in config.fallback_chain if provider_has_api_key(config, provider)]
+    chain = [
+        provider for provider in config.fallback_chain if provider_has_api_key(config, provider)
+    ]
     if chain:
         return chain
     if provider_has_api_key(config, config.primary_provider):

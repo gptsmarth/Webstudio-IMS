@@ -301,10 +301,18 @@ def normalize_accessory_spec(
 
     if identifier_type == "part_number":
         part_number = ai_part_number or entered
-        model_number = ai_model_number if ai_model_number and ai_model_number.upper() != entered.upper() else ai_model_number
+        model_number = (
+            ai_model_number
+            if ai_model_number and ai_model_number.upper() != entered.upper()
+            else ai_model_number
+        )
     else:
         model_number = ai_model_number or entered
-        part_number = ai_part_number if ai_part_number and ai_part_number.upper() != entered.upper() else ai_part_number
+        part_number = (
+            ai_part_number
+            if ai_part_number and ai_part_number.upper() != entered.upper()
+            else ai_part_number
+        )
 
     description = data.get("description")
     description_str = str(description).strip() if description else None

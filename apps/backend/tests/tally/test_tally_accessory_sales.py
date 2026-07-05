@@ -10,15 +10,14 @@ pytest_plugins = ["auth.conftest"]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.models.brand import Brand
-from webstudio_backend.infrastructure.database.models.location import Location
-from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.enums import (
     AccessoryKind,
     InventoryStatus,
     ProductCategory,
     SettingValueType,
 )
+from webstudio_backend.infrastructure.database.models.brand import Brand
+from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
 )
@@ -29,7 +28,10 @@ from webstudio_backend.infrastructure.repositories.sale_repository import SaleRe
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
-from webstudio_backend.integrations.tally.xml_parser import expand_inventory_lines, parse_vouchers_xml
+from webstudio_backend.integrations.tally.xml_parser import (
+    expand_inventory_lines,
+    parse_vouchers_xml,
+)
 from webstudio_backend.services.tally_sync_service import TallySyncService
 
 
@@ -72,6 +74,7 @@ async def _ensure_available_item(
         status=InventoryStatus.AVAILABLE,
     )
 
+
 MIXED_INVOICE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER>
   <GUID>mixed-invoice-guid-001</GUID>
@@ -102,8 +105,7 @@ MIXED_INVOICE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 @pytest.mark.asyncio
 async def test_expand_inventory_lines_splits_multiple_serials() -> None:
-    vouchers = parse_vouchers_xml(
-        """<?xml version="1.0" encoding="UTF-8"?>
+    vouchers = parse_vouchers_xml("""<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER>
       <GUID>multi-serial-guid</GUID>
       <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
@@ -116,8 +118,7 @@ async def test_expand_inventory_lines_splits_multiple_serials() -> None:
         <BATCHALLOCATIONS.LIST><SERIALNUMBER>ACC-001</SERIALNUMBER></BATCHALLOCATIONS.LIST>
         <BATCHALLOCATIONS.LIST><SERIALNUMBER>ACC-002</SERIALNUMBER></BATCHALLOCATIONS.LIST>
       </ALLINVENTORYENTRIES.LIST>
-    </VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>"""
-    )
+    </VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>""")
     expanded = expand_inventory_lines(vouchers[0].inventory_lines)
     assert len(expanded) == 2
     assert expanded[0].serial_number == "ACC-001"
@@ -148,7 +149,6 @@ async def test_tally_sync_marks_laptop_and_accessory_sold_on_same_invoice(
 
     accessory_model = await _ensure_accessory_model(db_session, brand)
 
-    inventory_repo = InventoryItemRepository(db_session)
     laptop_item = await _ensure_available_item(
         db_session,
         serial_number="SN-MIX-LAPTOP-001",

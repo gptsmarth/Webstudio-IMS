@@ -18,15 +18,13 @@ SCHEMA = "webstudio"
 
 def _create_enum(enum_name: str, values: tuple[str, ...]) -> None:
     quoted_values = ", ".join(f"'{value}'" for value in values)
-    op.execute(
-        sa.text(f"""
+    op.execute(sa.text(f"""
             DO $$ BEGIN
                 CREATE TYPE {SCHEMA}.{enum_name} AS ENUM ({quoted_values});
             EXCEPTION
                 WHEN duplicate_object THEN NULL;
             END $$;
-            """)
-    )
+            """))
 
 
 def upgrade() -> None:
@@ -112,9 +110,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            f"""
+    op.execute(sa.text(f"""
             UPDATE {SCHEMA}.product_models
             SET cpu = COALESCE(cpu, 'Unknown'),
                 ram_gb = COALESCE(ram_gb, 1),
@@ -122,9 +118,7 @@ def downgrade() -> None:
                 storage_unit = COALESCE(storage_unit, 'GB'),
                 storage_type = COALESCE(storage_type, 'SSD')
             WHERE category = 'accessory'
-            """
-        )
-    )
+            """))
 
     op.drop_index("ix_product_models_part_number", table_name="product_models", schema=SCHEMA)
     op.drop_index("ix_product_models_category", table_name="product_models", schema=SCHEMA)

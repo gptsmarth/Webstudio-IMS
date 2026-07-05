@@ -1,7 +1,5 @@
 """Tests for accessory product models."""
 
-from decimal import Decimal
-
 import pytest
 
 from webstudio_backend.infrastructure.database.enums import AccessoryKind, ProductCategory

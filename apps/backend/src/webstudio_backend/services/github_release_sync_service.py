@@ -56,9 +56,10 @@ async def ensure_github_release_sync_enabled(
     """Turn on GitHub release sync when production env is configured."""
     if settings.is_test or not settings.webstudio_release_sync_scheduler:
         return False
-    repo = settings.github_repo.strip() or (
-        await SystemSettingRepository(session).get_string("github_release_repo") or ""
-    ).strip()
+    repo = (
+        settings.github_repo.strip()
+        or (await SystemSettingRepository(session).get_string("github_release_repo") or "").strip()
+    )
     if not repo:
         return False
     settings_repo = SystemSettingRepository(session)
@@ -334,7 +335,9 @@ class GitHubReleaseSyncService:
         from webstudio_backend.services.client_update_service import ClientUpdateService
 
         payload = EnterpriseReleaseService._serialize_release(release)  # noqa: SLF001
-        await ClientUpdateService(self._session, self._settings).sync_platform_settings_from_release(
+        await ClientUpdateService(
+            self._session, self._settings
+        ).sync_platform_settings_from_release(
             payload,
         )
         logger.info(

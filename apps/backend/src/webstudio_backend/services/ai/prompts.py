@@ -111,7 +111,7 @@ Search the web for this exact {brand} accessory model. Official sources: {brand}
         search_hint = f'"{identifier}" {brand} accessory model'
 
     search_line = (
-        f'Use Google Search starting with: {search_hint}\n\n'
+        f"Use Google Search starting with: {search_hint}\n\n"
         if use_web_search
         else (
             "Use your knowledge of published manufacturer specifications.\n\n"

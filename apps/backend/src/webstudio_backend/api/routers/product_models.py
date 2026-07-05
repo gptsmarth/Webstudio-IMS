@@ -34,7 +34,11 @@ from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import ProductCategory, ProductModelStatus, UserRole
+from webstudio_backend.infrastructure.database.enums import (
+    ProductCategory,
+    ProductModelStatus,
+    UserRole,
+)
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate

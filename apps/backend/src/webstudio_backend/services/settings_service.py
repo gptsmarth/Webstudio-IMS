@@ -38,6 +38,9 @@ from webstudio_backend.infrastructure.repositories.restore_run_repository import
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
 from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
 from webstudio_backend.integrations.tally.connectivity import (
     normalize_tally_host,
@@ -45,9 +48,6 @@ from webstudio_backend.integrations.tally.connectivity import (
 )
 from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS
 from webstudio_backend.integrations.tally.incremental_sync import clamp_sync_interval_seconds
-from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
-    TallyCompanySyncRepository,
-)
 from webstudio_backend.services.ai.config import mask_api_key, resolve_ai_config
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.backup_engine import BackupEngine

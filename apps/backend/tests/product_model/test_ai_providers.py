@@ -127,7 +127,9 @@ def test_filter_configured_fallback_chain_skips_openai_without_key() -> None:
     config = AIProviderConfig(
         primary_provider="gemini",
         fallback_chain=["gemini", "openai"],
-        gemini=ProviderCredentials(provider="gemini", api_key="gem-key", model="gemini-2.5-flash-lite"),
+        gemini=ProviderCredentials(
+            provider="gemini", api_key="gem-key", model="gemini-2.5-flash-lite"
+        ),
         openai=ProviderCredentials(provider="openai", api_key="", model="gpt-4o-mini"),
     )
     assert filter_configured_fallback_chain(config) == ["gemini"]

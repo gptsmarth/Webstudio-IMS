@@ -59,7 +59,9 @@ def validate_part_number(part_number: str | None) -> str | None:
     if not normalized:
         return None
     if len(normalized) > MAX_MODEL_NUMBER_LENGTH:
-        raise InvalidFieldValueError("part_number", f"must be at most {MAX_MODEL_NUMBER_LENGTH} characters")
+        raise InvalidFieldValueError(
+            "part_number", f"must be at most {MAX_MODEL_NUMBER_LENGTH} characters"
+        )
     return normalized
 
 

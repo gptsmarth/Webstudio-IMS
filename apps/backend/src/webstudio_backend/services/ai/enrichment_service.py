@@ -530,7 +530,7 @@ class ProductEnrichmentService:
                     ),
                     timeout=6.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 image_url = None
             payload["product_image_url"] = image_url
         payload.pop("grounding_body", None)

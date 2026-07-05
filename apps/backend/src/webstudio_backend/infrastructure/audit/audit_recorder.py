@@ -1117,7 +1117,9 @@ class AuditRecorder:
             "gpu": product_model.gpu,
             "ram_gb": product_model.ram_gb,
             "storage_value": (
-                str(product_model.storage_value) if product_model.storage_value is not None else None
+                str(product_model.storage_value)
+                if product_model.storage_value is not None
+                else None
             ),
             "storage_unit": (
                 product_model.storage_unit.value if product_model.storage_unit else None

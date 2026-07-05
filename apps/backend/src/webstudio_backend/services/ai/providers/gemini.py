@@ -167,7 +167,9 @@ class GeminiProvider(AIProvider):
 
         sku = identifier.strip()
         if not sku:
-            raise AIProviderError("NOT_FOUND", "Part or model number is required.", provider="gemini")
+            raise AIProviderError(
+                "NOT_FOUND", "Part or model number is required.", provider="gemini"
+            )
 
         prompt = build_accessory_spec_lookup_prompt(
             sku,
@@ -201,7 +203,9 @@ class GeminiProvider(AIProvider):
             model_name=model_name,
             use_web_search=False,
         )
-        logger.info("Gemini web search did not validate for accessory {}, trying knowledge fallback", sku)
+        logger.info(
+            "Gemini web search did not validate for accessory {}, trying knowledge fallback", sku
+        )
         parsed_knowledge, knowledge_body, knowledge_error = await self._try_accessory_lookup(
             sku,
             prompt=knowledge_prompt,
