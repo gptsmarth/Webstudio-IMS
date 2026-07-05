@@ -454,6 +454,40 @@ class AuditRecorder:
             source=source,
         )
 
+    async def record_sale_cancel(
+        self,
+        sale: Sale,
+        *,
+        inventory_item_id: uuid.UUID,
+        restored_serial_number: str,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="sale",
+            entity_id=str(sale.id),
+            action=AuditAction.UPDATE,
+            actor=actor,
+            inventory_item_id=inventory_item_id,
+            old_value={
+                "sale_id": sale.id,
+                "invoice_number": sale.invoice_number,
+                "inventory_item_id": str(inventory_item_id),
+                "cancelled": False,
+            },
+            new_value={
+                "sale_id": sale.id,
+                "invoice_number": sale.invoice_number,
+                "serial_number": restored_serial_number,
+                "cancelled": True,
+                "cancelled_at": sale.cancelled_at.isoformat() if sale.cancelled_at else None,
+                "cancellation_reason": sale.cancellation_reason,
+            },
+            description=(
+                f"Sale cancelled — invoice {sale.invoice_number} deleted; "
+                f"{restored_serial_number} returned to available stock"
+            ),
+        )
+
     async def record_system_action(
         self,
         *,

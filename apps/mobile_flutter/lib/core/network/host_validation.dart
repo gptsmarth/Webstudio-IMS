@@ -1,6 +1,7 @@
 /// Host validation for IPv4, hostname, and .local mDNS names.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 final _hostnamePattern = RegExp(
@@ -61,7 +62,22 @@ String? extractHostnameFromUrl(String url) {
 Future<HostResolutionResult> resolveServerHost(String host, {int port = 8000}) async {
   try {
     final normalized = normalizeServerHost(host);
-    final results = await InternetAddress.lookup(normalized, type: InternetAddressType.IPv4);
+    if (_ipv4Pattern.hasMatch(normalized)) {
+      return HostResolutionResult(
+        configuredHost: normalized,
+        resolvedIp: normalized,
+        success: true,
+        message: 'Using IPv4 address $normalized.',
+      );
+    }
+
+    final results = await InternetAddress.lookup(
+      normalized,
+      type: InternetAddressType.IPv4,
+    ).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => throw TimeoutException('Timed out resolving $normalized.'),
+    );
     if (results.isEmpty) {
       return HostResolutionResult(
         configuredHost: normalized,
@@ -76,6 +92,13 @@ Future<HostResolutionResult> resolveServerHost(String host, {int port = 8000}) a
       resolvedIp: ip,
       success: true,
       message: 'Resolved $normalized to $ip.',
+    );
+  } on TimeoutException catch (error) {
+    return HostResolutionResult(
+      configuredHost: host.trim(),
+      resolvedIp: null,
+      success: false,
+      message: error.message ?? 'Timed out resolving host.',
     );
   } on HostValidationException catch (error) {
     return HostResolutionResult(

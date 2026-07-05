@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:webstudio_ims/features/catalogue/domain/catalogue_models.dart';
 import 'package:webstudio_ims/features/sales/domain/sales_models.dart';
+import 'package:webstudio_ims/features/sales/domain/sales_permissions.dart';
 
 void main() {
   group('QA — Sales', () {
@@ -65,6 +66,31 @@ void main() {
       expect(page1, hasLength(50));
       expect(page5, hasLength(50));
       expect(page5.first, 'item-200');
+    });
+
+    test('CancelSaleResult parses cancel API response', () {
+      final result = CancelSaleResult.fromJson({
+        'inventory': {
+          'id': 'item-1',
+          'status': 'available',
+        },
+        'sale': {
+          'id': 7,
+          'invoice_number': 'INV-7',
+          'serial_number': 'SN-001',
+          'cancelled_at': '2026-06-15T12:00:00Z',
+          'cancellation_reason': 'Customer return',
+        },
+      });
+      expect(result.saleId, 7);
+      expect(result.restoredStatus, 'available');
+      expect(result.restoredSerialNumber, 'SN-001');
+    });
+
+    test('canDeleteSale requires sales:cancel and linked inventory', () {
+      expect(canDeleteSale(['sales:cancel'], 'item-1'), isTrue);
+      expect(canDeleteSale(['sales:view'], 'item-1'), isFalse);
+      expect(canDeleteSale(['sales:cancel'], null), isFalse);
     });
   });
 }

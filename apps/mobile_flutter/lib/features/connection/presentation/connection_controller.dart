@@ -218,8 +218,13 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
     _messageTimer?.cancel();
   }
 
+  static const _manualConnectTimeout = Duration(seconds: 25);
+
   Future<ConnectionTestResult?> connectToUrl(String url) async {
     cancelDiscovery();
+    // Manual connect must not inherit discovery cancellation — otherwise success is ignored
+    // and the UI stays on the loading spinner forever.
+    _cancelled = false;
     state = state.copyWith(
       phase: ConnectionPhase.testing,
       clearError: true,
@@ -231,7 +236,16 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
 
     try {
       final normalized = normalizeServerUrl(url);
-      final result = await repo.testConnection(normalized);
+      ConnectionTestResult result;
+      try {
+        result = await repo.testConnection(normalized).timeout(_manualConnectTimeout);
+      } on TimeoutException {
+        result = ConnectionTestResult(
+          success: false,
+          url: normalized,
+          errorMessage: 'Connection timed out. Check server address and shop Wi-Fi.',
+        );
+      }
       if (_cancelled) return null;
 
       state = state.copyWith(diagnosticStages: result.stages);

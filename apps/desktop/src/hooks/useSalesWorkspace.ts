@@ -78,6 +78,7 @@ export interface SalesWorkspaceState {
   actionLoading: boolean;
   actionError: string | null;
   clearActionError: () => void;
+  cancelSale: (saleId: number, reason?: string | null) => Promise<void>;
 }
 
 function parseApiError(err: unknown): string {
@@ -259,6 +260,29 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     setActionError(null);
   }, []);
 
+  const cancelSale = useCallback(
+    async (saleId: number, reason?: string | null) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await SalesService.cancelSale(saleId, reason);
+        if (selectedId === saleId) {
+          setSelectedId(null);
+          setSaleDetail(null);
+          setAuditLogs([]);
+        }
+        await refresh();
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [refresh, selectedId],
+  );
+
   return {
     items,
     brands,
@@ -290,5 +314,6 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     actionLoading,
     actionError,
     clearActionError,
+    cancelSale,
   };
 }

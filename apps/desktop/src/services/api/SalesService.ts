@@ -71,6 +71,23 @@ interface ListMeta {
   total_pages?: number;
 }
 
+export interface CancelSaleResult {
+  inventory: {
+    id: string;
+    serial_number: string;
+    status: string;
+    model_number: string;
+    model_name: string;
+  };
+  sale: {
+    id: number;
+    invoice_number: string;
+    serial_number: string;
+    cancelled_at: string;
+    cancellation_reason: string | null;
+  };
+}
+
 export class SalesService {
   static async listSales(params?: SalesListParams): Promise<SalesListResult> {
     LoggingService.debug(
@@ -97,5 +114,13 @@ export class SalesService {
     LoggingService.debug('API', 'Fetching sale detail', { saleId });
     const client = await ApiClientProvider.getClient();
     return client.get<SaleDetail>(`/api/v1/sales/${saleId}`);
+  }
+
+  static async cancelSale(saleId: number, reason?: string | null): Promise<CancelSaleResult> {
+    LoggingService.debug('API', 'Cancelling sale', { saleId, reason });
+    const client = await ApiClientProvider.getClient();
+    return client.post<CancelSaleResult>(`/api/v1/sales/${saleId}/cancel`, {
+      reason: reason ?? null,
+    });
   }
 }

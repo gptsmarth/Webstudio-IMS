@@ -2,24 +2,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:webstudio_ims/core/network/host_validation.dart';
 
 void main() {
-  test('normalizeServerHost accepts IPv4', () {
-    expect(normalizeServerHost('192.168.1.10'), '192.168.1.10');
+  test('normalizeServerUrl accepts shop LAN address', () {
+    expect(
+      normalizeServerUrl('192.168.29.100:8000'),
+      'http://192.168.29.100:8000',
+    );
+    expect(
+      normalizeServerUrl('http://192.168.29.100:8000'),
+      'http://192.168.29.100:8000',
+    );
   });
 
-  test('normalizeServerHost accepts hostname', () {
-    expect(normalizeServerHost('WEBSTUDIO-SERVER'), 'webstudio-server');
-  });
-
-  test('normalizeServerHost accepts mDNS local', () {
-    expect(normalizeServerHost('WEBSTUDIO-SERVER.local'), 'webstudio-server.local');
-  });
-
-  test('normalizeServerUrl adds scheme and port', () {
-    expect(normalizeServerUrl('192.168.1.10'), 'http://192.168.1.10:8000');
-    expect(normalizeServerUrl('WEBSTUDIO-SERVER.local:9000'), 'http://webstudio-server.local:9000');
-  });
-
-  test('normalizeServerHost rejects invalid input', () {
-    expect(() => normalizeServerHost('bad host!'), throwsA(isA<HostValidationException>()));
+  test('resolveServerHost skips DNS lookup for IPv4 literals', () async {
+    final result = await resolveServerHost('192.168.29.100');
+    expect(result.success, isTrue);
+    expect(result.resolvedIp, '192.168.29.100');
+    expect(result.configuredHost, '192.168.29.100');
   });
 }

@@ -230,19 +230,25 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
           bottomNavigationBar: useRail || navItems.isEmpty
               ? null
-              : NavigationBar(
-                  selectedIndex: safeSelectedIndex,
-                  labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-                  animationDuration: const Duration(milliseconds: 200),
-                  onDestinationSelected: (index) => _selectBranch(navItems[index].branchIndex),
-                  destinations: [
-                    for (final item in navItems)
-                      NavigationDestination(
-                        icon: Icon(item.icon),
-                        selectedIcon: Icon(item.selectedIcon),
-                        label: item.label,
-                      ),
-                  ],
+              : MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.0),
+                  ),
+                  child: NavigationBar(
+                    selectedIndex: safeSelectedIndex,
+                    labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+                    animationDuration: const Duration(milliseconds: 200),
+                    onDestinationSelected: (index) => _selectBranch(navItems[index].branchIndex),
+                    destinations: [
+                      for (final item in navItems)
+                        NavigationDestination(
+                          icon: Icon(item.icon),
+                          selectedIcon: Icon(item.selectedIcon),
+                          label: item.shortLabel,
+                          tooltip: item.label,
+                        ),
+                    ],
+                  ),
                 ),
         ),
       ),

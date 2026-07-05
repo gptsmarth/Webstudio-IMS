@@ -23,7 +23,10 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
         super().__init__(session, Sale)
 
     async def get_by_inventory_item_id(self, inventory_item_id: uuid.UUID) -> Sale | None:
-        statement = select(Sale).where(Sale.inventory_item_id == inventory_item_id)
+        statement = select(Sale).where(
+            Sale.inventory_item_id == inventory_item_id,
+            Sale.cancelled_at.is_(None),
+        )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 

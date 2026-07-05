@@ -306,7 +306,10 @@ class ReportRepository:
         return await self._paginate_sales(statement, page_params)
 
     async def get_sale_detail_by_id(self, sale_id: int) -> SaleDetailRow | None:
-        statement = self._sales_detail_select().where(Sale.id == sale_id)
+        statement = self._sales_detail_select().where(
+            Sale.id == sale_id,
+            Sale.cancelled_at.is_(None),
+        )
         result = await self._session.execute(statement)
         row = result.one_or_none()
         if row is None:
@@ -518,7 +521,7 @@ class ReportRepository:
         )
 
     def _sales_where_clauses(self, filters: ReportFilters) -> list:
-        clauses = []
+        clauses = [Sale.cancelled_at.is_(None)]
         if filters.brand_id is not None:
             clauses.append(
                 or_(

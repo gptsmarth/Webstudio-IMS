@@ -137,6 +137,7 @@ InventoryRestoreDep = Annotated[AuthenticatedUser, Depends(require_permission("i
 # Sales
 SalesViewDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:view"))]
 SalesCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:create"))]
+SalesCancelDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:cancel"))]
 
 # Reports
 ReportsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("reports:view"))]

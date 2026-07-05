@@ -37,18 +37,10 @@ class ConnectionDiagnostics {
       return _failure(normalized, stages, hostStage);
     }
 
-    final reachabilityStage = await _runStage(ConnectionStageId.reachability, () async {
-      final healthy = await _api.checkHealthLiveAt(normalized);
-      if (!healthy) {
-        throw Exception('Server did not respond.');
-      }
-    });
-    stages.add(reachabilityStage);
-
     final httpStage = await _runStage(ConnectionStageId.httpConnection, () async {
       final healthy = await _api.checkHealthLiveAt(normalized);
       if (!healthy) {
-        throw Exception('HTTP health check failed.');
+        throw Exception('Server did not respond to health check.');
       }
     });
     stages.add(httpStage);

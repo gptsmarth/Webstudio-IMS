@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/device/file_transfer_service.dart';
+import '../../../core/rbac/role_permissions.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/adaptive_master_detail.dart';
 import '../../../shared/widgets/scrollable_bottom_sheet.dart';
 import '../../../shared/widgets/workspace_lookup_sheet.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../../reports/data/report_repository.dart';
 import '../../reports/domain/report_models.dart';
 import '../domain/sales_models.dart';
+import '../domain/sales_permissions.dart';
 import 'sales_controller.dart';
+import 'widgets/sale_cancel_dialog.dart';
 import 'widgets/sales_detail_sheet.dart';
 import 'widgets/sales_filters_sheet.dart';
 
@@ -100,10 +104,35 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     }
   }
 
+  Future<void> _confirmDeleteSale(SaleListItem sale) async {
+    final reasonInput = await showSaleCancelDialog(context, sale);
+    if (reasonInput == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(salesWorkspaceProvider.notifier);
+    try {
+      final result = await controller.cancelSale(
+        sale.id,
+        reason: reasonInput.isEmpty ? null : reasonInput,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Invoice ${result.invoiceNumber} deleted — ${result.restoredSerialNumber} back in stock',
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final workspace = ref.watch(salesWorkspaceProvider);
     final controller = ref.read(salesWorkspaceProvider.notifier);
+    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
 
     return Column(
       children: [
@@ -145,13 +174,25 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             ],
           ),
         ),
-        if (workspace.loading) const LinearProgressIndicator(minHeight: 2),
+        if (workspace.loading || workspace.actionInProgress)
+          const LinearProgressIndicator(minHeight: 2),
         if (workspace.error != null)
           Material(
             color: Theme.of(context).colorScheme.errorContainer,
             child: ListTile(
               title: Text(workspace.error!),
               trailing: TextButton(onPressed: controller.load, child: const Text('Retry')),
+            ),
+          ),
+        if (workspace.actionError != null)
+          Material(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              title: Text(workspace.actionError!),
+              trailing: TextButton(
+                onPressed: controller.clearActionError,
+                child: const Text('Dismiss'),
+              ),
             ),
           ),
         Expanded(
@@ -167,6 +208,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       itemBuilder: (context, index) {
                         final sale = workspace.items[index];
                         final selected = workspace.selectedDetail?.id == sale.id;
+                        final canDelete = canDeleteSale(permissions, sale.inventoryItemId);
                         return ListTile(
                           selected: selected,
                           title: Text(sale.invoiceNumber),
@@ -175,12 +217,41 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                             '${sale.brandName} ${sale.modelName} · ${sale.locationName}',
                           ),
                           isThreeLine: true,
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(formatSaleAmount(sale.saleAmount)),
-                              Text(sale.soldAt.split('T').first, style: Theme.of(context).textTheme.bodySmall),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(formatSaleAmount(sale.saleAmount)),
+                                  Text(
+                                    sale.soldAt.split('T').first,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                              if (canDelete)
+                                PopupMenuButton<String>(
+                                  tooltip: 'Actions',
+                                  onSelected: (value) {
+                                    if (value == 'delete') {
+                                      _confirmDeleteSale(sale);
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                          SizedBox(width: 8),
+                                          Text('Delete invoice'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                           onTap: () => _openDetail(sale.id),

@@ -1912,7 +1912,32 @@ Deprecated alias for single-line processing — prefer §11.2. Endpoint `POST /a
 
 ---
 
-## 12. Dashboard
+### 11.7 Cancel Sale (Delete Invoice)
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/sales/{sale_id}/cancel` |
+| **Method** | `POST` |
+| **Purpose** | Delete/cancel a sale and restore the linked inventory item to **available** stock (product return) |
+| **Authentication Required** | Yes |
+| **Required Permission** | `sales:cancel` (Admin / Main Admin) |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | No | Optional cancellation reason (max 2000 chars) |
+
+**Behaviour:**
+
+- Sets `cancelled_at` on the sale record (soft cancel — audit history retained)
+- Clears `inventory_item_id` on the sale so the serial can be sold again
+- Restores linked inventory item status from `sold` → `available` (same serial + product model)
+- Cancelled sales are excluded from sales list, reports, and dashboard counts
+
+**Success Codes:** `200`, `404` (sale not found), `409` (already cancelled), `422` (cannot restore stock)
+
+---
 
 > **Sprint 3.1 (implemented):** Production dashboard APIs at `/api/v1/dashboard` using dedicated `DashboardService` and `DashboardRepository` with aggregate SQL queries. UI layers must not query inventory repositories directly.
 

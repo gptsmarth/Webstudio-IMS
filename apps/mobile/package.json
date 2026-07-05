@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/mobile",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -29,7 +29,7 @@
     "typescript": "^5.7.2"
   },
   "webstudio": {
-    "buildNumber": 4,
+    "buildNumber": 5,
     "releaseChannel": "stable",
     "releaseDate": "2026-07-05",
     "gitCommit": "",

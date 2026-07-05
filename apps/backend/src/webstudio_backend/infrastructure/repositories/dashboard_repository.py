@@ -149,9 +149,15 @@ class DashboardRepository:
         start_of_month = start_of_day.replace(day=1)
 
         statement = select(
-            func.count(Sale.id).filter(Sale.sold_at >= start_of_day).label("today"),
-            func.count(Sale.id).filter(Sale.sold_at >= start_of_week).label("week"),
-            func.count(Sale.id).filter(Sale.sold_at >= start_of_month).label("month"),
+            func.count(Sale.id)
+            .filter(Sale.sold_at >= start_of_day, Sale.cancelled_at.is_(None))
+            .label("today"),
+            func.count(Sale.id)
+            .filter(Sale.sold_at >= start_of_week, Sale.cancelled_at.is_(None))
+            .label("week"),
+            func.count(Sale.id)
+            .filter(Sale.sold_at >= start_of_month, Sale.cancelled_at.is_(None))
+            .label("month"),
         )
         row = (await self._session.execute(statement)).one()
         return SalesPeriodCounts(
@@ -319,6 +325,7 @@ class DashboardRepository:
             .join(Sale, Sale.inventory_item_id == InventoryItem.id)
             .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
             .join(Brand, ProductModel.brand_id == Brand.id)
+            .where(Sale.cancelled_at.is_(None))
             .order_by(Sale.sold_at.desc())
             .limit(limit)
         )

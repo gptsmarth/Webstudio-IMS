@@ -37,6 +37,14 @@ class SalesRepository {
       parser: (json) => SaleDetail.fromJson(json! as Map<String, dynamic>),
     );
   }
+
+  Future<CancelSaleResult> cancelSale(int saleId, {String? reason}) async {
+    return _api.post(
+      '${ApiPaths.sales}/$saleId/cancel',
+      data: {'reason': reason},
+      parser: (json) => CancelSaleResult.fromJson(json! as Map<String, dynamic>),
+    );
+  }
 }
 
 final salesRepositoryProvider = Provider<SalesRepository>((ref) {

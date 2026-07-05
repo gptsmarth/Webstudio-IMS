@@ -16,6 +16,9 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     ArchivedInventoryOperationError,
     InventoryAlreadySoldError,
     InventoryNotAvailableForSaleError,
+    SaleAlreadyCancelledError,
+    SaleCancelNotAllowedError,
+    SaleNotFoundError,
 )
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemDetailRow,
@@ -29,6 +32,13 @@ from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 class ManualSaleResult:
     inventory: InventoryItemDetailRow
     sale: Sale
+
+
+@dataclass(frozen=True, slots=True)
+class CancelSaleResult:
+    inventory: InventoryItemDetailRow
+    sale: Sale
+    restored_serial_number: str
 
 
 class SaleService:
@@ -99,3 +109,78 @@ class SaleService:
         detail = await self._inventory.get_detail(item.id)
         assert detail is not None
         return ManualSaleResult(inventory=detail, sale=sale)
+
+    async def cancel_sale(
+        self,
+        sale_id: int,
+        *,
+        reason: str | None,
+        actor: AuditActor,
+    ) -> CancelSaleResult:
+        if actor.user_id is None:
+            raise ValueError("Sale cancellation requires an authenticated user")
+
+        sale = await self._sales.get_by_id(sale_id)
+        if sale is None or sale.cancelled_at is not None:
+            if sale is not None and sale.cancelled_at is not None:
+                raise SaleAlreadyCancelledError(sale_id)
+            raise SaleNotFoundError(sale_id)
+
+        if sale.inventory_item_id is None:
+            raise SaleCancelNotAllowedError(
+                "Cannot restore stock — inventory item is no longer linked to this sale.",
+            )
+
+        item = await self._inventory.require_by_id(sale.inventory_item_id)
+        if item.is_archived:
+            raise SaleCancelNotAllowedError(
+                "Cannot cancel sale — linked inventory item is archived.",
+            )
+        if item.status is not InventoryStatus.SOLD:
+            raise SaleCancelNotAllowedError(
+                f"Cannot cancel sale — inventory item status is {item.status.value}, not sold.",
+            )
+
+        linked_sale = await self._sales.get_by_inventory_item_id(item.id)
+        if linked_sale is None or linked_sale.id != sale.id:
+            raise SaleCancelNotAllowedError(
+                "Cannot cancel sale — inventory item is not linked to this active sale.",
+            )
+
+        restored_serial = item.serial_number
+        old_status = item.status
+        item.status = InventoryStatus.AVAILABLE
+        await self._session.flush()
+
+        inventory_item_id = sale.inventory_item_id
+        sale.inventory_item_id = None
+        sale.cancelled_at = datetime.now(UTC)
+        sale.cancelled_by_user_id = actor.user_id
+        sale.cancellation_reason = reason.strip() if reason and reason.strip() else None
+        await self._session.flush()
+
+        await self._recorder.record_inventory_status_change(
+            item,
+            old_status=old_status,
+            new_status=InventoryStatus.AVAILABLE,
+            actor=actor,
+            extra_new_value={
+                "invoice_number": sale.invoice_number,
+                "sale_id": sale.id,
+                "cancelled": True,
+            },
+        )
+        await self._recorder.record_sale_cancel(
+            sale,
+            inventory_item_id=inventory_item_id,
+            restored_serial_number=restored_serial,
+            actor=actor,
+        )
+
+        detail = await self._inventory.get_detail(item.id)
+        assert detail is not None
+        return CancelSaleResult(
+            inventory=detail,
+            sale=sale,
+            restored_serial_number=restored_serial,
+        )

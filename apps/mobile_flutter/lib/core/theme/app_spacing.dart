@@ -11,7 +11,7 @@ abstract final class AppSpacing {
   static const double inputHeight = 44;
   static const double buttonHeight = 44;
   static const double toolbarHeight = 56;
-  static const double bottomNavHeight = 64;
+  static const double bottomNavHeight = 72;
 
   /// WCAG-friendly minimum touch target (Material 48dp).
   static const double minTouchTarget = 48;

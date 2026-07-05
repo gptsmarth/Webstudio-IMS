@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from webstudio_backend.api.schemas.inventory import InventoryItemDetail
 from webstudio_backend.infrastructure.repositories.report_repository import (
     SaleDetailRow,
     SalesReportRow,
@@ -127,3 +128,20 @@ class SaleDetailResponse(BaseModel):
             tally_voucher_type=row.tally_voucher_type,
             created_at=row.created_at,
         )
+
+
+class CancelSaleRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class CancelledSaleSummary(BaseModel):
+    id: int
+    invoice_number: str
+    serial_number: str
+    cancelled_at: datetime
+    cancellation_reason: str | None
+
+
+class CancelSaleResponse(BaseModel):
+    inventory: InventoryItemDetail
+    sale: CancelledSaleSummary

@@ -2630,6 +2630,14 @@
     cursor: not-allowed;
   }
 
+  .sales-row-menu__item--danger {
+    color: var(--color-danger, #dc2626);
+  }
+
+  .sales-row-menu__item--danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-danger, #dc2626) 10%, transparent);
+  }
+
   .sales-status-bar {
     display: flex;
     align-items: center;

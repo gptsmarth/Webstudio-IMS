@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import {
+  canCancelSales,
   formatInvoiceDate,
   formatSaleAmount,
   saleSourceLabel,
@@ -14,6 +15,7 @@ import type { SalesSortField, SalesWorkspaceState } from '../../hooks/useSalesWo
 import type { SaleListItem } from '../../services/api/SalesService';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
 import { SalesEmptyState } from './SalesEmptyState';
+import { SaleCancelDialog } from './SaleCancelDialog';
 import { SalesRowActionsMenu } from './SalesRowActionsMenu';
 
 interface ColumnDef {
@@ -109,6 +111,8 @@ interface SalesTableProps {
     | 'filters'
     | 'search'
     | 'resetFilters'
+    | 'cancelSale'
+    | 'actionLoading'
   >;
   onView: (item: SaleListItem) => void;
 }
@@ -116,6 +120,7 @@ interface SalesTableProps {
 export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const showPurchasePrice = session ? canViewPurchasePrice(session.permissions) : false;
+  const canCancel = session ? canCancelSales(session.permissions) : false;
   const columns = showPurchasePrice
     ? COLUMNS
     : COLUMNS.filter((column) => column.id !== 'purchasePrice');
@@ -127,6 +132,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
   });
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [menuState, setMenuState] = useState<{ item: SaleListItem; rect: DOMRect } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<SaleListItem | null>(null);
   const resizeRef = useRef<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
@@ -336,14 +342,30 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
       {menuState && (
         <SalesRowActionsMenu
           item={menuState.item}
+          canCancel={canCancel}
           anchorRect={menuState.rect}
           onClose={() => setMenuState(null)}
           onView={(item) => {
             setMenuState(null);
             onView(item);
           }}
+          onDelete={(item) => {
+            setMenuState(null);
+            setCancelTarget(item);
+          }}
         />
       )}
+
+      <SaleCancelDialog
+        open={cancelTarget !== null}
+        sale={cancelTarget}
+        loading={workspace.actionLoading}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={async (reason) => {
+          if (!cancelTarget) return;
+          await workspace.cancelSale(cancelTarget.id, reason);
+        }}
+      />
 
       <div className="sales-table-pagination">
         <span className="sales-table-pagination__meta">

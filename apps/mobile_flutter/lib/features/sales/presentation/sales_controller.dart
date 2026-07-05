@@ -31,6 +31,8 @@ class SalesWorkspaceState {
     this.selectedId,
     this.selectedDetail,
     this.detailLoading = false,
+    this.actionInProgress = false,
+    this.actionError,
   });
 
   final bool loading;
@@ -50,6 +52,8 @@ class SalesWorkspaceState {
   final int? selectedId;
   final SaleDetail? selectedDetail;
   final bool detailLoading;
+  final bool actionInProgress;
+  final String? actionError;
 
   SaleListItem? get selectedItem {
     if (selectedId == null) return null;
@@ -77,8 +81,11 @@ class SalesWorkspaceState {
     int? selectedId,
     SaleDetail? selectedDetail,
     bool? detailLoading,
+    bool? actionInProgress,
+    String? actionError,
     bool clearError = false,
     bool clearSelection = false,
+    bool clearActionError = false,
   }) {
     return SalesWorkspaceState(
       loading: loading ?? this.loading,
@@ -98,6 +105,8 @@ class SalesWorkspaceState {
       selectedId: clearSelection ? null : selectedId ?? this.selectedId,
       selectedDetail: clearSelection ? null : selectedDetail ?? this.selectedDetail,
       detailLoading: detailLoading ?? this.detailLoading,
+      actionInProgress: actionInProgress ?? this.actionInProgress,
+      actionError: clearActionError ? null : actionError ?? this.actionError,
     );
   }
 }
@@ -232,5 +241,25 @@ class SalesWorkspaceController extends StateNotifier<SalesWorkspaceState> {
       if (!mounted) return;
       refresh();
     });
+  }
+
+  Future<CancelSaleResult> cancelSale(int saleId, {String? reason}) async {
+    state = state.copyWith(actionInProgress: true, clearActionError: true);
+    try {
+      final result = await _sales.cancelSale(saleId, reason: reason);
+      if (state.selectedId == saleId) {
+        state = state.copyWith(clearSelection: true);
+      }
+      await refresh();
+      state = state.copyWith(actionInProgress: false);
+      return result;
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, actionError: error.toString());
+      rethrow;
+    }
+  }
+
+  void clearActionError() {
+    state = state.copyWith(clearActionError: true);
   }
 }

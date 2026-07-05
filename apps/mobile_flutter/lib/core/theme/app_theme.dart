@@ -200,6 +200,8 @@ abstract final class AppTheme {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 11,
+            height: 1.0,
+            letterSpacing: -0.1,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? scheme.primary : textSecondary,
           );

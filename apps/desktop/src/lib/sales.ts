@@ -1,4 +1,8 @@
-import { canExportSales as canExportSalesPermission } from '../services/PermissionService';
+import {
+  canExportSales as canExportSalesPermission,
+  P,
+  PermissionService,
+} from '../services/PermissionService';
 import { formatInventoryDate, formatStorage } from './inventory';
 import type { SaleDetail } from '../services/api/SalesService';
 import type { StorageType, StorageUnit } from '../services/api/InventoryService';
@@ -46,6 +50,10 @@ export function formatSaleSpecs(
 
 export function canExportSales(permissions: string[]): boolean {
   return canExportSalesPermission(permissions);
+}
+
+export function canCancelSales(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.sales.cancel);
 }
 
 export function formatInvoiceDate(value: string): string {

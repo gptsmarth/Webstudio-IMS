@@ -267,3 +267,20 @@ class SourceLocationMismatchError(RepositoryError):
             f"{from_location_id} does not match inventory item {inventory_item_id} "
             "current location",
         )
+
+
+class SaleNotFoundError(RepositoryError):
+    def __init__(self, sale_id: int) -> None:
+        self.sale_id = sale_id
+        super().__init__(f"Sale not found: {sale_id}")
+
+
+class SaleAlreadyCancelledError(RepositoryError):
+    def __init__(self, sale_id: int) -> None:
+        self.sale_id = sale_id
+        super().__init__(f"Sale is already cancelled: {sale_id}")
+
+
+class SaleCancelNotAllowedError(RepositoryError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

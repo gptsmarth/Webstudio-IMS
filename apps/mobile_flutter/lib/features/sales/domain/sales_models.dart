@@ -287,3 +287,40 @@ String saleSourceLabel(String source) => switch (source) {
     };
 
 const paymentModes = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Finance'];
+
+class CancelSaleResult extends Equatable {
+  const CancelSaleResult({
+    required this.restoredInventoryId,
+    required this.restoredSerialNumber,
+    required this.restoredStatus,
+    required this.saleId,
+    required this.invoiceNumber,
+    required this.cancelledAt,
+    this.cancellationReason,
+  });
+
+  final String restoredInventoryId;
+  final String restoredSerialNumber;
+  final String restoredStatus;
+  final int saleId;
+  final String invoiceNumber;
+  final String cancelledAt;
+  final String? cancellationReason;
+
+  factory CancelSaleResult.fromJson(Map<String, dynamic> json) {
+    final inventory = json['inventory'] as Map<String, dynamic>;
+    final sale = json['sale'] as Map<String, dynamic>;
+    return CancelSaleResult(
+      restoredInventoryId: inventory['id'] as String,
+      restoredSerialNumber: sale['serial_number'] as String,
+      restoredStatus: inventory['status'] as String,
+      saleId: sale['id'] as int,
+      invoiceNumber: sale['invoice_number'] as String,
+      cancelledAt: sale['cancelled_at'] as String,
+      cancellationReason: sale['cancellation_reason'] as String?,
+    );
+  }
+
+  @override
+  List<Object?> get props => [saleId, invoiceNumber];
+}

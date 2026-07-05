@@ -1,4 +1,4 @@
-"""Sale ORM entity — immutable sales history."""
+"""Sale ORM entity — append-only sales history (soft-cancel via cancelled_at)."""
 
 from __future__ import annotations
 
@@ -98,3 +98,9 @@ class Sale(Base, PrimaryKeyMixin):
         server_default=func.now(),
         nullable=False,
     )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancelled_by_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -231,6 +231,7 @@ class ApiClient {
         '$baseUrl$path',
         queryParameters: queryParameters,
         options: Options(
+          connectTimeout: const Duration(seconds: 8),
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
         ),

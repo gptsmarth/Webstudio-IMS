@@ -33,11 +33,14 @@ void main() {
   });
 
   test('admin nav includes stock and inventory', () {
-    final labels = mobileNavItemsForUser(admin).map((item) => item.label).toList();
+    final items = mobileNavItemsForUser(admin);
+    final labels = items.map((item) => item.label).toList();
     expect(labels, contains('Stock'));
     expect(labels, contains('Inventory'));
     expect(labels, contains('Sales'));
     expect(labels, contains('Settings'));
+    final inventory = items.firstWhere((item) => item.label == 'Inventory');
+    expect(inventory.shortLabel, 'Add');
   });
 
   test('isShellPathAllowed blocks inventory create route without permission', () {

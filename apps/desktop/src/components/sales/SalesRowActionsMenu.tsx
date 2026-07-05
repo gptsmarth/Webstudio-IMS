@@ -1,23 +1,28 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Eye, FileDown, FileText, Printer } from 'lucide-react';
+import { Eye, FileDown, FileText, Printer, Trash2 } from 'lucide-react';
 import type { SaleListItem } from '../../services/api/SalesService';
 import { rowMenuPosition, useRowActionsMenuDismiss } from '../../hooks/useRowActionsMenuDismiss';
 
 interface SalesRowActionsMenuProps {
   item: SaleListItem;
+  canCancel: boolean;
   onView: (item: SaleListItem) => void;
+  onDelete: (item: SaleListItem) => void;
   onClose: () => void;
   anchorRect: DOMRect;
 }
 
 export function SalesRowActionsMenu({
   item,
+  canCancel,
   onView,
+  onDelete,
   onClose,
   anchorRect,
 }: SalesRowActionsMenuProps): JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null);
+  const canDelete = canCancel && item.inventory_item_id !== null;
 
   useRowActionsMenuDismiss(menuRef, onClose);
 
@@ -39,6 +44,16 @@ export function SalesRowActionsMenu({
       >
         <Eye size={14} aria-hidden /> View
       </button>
+      {canDelete && (
+        <button
+          type="button"
+          className="sales-row-menu__item sales-row-menu__item--danger"
+          role="menuitem"
+          onClick={() => onDelete(item)}
+        >
+          <Trash2 size={14} aria-hidden /> Delete invoice
+        </button>
+      )}
       <button
         type="button"
         className="sales-row-menu__item sales-row-menu__item--disabled"

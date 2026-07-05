@@ -8,16 +8,26 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuthenticatedUser, SalesViewDep
+from webstudio_backend.api.dependencies.auth import AuthenticatedUser, SalesCancelDep, SalesViewDep
 from webstudio_backend.api.response_helpers import build_page_meta
+from webstudio_backend.api.sales_errors import raise_sale_error
+from webstudio_backend.api.schemas.inventory import InventoryItemDetail
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
-from webstudio_backend.api.schemas.sales import SaleDetailResponse, SaleListItem
+from webstudio_backend.api.schemas.sales import (
+    CancelSaleRequest,
+    CancelSaleResponse,
+    CancelledSaleSummary,
+    SaleDetailResponse,
+    SaleListItem,
+)
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.enums import SaleSource, UserRole
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters
 from webstudio_backend.services.report_service import ReportService
+from webstudio_backend.services.sale_service import SaleService
 
 router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 
@@ -38,6 +48,14 @@ def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) ->
 
 def _can_view_purchase_price(current: AuthenticatedUser) -> bool:
     return current.user.role in {UserRole.MAIN_ADMIN, UserRole.ADMIN}
+
+
+def _actor(current: AuthenticatedUser) -> AuditActor:
+    return AuditActor(
+        user_id=current.user.id,
+        display_name=current.user.display_name,
+        role=current.user.role.value,
+    )
 
 
 def _sale_list_payload(row, *, current: AuthenticatedUser) -> dict:
@@ -122,3 +140,40 @@ async def get_sale(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found.")
     return _envelope(request, _sale_detail_payload(row, current=current))
+
+
+@router.post("/{sale_id}/cancel")
+async def cancel_sale(
+    request: Request,
+    sale_id: int,
+    body: CancelSaleRequest,
+    current: SalesCancelDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    try:
+        result = await SaleService(db_session).cancel_sale(
+            sale_id,
+            reason=body.reason,
+            actor=_actor(current),
+        )
+    except Exception as exc:
+        raise_sale_error(exc)
+
+    include_purchase = _can_view_purchase_price(current)
+    response = CancelSaleResponse(
+        inventory=InventoryItemDetail.from_row(
+            result.inventory,
+            include_purchase_price=include_purchase,
+        ),
+        sale=CancelledSaleSummary(
+            id=result.sale.id,
+            invoice_number=result.sale.invoice_number,
+            serial_number=result.restored_serial_number,
+            cancelled_at=result.sale.cancelled_at,
+            cancellation_reason=result.sale.cancellation_reason,
+        ),
+    )
+    payload = response.model_dump()
+    if not include_purchase:
+        payload["inventory"].pop("purchase_price", None)
+    return _envelope(request, payload)

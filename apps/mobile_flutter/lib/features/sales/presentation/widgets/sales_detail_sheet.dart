@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../audit/data/audit_repository.dart';
 import '../../../audit/domain/audit_models.dart';
+import '../../../../core/rbac/role_permissions.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../auth/presentation/auth_controller.dart';
 import '../../domain/sales_models.dart';
+import '../../domain/sales_permissions.dart';
 import '../sales_controller.dart';
+import 'sale_cancel_dialog.dart';
 
 class SalesDetailSheet extends ConsumerStatefulWidget {
   const SalesDetailSheet({super.key});
@@ -36,11 +40,41 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
     }
   }
 
+  Future<void> _confirmDelete(SaleDetail detail) async {
+    final reasonInput = await showSaleCancelDialogForDetail(context, detail);
+    if (reasonInput == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(salesWorkspaceProvider.notifier);
+    try {
+      final result = await controller.cancelSale(
+        detail.id,
+        reason: reasonInput.isEmpty ? null : reasonInput,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Invoice ${result.invoiceNumber} deleted — ${result.restoredSerialNumber} back in stock',
+          ),
+        ),
+      );
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final workspace = ref.watch(salesWorkspaceProvider);
     final detail = workspace.selectedDetail;
     if (detail == null) return const SizedBox.shrink();
+
+    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
+    final canDelete = canDeleteSale(permissions, detail.inventoryItemId);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.78,
@@ -73,6 +107,20 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                         Chip(label: Text(saleSourceLabel(detail.saleSource))),
                       ],
                     ),
+                    if (canDelete) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: workspace.actionInProgress ? null : () => _confirmDelete(detail),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Delete invoice'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
                     Text(detail.soldAt.split('T').first, style: Theme.of(context).textTheme.bodySmall),
                     const Divider(height: 32),
                     const _SectionTitle('Timeline'),

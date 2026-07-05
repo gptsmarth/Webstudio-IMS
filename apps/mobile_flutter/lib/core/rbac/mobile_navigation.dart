@@ -10,10 +10,13 @@ class MobileNavItem {
     required this.label,
     required this.icon,
     required this.selectedIcon,
-  });
+    String? shortLabel,
+  }) : shortLabel = shortLabel ?? label;
 
   final int branchIndex;
   final String label;
+  /// Compact label for phone bottom navigation (avoids wrapping with 6–7 tabs).
+  final String shortLabel;
   final IconData icon;
   final IconData selectedIcon;
 }
@@ -85,6 +88,7 @@ List<MobileNavItem> mobileNavItemsFor(List<String> permissions) {
     items.add(const MobileNavItem(
       branchIndex: MobileShellBranch.dashboard,
       label: 'Dashboard',
+      shortLabel: 'Home',
       icon: Icons.dashboard_outlined,
       selectedIcon: Icons.dashboard,
     ));
@@ -103,6 +107,7 @@ List<MobileNavItem> mobileNavItemsFor(List<String> permissions) {
     items.add(const MobileNavItem(
       branchIndex: MobileShellBranch.inventory,
       label: 'Inventory',
+      shortLabel: 'Add',
       icon: Icons.warehouse_outlined,
       selectedIcon: Icons.warehouse,
     ));
@@ -121,6 +126,7 @@ List<MobileNavItem> mobileNavItemsFor(List<String> permissions) {
     items.add(const MobileNavItem(
       branchIndex: MobileShellBranch.catalogue,
       label: 'Catalogue',
+      shortLabel: 'Catalog',
       icon: Icons.category_outlined,
       selectedIcon: Icons.category,
     ));
@@ -138,6 +144,7 @@ List<MobileNavItem> mobileNavItemsFor(List<String> permissions) {
   items.add(const MobileNavItem(
     branchIndex: MobileShellBranch.settings,
     label: 'Settings',
+    shortLabel: 'Setup',
     icon: Icons.settings_outlined,
     selectedIcon: Icons.settings,
   ));
