@@ -84,7 +84,12 @@ export function SaleCancelDialog({
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
             Cancel
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => void submit()} disabled={loading}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void submit()}
+            disabled={loading}
+          >
             {loading ? 'Deleting…' : 'Delete invoice'}
           </button>
         </footer>
