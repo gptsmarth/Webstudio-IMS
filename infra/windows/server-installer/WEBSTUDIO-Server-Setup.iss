@@ -2,8 +2,8 @@
 ; Compile: scripts/release/build-server-setup.ps1 (stages Python + NSSM automatically)
 
 #define MyAppName "WEBSTUDIO Server"
-#define MyAppVersion "1.0.2"
-#define MyAppBuild 3
+#define MyAppVersion "1.0.3"
+#define MyAppBuild 4
 #define MyAppPublisher "WEBSTUDIO"
 #define MyAppURL "https://webstudio.local"
 #define InstallRoot "D:\WEBSTUDIO-IMS"

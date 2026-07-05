@@ -72,7 +72,9 @@ Desktop polls every 15s when disconnected (M12D).
 
 ## 5. Multi-SSID / multi-floor
 
-All store SSIDs should route to the **same LAN/VLAN** as the server.
+All store SSIDs must route to the **same LAN/VLAN** as the server.
+
+**Common showroom layout:** server on **ground floor**, Tally laptop on **first floor** — fully supported. Floor only matters for physical cabling; apps and Tally sync use IP/hostname on the shared subnet.
 
 1. Settings → Backup → Recovery Center → **Network wizard**
 2. Validate server, database, API, Tally, backup paths

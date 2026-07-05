@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { HierarchySearchField } from '../lib/hierarchySearch';
+import type { ProductCategoryFilter } from '../lib/productCategory';
+import { matchesCategoryFilter } from '../lib/inventoryHierarchy';
 
 export type HierarchyLevel = 'brands' | 'models' | 'serials';
 
@@ -20,6 +22,7 @@ export interface HierarchyNavState {
   modelLabel: string | null;
   search: string;
   searchField: HierarchySearchField;
+  productCategoryFilter: ProductCategoryFilter;
   showZeroStock: boolean;
   showSellingPrice: boolean;
   openBrand: (brandId: number, brandName: string) => void;
@@ -28,6 +31,7 @@ export interface HierarchyNavState {
   goToModels: () => void;
   setSearch: (value: string) => void;
   setSearchField: (value: HierarchySearchField) => void;
+  setProductCategoryFilter: (value: ProductCategoryFilter) => void;
   setShowZeroStock: (value: boolean) => void;
   setShowSellingPrice: (value: boolean) => void;
   reset: () => void;
@@ -41,6 +45,7 @@ const INITIAL = {
   modelLabel: null,
   search: '',
   searchField: 'all' as HierarchySearchField,
+  productCategoryFilter: 'all' as ProductCategoryFilter,
   showZeroStock: false,
   showSellingPrice: readShowSellingPrice(),
 };
@@ -79,6 +84,7 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
       })),
     setSearch: (search) => set({ search }),
     setSearchField: (searchField) => set({ searchField }),
+    setProductCategoryFilter: (productCategoryFilter) => set({ productCategoryFilter }),
     setShowZeroStock: (showZeroStock) => set({ showZeroStock }),
     setShowSellingPrice: (showSellingPrice) => {
       localStorage.setItem(STOCK_SHOW_SELLING_PRICE_KEY, String(showSellingPrice));

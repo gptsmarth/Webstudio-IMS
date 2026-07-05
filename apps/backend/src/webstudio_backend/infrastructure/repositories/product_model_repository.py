@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import (
+    AccessoryKind,
+    ProductCategory,
     ProductModelStatus,
     StorageType,
     StorageUnit,
@@ -28,10 +30,14 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     DuplicateModelNumberError,
 )
 from webstudio_backend.infrastructure.repositories.product_model_validation import (
+    validate_accessory_kind,
+    validate_category,
     validate_cpu,
     validate_gpu,
+    validate_laptop_configuration,
     validate_model_name,
     validate_model_number,
+    validate_part_number,
     validate_ram_gb,
     validate_status,
     validate_storage_type,
@@ -53,7 +59,7 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         normalized = validate_model_number(model_number)
         statement = select(ProductModel.id).where(
             ProductModel.brand_id == brand_id,
-            ProductModel.model_number == normalized,
+            func.lower(ProductModel.model_number) == normalized.lower(),
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none() is not None
@@ -64,11 +70,14 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         brand_id: int,
         model_number: str,
         model_name: str,
-        cpu: str,
-        ram_gb: int,
-        storage_value: Decimal,
-        storage_unit: StorageUnit,
-        storage_type: StorageType,
+        cpu: str | None = None,
+        ram_gb: int | None = None,
+        storage_value: Decimal | None = None,
+        storage_unit: StorageUnit | None = None,
+        storage_type: StorageType | None = None,
+        category: ProductCategory = ProductCategory.LAPTOP,
+        accessory_kind: AccessoryKind | None = None,
+        part_number: str | None = None,
         gpu: str | None = None,
         status: ProductModelStatus = ProductModelStatus.ACTIVE,
         display: str | None = None,
@@ -84,6 +93,9 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             brand_id=brand_id,
             model_number=model_number,
             model_name=model_name,
+            category=category,
+            accessory_kind=accessory_kind,
+            part_number=part_number,
             cpu=cpu,
             gpu=gpu,
             ram_gb=ram_gb,
@@ -142,7 +154,7 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             if model_number is not None
             else product_model.model_number
         )
-        if next_model_number != product_model.model_number:
+        if next_model_number.lower() != product_model.model_number.lower():
             if await self.exists(product_model.brand_id, next_model_number):
                 raise DuplicateModelNumberError(product_model.brand_id, next_model_number)
             old_value = {"model_number": product_model.model_number}
@@ -438,23 +450,45 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         brand_id: int,
         model_number: str,
         model_name: str,
-        cpu: str,
+        category: ProductCategory,
+        accessory_kind: AccessoryKind | None,
+        part_number: str | None,
+        cpu: str | None,
         gpu: str | None,
-        ram_gb: int,
-        storage_value: Decimal,
-        storage_unit: StorageUnit,
-        storage_type: StorageType,
+        ram_gb: int | None,
+        storage_value: Decimal | None,
+        storage_unit: StorageUnit | None,
+        storage_type: StorageType | None,
         status: ProductModelStatus,
     ) -> dict[str, object]:
+        resolved_category = validate_category(category)
+        resolved_cpu = validate_cpu(cpu)
+        resolved_ram = validate_ram_gb(ram_gb)
+        resolved_storage_value = validate_storage_value(storage_value)
+        resolved_storage_unit = validate_storage_unit(storage_unit)
+        resolved_storage_type = validate_storage_type(storage_type)
+        resolved_accessory_kind = validate_accessory_kind(accessory_kind)
+        validate_laptop_configuration(
+            category=resolved_category,
+            cpu=resolved_cpu,
+            ram_gb=resolved_ram,
+            storage_value=resolved_storage_value,
+            storage_unit=resolved_storage_unit,
+            storage_type=resolved_storage_type,
+            accessory_kind=resolved_accessory_kind,
+        )
         return {
             "brand_id": brand_id,
+            "category": resolved_category,
+            "accessory_kind": resolved_accessory_kind,
+            "part_number": validate_part_number(part_number),
             "model_number": validate_model_number(model_number),
             "model_name": validate_model_name(model_name),
-            "cpu": validate_cpu(cpu),
+            "cpu": resolved_cpu,
             "gpu": validate_gpu(gpu),
-            "ram_gb": validate_ram_gb(ram_gb),
-            "storage_value": validate_storage_value(storage_value),
-            "storage_unit": validate_storage_unit(storage_unit),
-            "storage_type": validate_storage_type(storage_type),
+            "ram_gb": resolved_ram,
+            "storage_value": resolved_storage_value,
+            "storage_unit": resolved_storage_unit,
+            "storage_type": resolved_storage_type,
             "status": validate_status(status),
         }

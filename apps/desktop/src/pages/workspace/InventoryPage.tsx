@@ -8,6 +8,7 @@ import {
 } from '../../components/inventory/admin';
 import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
 import { AddLaptopWizard } from '../../components/inventory/AddLaptopWizard';
+import { AddAccessoryWizard } from '../../components/inventory/AddAccessoryWizard';
 import { InventoryDetailDrawer } from '../../components/inventory/InventoryDetailDrawer';
 import { MarkSoldDialog } from '../../components/inventory/MarkSoldDialog';
 import { HierarchyBreadcrumb, HierarchyToolbar, StockBrandGrid } from '../../components/stock';
@@ -17,6 +18,7 @@ import {
 } from '../../hooks/useInventoryHierarchyData';
 import { useInventoryWorkspace } from '../../hooks/useInventoryWorkspace';
 import { canArchiveProductModels, canWriteInventory } from '../../lib/inventory';
+import { matchesCategoryFilter } from '../../lib/inventoryHierarchy';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
 import { useInventoryNavStore } from '../../store/useHierarchyNavStore';
@@ -31,6 +33,7 @@ export function InventoryPage(): JSX.Element {
   const nav = useInventoryNavStore();
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [addOpen, setAddOpen] = useState(false);
+  const [addAccessoryOpen, setAddAccessoryOpen] = useState(false);
   const [markSoldOpen, setMarkSoldOpen] = useState(false);
   const [markSoldItemId, setMarkSoldItemId] = useState<string | null>(null);
   const [editModelId, setEditModelId] = useState<string | null>(null);
@@ -63,8 +66,9 @@ export function InventoryPage(): JSX.Element {
     if (!nav.showZeroStock) {
       rows = rows.filter((row) => row.availableUnits > 0);
     }
+    rows = rows.filter((row) => matchesCategoryFilter(row.model, nav.productCategoryFilter));
     return rows;
-  }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField, nav.showZeroStock]);
+  }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField, nav.showZeroStock, nav.productCategoryFilter]);
 
   const serialUnits = useMemo(
     () => (nav.modelId ? hierarchy.unitsForModel(nav.modelId, false) : []),
@@ -203,6 +207,8 @@ export function InventoryPage(): JSX.Element {
           onSearchChange={nav.setSearch}
           searchField={nav.searchField}
           onSearchFieldChange={nav.setSearchField}
+          productCategoryFilter={nav.productCategoryFilter}
+          onProductCategoryFilterChange={nav.setProductCategoryFilter}
           showZeroStock={nav.showZeroStock}
           onToggleZeroStock={nav.level === 'models' ? nav.setShowZeroStock : undefined}
         />
@@ -232,6 +238,7 @@ export function InventoryPage(): JSX.Element {
             nav.openModel(modelId, label);
           }}
           onAddLaptop={() => setAddOpen(true)}
+          onAddAccessory={() => setAddAccessoryOpen(true)}
           onEditModel={setEditModelId}
         />
       )}
@@ -283,6 +290,19 @@ export function InventoryPage(): JSX.Element {
           productModels={hierarchy.models}
           loading={workspace.actionLoading}
           onClose={() => setAddOpen(false)}
+          onConfirm={handleAddComplete}
+        />
+      )}
+
+      {nav.brandId && (
+        <AddAccessoryWizard
+          open={addAccessoryOpen}
+          brandId={nav.brandId}
+          brandName={nav.brandName ?? ''}
+          locations={hierarchy.locations}
+          productModels={hierarchy.models}
+          loading={workspace.actionLoading}
+          onClose={() => setAddAccessoryOpen(false)}
           onConfirm={handleAddComplete}
         />
       )}

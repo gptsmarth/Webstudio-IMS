@@ -82,3 +82,60 @@ def default_image_search_query(
 ) -> str:
     parts = [brand_name, model_name, model_number, "official product"]
     return " ".join(part.strip() for part in parts if part and part.strip())
+
+
+def build_accessory_spec_lookup_prompt(
+    identifier: str,
+    *,
+    identifier_type: str = "model_number",
+    brand_name: str | None = None,
+    model_name: str | None = None,
+    use_web_search: bool = True,
+) -> str:
+    brand = (brand_name or "").strip()
+    brand_line = f"Brand: {brand}\n" if brand else ""
+    name_line = f"Known name (if any): {model_name}\n" if model_name else ""
+
+    if identifier_type == "part_number":
+        id_context = f"""The retailer entered the manufacturer PART NUMBER (product number / SKU / order code) for {brand or "this brand"}.
+Part number to look up: {identifier}
+
+Search the web for this exact {brand} part number. Official sources: {brand} support site, {brand} store, authorized retailers (Amazon India, Flipkart, etc.).
+The part number and marketing model number are often DIFFERENT — return both when the listing shows both."""
+        search_hint = f'"{identifier}" {brand} part number'
+    else:
+        id_context = f"""The retailer entered the manufacturer MODEL NUMBER / marketing SKU for {brand or "this brand"}.
+Model number to look up: {identifier}
+
+Search the web for this exact {brand} accessory model. Official sources: {brand} support site, {brand} store, authorized retailers."""
+        search_hint = f'"{identifier}" {brand} accessory model'
+
+    search_line = (
+        f'Use Google Search starting with: {search_hint}\n\n'
+        if use_web_search
+        else (
+            "Use your knowledge of published manufacturer specifications.\n\n"
+            f'If you cannot verify "{identifier}", set confidence_score below 0.5 and explain in notes.\n\n'
+        )
+    )
+    return f"""You are looking up computer accessory details for inventory entry at a retail store.
+
+{brand_line}{id_context}
+{name_line}
+{search_line}
+Find the official manufacturer or major retailer listing for this EXACT identifier.
+
+Important rules:
+1. The entered identifier "{identifier}" is what the user typed — do not substitute a different SKU.
+2. model_name must be the official marketing product name (e.g. "ASUS MD100 Silent Wireless Mouse") — NOT the raw part number alone.
+3. part_number and model_number are separate fields when the manufacturer publishes both. Do not copy the part number into model_number unless they are genuinely the same on the official listing.
+4. accessory_kind must be one of: mouse, keyboard, charger, headset, bag, dock, cable, adapter, storage, other — infer from the product (do not default to "other" if obvious).
+5. color_options: comma-separated colors/variants when published, else null.
+6. description: 2–4 sentences for retail staff — key features and compatibility. Plain text only.
+7. confidence_score: float 0.0–1.0 for match confidence on this exact identifier.
+8. Do NOT return product_image_url — images are resolved separately.
+
+Respond with ONLY valid JSON (no markdown fences) using exactly these keys:
+model_name, model_number, part_number, accessory_kind, color_options, description, notes, confidence_score
+
+notes: brief source or caveat only."""

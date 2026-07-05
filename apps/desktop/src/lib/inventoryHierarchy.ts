@@ -3,6 +3,7 @@ import type { InventoryItemDetail } from '../services/api/InventoryService';
 import type { ProductModel } from '../services/api/ProductModelService';
 import type { Brand } from '../services/api/BrandService';
 import type { HierarchySearchField } from './hierarchySearch';
+import type { ProductCategoryFilter } from './productCategory';
 import { formatInventorySpecs } from './inventory';
 
 export interface BrandInventorySummary {
@@ -104,6 +105,14 @@ export function buildModelRows(
   };
 }
 
+export function matchesCategoryFilter(
+  model: ProductModel,
+  filter: ProductCategoryFilter,
+): boolean {
+  if (filter === 'all') return true;
+  return (model.category ?? 'laptop') === filter;
+}
+
 export function matchesModelSearch(
   model: ProductModel,
   sampleItem: InventoryItemDetail | null,
@@ -117,16 +126,17 @@ export function matchesModelSearch(
     all: [
       model.model_number,
       model.model_name,
-      model.cpu,
+      model.part_number ?? '',
+      model.cpu ?? '',
       model.gpu ?? '',
       model.display ?? '',
       model.search_aliases ?? '',
       sampleItem?.serial_number ?? '',
     ],
-    model_number: [model.model_number],
+    model_number: [model.model_number, model.part_number ?? ''],
     model_name: [model.model_name],
     gpu: [model.gpu ?? ''],
-    cpu: [model.cpu],
+    cpu: [model.cpu ?? ''],
     display: [model.display ?? ''],
     serial: [sampleItem?.serial_number ?? ''],
   };

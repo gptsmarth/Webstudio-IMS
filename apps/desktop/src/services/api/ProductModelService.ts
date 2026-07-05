@@ -1,6 +1,7 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
 import type { StorageType, StorageUnit } from './InventoryService';
+import type { AccessoryKind, ProductCategory } from '../../lib/productCategory';
 
 export type ProductModelStatus = 'active' | 'archived';
 
@@ -8,14 +9,17 @@ export interface ProductModel {
   id: string;
   brand_id: number;
   brand_name: string | null;
+  category: ProductCategory;
+  accessory_kind: AccessoryKind | null;
+  part_number: string | null;
   model_number: string;
   model_name: string;
-  cpu: string;
+  cpu: string | null;
   gpu: string | null;
-  ram_gb: number;
-  storage_value: string;
-  storage_unit: StorageUnit;
-  storage_type: StorageType;
+  ram_gb: number | null;
+  storage_value: string | null;
+  storage_unit: StorageUnit | null;
+  storage_type: StorageType | null;
   status: ProductModelStatus;
   display: string | null;
   color_options: string | null;
@@ -30,14 +34,17 @@ export interface ProductModel {
 
 export interface CreateProductModelRequest {
   brand_id: number;
+  category?: ProductCategory;
+  accessory_kind?: AccessoryKind | null;
+  part_number?: string | null;
   model_number: string;
   model_name: string;
-  cpu: string;
+  cpu?: string | null;
   gpu?: string | null;
-  ram_gb: number;
-  storage_value: number | string;
-  storage_unit: StorageUnit;
-  storage_type: StorageType;
+  ram_gb?: number | null;
+  storage_value?: number | string | null;
+  storage_unit?: StorageUnit | null;
+  storage_type?: StorageType | null;
   status?: ProductModelStatus;
   display?: string | null;
   color_options?: string | null;
@@ -56,6 +63,7 @@ export interface UpdateSellingPriceRequest {
 
 export interface ProductModelListParams {
   brand_id?: number;
+  category?: ProductCategory;
   active?: boolean;
   archived?: boolean;
 }

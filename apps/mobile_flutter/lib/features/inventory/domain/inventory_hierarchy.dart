@@ -1,5 +1,6 @@
 import '../../dashboard/domain/dashboard_models.dart';
 import '../domain/inventory_models.dart';
+import 'product_category.dart';
 
 class BrandInventorySummary {
   const BrandInventorySummary({
@@ -190,6 +191,9 @@ ProductModel productModelFromInventoryItem(InventoryItem item) {
   return ProductModel(
     id: item.productModelId,
     brandId: item.brandId,
+    category: item.category,
+    accessoryKind: item.accessoryKind,
+    partNumber: item.partNumber,
     modelNumber: item.modelNumber,
     modelName: item.modelName,
     cpu: item.cpu,
@@ -287,11 +291,13 @@ List<ModelInventoryRow> filterInventoryModels({
   required String search,
   required HierarchySearchField searchField,
   required bool showZeroStock,
+  ProductCategoryFilter productCategoryFilter = ProductCategoryFilter.all,
 }) {
   var rows = buildInventoryModelRows(models, distributionByModel, brandId, items);
   if (!showZeroStock) {
     rows = rows.where((row) => row.availableUnits > 0).toList();
   }
+  rows = rows.where((row) => matchesCategoryFilter(row.model, productCategoryFilter)).toList();
   if (search.trim().isEmpty) return rows;
   return rows
       .where(
@@ -305,7 +311,13 @@ List<ModelInventoryRow> filterInventoryModels({
       .toList();
 }
 
-enum HierarchySearchField { all, modelNumber, modelName, gpu, cpu, serial, display }
+bool matchesCategoryFilter(ProductModel model, ProductCategoryFilter filter) {
+  if (filter == ProductCategoryFilter.all) return true;
+  if (filter == ProductCategoryFilter.accessory) return model.isAccessory;
+  return model.isLaptop;
+}
+
+enum HierarchySearchField { all, modelNumber, modelName, partNumber, gpu, cpu, serial, display }
 
 bool matchesModelSearch(
   ProductModel model,
@@ -326,6 +338,7 @@ bool matchesModelSearch(
   return switch (field) {
     HierarchySearchField.modelNumber => contains(model.modelNumber),
     HierarchySearchField.modelName => contains(model.modelName),
+    HierarchySearchField.partNumber => contains(model.partNumber),
     HierarchySearchField.gpu => contains(model.gpu),
     HierarchySearchField.cpu => contains(model.cpu),
     HierarchySearchField.display => contains(model.display),
@@ -333,6 +346,7 @@ bool matchesModelSearch(
     HierarchySearchField.all =>
       contains(model.modelNumber) ||
           contains(model.modelName) ||
+          contains(model.partNumber) ||
           contains(model.gpu) ||
           contains(model.cpu) ||
           contains(model.display) ||

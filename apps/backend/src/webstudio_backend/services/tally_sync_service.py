@@ -67,6 +67,7 @@ from webstudio_backend.integrations.tally.incremental_sync import (
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.integrations.tally.xml_parser import (
+    expand_inventory_lines,
     models_equivalent,
     parse_vouchers_xml,
     resolve_inventory_line_sale_amount,
@@ -619,7 +620,7 @@ class TallySyncService:
         }
         mapped_location = await self._resolve_store_location(voucher.voucher_type)
 
-        for line in voucher.inventory_lines:
+        for line in expand_inventory_lines(voucher.inventory_lines):
             stats["total"] += 1
             counters.inventory_entries_processed += 1
             line_row = await self._processed_lines.get_or_create_line(
@@ -672,7 +673,9 @@ class TallySyncService:
             elif outcome == TallyLineOutcome.PRODUCT_MODEL_MISMATCH:
                 await self._processed_lines.complete_line(line_row, outcome=outcome)
                 stats["completed"] += 1
+                stats["sales"] += 1
                 stats["model_mismatches"] += 1
+                counters.sales_created += 1
                 counters.model_mismatches += 1
             else:
                 await self._processed_lines.complete_line(line_row, outcome=outcome)
@@ -689,6 +692,7 @@ class TallySyncService:
         company_name: str,
         mapped_location_id: int | None,
     ) -> TallyLineOutcome:
+        """Match by serial first; model name is verification-only and never blocks a serial sale."""
         inventory_item: InventoryItem | None = None
         model_mismatch = False
 
@@ -737,7 +741,12 @@ class TallySyncService:
 
             detail = await self._inventory.get_detail(inventory_item.id)
             if detail and not models_equivalent(
-                f"{detail.brand.name} {detail.product_model.model_name} {detail.product_model.model_number}",
+                self._inventory_catalog_label(
+                    detail.brand.name,
+                    model_name=detail.product_model.model_name,
+                    model_number=detail.product_model.model_number,
+                    part_number=detail.product_model.part_number,
+                ),
                 line.stock_item_name,
             ):
                 model_mismatch = True
@@ -845,7 +854,13 @@ class TallySyncService:
 
     async def _match_inventory_by_model(self, stock_item_name: str) -> InventoryItem | None:
         statement = (
-            select(InventoryItem, Brand.name, ProductModel.model_name, ProductModel.model_number)
+            select(
+                InventoryItem,
+                Brand.name,
+                ProductModel.model_name,
+                ProductModel.model_number,
+                ProductModel.part_number,
+            )
             .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
             .join(Brand, ProductModel.brand_id == Brand.id)
             .where(InventoryItem.status == InventoryStatus.AVAILABLE)
@@ -853,13 +868,31 @@ class TallySyncService:
         )
         result = await self._session.execute(statement)
         matches: list[InventoryItem] = []
-        for item, brand_name, model_name, model_number in result.all():
-            inventory_label = f"{brand_name} {model_name} {model_number}"
+        for item, brand_name, model_name, model_number, part_number in result.all():
+            inventory_label = self._inventory_catalog_label(
+                brand_name,
+                model_name=model_name,
+                model_number=model_number,
+                part_number=part_number,
+            )
             if models_equivalent(inventory_label, stock_item_name):
                 matches.append(item)
         if len(matches) == 1:
             return matches[0]
         return None
+
+    @staticmethod
+    def _inventory_catalog_label(
+        brand_name: str,
+        *,
+        model_name: str,
+        model_number: str,
+        part_number: str | None = None,
+    ) -> str:
+        label = f"{brand_name} {model_name} {model_number}"
+        if part_number:
+            label = f"{label} {part_number}"
+        return label
 
     async def _resolve_store_location(self, voucher_type: str):
         store_name = VOUCHER_TYPE_STORE_MAP.get(voucher_type)

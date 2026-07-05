@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, date, datetime, time
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep
@@ -172,7 +172,9 @@ async def audit_lifecycle_by_serial(
     _ = current
     repository = AuditLogRepository(db_session)
     item_exists = await db_session.scalar(
-        select(InventoryItem.id).where(InventoryItem.serial_number == serial_number.strip()),
+        select(InventoryItem.id).where(
+            func.lower(InventoryItem.serial_number) == serial_number.strip().lower(),
+        ),
     )
     if item_exists is None:
         raise HTTPException(

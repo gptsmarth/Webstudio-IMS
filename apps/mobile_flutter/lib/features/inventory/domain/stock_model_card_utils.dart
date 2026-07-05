@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart';
+
 import 'inventory_models.dart';
+import 'product_category.dart';
 
 const int stockCardCollapsedSpecCount = 6;
 
@@ -88,6 +91,17 @@ void _pushIfPresent(List<StockModelSpecLine> lines, String label, String? value)
 }
 
 List<StockModelSpecLine> buildStockModelSpecLines(ProductModel model) {
+  if (model.isAccessory) {
+    final lines = <StockModelSpecLine>[
+      StockModelSpecLine(label: 'Type', value: accessoryKindLabel(model.accessoryKind)),
+    ];
+    _pushIfPresent(lines, 'Part number', model.partNumber);
+    _pushIfPresent(lines, 'Model number', model.modelNumber);
+    _pushIfPresent(lines, 'Colors', model.colorOptions);
+    lines.addAll(parseNotesSpecLines(model.notes));
+    return lines;
+  }
+
   final lines = <StockModelSpecLine>[
     StockModelSpecLine(label: 'Processor', value: model.cpu.trim().isEmpty ? 'Standard Processor' : model.cpu.trim()),
     StockModelSpecLine(
@@ -121,6 +135,9 @@ List<StockModelSpecLine> buildStockModelSpecLines(ProductModel model) {
 }
 
 const _retailerSpecOrder = [
+  'type',
+  'part number',
+  'model number',
   'operating system',
   'os',
   'processor',
@@ -159,7 +176,12 @@ String stockAvailabilityLabel(int availableUnits) {
   return availableUnits == 1 ? '1 unit available' : '$availableUnits units available';
 }
 
-String? displayScreenHint(String? display) {
+String? displayScreenHint(ProductModel model) {
+  if (model.isAccessory) return null;
+  return displayScreenHintFromText(model.display);
+}
+
+String? displayScreenHintFromText(String? display) {
   if (display == null || display.trim().isEmpty) return null;
   final text = display.trim();
   final inch = RegExp(r'(\d+(?:\.\d+)?)\s*(?:inch|inches|")\b', caseSensitive: false).firstMatch(text);
@@ -196,6 +218,19 @@ String modelDescriptionText(String? notes) {
   final split = splitModelNotes(notes);
   if (split.description.isNotEmpty) return split.description;
   return notes?.trim() ?? '';
+}
+
+String modelNumberLine(ProductModel model) {
+  final modelNumber = model.modelNumber.trim();
+  final partNumber = model.partNumber?.trim();
+  if (model.isAccessory && partNumber != null && partNumber.isNotEmpty && partNumber != modelNumber) {
+    return '$modelNumber · PN $partNumber';
+  }
+  return modelNumber;
+}
+
+IconData productCategoryPlaceholderIcon(ProductModel model) {
+  return model.isAccessory ? Icons.mouse_outlined : Icons.laptop_mac_outlined;
 }
 
 /// Product title without repeating the brand line shown above it.

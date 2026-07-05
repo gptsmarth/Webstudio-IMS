@@ -17,11 +17,11 @@ Deployment model for a **single-store office** with a dedicated server PC powere
 
 | Location | Equipment | Network |
 |----------|-----------|---------|
-| First floor | Dedicated server PC | Wired Ethernet to router (recommended) |
-| First floor | Router / gateway | DHCP server, optional VLAN |
-| Ground / First floor | Wi‑Fi access point(s) | Same LAN as server |
-| Mobile | Tally laptop | Wi‑Fi — may roam between floors |
-| Staff desks | Desktop PCs | Ethernet or Wi‑Fi |
+| **Ground floor** | Dedicated WEBSTUDIO server PC | Ethernet to Tenda/router **or** Wi‑Fi (same LAN) — **recommended location for 24/7 server** |
+| First floor | Router / gateway (Jio) | DHCP server |
+| First floor | Tally billing laptop | Wi‑Fi **JioBharat** (typical) — server reaches it over LAN |
+| Ground / First floor | Wi‑Fi access point(s) | Same LAN (`192.168.29.x`); Tenda AP bridges floors |
+| Staff desks | Desktop PCs | Ethernet or Wi‑Fi (either floor) |
 | Floor staff | Android / iPhone | Store Wi‑Fi |
 
 ---

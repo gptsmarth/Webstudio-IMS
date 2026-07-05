@@ -10,9 +10,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
 from webstudio_backend.infrastructure.database.enums import (
+    ACCESSORY_KIND_ENUM_NAME,
+    PRODUCT_CATEGORY_ENUM_NAME,
     PRODUCT_MODEL_STATUS_ENUM_NAME,
     STORAGE_TYPE_ENUM_NAME,
     STORAGE_UNIT_ENUM_NAME,
+    AccessoryKind,
+    ProductCategory,
     ProductModelStatus,
     StorageType,
     StorageUnit,
@@ -28,13 +32,35 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
         ForeignKey(f"{DATABASE_SCHEMA}.brands.id", name="fk_product_models_brand"),
         nullable=False,
     )
+    category: Mapped[ProductCategory] = mapped_column(
+        Enum(
+            ProductCategory,
+            name=PRODUCT_CATEGORY_ENUM_NAME,
+            schema=DATABASE_SCHEMA,
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        server_default=ProductCategory.LAPTOP.value,
+    )
+    accessory_kind: Mapped[AccessoryKind | None] = mapped_column(
+        Enum(
+            AccessoryKind,
+            name=ACCESSORY_KIND_ENUM_NAME,
+            schema=DATABASE_SCHEMA,
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    part_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model_number: Mapped[str] = mapped_column(String(64), nullable=False)
     model_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    cpu: Mapped[str] = mapped_column(String(128), nullable=False)
+    cpu: Mapped[str | None] = mapped_column(String(128), nullable=True)
     gpu: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    ram_gb: Mapped[int] = mapped_column(Integer, nullable=False)
-    storage_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    storage_unit: Mapped[StorageUnit] = mapped_column(
+    ram_gb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    storage_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    storage_unit: Mapped[StorageUnit | None] = mapped_column(
         Enum(
             StorageUnit,
             name=STORAGE_UNIT_ENUM_NAME,
@@ -42,9 +68,9 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
             native_enum=True,
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
-        nullable=False,
+        nullable=True,
     )
-    storage_type: Mapped[StorageType] = mapped_column(
+    storage_type: Mapped[StorageType | None] = mapped_column(
         Enum(
             StorageType,
             name=STORAGE_TYPE_ENUM_NAME,
@@ -52,7 +78,7 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
             native_enum=True,
             values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
-        nullable=False,
+        nullable=True,
     )
     status: Mapped[ProductModelStatus] = mapped_column(
         Enum(

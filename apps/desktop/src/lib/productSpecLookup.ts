@@ -107,12 +107,12 @@ export function modelToFetchedSpec(model: ProductModel): FetchedProductSpec {
   const { description, specNotes } = splitModelNotes(model.notes);
   return {
     model_name: model.model_name,
-    cpu: model.cpu,
+    cpu: model.cpu ?? '',
     gpu: model.gpu,
-    ram_gb: model.ram_gb,
-    storage_value: String(model.storage_value),
-    storage_unit: model.storage_unit,
-    storage_type: model.storage_type,
+    ram_gb: model.ram_gb ?? 0,
+    storage_value: String(model.storage_value ?? ''),
+    storage_unit: model.storage_unit ?? 'GB',
+    storage_type: model.storage_type ?? 'SSD',
     display: model.display,
     color_options: model.color_options,
     product_image_url: model.product_image_url,

@@ -86,7 +86,7 @@ class StockModelDetailView extends ConsumerWidget {
                           ),
                         ),
                         child: Icon(
-                          Icons.laptop_mac,
+                          productCategoryPlaceholderIcon(model),
                           size: 72,
                           color: Theme.of(context).colorScheme.outline,
                         ),
@@ -116,7 +116,7 @@ class StockModelDetailView extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      model.modelNumber,
+                      modelNumberLine(model),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontFeatures: const [FontFeature.tabularFigures()],

@@ -1,6 +1,7 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
 import type { StorageType, StorageUnit } from './InventoryService';
+import type { AccessoryKind, AccessoryIdentifierType } from '../../lib/productCategory';
 
 export interface ProductSpecLookupResult {
   model_name: string;
@@ -11,6 +12,18 @@ export interface ProductSpecLookupResult {
   storage_unit: StorageUnit;
   storage_type: StorageType;
   display: string | null;
+  color_options: string | null;
+  product_image_url: string | null;
+  description: string | null;
+  notes: string | null;
+  source: string;
+}
+
+export interface AccessorySpecLookupResult {
+  model_name: string;
+  model_number: string | null;
+  part_number: string | null;
+  accessory_kind: AccessoryKind | null;
   color_options: string | null;
   product_image_url: string | null;
   description: string | null;
@@ -59,6 +72,31 @@ export class ProductSpecService {
     try {
       return await client.post<ProductSpecLookupResult>(
         '/api/v1/product-models/spec-lookup',
+        input,
+      );
+    } catch (err: unknown) {
+      const api = err as { code?: string; message?: string };
+      if (
+        api.code &&
+        (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')
+      ) {
+        throw new SpecLookupError(api.code, api.message ?? 'Gemini lookup failed.');
+      }
+      return null;
+    }
+  }
+
+  static async lookupAccessorySpec(input: {
+    identifier: string;
+    identifier_type?: AccessoryIdentifierType;
+    brand_name?: string;
+    model_name?: string;
+  }): Promise<AccessorySpecLookupResult | null> {
+    LoggingService.info('API', 'Looking up accessory spec via Gemini', { id: input.identifier });
+    const client = await ApiClientProvider.getClient();
+    try {
+      return await client.post<AccessorySpecLookupResult>(
+        '/api/v1/product-models/accessory-spec-lookup',
         input,
       );
     } catch (err: unknown) {

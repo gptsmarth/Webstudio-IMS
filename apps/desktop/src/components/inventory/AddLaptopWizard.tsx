@@ -93,7 +93,6 @@ export function AddLaptopWizard({
     {
       serial_number: '',
       current_location_id: locations[0]?.id ?? 0,
-      color: '',
       purchase_price: '',
     },
   ]);

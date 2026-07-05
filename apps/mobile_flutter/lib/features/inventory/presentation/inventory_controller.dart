@@ -11,6 +11,7 @@ import '../../dashboard/domain/dashboard_models.dart';
 import '../data/inventory_repository.dart';
 import '../domain/inventory_hierarchy.dart';
 import '../domain/inventory_models.dart';
+import '../domain/product_category.dart';
 import '../domain/product_spec_lookup.dart';
 
 enum InventoryNavLevel { brands, models, serials }
@@ -37,6 +38,7 @@ class InventoryWorkspaceState {
     this.inventoryAdminMode = false,
     this.showZeroStock = false,
     this.showSellingPrice = false,
+    this.productCategoryFilter = ProductCategoryFilter.all,
     this.fromCache = false,
     this.isStale = false,
   });
@@ -61,6 +63,7 @@ class InventoryWorkspaceState {
   final bool inventoryAdminMode;
   final bool showZeroStock;
   final bool showSellingPrice;
+  final ProductCategoryFilter productCategoryFilter;
   final bool fromCache;
   final bool isStale;
 
@@ -88,8 +91,9 @@ class InventoryWorkspaceState {
 
   List<ModelInventoryRow> get visibleModels {
     if (selectedBrandId == null) return [];
+    List<ModelInventoryRow> rows;
     if (inventoryAdminMode) {
-      return filterInventoryModels(
+      rows = filterInventoryModels(
         models: models,
         distributionByModel: distribution?.byProductModel ?? [],
         brandId: selectedBrandId!,
@@ -97,19 +101,26 @@ class InventoryWorkspaceState {
         search: search,
         searchField: searchField,
         showZeroStock: showZeroStock,
+        productCategoryFilter: productCategoryFilter,
       );
+    } else {
+      final built = buildModelRows(
+        models,
+        distribution?.byProductModel ?? [],
+        selectedBrandId!,
+        items,
+      );
+      rows = built.inStock;
+      if (productCategoryFilter != ProductCategoryFilter.all) {
+        rows = rows.where((row) => matchesCategoryFilter(row.model, productCategoryFilter)).toList();
+      }
+      if (search.trim().isNotEmpty) {
+        rows = rows
+            .where((row) => matchesModelSearch(row.model, search, searchField, items: items))
+            .toList();
+      }
     }
-    final built = buildModelRows(
-      models,
-      distribution?.byProductModel ?? [],
-      selectedBrandId!,
-      items,
-    );
-    var rows = built.inStock;
-    if (search.trim().isEmpty) return rows;
-    return rows
-        .where((row) => matchesModelSearch(row.model, search, searchField, items: items))
-        .toList();
+    return rows;
   }
 
   BrandInventorySummary? get selectedBrandSummary {
@@ -184,6 +195,7 @@ class InventoryWorkspaceState {
     bool? inventoryAdminMode,
     bool? showZeroStock,
     bool? showSellingPrice,
+    ProductCategoryFilter? productCategoryFilter,
     bool? fromCache,
     bool? isStale,
     bool clearError = false,
@@ -210,6 +222,7 @@ class InventoryWorkspaceState {
       inventoryAdminMode: inventoryAdminMode ?? this.inventoryAdminMode,
       showZeroStock: showZeroStock ?? this.showZeroStock,
       showSellingPrice: showSellingPrice ?? this.showSellingPrice,
+      productCategoryFilter: productCategoryFilter ?? this.productCategoryFilter,
       fromCache: fromCache ?? this.fromCache,
       isStale: isStale ?? this.isStale,
     );
@@ -303,6 +316,9 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
   void setFilters(InventoryListFilters filters) => state = state.copyWith(filters: filters);
   void setIncludeZeroStock(bool value) => state = state.copyWith(includeZeroStock: value);
   void setShowZeroStock(bool value) => state = state.copyWith(showZeroStock: value);
+
+  void setProductCategoryFilter(ProductCategoryFilter value) =>
+      state = state.copyWith(productCategoryFilter: value);
   void setShowSellingPrice(bool value) {
     state = state.copyWith(showSellingPrice: value);
     if (!_inventoryAdminMode) {

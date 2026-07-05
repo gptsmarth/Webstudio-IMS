@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/api_paths.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/json_map.dart';
+import '../../inventory/domain/product_category.dart';
 
 class AiEnrichmentRepository {
   AiEnrichmentRepository(this._api);
@@ -20,6 +21,24 @@ class AiEnrichmentRepository {
         'brand_name': brandName,
         'model_number': modelNumber,
         if (modelName != null) 'model_name': modelName,
+      },
+      parser: (json) => asJsonMap(json),
+    );
+  }
+
+  Future<Map<String, dynamic>> lookupAccessorySpec({
+    required String identifier,
+    AccessoryIdentifierType identifierType = AccessoryIdentifierType.modelNumber,
+    String? brandName,
+    String? modelName,
+  }) async {
+    return _api.post(
+      ApiPaths.productModelsAccessorySpecLookup,
+      data: {
+        'identifier': identifier,
+        'identifier_type': identifierTypeToApi(identifierType),
+        if (brandName != null && brandName.trim().isNotEmpty) 'brand_name': brandName.trim(),
+        if (modelName != null && modelName.trim().isNotEmpty) 'model_name': modelName.trim(),
       },
       parser: (json) => asJsonMap(json),
     );

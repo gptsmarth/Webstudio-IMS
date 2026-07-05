@@ -47,7 +47,7 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
         ? specLines
         : specLines.take(stockCardCollapsedSpecCount).toList();
     final hasMoreSpecs = specLines.length > stockCardCollapsedSpecCount;
-    final screenHint = displayScreenHint(model.display);
+    final screenHint = displayScreenHint(model);
     final available = widget.row.availableUnits;
     final badgeBackground = available > 0 ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6);
     final badgeForeground = available > 0 ? const Color(0xFF166534) : const Color(0xFF6B7280);
@@ -104,7 +104,7 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
                   : ColoredBox(
                       color: colorScheme.surfaceContainerLowest,
                       child: Center(
-                        child: Icon(Icons.laptop_mac_outlined, size: 52, color: colorScheme.outline),
+                        child: Icon(productCategoryPlaceholderIcon(model), size: 52, color: colorScheme.outline),
                       ),
                     ),
             ),
@@ -134,7 +134,7 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    model.modelNumber,
+                    modelNumberLine(model),
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],

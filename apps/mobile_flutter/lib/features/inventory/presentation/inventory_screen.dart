@@ -14,9 +14,11 @@ import '../domain/barcode_field_resolver.dart';
 import '../domain/inventory_hierarchy.dart';
 import '../domain/inventory_permissions.dart' as inv_perms;
 import '../domain/inventory_models.dart';
+import '../domain/product_category.dart';
 import '../domain/stock_model_card_utils.dart';
 import 'inventory_controller.dart';
 import '../../../core/device/barcode_scan_launcher.dart';
+import 'widgets/add_accessory_wizard.dart';
 import 'widgets/add_laptop_wizard.dart';
 import 'widgets/inventory_detail_sheet.dart';
 import 'widgets/inventory_filters_sheet.dart';
@@ -119,7 +121,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final field = switch (scan.targetField) {
       BarcodeFieldTarget.serialNumber => HierarchySearchField.serial,
       BarcodeFieldTarget.modelNumber => HierarchySearchField.modelNumber,
-      BarcodeFieldTarget.partNumber => HierarchySearchField.modelNumber,
+      BarcodeFieldTarget.partNumber => HierarchySearchField.partNumber,
     };
     controller.setSearchField(field);
     controller.setSearch(scan.rawValue);
@@ -144,6 +146,73 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final result = await showWorkspaceLookupSheet(context, ref);
     if (result?.inventoryItem != null && mounted) {
       _openDetail(result!.inventoryItem!);
+    }
+  }
+
+  Future<void> _showAddInventoryOptions(BuildContext context, WidgetRef ref, Brand brand) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.laptop_outlined),
+              title: const Text('Add laptop'),
+              subtitle: const Text('New or existing laptop model with serial numbers'),
+              onTap: () {
+                Navigator.pop(context);
+                showAddLaptopWizard(
+                  context,
+                  ref,
+                  brandId: brand.id,
+                  brandName: brand.name,
+                  workspaceProvider: _provider,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.mouse_outlined),
+              title: const Text('Add accessory'),
+              subtitle: const Text('Mouse, keyboard, charger, and other accessories'),
+              onTap: () {
+                Navigator.pop(context);
+                showAddAccessoryWizard(
+                  context,
+                  ref,
+                  brandId: brand.id,
+                  brandName: brand.name,
+                  workspaceProvider: _provider,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCategoryFilterSheet(BuildContext context, ProductCategoryFilter current) async {
+    final selected = await showModalBottomSheet<ProductCategoryFilter>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in productCategoryFilterOptions)
+              ListTile(
+                title: Text(option.label),
+                trailing: option.value == current ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, option.value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) {
+      ref.read(_provider.notifier).setProductCategoryFilter(selected);
     }
   }
 
@@ -206,6 +275,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               onSelectItem: _openDetail,
               onTogglePrices: controller.setShowSellingPrice,
               onToggleZeroStock: controller.setShowZeroStock,
+              onCategoryFilter: () => _showCategoryFilterSheet(context, workspace.productCategoryFilter),
             ),
           ),
         ],
@@ -215,17 +285,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               final brand = workspace.selectedBrand;
               if (canCreate && brand != null) {
                 return FloatingActionButton.extended(
-                  onPressed: () {
-                    showAddLaptopWizard(
-                      context,
-                      ref,
-                      brandId: brand.id,
-                      brandName: brand.name,
-                      workspaceProvider: _provider,
-                    );
-                  },
+                  onPressed: () => _showAddInventoryOptions(context, ref, brand),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add laptop'),
+                  label: const Text('Add'),
                 );
               }
               if (canCreateModel) {
@@ -399,6 +461,37 @@ class _ModelsPriceToggle extends StatelessWidget {
   }
 }
 
+class _CategoryFilterBar extends StatelessWidget {
+  const _CategoryFilterBar({required this.filter, required this.onTap});
+
+  final ProductCategoryFilter filter;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        dense: true,
+        leading: const Icon(Icons.filter_alt_outlined, size: 20),
+        title: const Text('Show'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              productCategoryFilterLabel(filter),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
 class _ZeroStockToggle extends StatelessWidget {
   const _ZeroStockToggle({required this.showZeroStock, required this.onChanged});
 
@@ -454,6 +547,7 @@ class _InventoryBody extends ConsumerWidget {
     required this.onSelectItem,
     required this.onTogglePrices,
     required this.onToggleZeroStock,
+    required this.onCategoryFilter,
   });
 
   final InventoryWorkspaceState workspace;
@@ -472,6 +566,7 @@ class _InventoryBody extends ConsumerWidget {
   final void Function(InventoryItem item) onSelectItem;
   final ValueChanged<bool> onTogglePrices;
   final ValueChanged<bool> onToggleZeroStock;
+  final VoidCallback onCategoryFilter;
 
   static const _scrollBottomPadding = 96.0;
 
@@ -514,6 +609,10 @@ class _InventoryBody extends ConsumerWidget {
           showPrices: showPrices,
           onChanged: onTogglePrices,
         ),
+      _CategoryFilterBar(
+        filter: workspace.productCategoryFilter,
+        onTap: onCategoryFilter,
+      ),
       if (!stockOnly)
         _ZeroStockToggle(
           showZeroStock: workspace.showZeroStock,
@@ -566,7 +665,11 @@ class _InventoryBody extends ConsumerWidget {
                     ..._modelsHeaderWidgets(context),
                     SizedBox(height: stockOnly ? 40 : 80),
                     EmptyStateView(
-                      icon: stockOnly ? Icons.laptop_outlined : Icons.inventory_2_outlined,
+                      icon: workspace.productCategoryFilter == ProductCategoryFilter.accessory
+                          ? Icons.mouse_outlined
+                          : stockOnly
+                              ? Icons.laptop_outlined
+                              : Icons.inventory_2_outlined,
                       title: stockOnly ? 'No in-stock models' : 'No models for this brand',
                       message: _modelsEmptyMessage(workspace, stockOnly),
                     ),

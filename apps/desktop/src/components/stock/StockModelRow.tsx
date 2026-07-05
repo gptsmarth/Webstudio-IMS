@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Laptop } from 'lucide-react';
+import { ChevronRight, Laptop, MousePointer2 } from 'lucide-react';
 import type { ModelInventoryRow } from '../../lib/inventoryHierarchy';
+import { isAccessoryModel } from '../../lib/productCategory';
 import { buildStockModelSpecLines, stockAvailabilityLabel } from '../../lib/stockModelCard';
 import { ProductImageService } from '../../services/images/ProductImageService';
 
@@ -71,7 +72,11 @@ export function StockModelRow({
           />
         ) : (
           <div className="stock-model-row__image stock-model-row__image--placeholder" aria-hidden>
-            <Laptop size={28} strokeWidth={1.25} />
+            {isAccessoryModel(row.model) ? (
+              <MousePointer2 size={28} strokeWidth={1.25} />
+            ) : (
+              <Laptop size={28} strokeWidth={1.25} />
+            )}
           </div>
         )}
       </div>

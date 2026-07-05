@@ -60,6 +60,17 @@ void main() {
       expect(result.targetField, BarcodeFieldTarget.partNumber);
     });
 
+    test('honours explicit preferred target when trust flag is set', () {
+      final result = BarcodeFieldResolver.resolve(
+        rawValue: 'G3N0CX14P199139',
+        format: 'code128',
+        preferredTarget: BarcodeFieldTarget.modelNumber,
+        trustPreferredTarget: true,
+      );
+      expect(result.targetField, BarcodeFieldTarget.modelNumber);
+      expect(result.rawValue, 'G3N0CX14P199139');
+    });
+
     test('exposes human-readable field labels', () {
       expect(BarcodeFieldTarget.modelNumber.label, 'Model number');
     });

@@ -363,6 +363,7 @@ async def resolve_product_image(
     model_id: str | None = None,
     persist_local: bool = False,
     image_search_query: str | None = None,
+    fast: bool = False,
 ) -> str | None:
     """Find a loadable product image using free web scraping (DuckDuckGo + page HTML)."""
 
@@ -374,15 +375,17 @@ async def resolve_product_image(
         if _looks_like_image_url(page_url):
             candidates.append(page_url)
 
-    async with httpx.AsyncClient(
-        timeout=15.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}
-    ) as client:
-        for page_url in extract_grounding_page_urls(grounding_body)[:MAX_PAGE_FETCHES]:
-            if _looks_like_image_url(page_url):
-                continue
-            html = await fetch_page_html(page_url, client=client)
-            if html:
-                candidates.extend(extract_image_urls_from_html(html, page_url))
+    page_fetch_limit = 0 if fast else MAX_PAGE_FETCHES
+    if page_fetch_limit:
+        async with httpx.AsyncClient(
+            timeout=15.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            for page_url in extract_grounding_page_urls(grounding_body)[:page_fetch_limit]:
+                if _looks_like_image_url(page_url):
+                    continue
+                html = await fetch_page_html(page_url, client=client)
+                if html:
+                    candidates.extend(extract_image_urls_from_html(html, page_url))
 
     from webstudio_backend.services.web_image_scraper import discover_product_image_url
 
@@ -395,4 +398,5 @@ async def resolve_product_image(
         model_id=model_id,
         persist_local=persist_local,
         image_search_queries=image_search_queries,
+        max_queries=2 if fast else None,
     )

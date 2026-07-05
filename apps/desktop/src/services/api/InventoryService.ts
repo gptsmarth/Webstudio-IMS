@@ -1,6 +1,8 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
 
+import type { AccessoryKind, ProductCategory } from '../../lib/productCategory';
+
 export type InventoryStatus = 'received' | 'available' | 'reserved' | 'sold';
 export type StorageUnit = 'GB' | 'TB';
 export type StorageType = 'SSD' | 'HDD';
@@ -11,14 +13,17 @@ export interface InventoryItemDetail {
   product_model_id: string;
   brand_id: number;
   brand_name: string;
+  category: ProductCategory;
+  accessory_kind: AccessoryKind | null;
+  part_number: string | null;
   model_number: string;
   model_name: string;
-  cpu: string;
+  cpu: string | null;
   gpu: string | null;
-  ram_gb: number;
-  storage_value: string;
-  storage_unit: StorageUnit;
-  storage_type: StorageType;
+  ram_gb: number | null;
+  storage_value: string | null;
+  storage_unit: StorageUnit | null;
+  storage_type: StorageType | null;
   color: string;
   current_location_id: number;
   current_location_name: string;

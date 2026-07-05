@@ -20,6 +20,8 @@ from webstudio_backend.api.dependencies.auth import (
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.catalogue_deletion import ProductModelDeletePreviewResponse
 from webstudio_backend.api.schemas.product_model import (
+    AccessorySpecLookupRequest,
+    AccessorySpecLookupResponse,
     CreateProductModelRequest,
     ProductModelImageResolveResponse,
     ProductModelResponse,
@@ -32,7 +34,7 @@ from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import ProductModelStatus, UserRole
+from webstudio_backend.infrastructure.database.enums import ProductCategory, ProductModelStatus, UserRole
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, paginate
@@ -112,6 +114,7 @@ async def _resolve_and_store_product_image(
 def _product_model_list_filters(
     *,
     brand_id: int | None,
+    category: ProductCategory | None,
     active: bool | None,
     archived: bool | None,
     search: str | None,
@@ -119,6 +122,8 @@ def _product_model_list_filters(
     clauses: list = []
     if brand_id is not None:
         clauses.append(ProductModel.brand_id == brand_id)
+    if category is not None:
+        clauses.append(ProductModel.category == category)
     if active is not None:
         if active:
             clauses.append(ProductModel.status == ProductModelStatus.ACTIVE)
@@ -132,7 +137,9 @@ def _product_model_list_filters(
     if search and search.strip():
         term = f"{search.strip()}%"
         clauses.append(
-            (ProductModel.model_number.ilike(term)) | (ProductModel.model_name.ilike(term)),
+            (ProductModel.model_number.ilike(term))
+            | (ProductModel.model_name.ilike(term))
+            | (ProductModel.part_number.ilike(term)),
         )
     return clauses
 
@@ -142,6 +149,7 @@ async def list_product_models(
     request: Request,
     current: ProductModelsOrInventoryViewDep,
     brand_id: int | None = None,
+    category: ProductCategory | None = None,
     active: bool | None = None,
     archived: bool | None = None,
     page: int | None = Query(default=None, ge=1),
@@ -151,6 +159,7 @@ async def list_product_models(
 ) -> dict:
     filters = _product_model_list_filters(
         brand_id=brand_id,
+        category=category,
         active=active,
         archived=archived,
         search=search,
@@ -226,6 +235,9 @@ async def create_product_model(
     try:
         pm = await repo.create(
             brand_id=body.brand_id,
+            category=body.category,
+            accessory_kind=body.accessory_kind,
+            part_number=body.part_number,
             model_number=body.model_number,
             model_name=body.model_name,
             cpu=body.cpu,
@@ -474,6 +486,51 @@ async def lookup_product_model_spec(
         storage_unit=result["storage_unit"],
         storage_type=result["storage_type"],
         display=result.get("display"),
+        color_options=result.get("color_options"),
+        product_image_url=result.get("product_image_url"),
+        description=result.get("description"),
+        notes=result.get("notes"),
+        source=result.get("source", "gemini"),
+        provider=result.get("provider"),
+        confidence_score=result.get("confidence_score"),
+        cached=bool(result.get("cached")),
+    )
+    return _envelope(request, response.model_dump())
+
+
+@router.post("/accessory-spec-lookup")
+async def lookup_accessory_spec(
+    request: Request,
+    body: AccessorySpecLookupRequest,
+    current: ProductModelsCreateDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings=AppSettingsDep,
+) -> dict:
+    del current
+    service = ProductEnrichmentService(db_session, app_settings)
+    try:
+        result = await service.lookup_accessory_spec(
+            body.identifier,
+            identifier_type=body.identifier_type,
+            brand_name=body.brand_name,
+            accessory_kind=body.accessory_kind,
+            model_name=body.model_name,
+        )
+    except AIProviderError as exc:
+        status_code = status.HTTP_404_NOT_FOUND
+        if exc.code == "RATE_LIMITED":
+            status_code = status.HTTP_429_TOO_MANY_REQUESTS
+        elif exc.code in {"SERVICE_UNAVAILABLE", "NOT_CONFIGURED"}:
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        elif exc.code in {"API_ERROR", "TIMEOUT", "QUOTA_EXCEEDED"}:
+            status_code = status.HTTP_502_BAD_GATEWAY
+        raise AppError(exc.code, exc.message, status_code=status_code) from exc
+
+    response = AccessorySpecLookupResponse(
+        model_name=result["model_name"],
+        model_number=result.get("model_number"),
+        part_number=result.get("part_number"),
+        accessory_kind=result.get("accessory_kind"),
         color_options=result.get("color_options"),
         product_image_url=result.get("product_image_url"),
         description=result.get("description"),

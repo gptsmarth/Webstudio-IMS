@@ -20,6 +20,7 @@ import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { P, PermissionService } from '../../services/PermissionService';
 import { canEditStockProductModel } from '../../lib/inventory';
+import { matchesCategoryFilter } from '../../lib/inventoryHierarchy';
 import { BrandLogoImage } from '../../components/branding/BrandLogoImage';
 
 export function StockPage(): JSX.Element {
@@ -49,8 +50,9 @@ export function StockPage(): JSX.Element {
 
   const modelRows = useMemo(() => {
     if (!nav.brandId) return [];
-    return hierarchy.filterStockModels(nav.brandId, debouncedSearch, nav.searchField);
-  }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField]);
+    const rows = hierarchy.filterStockModels(nav.brandId, debouncedSearch, nav.searchField);
+    return rows.filter((row) => matchesCategoryFilter(row.model, nav.productCategoryFilter));
+  }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField, nav.productCategoryFilter]);
 
   const brandSummary = useMemo(
     () => hierarchy.brandSummaries.find((summary) => summary.brandId === nav.brandId) ?? null,
@@ -137,7 +139,7 @@ export function StockPage(): JSX.Element {
         <div>
           <h1 className="stock-page__title">Stock</h1>
           <p className="stock-page__subtitle">
-            Browse available laptops by brand and model while assisting customers.
+            Browse available laptops and accessories by brand and model while assisting customers.
           </p>
         </div>
       </header>
@@ -166,6 +168,8 @@ export function StockPage(): JSX.Element {
             onSearchChange={nav.setSearch}
             searchField={nav.searchField}
             onSearchFieldChange={nav.setSearchField}
+            productCategoryFilter={nav.productCategoryFilter}
+            onProductCategoryFilterChange={nav.setProductCategoryFilter}
           />
           {nav.level === 'models' && nav.brandName && (
             <div className="stock-page__brand-logo" data-brand={nav.brandName.trim().toLowerCase()}>

@@ -16,6 +16,24 @@ class ProductModelStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class ProductCategory(StrEnum):
+    LAPTOP = "laptop"
+    ACCESSORY = "accessory"
+
+
+class AccessoryKind(StrEnum):
+    MOUSE = "mouse"
+    KEYBOARD = "keyboard"
+    CHARGER = "charger"
+    HEADSET = "headset"
+    BAG = "bag"
+    DOCK = "dock"
+    CABLE = "cable"
+    ADAPTER = "adapter"
+    STORAGE = "storage"
+    OTHER = "other"
+
+
 class StorageUnit(StrEnum):
     GB = "GB"
     TB = "TB"
@@ -175,6 +193,8 @@ HUMAN_USER_ROLES = frozenset({UserRole.MAIN_ADMIN, UserRole.ADMIN, UserRole.SALE
 
 LOCATION_TYPE_ENUM_NAME = "location_type"
 PRODUCT_MODEL_STATUS_ENUM_NAME = "product_model_status"
+PRODUCT_CATEGORY_ENUM_NAME = "product_category"
+ACCESSORY_KIND_ENUM_NAME = "accessory_kind"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
@@ -205,6 +225,8 @@ __all__ = [
     "INVENTORY_STATUS_ENUM_NAME",
     "LOCATION_TYPE_ENUM_NAME",
     "PRODUCT_MODEL_STATUS_ENUM_NAME",
+    "PRODUCT_CATEGORY_ENUM_NAME",
+    "ACCESSORY_KIND_ENUM_NAME",
     "SETTING_VALUE_TYPE_ENUM_NAME",
     "STORAGE_TYPE_ENUM_NAME",
     "STORAGE_UNIT_ENUM_NAME",
@@ -233,6 +255,8 @@ __all__ = [
     "TALLY_SYNC_RUN_STATUS_ENUM_NAME",
     "LocationType",
     "ProductModelStatus",
+    "ProductCategory",
+    "AccessoryKind",
     "ReleaseChannel",
     "RELEASE_CHANNEL_ENUM_NAME",
     "ReleaseDownloadStatus",

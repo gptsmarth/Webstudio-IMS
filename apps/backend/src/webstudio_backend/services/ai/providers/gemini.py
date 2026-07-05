@@ -17,13 +17,16 @@ from webstudio_backend.services.ai.gemini_model_stats import (
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.json_utils import parse_json_object
 from webstudio_backend.services.ai.prompts import (
+    build_accessory_spec_lookup_prompt,
     build_image_search_query_prompt,
     build_spec_lookup_prompt,
     default_image_search_query,
 )
 from webstudio_backend.services.ai.providers.base import AIProvider
 from webstudio_backend.services.ai.spec_normalization import (
+    normalize_accessory_spec,
     normalize_spec,
+    validate_accessory_payload,
     validate_enrichment_payload,
 )
 from webstudio_backend.services.ai.types import (
@@ -145,6 +148,138 @@ class GeminiProvider(AIProvider):
             f"Could not find verified specifications for {sku}. Enter details manually.",
             provider="gemini",
         )
+
+    async def enrich_accessory_spec(
+        self,
+        identifier: str,
+        *,
+        identifier_type: str = "model_number",
+        brand_name: str | None = None,
+        accessory_kind: str | None = None,
+        model_name: str | None = None,
+    ) -> dict[str, Any]:
+        if not self.is_configured():
+            raise AIProviderError(
+                "NOT_CONFIGURED",
+                "Gemini API is not configured. Add your API key in System Settings → Integrations.",
+                provider="gemini",
+            )
+
+        sku = identifier.strip()
+        if not sku:
+            raise AIProviderError("NOT_FOUND", "Part or model number is required.", provider="gemini")
+
+        prompt = build_accessory_spec_lookup_prompt(
+            sku,
+            identifier_type=identifier_type,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_web_search=True,
+        )
+        parsed, grounding_body, last_error = await self._try_accessory_lookup(
+            sku,
+            prompt=prompt,
+            brand_name=brand_name,
+            identifier_type=identifier_type,
+            use_grounding=True,
+        )
+        if parsed is not None:
+            image_query = default_image_search_query(
+                sku,
+                brand_name=brand_name,
+                model_name=parsed.get("model_name"),
+            )
+            parsed["image_search_query"] = image_query
+            parsed["grounding_body"] = grounding_body
+            parsed["provider"] = "gemini"
+            return parsed
+
+        knowledge_prompt = build_accessory_spec_lookup_prompt(
+            sku,
+            identifier_type=identifier_type,
+            brand_name=brand_name,
+            model_name=model_name,
+            use_web_search=False,
+        )
+        logger.info("Gemini web search did not validate for accessory {}, trying knowledge fallback", sku)
+        parsed_knowledge, knowledge_body, knowledge_error = await self._try_accessory_lookup(
+            sku,
+            prompt=knowledge_prompt,
+            brand_name=brand_name,
+            identifier_type=identifier_type,
+            use_grounding=False,
+            models=self._model_chain(max_models=1),
+        )
+        if parsed_knowledge is not None:
+            image_query = default_image_search_query(
+                sku,
+                brand_name=brand_name,
+                model_name=parsed_knowledge.get("model_name"),
+            )
+            parsed_knowledge["image_search_query"] = image_query
+            parsed_knowledge["grounding_body"] = knowledge_body
+            parsed_knowledge["provider"] = "gemini"
+            return parsed_knowledge
+
+        if last_error and last_error.code == "RATE_LIMITED":
+            raise last_error
+        if knowledge_error and knowledge_error.code == "RATE_LIMITED":
+            raise knowledge_error
+        if last_error:
+            raise last_error
+        if knowledge_error:
+            raise knowledge_error
+        raise AIProviderError(
+            "NOT_FOUND",
+            f"Could not find verified details for {sku}. Enter details manually.",
+            provider="gemini",
+        )
+
+    async def _try_accessory_lookup(
+        self,
+        identifier: str,
+        *,
+        prompt: str,
+        brand_name: str | None,
+        identifier_type: str,
+        use_grounding: bool,
+        models: list[str] | None = None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, AIProviderError | None]:
+        last_error: AIProviderError | None = None
+        for gemini_model in models or self._model_chain():
+            started = time.perf_counter()
+            AIProviderHealthTracker.record_request("gemini")
+            try:
+                payload = _build_payload(prompt, use_grounding=use_grounding)
+                body = await self._generate(gemini_model, payload)
+                parsed = _parse_accessory_body(
+                    body,
+                    fallback_name=identifier,
+                    identifier=identifier,
+                    identifier_type=identifier_type,
+                    brand_name=brand_name,
+                )
+                if not parsed:
+                    continue
+                duration_ms = int((time.perf_counter() - started) * 1000)
+                logger.info(
+                    "Gemini accessory lookup succeeded for {} ({}) via {} in {}ms",
+                    identifier,
+                    identifier_type,
+                    gemini_model,
+                    duration_ms,
+                )
+                record_gemini_model_success(gemini_model)
+                AIProviderHealthTracker.record_success("gemini")
+                return parsed, body, None
+            except AIProviderError as exc:
+                last_error = exc
+                if exc.code == "RATE_LIMITED":
+                    AIProviderHealthTracker.record_rate_limit("gemini", message=exc.message)
+                    await asyncio.sleep(RATE_LIMIT_MODEL_SWITCH_DELAY_SECONDS)
+                    continue
+                AIProviderHealthTracker.record_failure("gemini", message=exc.message)
+        return None, None, last_error
 
     async def _try_spec_lookup(
         self,
@@ -409,6 +544,38 @@ def _parse_lookup_body(
             model_number,
             strict_validation,
         )
+        return None
+    return normalized
+
+
+def _parse_accessory_body(
+    body: dict[str, Any],
+    *,
+    fallback_name: str,
+    identifier: str,
+    identifier_type: str = "model_number",
+    brand_name: str | None = None,
+) -> dict[str, Any] | None:
+    text = _extract_text(body)
+    if not text:
+        return None
+    parsed = parse_json_object(text)
+    if not parsed:
+        logger.warning("Gemini returned non-JSON accessory text: {}", text[:200])
+        return None
+    normalized = normalize_accessory_spec(
+        parsed,
+        fallback_name=fallback_name,
+        identifier=identifier,
+        identifier_type=identifier_type,
+        source="gemini",
+    )
+    if not validate_accessory_payload(
+        normalized,
+        identifier=identifier,
+        identifier_type=identifier_type,
+    ):
+        logger.info("Gemini accessory payload rejected for {} ({})", identifier, identifier_type)
         return None
     return normalized
 

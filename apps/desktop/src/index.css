@@ -10591,6 +10591,8 @@
   .admin-model-table__toolbar {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
   }
 
@@ -10690,6 +10692,27 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .add-laptop-wizard__identifier-type {
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .add-laptop-wizard__identifier-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .add-laptop-wizard__identifier-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
   }
 
   .add-laptop-wizard__form-grid {

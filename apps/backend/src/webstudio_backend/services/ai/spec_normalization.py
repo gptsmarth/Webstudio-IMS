@@ -258,3 +258,90 @@ def normalize_brand_name(brand_name: str | None) -> str | None:
         return None
     cleaned = brand_name.strip()
     return cleaned or None
+
+
+_ACCESSORY_KINDS = {
+    "mouse",
+    "keyboard",
+    "charger",
+    "headset",
+    "bag",
+    "dock",
+    "cable",
+    "adapter",
+    "storage",
+    "other",
+}
+
+
+def normalize_accessory_kind(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in _ACCESSORY_KINDS:
+        return text
+    return "other"
+
+
+def normalize_accessory_spec(
+    data: dict[str, Any],
+    *,
+    fallback_name: str,
+    identifier: str,
+    identifier_type: str = "model_number",
+    source: str = "gemini",
+) -> dict[str, Any]:
+    entered = identifier.strip()
+    model_name = str(data.get("model_name") or "").strip()
+    if not model_name or model_name.upper().replace(" ", "") == entered.upper().replace(" ", ""):
+        model_name = str(data.get("model_name") or fallback_name).strip()
+
+    ai_model_number = str(data.get("model_number") or "").strip() or None
+    ai_part_number = str(data.get("part_number") or "").strip() or None
+
+    if identifier_type == "part_number":
+        part_number = ai_part_number or entered
+        model_number = ai_model_number if ai_model_number and ai_model_number.upper() != entered.upper() else ai_model_number
+    else:
+        model_number = ai_model_number or entered
+        part_number = ai_part_number if ai_part_number and ai_part_number.upper() != entered.upper() else ai_part_number
+
+    description = data.get("description")
+    description_str = str(description).strip() if description else None
+    notes = data.get("notes")
+    notes_str = str(notes).strip() if notes else None
+    try:
+        confidence_score = float(data.get("confidence_score") or 0.75)
+    except (TypeError, ValueError):
+        confidence_score = 0.75
+    confidence_score = max(0.0, min(1.0, confidence_score))
+    return {
+        "model_name": model_name,
+        "model_number": model_number,
+        "part_number": part_number,
+        "accessory_kind": normalize_accessory_kind(data.get("accessory_kind")),
+        "color_options": normalize_color_options(data.get("color_options")),
+        "product_image_url": None,
+        "description": description_str,
+        "notes": notes_str,
+        "source": source,
+        "confidence_score": confidence_score,
+    }
+
+
+def validate_accessory_payload(
+    payload: dict[str, Any],
+    *,
+    identifier: str,
+    identifier_type: str = "model_number",
+) -> bool:
+    del identifier_type
+    name = str(payload.get("model_name") or "").strip()
+    if not name:
+        return False
+    entered = identifier.strip()
+    if name.upper().replace(" ", "") == entered.upper().replace(" ", ""):
+        return False
+    if float(payload.get("confidence_score") or 0) < 0.35:
+        return False
+    return True

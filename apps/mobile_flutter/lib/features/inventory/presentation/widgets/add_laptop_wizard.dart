@@ -32,6 +32,7 @@ Future<void> showAddLaptopWizard(
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: _AddLaptopWizard(
@@ -72,6 +73,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   int _existingAvailableUnits = 0;
 
   final _modelNumber = TextEditingController();
+  final _modelNumberFocus = FocusNode();
   final _modelName = TextEditingController();
   final _cpu = TextEditingController();
   final _gpu = TextEditingController();
@@ -135,6 +137,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       row.dispose();
     }
     _modelNumber.dispose();
+    _modelNumberFocus.dispose();
     _modelName.dispose();
     _cpu.dispose();
     _gpu.dispose();
@@ -207,7 +210,11 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       _message = null;
     });
 
-    final existing = findModelByNumber(widget.models, trimmed, brandId: widget.brandId);
+    final existing = findModelByNumber(
+      widget.models.where((model) => model.isLaptop).toList(),
+      trimmed,
+      brandId: widget.brandId,
+    );
     if (existing != null) {
       _applyExistingModel(existing);
       setState(() {
@@ -388,10 +395,6 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       preferredTarget: BarcodeFieldTarget.modelNumber,
     );
     if (scan == null || !mounted) return;
-    if (scan.targetField == BarcodeFieldTarget.serialNumber) {
-      setState(() => _error = 'That looks like a serial number. Scan a model or part number barcode, or type it manually.');
-      return;
-    }
     setState(() {
       _modelNumber.text = scan.rawValue;
       _error = null;
@@ -423,7 +426,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       );
     }
 
-    final sheetHeight = MediaQuery.sizeOf(context).height * 0.9;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.9;
+    final sheetHeight = (maxHeight - viewInsets.bottom).clamp(280.0, maxHeight);
 
     return Material(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -522,11 +527,17 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
           Expanded(
             child: TextField(
               controller: _modelNumber,
+              focusNode: _modelNumberFocus,
               decoration: const InputDecoration(
                 labelText: 'Model number',
                 hintText: 'e.g. X151VA-AB5321WS',
               ),
+              keyboardType: TextInputType.visiblePassword,
+              textCapitalization: TextCapitalization.characters,
+              autocorrect: false,
+              enableSuggestions: false,
               textInputAction: TextInputAction.done,
+              onTap: () => _modelNumberFocus.requestFocus(),
               onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) {
                 if (!_checking && canContinue) _continueFromModel();

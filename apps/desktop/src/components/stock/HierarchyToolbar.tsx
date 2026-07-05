@@ -4,12 +4,16 @@ import {
   hierarchySearchPlaceholder,
   type HierarchySearchField,
 } from '../../lib/hierarchySearch';
+import type { ProductCategoryFilter } from '../../lib/productCategory';
+import { PRODUCT_CATEGORY_FILTERS } from '../../lib/productCategory';
 
 interface HierarchyToolbarProps {
   search: string;
   onSearchChange: (value: string) => void;
   searchField?: HierarchySearchField;
   onSearchFieldChange?: (value: HierarchySearchField) => void;
+  productCategoryFilter?: ProductCategoryFilter;
+  onProductCategoryFilterChange?: (value: ProductCategoryFilter) => void;
   placeholder?: string;
   showZeroStock?: boolean;
   onToggleZeroStock?: (value: boolean) => void;
@@ -20,6 +24,8 @@ export function HierarchyToolbar({
   onSearchChange,
   searchField = 'all',
   onSearchFieldChange,
+  productCategoryFilter = 'all',
+  onProductCategoryFilterChange,
   placeholder,
   showZeroStock,
   onToggleZeroStock,
@@ -28,6 +34,24 @@ export function HierarchyToolbar({
 
   return (
     <div className="hierarchy-toolbar">
+      {onProductCategoryFilterChange && (
+        <label className="toolbar-field hierarchy-toolbar__filter">
+          <span className="toolbar-field__label">Show</span>
+          <select
+            className="input hierarchy-toolbar__filter-select"
+            value={productCategoryFilter}
+            onChange={(event) =>
+              onProductCategoryFilterChange(event.target.value as ProductCategoryFilter)
+            }
+          >
+            {PRODUCT_CATEGORY_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {onSearchFieldChange && (
         <label className="toolbar-field hierarchy-toolbar__filter">
           <span className="toolbar-field__label">Search by</span>

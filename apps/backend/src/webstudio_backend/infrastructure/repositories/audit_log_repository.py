@@ -181,7 +181,9 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
     ) -> PageResult[AuditLog]:
         normalized = serial_number.strip()
         item = await self._session.scalar(
-            select(InventoryItem).where(InventoryItem.serial_number == normalized),
+            select(InventoryItem).where(
+                func.lower(InventoryItem.serial_number) == normalized.lower(),
+            ),
         )
         if item is None:
             raise InventoryItemNotFoundError(normalized)
@@ -202,7 +204,9 @@ class AuditLogRepository(SqlAlchemyRepository[AuditLog]):
         if filters.serial_number is not None:
             normalized = filters.serial_number.strip()
             item = await self._session.scalar(
-                select(InventoryItem.id).where(InventoryItem.serial_number == normalized),
+                select(InventoryItem.id).where(
+                    func.lower(InventoryItem.serial_number) == normalized.lower(),
+                ),
             )
             if item is None:
                 statement = statement.where(AuditLog.id.is_(None))

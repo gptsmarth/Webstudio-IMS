@@ -16,6 +16,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-05
+
+### Added
+
+- **Accessory inventory:** category, part number, accessory type; Add Accessory wizard on desktop and mobile
+- **Stock / inventory filters:** All products, Laptops only, Accessories only
+- **Mobile:** Add Accessory flow, category-aware stock cards, part-number search, accessory spec auto-fetch
+- **Tally:** accessory part-number matching, multi-serial line expansion, mixed laptop + accessory invoices
+- **Docs:** ground-floor server + first-floor Tally layout (same shop LAN)
+
+### Fixed
+
+- **Tally sync:** GST on all sale lines; serial match authoritative; case-insensitive serial/model matching
+- **Accessory auto-fetch:** Gemini lookup import fix; faster image/spec fetch with dedup
+- **Mobile barcode:** scan arm delay, part-number field routing, keyboard/serial scan fixes
+- **Inventory models:** nullable laptop fields for accessory API responses (mobile)
+
+### Changed
+
+- Mobile Add button opens laptop or accessory chooser; server URL still `http://192.168.29.100:8000`
+
 ## [1.0.2] - 2026-07-04
 
 ### Fixed

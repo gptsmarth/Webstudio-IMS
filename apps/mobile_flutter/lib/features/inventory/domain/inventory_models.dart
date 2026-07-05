@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'product_category.dart';
+
 enum InventoryStatus { received, available, reserved, sold }
 
 InventoryStatus inventoryStatusFromString(String value) {
@@ -25,14 +27,17 @@ class InventoryItem extends Equatable {
     required this.productModelId,
     required this.brandId,
     required this.brandName,
+    this.category = ProductCategory.laptop,
+    this.accessoryKind,
+    this.partNumber,
     required this.modelNumber,
     required this.modelName,
-    required this.cpu,
+    this.cpu = '',
     this.gpu,
-    required this.ramGb,
-    required this.storageValue,
-    required this.storageUnit,
-    required this.storageType,
+    this.ramGb = 0,
+    this.storageValue = '',
+    this.storageUnit = 'GB',
+    this.storageType = 'SSD',
     required this.color,
     required this.currentLocationId,
     required this.currentLocationName,
@@ -48,6 +53,9 @@ class InventoryItem extends Equatable {
   final String productModelId;
   final int brandId;
   final String brandName;
+  final ProductCategory category;
+  final AccessoryKind? accessoryKind;
+  final String? partNumber;
   final String modelNumber;
   final String modelName;
   final String cpu;
@@ -65,23 +73,38 @@ class InventoryItem extends Equatable {
   final String createdAt;
   final String updatedAt;
 
-  String get specsLabel => '$cpu • ${ramGb}GB RAM • $storageValue $storageUnit $storageType';
+  bool get isAccessory => isAccessoryModel(category: category);
+  bool get isLaptop => isLaptopModel(category: category);
+
+  String get specsLabel {
+    if (isAccessory) {
+      final parts = <String>[accessoryKindLabel(accessoryKind)];
+      final pn = partNumber?.trim();
+      if (pn != null && pn.isNotEmpty) parts.add('PN $pn');
+      return parts.join(' • ');
+    }
+    return '$cpu • ${ramGb}GB RAM • $storageValue $storageUnit $storageType';
+  }
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
+    final category = productCategoryFromString(json['category'] as String?);
     return InventoryItem(
       id: json['id'] as String,
       serialNumber: json['serial_number'] as String,
       productModelId: json['product_model_id'] as String,
       brandId: json['brand_id'] as int,
       brandName: json['brand_name'] as String,
+      category: category,
+      accessoryKind: accessoryKindFromString(json['accessory_kind'] as String?),
+      partNumber: json['part_number'] as String?,
       modelNumber: json['model_number'] as String,
       modelName: json['model_name'] as String,
-      cpu: json['cpu'] as String,
+      cpu: json['cpu'] as String? ?? '',
       gpu: json['gpu'] as String?,
-      ramGb: json['ram_gb'] as int,
-      storageValue: json['storage_value'].toString(),
-      storageUnit: json['storage_unit'] as String,
-      storageType: json['storage_type'] as String,
+      ramGb: (json['ram_gb'] as num?)?.toInt() ?? 0,
+      storageValue: json['storage_value']?.toString() ?? '',
+      storageUnit: json['storage_unit'] as String? ?? 'GB',
+      storageType: json['storage_type'] as String? ?? 'SSD',
       color: json['color'] as String,
       currentLocationId: json['current_location_id'] as int,
       currentLocationName: json['current_location_name'] as String,
@@ -99,6 +122,9 @@ class InventoryItem extends Equatable {
         'product_model_id': productModelId,
         'brand_id': brandId,
         'brand_name': brandName,
+        'category': productCategoryToApi(category),
+        if (accessoryKind != null) 'accessory_kind': accessoryKindToApi(accessoryKind!),
+        if (partNumber != null) 'part_number': partNumber,
         'model_number': modelNumber,
         'model_name': modelName,
         'cpu': cpu,
@@ -214,14 +240,17 @@ class ProductModel extends Equatable {
     required this.id,
     required this.brandId,
     this.brandName,
+    this.category = ProductCategory.laptop,
+    this.accessoryKind,
+    this.partNumber,
     required this.modelNumber,
     required this.modelName,
-    required this.cpu,
+    this.cpu = '',
     this.gpu,
-    required this.ramGb,
-    required this.storageValue,
-    required this.storageUnit,
-    required this.storageType,
+    this.ramGb = 0,
+    this.storageValue = '',
+    this.storageUnit = 'GB',
+    this.storageType = 'SSD',
     this.display,
     required this.status,
     this.productImageUrl,
@@ -234,6 +263,9 @@ class ProductModel extends Equatable {
   final String id;
   final int brandId;
   final String? brandName;
+  final ProductCategory category;
+  final AccessoryKind? accessoryKind;
+  final String? partNumber;
   final String modelNumber;
   final String modelName;
   final String cpu;
@@ -250,20 +282,34 @@ class ProductModel extends Equatable {
   final String? notes;
   final String? colorOptions;
 
-  String get specsLabel => '$cpu • ${ramGb}GB RAM • $storageValue $storageUnit $storageType';
+  bool get isAccessory => isAccessoryModel(category: category);
+  bool get isLaptop => isLaptopModel(category: category);
+
+  String get specsLabel {
+    if (isAccessory) {
+      final parts = <String>[accessoryKindLabel(accessoryKind)];
+      final pn = partNumber?.trim();
+      if (pn != null && pn.isNotEmpty) parts.add('PN $pn');
+      return parts.join(' • ');
+    }
+    return '$cpu • ${ramGb}GB RAM • $storageValue $storageUnit $storageType';
+  }
 
   factory ProductModel.fromJson(Map<String, dynamic> json) => ProductModel(
         id: json['id'] as String,
         brandId: (json['brand_id'] as num).toInt(),
         brandName: json['brand_name'] as String?,
+        category: productCategoryFromString(json['category'] as String?),
+        accessoryKind: accessoryKindFromString(json['accessory_kind'] as String?),
+        partNumber: json['part_number'] as String?,
         modelNumber: json['model_number'] as String,
         modelName: json['model_name'] as String,
-        cpu: json['cpu'] as String,
+        cpu: json['cpu'] as String? ?? '',
         gpu: json['gpu'] as String?,
-        ramGb: json['ram_gb'] as int,
-        storageValue: json['storage_value'].toString(),
-        storageUnit: json['storage_unit'] as String,
-        storageType: json['storage_type'] as String,
+        ramGb: (json['ram_gb'] as num?)?.toInt() ?? 0,
+        storageValue: json['storage_value']?.toString() ?? '',
+        storageUnit: json['storage_unit'] as String? ?? 'GB',
+        storageType: json['storage_type'] as String? ?? 'SSD',
         display: json['display'] as String?,
         status: json['status'] as String? ?? 'active',
         productImageUrl: json['product_image_url'] as String?,

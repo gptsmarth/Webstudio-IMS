@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -8,6 +10,9 @@ import '../domain/barcode_scan_selection.dart';
 import 'widgets/barcode_viewfinder_overlay.dart';
 
 enum BarcodeScannerMode { single, continuous }
+
+/// Time to select S/N vs Model vs P/N and aim at the correct label before capture.
+const kBarcodeScanArmDelay = Duration(seconds: 2);
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({
@@ -29,13 +34,16 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
     with SingleTickerProviderStateMixin {
   bool _handled = false;
   bool _paused = false;
+  bool _scanArmed = false;
+  int _armSecondsLeft = kBarcodeScanArmDelay.inSeconds;
   bool _soundEnabled = true;
   bool _hapticEnabled = true;
   late BarcodeFieldTarget _selectedTarget;
   late AnimationController _scanLineController;
+  Timer? _armTimer;
   final _history = <BarcodeScanResult>[];
   final _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
+    detectionSpeed: DetectionSpeed.noDuplicates,
     formats: const [
       BarcodeFormat.code128,
       BarcodeFormat.code39,
@@ -60,6 +68,29 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
     _loadPreferences();
+    _startArmDelay();
+  }
+
+  void _startArmDelay() {
+    _armTimer?.cancel();
+    setState(() {
+      _scanArmed = false;
+      _handled = false;
+      _armSecondsLeft = kBarcodeScanArmDelay.inSeconds;
+    });
+    _armTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _armSecondsLeft--;
+        if (_armSecondsLeft <= 0) {
+          _scanArmed = true;
+          timer.cancel();
+        }
+      });
+    });
   }
 
   Future<void> _loadPreferences() async {
@@ -96,13 +127,14 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
 
   @override
   void dispose() {
+    _armTimer?.cancel();
     _scanLineController.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_paused) return;
+    if (_paused || !_scanArmed) return;
     if (!_continuous && _handled) return;
 
     final barcode = selectBarcodeForTarget(
@@ -117,6 +149,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
       rawValue: raw,
       format: format,
       preferredTarget: _selectedTarget,
+      trustPreferredTarget: true,
     );
 
     if (_continuous) {
@@ -212,6 +245,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                   children: [
                     MobileScanner(
                       controller: _controller,
+                      scanWindow: scanWindow,
                       onDetect: _onDetect,
                       errorBuilder: (context, error) => Center(
                         child: Padding(
@@ -261,6 +295,36 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                         );
                       },
                     ),
+                    if (!_scanArmed)
+                      Container(
+                        color: Colors.black54,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _armSecondsLeft > 0
+                                  ? 'Select ${_selectedTarget.label} below, then aim at that barcode'
+                                  : 'Ready',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _armSecondsLeft > 0
+                                  ? 'Scanning starts in $_armSecondsLeft…'
+                                  : 'Hold steady inside the frame',
+                              style: const TextStyle(color: Colors.white70, fontSize: 14),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
                     if (_paused)
                       Container(
                         color: Colors.black54,
@@ -278,10 +342,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
           _TargetSelector(
             selected: _selectedTarget,
             onChanged: (target) {
-              setState(() {
-                _selectedTarget = target;
-                _handled = false;
-              });
+              setState(() => _selectedTarget = target);
+              _startArmDelay();
             },
           ),
           Container(
@@ -291,7 +353,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
             child: Text(
               _continuous
                   ? 'Scanned ${_history.length} item(s). Only the barcode inside the frame is read.'
-                  : 'Hold steady — scan one barcode at a time inside the frame. Switch target above for S/N, Model, or P/N.',
+                  : _scanArmed
+                      ? 'Hold steady — only the barcode inside the frame is read. Switch target above for S/N, Model, or P/N.'
+                      : 'Choose the correct target (S/N, Model, or P/N) before scanning starts.',
               style: Theme.of(context).textTheme.bodySmall,
               textAlign: TextAlign.center,
             ),

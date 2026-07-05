@@ -135,6 +135,7 @@ String _searchFieldLabel(HierarchySearchField field) {
     HierarchySearchField.all => 'All fields',
     HierarchySearchField.modelNumber => 'Model number',
     HierarchySearchField.modelName => 'Model name',
+    HierarchySearchField.partNumber => 'Part number',
     HierarchySearchField.gpu => 'Graphics (GPU)',
     HierarchySearchField.cpu => 'Processor (CPU)',
     HierarchySearchField.display => 'Display',
@@ -146,10 +147,11 @@ String hierarchySearchPlaceholder(HierarchySearchField field) {
   return switch (field) {
     HierarchySearchField.modelNumber => 'Enter model number…',
     HierarchySearchField.modelName => 'Enter model name…',
+    HierarchySearchField.partNumber => 'Enter part number…',
     HierarchySearchField.gpu => 'Search by graphics card…',
     HierarchySearchField.cpu => 'Search by processor…',
     HierarchySearchField.display => 'Search by display size…',
     HierarchySearchField.serial => 'Search by serial number…',
-    HierarchySearchField.all => 'Search model, serial, CPU, GPU…',
+    HierarchySearchField.all => 'Search model, part number, serial, CPU, GPU…',
   };
 }

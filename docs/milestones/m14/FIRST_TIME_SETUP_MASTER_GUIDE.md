@@ -1,11 +1,11 @@
 ---
 Title: WEBSTUDIO IMS — Complete Customer Office Setup Guide
-Version: 3.2.0
+Version: 3.3.0
 Status: Active
 Owner: WEBSTUDIO IMS Team
-Last Updated: 2026-07-03
+Last Updated: 2026-07-05
 Milestone: 14
-Release: v1.0.2+
+Release: v1.0.3+
 Site: Customer showroom (Jio + Tenda two-floor LAN)
 Audience: Store owner, integrator, Main Admin
 Related Documents:
@@ -34,19 +34,22 @@ Subnet:                    192.168.29.0 / 255.255.255.0
 Ground floor Wi‑Fi:        Asus Store  (Tenda AP mode)
 
 WEBSTUDIO Server PC:
+  Location:                Ground floor (permanent)
   Computer name:           WEBSTUDIO-SERVER
-  Wi‑Fi:                   JioBharat
+  Network:                 Asus Store Wi‑Fi **or** Ethernet → Tenda LAN
   Fixed IP:                192.168.29.100
   MAC (for Jio reservation): E0:AD:47:31:CA:0A
 
 Tally laptop:
+  Location:                First floor (billing desk — may move floors)
   Computer name:           TALLY-LAPTOP
+  Wi‑Fi:                   JioBharat (typical)
   IP:                      DHCP (changes — do NOT use IP in settings)
   Example IP now:          192.168.29.176
   Tally XML port:          9000
 
 Installers from GitHub:
-  https://github.com/Smarthsingh/WEBSTUDIO-IMS/releases → v1.0.1
+  https://github.com/Smarthsingh/WEBSTUDIO-IMS/releases → v1.0.3
 
 Release notes (v1.0.1 — CI verified):
   - All release assets built successfully (Server, Desktop, APK)
@@ -64,39 +67,56 @@ Install date:              _______________________
 
 ## Your network layout
 
+**Plan (production):** WEBSTUDIO **server stays on the ground floor**. **Tally laptop stays on the first floor** (billing). Both use the **same shop LAN** (`192.168.29.x`) via Jio router + Tenda AP — floor does not matter for apps or Tally sync.
+
 ```
                          INTERNET
                              │
                     ┌────────▼────────┐
-                    │   Jio Router    │  192.168.29.1
-                    │  Wi‑Fi: JioBharat│  (1st floor main)
+                    │   Jio Router    │  192.168.29.1 (1st floor)
+                    │  Wi‑Fi: JioBharat│
                     └────────┬────────┘
                              │ LAN cable
               ┌──────────────┼──────────────┐
               │              │              │
     ┌─────────▼─────────┐    │    ┌─────────▼─────────┐
-    │ WEBSTUDIO Server  │    │    │  Tenda (AP mode)  │
-    │ WEBSTUDIO-SERVER  │    │    │  Wi‑Fi: Asus Store │
-    │ 192.168.29.100    │    │    │  (ground floor)   │
-    │ Wi‑Fi: JioBharat  │    │    └─────────┬─────────┘
+    │ TALLY-LAPTOP      │    │    │  Tenda (AP mode)  │
+    │ 1st floor billing │    │    │  Wi‑Fi: Asus Store │
+    │ Wi‑Fi: JioBharat  │    │    │  (ground floor)   │
+    │ DHCP (.176 etc.)  │    │    └─────────┬─────────┘
     └───────────────────┘    │              │
               │              │    ┌─────────▼─────────┐
-    ┌─────────▼─────────┐    │    │ Staff laptops &   │
-    │ TALLY-LAPTOP      │    │    │ phones (GF)       │
-    │ DHCP (.176 etc.)  │    │    │ DHCP automatic    │
-    │ moves 1F ↔ GF     │    │    └───────────────────┘
-    └───────────────────┘    │
-              │              │
-    Staff laptops / phones (1st floor, JioBharat, DHCP)
+    ┌─────────▼─────────┐    │    │ WEBSTUDIO Server  │
+    │ Staff laptops &   │    │    │ WEBSTUDIO-SERVER  │
+    │ phones (1st floor)│    │    │ 192.168.29.100    │
+    └───────────────────┘    │    │ GF: Asus Store or │
+                               │    │ Ethernet→Tenda   │
+                               │    └─────────┬─────────┘
+                               │              │
+                               │    ┌─────────▼─────────┐
+                               │    │ Staff laptops &   │
+                               │    │ phones (GF)       │
+                               │    └───────────────────┘
 ```
 
 | Rule | Detail |
 |------|--------|
+| **Server on GF + Tally on 1F** | **Supported** — server connects **outbound** to `TALLY-LAPTOP:9000` over the LAN |
 | All devices use **local** IPs `192.168.29.x` | Not public IP `49.43.x.x` |
-| Server URL for **every** app | `http://192.168.29.100:8000` |
+| Server URL for **every** app | `http://192.168.29.100:8000` (unchanged when server moves floor) |
 | Staff laptops & phones | **DHCP only** — no static IP |
-| Tally laptop | **DHCP** + hostname **`TALLY-LAPTOP`** in WEBSTUDIO |
+| Tally laptop | **DHCP** + hostname **`TALLY-LAPTOP`** in WEBSTUDIO (not IP) |
 | PostgreSQL port 5432 | **Server localhost only** — never open to LAN |
+
+### Why ground-floor server + first-floor Tally works
+
+| Traffic | Direction | Needs same floor? |
+|---------|-----------|-------------------|
+| Desktop / mobile → server API | Client → `192.168.29.100:8000` | **No** — same subnet only |
+| Server → Tally XML sync | Server → `TALLY-LAPTOP:9000` | **No** — same subnet only |
+| mDNS discovery | LAN multicast | **No** — works across bridged SSIDs |
+
+**Requirements:** Jio + Tenda still form **one LAN** (Part A1–A2). **Do not** use guest Wi‑Fi. Tenda **AP isolation Off**.
 
 ---
 
@@ -262,7 +282,9 @@ Log into **`http://192.168.29.1`**:
 
 ## A3 — Reserve server IP on Jio (recommended)
 
-**Settings → DHCP / Address reservation** (name varies):
+**Server lives on the ground floor.** Connect it by **Ethernet** (Jio LAN → Tenda LAN → server) **or** Wi‑Fi **Asus Store**. The reserved IP is the same either way.
+
+**Settings → DHCP / Address reservation** on Jio (`http://192.168.29.1`):
 
 | Field | Value |
 |-------|--------|
@@ -270,7 +292,7 @@ Log into **`http://192.168.29.1`**:
 | Reserved IP | `192.168.29.100` |
 | Name | `WEBSTUDIO-SERVER` |
 
-Save → on server PC: disconnect/reconnect **JioBharat** Wi‑Fi or reboot.
+Save → on server PC: reconnect **Asus Store** Wi‑Fi (or replug Ethernet) or reboot.
 
 Verify on server:
 
@@ -278,18 +300,20 @@ Verify on server:
 ipconfig
 ```
 
-Under **Wireless LAN adapter Wi‑Fi**:
+Under **Wireless LAN adapter Wi‑Fi** (if using Wi‑Fi) **or** **Ethernet adapter** (if wired):
 
 ```text
 IPv4 Address. . . . . . . . . . . : 192.168.29.100
 Default Gateway . . . . . . . . . : 192.168.29.1
 ```
 
-> **Note:** `ipconfig /release` may show *"Ethernet 2 media disconnected"* — ignore it. That is an unplugged wired port. Only check **Wi‑Fi** section.
+> **Recommended (ground floor):** Run an Ethernet cable **Jio router LAN → Tenda LAN port → server LAN** for 24/7 stability. Wi‑Fi **Asus Store** is OK if Ethernet is not practical.
 
-### Alternative — manual static IP on server Wi‑Fi
+> **Note:** `ipconfig /release` may show *"Ethernet 2 media disconnected"* — ignore unused ports. Check the adapter you actually use.
 
-**Settings → Network & Internet → Wi‑Fi → JioBharat → Properties → IP assignment → Manual:**
+### Alternative — manual static IP on server
+
+**Settings → Network & Internet → Wi‑Fi → Asus Store → Properties → IP assignment → Manual** (or Ethernet adapter if wired):
 
 | Field | Value |
 |-------|--------|
@@ -300,7 +324,9 @@ Default Gateway . . . . . . . . . : 192.168.29.1
 
 ## A4 — Server PC network profile
 
-**Wi‑Fi JioBharat → Network profile → Private** (not Public).
+**Asus Store** (Wi‑Fi) or **Ethernet** → **Private** (not Public).
+
+TALLY-LAPTOP on **1st floor** → **JioBharat** → **Private**.
 
 ## A5 — Staff laptops and phones
 
@@ -325,13 +351,19 @@ Gateways must **match**.
 
 ### Test 2 — Reach server (after IP is `.100`)
 
-From **ground floor** laptop browser:
+From **ground floor** laptop browser (**Asus Store**):
 
 ```text
 http://192.168.29.100:8000/health/live
 ```
 
-(Works after WEBSTUDIO Server installed; before install = connection refused is normal.)
+From **first floor** laptop browser (**JioBharat**):
+
+```text
+http://192.168.29.100:8000/health/live
+```
+
+Both must return OK after WEBSTUDIO Server is installed. (Before install = connection refused is normal.)
 
 ### Test 3 — Ping (optional)
 
@@ -397,7 +429,7 @@ Get-NetFirewallRule -DisplayName "WEBSTUDIO IMS*" | Format-Table DisplayName, En
 
 # PART C — INSTALL WEBSTUDIO SERVER
 
-On **WEBSTUDIO-SERVER** (`192.168.29.100`, Wi‑Fi **JioBharat**).
+On **WEBSTUDIO-SERVER** (`192.168.29.100`, ground floor — **Asus Store** Wi‑Fi or Ethernet via Tenda).
 
 ## C0 — Prerequisites checklist
 
@@ -406,8 +438,8 @@ Before running **`WEBSTUDIO Server Setup.exe`**:
 | # | Check | Command / action |
 |---|--------|------------------|
 | 1 | Windows 11 Pro, name `WEBSTUDIO-SERVER` | Settings → System → About |
-| 2 | IP **`192.168.29.100`** on Wi‑Fi | `ipconfig` |
-| 3 | Wi‑Fi profile **Private** | Settings → Wi‑Fi → JioBharat |
+| 2 | IP **`192.168.29.100`** on active adapter | `ipconfig` |
+| 3 | Network profile **Private** (Asus Store or Ethernet) | Settings → Network |
 | 4 | **PostgreSQL running** | `Get-Service postgresql-x64-18` → Running |
 | 5 | Database **`webstudio`** + user **`webstudio_app`** created | pgAdmin (**Part C2**) |
 | 6 | Old `D:\WEBSTUDIO-IMS` removed (if retrying) | Part 0C |
@@ -520,15 +552,15 @@ powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\configu
 powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\validate-production-network.ps1" -ApiPort 8000
 ```
 
-## C7 — Test from ground floor
+## C7 — Test from both floors
 
-On laptop connected to **Asus Store**, browser:
+**Ground floor** (Asus Store) and **first floor** (JioBharat) — browser on each:
 
 ```text
 http://192.168.29.100:8000/health/live
 ```
 
-Must return OK. If yes → both floors reach server.
+Must return OK on **both** floors. If first floor fails but ground floor works → check Tenda AP mode and Jio AP isolation (Part A1–A2).
 
 ---
 
@@ -673,7 +705,18 @@ Or use `pnpm release:android` after setting that define in the release script.
 
 ---
 
-# PART G — TALLY-LAPTOP (moves 1st floor ↔ ground floor)
+# PART G — TALLY-LAPTOP (first floor billing; may move floors)
+
+## G0 — Server on GF + Tally on 1F (your layout)
+
+| Device | Floor | Role |
+|--------|-------|------|
+| **WEBSTUDIO-SERVER** | Ground floor | API, database, Tally sync **client** (connects to Tally laptop) |
+| **TALLY-LAPTOP** | First floor (typical) | Tally ERP 9 XML **server** on port 9000 |
+
+The WEBSTUDIO server **calls** the Tally laptop over the LAN. Tally does **not** need to be on the same floor as the server — only on the **same `192.168.29.x` network**.
+
+After moving the server to the ground floor, **no change** to client app URLs. Re-run **Settings → Tally → Test connection** with TALLY-LAPTOP on **JioBharat** (1st floor) to confirm.
 
 ## G1 — Your Tally machine
 
@@ -682,7 +725,7 @@ Or use `pnpm release:android` after setting that define in the release script.
 | Computer name | **`TALLY-LAPTOP`** (you set this) |
 | Current IP (example) | `192.168.29.176` — **will change** when switching Wi‑Fi |
 | Gateway | `192.168.29.1` |
-| Wi‑Fi | JioBharat or Asus Store |
+| Wi‑Fi | JioBharat (1st floor typical) or Asus Store if moved |
 
 **Never enter `192.168.29.176` in WEBSTUDIO** — use hostname instead (enter it in **Settings → Tally → Tally workstation address**; see Part **G4**).
 
@@ -754,7 +797,7 @@ To set or check the name: **Settings → System → About → Rename this PC**.
 
 1. Click **Save** (or save the form if prompted).
 2. Click **Test connection**.
-3. Expected: success message when TALLY-LAPTOP is on the same shop Wi‑Fi (JioBharat or Asus Store), Tally is open with that company, and port **9000** is allowed in firewall (Part G3).
+3. Expected: success when TALLY-LAPTOP is on shop Wi‑Fi (**JioBharat** on 1st floor is fine), Tally is open with that company, and port **9000** is allowed in firewall (Part G3).
 
 ### G4.4 — Common mistakes
 
@@ -763,7 +806,8 @@ To set or check the name: **Settings → System → About → Rename this PC**.
 | Left **Tally workstation address** as `127.0.0.1` | Use **`TALLY-LAPTOP`** (output of `hostname` on the Tally PC) |
 | Used Tally laptop IP (e.g. `192.168.29.176`) | Prefer **hostname** so sync still works when the laptop moves floors and gets a new IP |
 | **Company name in Tally** does not match Tally | Copy the **full** name from Tally (Gateway → company list, or `List of Companies` XML test on server). Tally Prime often appends `(from 1-Apr-…)` suffixes |
-| Test fails after moving to ground floor | TALLY-LAPTOP Wi‑Fi → **Private**; Tenda **AP isolation Off**; Tally XML still on port 9000 |
+| Test fails with server on GF, Tally on 1F | Confirm both `ipconfig` show `192.168.29.x` and gateway `192.168.29.1`; Tenda AP isolation **Off**; use **`TALLY-LAPTOP`** not IP |
+| Test fails after moving Tally to ground floor | TALLY-LAPTOP Wi‑Fi → **Private**; Tenda **AP isolation Off**; Tally XML still on port 9000 |
 | Forgot firewall on TALLY-LAPTOP | Run Part **G3** rule on the **Tally laptop**, not the server |
 | **`netstat` shows no port 9000** | Tally XML off — repeat **G2** (full restart + company open) |
 | Tally sync **Success** but **0 checked / 0 imported** | (1) **Company name** wrong — use full Tally Prime name (see G4). (2) Tally stuck on **Import/GSTR** screen — press Esc to Gateway. (3) Server on **v1.0.1** — upgrade to **v1.0.2+** (Day Book export for Tally Prime) |
@@ -991,10 +1035,10 @@ This script:
 
 | # | Task | Done |
 |---|------|------|
-| 1 | Download **v1.0.2+** from GitHub Releases | ☐ |
+| 1 | Download **v1.0.3+** from GitHub Releases | ☐ |
 | 2 | Jio: reserve `192.168.29.100` → MAC `E0:AD:47:31:CA:0A` | ☐ |
-| 3 | Server `ipconfig` shows `.100` on Wi‑Fi | ☐ |
-| 4 | Server Wi‑Fi **Private** | ☐ |
+| 3 | Server `ipconfig` shows `.100` (Asus Store or Ethernet) | ☐ |
+| 4 | Server network **Private** | ☐ |
 | 5 | PostgreSQL 18 running (`postgresql-x64-18`) | ☐ |
 | 6 | Create `webstudio` DB + `webstudio_app` user | ☐ |
 | 7 | Remove old `D:\WEBSTUDIO-IMS` if retrying (Part 0C) | ☐ |
@@ -1002,11 +1046,11 @@ This script:
 | 9 | `/health/live` + `/health/ready` OK; run **`finalize-server-setup.ps1`** once | ☐ |
 | 10 | **Test manual backup** in Settings → Backup | ☐ |
 | 11 | Run `configure-firewall.ps1 -Subnet 192.168.29.0/24` | ☐ |
-| 12 | GF laptop: `http://192.168.29.100:8000/health/live` OK | ☐ |
+| 12 | GF **and** 1F laptop: `http://192.168.29.100:8000/health/live` OK | ☐ |
 | 13 | Install Desktop v1.0.2+ + Setup Wizard + recovery key saved | ☐ |
 | 14 | Install Desktop on all staff laptops | ☐ |
 | 15 | Install APK on phones; test Connect + barcode scan | ☐ |
-| 16 | TALLY-LAPTOP: XML 9000 + `netstat` + firewall + Settings → Tally | ☐ |
+| 16 | TALLY-LAPTOP (1F): XML 9000 + `netstat` + firewall + Settings → Tally **Test connection** from GF server | ☐ |
 | 17 | Create staff users | ☐ |
 | 18 | Backup schedule + validation scripts | ☐ |
 

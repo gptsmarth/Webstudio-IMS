@@ -34,6 +34,7 @@ class BarcodeFieldResolver {
     required String rawValue,
     required String format,
     BarcodeFieldTarget? preferredTarget,
+    bool trustPreferredTarget = false,
   }) {
     final trimmed = rawValue.trim();
     if (trimmed.isEmpty) {
@@ -41,6 +42,14 @@ class BarcodeFieldResolver {
         rawValue: trimmed,
         format: format,
         targetField: preferredTarget ?? BarcodeFieldTarget.serialNumber,
+      );
+    }
+
+    if (preferredTarget != null && trustPreferredTarget) {
+      return BarcodeScanResult(
+        rawValue: trimmed,
+        format: format,
+        targetField: preferredTarget,
       );
     }
 

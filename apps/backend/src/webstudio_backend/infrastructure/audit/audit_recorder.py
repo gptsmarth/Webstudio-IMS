@@ -1106,13 +1106,24 @@ class AuditRecorder:
     async def _product_model_snapshot(self, product_model: ProductModel) -> dict[str, Any]:
         return {
             "brand": await self._brand_ref(product_model.brand_id),
+            "category": product_model.category.value,
+            "accessory_kind": (
+                product_model.accessory_kind.value if product_model.accessory_kind else None
+            ),
+            "part_number": product_model.part_number,
             "model_number": product_model.model_number,
             "model_name": product_model.model_name,
             "cpu": product_model.cpu,
             "gpu": product_model.gpu,
             "ram_gb": product_model.ram_gb,
-            "storage_value": str(product_model.storage_value),
-            "storage_unit": product_model.storage_unit.value,
-            "storage_type": product_model.storage_type.value,
+            "storage_value": (
+                str(product_model.storage_value) if product_model.storage_value is not None else None
+            ),
+            "storage_unit": (
+                product_model.storage_unit.value if product_model.storage_unit else None
+            ),
+            "storage_type": (
+                product_model.storage_type.value if product_model.storage_type else None
+            ),
             "status": product_model.status.value,
         }

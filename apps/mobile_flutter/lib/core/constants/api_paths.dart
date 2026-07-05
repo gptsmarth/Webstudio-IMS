@@ -30,6 +30,7 @@ abstract final class ApiPaths {
   static String auditLogsLifecycle(String serial) => '$auditLogs/lifecycle/by-serial/${Uri.encodeComponent(serial)}';
 
   static const productModelsSpecLookup = '/api/v1/product-models/spec-lookup';
+  static const productModelsAccessorySpecLookup = '/api/v1/product-models/accessory-spec-lookup';
   static String productModelResolveImage(String id) => '/api/v1/product-models/$id/resolve-image';
 
   static const tallyConnectionTest = '/api/v1/integrations/tally/connection/test';

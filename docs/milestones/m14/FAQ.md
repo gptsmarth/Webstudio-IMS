@@ -57,6 +57,10 @@ Clear the saved server URL and rediscover, or re-enter the correct IP. The broke
 
 **Yes, on the local network** — WEBSTUDIO runs on your store LAN. You do not need public internet for inventory and sales. **AI enrichment** and some updates may need internet on the server.
 
+### Can the server be on the ground floor and Tally on the first floor?
+
+**Yes.** Desktop, mobile, and Tally sync only need the **same shop network** (`192.168.29.x`), not the same floor. The server connects to the Tally laptop by name (`TALLY-LAPTOP`), not by floor. Staff still use **`http://192.168.29.100:8000`** everywhere. If Tally sync fails, ask IT to check both devices are on **JioBharat** or **Asus Store** (not guest Wi‑Fi) and run **Settings → Tally → Test connection**.
+
 ---
 
 ## Search

@@ -9,7 +9,9 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from webstudio_backend.infrastructure.database.enums import (
+    AccessoryKind,
     InventoryStatus,
+    ProductCategory,
     StorageType,
     StorageUnit,
 )
@@ -88,14 +90,17 @@ class InventoryItemDetail(BaseModel):
     product_model_id: uuid.UUID
     brand_id: int
     brand_name: str
+    category: ProductCategory = ProductCategory.LAPTOP
+    accessory_kind: AccessoryKind | None = None
+    part_number: str | None = None
     model_number: str
     model_name: str
-    cpu: str
-    gpu: str | None
-    ram_gb: int
-    storage_value: Decimal
-    storage_unit: StorageUnit
-    storage_type: StorageType
+    cpu: str | None = None
+    gpu: str | None = None
+    ram_gb: int | None = None
+    storage_value: Decimal | None = None
+    storage_unit: StorageUnit | None = None
+    storage_type: StorageType | None = None
     color: str
     current_location_id: int
     current_location_name: str
@@ -121,6 +126,9 @@ class InventoryItemDetail(BaseModel):
             product_model_id=item.product_model_id,
             brand_id=row.brand.id,
             brand_name=row.brand.name,
+            category=pm.category,
+            accessory_kind=pm.accessory_kind,
+            part_number=pm.part_number,
             model_number=pm.model_number,
             model_name=pm.model_name,
             cpu=pm.cpu,

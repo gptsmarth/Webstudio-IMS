@@ -1,6 +1,7 @@
 import type { ProductModel } from '../services/api/ProductModelService';
 import { formatStorage } from './inventory';
 import { splitModelNotes } from './modelNotes';
+import { accessoryKindLabel, isAccessoryModel } from './productCategory';
 
 export interface StockModelSpecLine {
   label: string;
@@ -45,13 +46,25 @@ function pushIfPresent(
 export function buildStockModelSpecLines(model: ProductModel): StockModelSpecLine[] {
   const lines: StockModelSpecLine[] = [];
 
+  if (isAccessoryModel(model)) {
+    lines.push({ label: 'Type', value: accessoryKindLabel(model.accessory_kind) });
+    pushIfPresent(lines, 'Part number', model.part_number);
+    pushIfPresent(lines, 'Model number', model.model_number);
+    pushIfPresent(lines, 'Colors', model.color_options);
+    const noteLines = parseNotesSpecLines(model.notes);
+    lines.push(...noteLines);
+    return lines;
+  }
+
   lines.push({ label: 'Processor', value: model.cpu?.trim() || 'Standard Processor' });
   lines.push({ label: 'Graphics', value: model.gpu?.trim() || 'Integrated Graphics' });
   lines.push({ label: 'Memory', value: `${model.ram_gb || 16} GB RAM` });
-  lines.push({
-    label: 'Storage',
-    value: formatStorage(model.storage_value, model.storage_unit, model.storage_type),
-  });
+  if (model.storage_value && model.storage_unit && model.storage_type) {
+    lines.push({
+      label: 'Storage',
+      value: formatStorage(model.storage_value, model.storage_unit, model.storage_type),
+    });
+  }
   lines.push({ label: 'Display', value: model.display?.trim() || '15.6" Standard Display' });
 
   pushIfPresent(lines, 'Colors', model.color_options);

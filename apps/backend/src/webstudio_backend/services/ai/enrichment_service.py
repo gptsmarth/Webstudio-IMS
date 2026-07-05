@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
+from webstudio_backend.infrastructure.database.enums import ProductCategory
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.services.ai.cache import EnrichmentCacheService
@@ -26,6 +27,7 @@ from webstudio_backend.services.ai.logging import (
     log_provider_test,
 )
 from webstudio_backend.services.ai.providers.factory import build_provider_chain, create_provider
+from webstudio_backend.services.ai.providers.gemini import GeminiProvider
 from webstudio_backend.services.ai.types import (
     AIProviderError,
     EnrichmentResult,
@@ -35,6 +37,7 @@ from webstudio_backend.services.ai.types import (
 from webstudio_backend.services.product_image_service import resolve_product_image
 
 _inflight_spec_lookups: dict[str, asyncio.Task[dict[str, Any]]] = {}
+_inflight_accessory_lookups: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
 
 def _spec_lookup_providers(config, app_settings: Settings):
@@ -235,6 +238,144 @@ class ProductEnrichmentService:
             "Could not resolve laptop specifications. Enter details manually.",
         )
 
+    async def lookup_accessory_spec(
+        self,
+        identifier: str,
+        *,
+        identifier_type: str = "model_number",
+        brand_name: str | None = None,
+        accessory_kind: str | None = None,
+        model_name: str | None = None,
+    ) -> dict[str, Any]:
+        sku = identifier.strip()
+        if not sku:
+            raise AIProviderError("NOT_FOUND", "Part or model number is required.")
+
+        inflight_key = (
+            f"accessory:{identifier_type}:{sku.lower()}|{(brand_name or '').strip().lower()}"
+        )
+        existing_task = _inflight_accessory_lookups.get(inflight_key)
+        if existing_task is not None:
+            return await asyncio.shield(existing_task)
+
+        task = asyncio.create_task(
+            self._lookup_accessory_spec_impl(
+                sku,
+                identifier_type=identifier_type,
+                brand_name=brand_name,
+                accessory_kind=accessory_kind,
+                model_name=model_name,
+            )
+        )
+        _inflight_accessory_lookups[inflight_key] = task
+        try:
+            return await task
+        finally:
+            if _inflight_accessory_lookups.get(inflight_key) is task:
+                _inflight_accessory_lookups.pop(inflight_key, None)
+
+    async def _lookup_accessory_spec_impl(
+        self,
+        sku: str,
+        *,
+        identifier_type: str,
+        brand_name: str | None,
+        accessory_kind: str | None,
+        model_name: str | None,
+    ) -> dict[str, Any]:
+        config = await resolve_ai_config(self._session, self._app_settings)
+        if not config.enrichment_enabled:
+            raise AIProviderError(
+                "SERVICE_UNAVAILABLE",
+                "AI product enrichment is disabled in System Settings → Integrations.",
+            )
+
+        cache = EnrichmentCacheService(self._session)
+        cache_key = f"accessory:{identifier_type}:{sku}"
+        cached = await cache.get(cache_key, brand_name=brand_name)
+        if cached and cached.get("model_name"):
+            log_cache_hit(sku=sku, provider=str(cached.get("provider") or "cache"))
+            cached["cached"] = True
+            return cached
+
+        existing = await self._lookup_existing_accessory(
+            sku,
+            brand_name=brand_name,
+            identifier_type=identifier_type,
+        )
+        if existing:
+            log_database_reuse(sku=sku)
+            existing["cached"] = True
+            await cache.set(
+                cache_key,
+                brand_name=brand_name,
+                payload=existing,
+                provider="database",
+            )
+            return existing
+
+        provider = create_provider("gemini", config)
+        if not isinstance(provider, GeminiProvider) or not provider.is_configured():
+            if self._app_settings.is_test:
+                provider = create_provider("mock", config)
+            else:
+                raise AIProviderError(
+                    "NOT_CONFIGURED",
+                    "No AI provider is configured. Add a Gemini API key in System Settings → Integrations.",
+                )
+
+        started = time.perf_counter()
+        log_enrichment_start(sku=sku, attempt=1, max_attempts=1, providers=["gemini"])
+        log_provider_attempt(provider="gemini", sku=sku, attempt=1)
+        try:
+            if isinstance(provider, GeminiProvider):
+                result = await provider.enrich_accessory_spec(
+                    sku,
+                    identifier_type=identifier_type,
+                    brand_name=brand_name,
+                    accessory_kind=accessory_kind,
+                    model_name=model_name,
+                )
+            else:
+                raise AIProviderError("NOT_CONFIGURED", "Accessory lookup requires Gemini.")
+        except AIProviderError as exc:
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            log_provider_failure(
+                provider="gemini",
+                sku=sku,
+                duration_ms=duration_ms,
+                code=exc.code,
+                message=exc.message,
+            )
+            raise
+
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        log_provider_success(
+            provider="gemini",
+            sku=sku,
+            duration_ms=duration_ms,
+            confidence=float(result.get("confidence_score") or 0.85),
+        )
+        spec_payload = self._accessory_spec_cache_payload(result)
+        await cache.set(
+            cache_key,
+            brand_name=brand_name,
+            payload=spec_payload,
+            provider="gemini",
+        )
+        finalized = await self._finalize_accessory_result(
+            result,
+            identifier=sku,
+            brand_name=brand_name,
+        )
+        await cache.set(
+            cache_key,
+            brand_name=brand_name,
+            payload=finalized,
+            provider="gemini",
+        )
+        return finalized
+
     async def test_provider(self, provider_id: ProviderId) -> ProviderTestResult:
         config = await resolve_ai_config(self._session, self._app_settings)
         provider = create_provider(provider_id, config)
@@ -246,6 +387,55 @@ class ProductEnrichmentService:
             message=result.message,
         )
         return result
+
+    async def _lookup_existing_accessory(
+        self,
+        identifier: str,
+        *,
+        brand_name: str | None,
+        identifier_type: str,
+    ) -> dict[str, Any] | None:
+        from sqlalchemy import or_
+
+        statement = select(ProductModel, Brand.name).join(Brand, Brand.id == ProductModel.brand_id)
+        statement = statement.where(ProductModel.category == ProductCategory.ACCESSORY)
+        normalized = identifier.strip()
+        if identifier_type == "part_number":
+            statement = statement.where(
+                or_(
+                    ProductModel.part_number.ilike(normalized),
+                    ProductModel.model_number.ilike(normalized),
+                )
+            )
+        else:
+            statement = statement.where(
+                or_(
+                    ProductModel.model_number.ilike(normalized),
+                    ProductModel.part_number.ilike(normalized),
+                )
+            )
+        if brand_name:
+            statement = statement.where(Brand.name.ilike(brand_name.strip()))
+        row = (await self._session.execute(statement.limit(1))).first()
+        if row is None:
+            return None
+        product_model, _resolved_brand = row
+        return {
+            "model_name": product_model.model_name,
+            "model_number": product_model.model_number,
+            "part_number": product_model.part_number,
+            "accessory_kind": (
+                product_model.accessory_kind.value if product_model.accessory_kind else None
+            ),
+            "color_options": product_model.color_options,
+            "product_image_url": product_model.product_image_url,
+            "description": None,
+            "notes": product_model.notes,
+            "source": "database",
+            "provider": "database",
+            "confidence_score": 1.0,
+            "cached": True,
+        }
 
     async def _lookup_existing_model(
         self,
@@ -304,6 +494,48 @@ class ProductEnrichmentService:
             payload["product_image_url"] = image_url
         payload["source"] = result.source
         payload["provider"] = result.provider
+        return payload
+
+    @staticmethod
+    def _accessory_spec_cache_payload(result: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(result)
+        payload.pop("grounding_body", None)
+        payload.pop("image_search_query", None)
+        payload.setdefault("product_image_url", None)
+        payload["cached"] = False
+        return payload
+
+    async def _finalize_accessory_result(
+        self,
+        result: dict[str, Any],
+        *,
+        identifier: str,
+        brand_name: str | None,
+    ) -> dict[str, Any]:
+        payload = dict(result)
+        if self._app_settings.is_test:
+            payload["product_image_url"] = result.get("product_image_url")
+        else:
+            lookup_number = payload.get("model_number") or payload.get("part_number") or identifier
+            try:
+                image_url = await asyncio.wait_for(
+                    resolve_product_image(
+                        model_number=lookup_number,
+                        brand_name=brand_name,
+                        model_name=result.get("model_name"),
+                        candidate_url=result.get("product_image_url"),
+                        grounding_body=result.get("grounding_body"),
+                        image_search_query=result.get("image_search_query"),
+                        fast=True,
+                    ),
+                    timeout=6.0,
+                )
+            except asyncio.TimeoutError:
+                image_url = None
+            payload["product_image_url"] = image_url
+        payload.pop("grounding_body", None)
+        payload.pop("image_search_query", None)
+        payload["cached"] = False
         return payload
 
     @staticmethod

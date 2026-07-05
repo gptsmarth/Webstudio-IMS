@@ -114,6 +114,48 @@ def resolve_inventory_line_sale_amount(
     return None
 
 
+def expand_inventory_lines(lines: list[TallyInventoryLine]) -> list[TallyInventoryLine]:
+    """Split Tally lines that carry multiple serials into one sync row per serial."""
+    expanded: list[TallyInventoryLine] = []
+    for line in lines:
+        serials = list(line.batch_allocations)
+        if not serials and line.serial_number:
+            serials = [line.serial_number]
+        if len(serials) <= 1:
+            expanded.append(
+                TallyInventoryLine(
+                    line_index=len(expanded),
+                    stock_item_name=line.stock_item_name,
+                    quantity=line.quantity,
+                    serial_number=serials[0] if serials else line.serial_number,
+                    batch_allocations=serials,
+                    amount=line.amount,
+                )
+            )
+            continue
+
+        unit_amount: str | None = line.amount
+        if line.amount:
+            try:
+                total = Decimal(line.amount)
+                unit_amount = str((total / len(serials)).quantize(Decimal("0.01")))
+            except (InvalidOperation, ZeroDivisionError):
+                unit_amount = line.amount
+
+        for serial in serials:
+            expanded.append(
+                TallyInventoryLine(
+                    line_index=len(expanded),
+                    stock_item_name=line.stock_item_name,
+                    quantity="1",
+                    serial_number=serial,
+                    batch_allocations=[serial],
+                    amount=unit_amount,
+                )
+            )
+    return expanded
+
+
 def _parse_inventory_line(line: ET.Element, index: int) -> TallyInventoryLine:
     stock_item = _child_text(line, "STOCKITEMNAME") or ""
     quantity = _child_text(line, "ACTUALQTY") or _child_text(line, "BILLEDQTY") or "1"

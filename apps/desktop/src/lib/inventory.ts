@@ -4,6 +4,8 @@ import type {
   StorageType,
   StorageUnit,
 } from '../services/api/InventoryService';
+import type { ProductModel } from '../services/api/ProductModelService';
+import { accessoryKindLabel, isAccessoryModel } from './productCategory';
 import {
   canEditProductModels as canEditProductModelsPermission,
   canEditSellingPrice as canEditSellingPricePermission,
@@ -19,22 +21,50 @@ import {
 
 export function formatInventorySpecs(
   item: Pick<
-    InventoryItemDetail,
-    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'
+    InventoryItemDetail | ProductModel,
+    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type' | 'category' | 'accessory_kind' | 'part_number' | 'model_number'
   >,
 ): string {
-  const storage = formatStorage(item.storage_value, item.storage_unit, item.storage_type);
+  if (isAccessoryModel(item)) {
+    const parts = [accessoryKindLabel(item.accessory_kind)];
+    if (item.part_number && item.part_number !== item.model_number) {
+      parts.push(`PN ${item.part_number}`);
+    }
+    return parts.join(' • ');
+  }
+  if (!item.cpu || item.ram_gb == null) {
+    return '—';
+  }
+  const storage = formatStorage(
+    item.storage_value ?? '',
+    item.storage_unit ?? 'GB',
+    item.storage_type ?? 'SSD',
+  );
   return `${item.cpu} • ${item.ram_gb} GB RAM • ${storage}`;
 }
 
 /** Comma-separated specs for data tables (no bullet separators). */
 export function formatInventorySpecsTable(
   item: Pick<
-    InventoryItemDetail,
-    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type'
+    InventoryItemDetail | ProductModel,
+    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type' | 'category' | 'accessory_kind' | 'part_number' | 'model_number'
   >,
 ): string {
-  const storage = formatStorage(item.storage_value, item.storage_unit, item.storage_type);
+  if (isAccessoryModel(item)) {
+    const parts = [accessoryKindLabel(item.accessory_kind)];
+    if (item.part_number && item.part_number !== item.model_number) {
+      parts.push(`PN ${item.part_number}`);
+    }
+    return parts.join(', ');
+  }
+  if (!item.cpu || item.ram_gb == null) {
+    return '—';
+  }
+  const storage = formatStorage(
+    item.storage_value ?? '',
+    item.storage_unit ?? 'GB',
+    item.storage_type ?? 'SSD',
+  );
   return [item.cpu, `${item.ram_gb} GB RAM`, storage].join(', ');
 }
 

@@ -45,6 +45,6 @@ void main() {
   });
 
   test('displayScreenHint extracts inch size', () {
-    expect(displayScreenHint('15.6 inch FHD'), '15.6"');
+    expect(displayScreenHintFromText('15.6 inch FHD'), '15.6"');
   });
 }

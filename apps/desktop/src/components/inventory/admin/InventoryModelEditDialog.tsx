@@ -6,6 +6,7 @@ import type { StorageType, StorageUnit } from '../../../services/api/InventorySe
 import { formatInventoryPrice, parsePriceInput } from '../../../lib/inventoryPrice';
 import { fetchProductSpecFromInternet } from '../../../lib/productSpecLookup';
 import { composeModelNotes } from '../../../lib/modelNotes';
+import { isAccessoryModel } from '../../../lib/productCategory';
 
 interface InventoryModelEditDialogProps {
   open: boolean;
@@ -62,12 +63,12 @@ export function InventoryModelEditDialog({
     if (!open || !model) return;
     setModelNumber(model.model_number);
     setModelName(model.model_name);
-    setCpu(model.cpu);
+    setCpu(model.cpu ?? '');
     setGpu(model.gpu ?? '');
-    setRamGb(String(model.ram_gb));
-    setStorageValue(String(model.storage_value));
-    setStorageUnit(model.storage_unit);
-    setStorageType(model.storage_type);
+    setRamGb(model.ram_gb != null ? String(model.ram_gb) : '');
+    setStorageValue(model.storage_value != null ? String(model.storage_value) : '');
+    setStorageUnit(model.storage_unit ?? 'GB');
+    setStorageType(model.storage_type ?? 'SSD');
     setDisplay(model.display ?? '');
     setColorOptions(model.color_options ?? '');
     setProductImageUrl(model.product_image_url ?? '');
@@ -82,15 +83,20 @@ export function InventoryModelEditDialog({
   const submit = async () => {
     const ram = Number(ramGb);
     const storage = Number(storageValue);
-    if (!modelNumber.trim() || !modelName.trim() || !cpu.trim()) {
+    const accessory = isAccessoryModel(model);
+    if (!modelNumber.trim() || !modelName.trim()) {
+      setError('Model number and name are required.');
+      return;
+    }
+    if (!accessory && !cpu.trim()) {
       setError('Model number, name, and processor are required.');
       return;
     }
-    if (!Number.isFinite(ram) || ram <= 0) {
+    if (!accessory && (!Number.isFinite(ram) || ram <= 0)) {
       setError('Enter a valid RAM size.');
       return;
     }
-    if (!Number.isFinite(storage) || storage <= 0) {
+    if (!accessory && (!Number.isFinite(storage) || storage <= 0)) {
       setError('Enter a valid storage size.');
       return;
     }
@@ -111,10 +117,10 @@ export function InventoryModelEditDialog({
       await onConfirm({
         model_number: modelNumber.trim(),
         model_name: modelName.trim(),
-        cpu: cpu.trim(),
-        gpu: gpu.trim() || null,
-        ram_gb: ram,
-        storage_value: storage,
+        cpu: accessory ? cpu.trim() || '—' : cpu.trim(),
+        gpu: accessory ? null : gpu.trim() || null,
+        ram_gb: accessory ? 1 : ram,
+        storage_value: accessory ? 1 : storage,
         storage_unit: storageUnit,
         storage_type: storageType,
         display: display.trim() || null,

@@ -21,12 +21,12 @@ class SaleProductSnapshot:
     model_number: str
     model_name: str
     color: str
-    cpu: str
+    cpu: str | None
     gpu: str | None
-    ram_gb: int
-    storage_value: Decimal
-    storage_unit: str
-    storage_type: str
+    ram_gb: int | None
+    storage_value: Decimal | None
+    storage_unit: str | None
+    storage_type: str | None
     location_name: str
     purchase_price: Decimal | None = None
 
@@ -48,13 +48,13 @@ class SaleProductSnapshot:
             storage_value=model.storage_value,
             storage_unit=(
                 model.storage_unit.value
-                if hasattr(model.storage_unit, "value")
-                else str(model.storage_unit)
+                if model.storage_unit is not None and hasattr(model.storage_unit, "value")
+                else (str(model.storage_unit) if model.storage_unit is not None else None)
             ),
             storage_type=(
                 model.storage_type.value
-                if hasattr(model.storage_type, "value")
-                else str(model.storage_type)
+                if model.storage_type is not None and hasattr(model.storage_type, "value")
+                else (str(model.storage_type) if model.storage_type is not None else None)
             ),
             location_name=detail.location.name,
             purchase_price=item.purchase_price,
