@@ -1,7 +1,11 @@
 import type { ModelInventoryRow } from '../../../lib/inventoryHierarchy';
 import { formatInventorySpecsTable } from '../../../lib/inventory';
 import { formatInventoryPrice } from '../../../lib/inventoryPrice';
-import { accessoryKindLabel, isAccessoryModel, productCategoryLabel } from '../../../lib/productCategory';
+import {
+  accessoryKindLabel,
+  isAccessoryModel,
+  productCategoryLabel,
+} from '../../../lib/productCategory';
 
 interface AdminModelTableProps {
   rows: ModelInventoryRow[];

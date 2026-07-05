@@ -105,10 +105,7 @@ export function buildModelRows(
   };
 }
 
-export function matchesCategoryFilter(
-  model: ProductModel,
-  filter: ProductCategoryFilter,
-): boolean {
+export function matchesCategoryFilter(model: ProductModel, filter: ProductCategoryFilter): boolean {
   if (filter === 'all') return true;
   return (model.category ?? 'laptop') === filter;
 }

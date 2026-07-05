@@ -22,7 +22,15 @@ import {
 export function formatInventorySpecs(
   item: Pick<
     InventoryItemDetail | ProductModel,
-    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type' | 'category' | 'accessory_kind' | 'part_number' | 'model_number'
+    | 'cpu'
+    | 'ram_gb'
+    | 'storage_value'
+    | 'storage_unit'
+    | 'storage_type'
+    | 'category'
+    | 'accessory_kind'
+    | 'part_number'
+    | 'model_number'
   >,
 ): string {
   if (isAccessoryModel(item)) {
@@ -47,7 +55,15 @@ export function formatInventorySpecs(
 export function formatInventorySpecsTable(
   item: Pick<
     InventoryItemDetail | ProductModel,
-    'cpu' | 'ram_gb' | 'storage_value' | 'storage_unit' | 'storage_type' | 'category' | 'accessory_kind' | 'part_number' | 'model_number'
+    | 'cpu'
+    | 'ram_gb'
+    | 'storage_value'
+    | 'storage_unit'
+    | 'storage_type'
+    | 'category'
+    | 'accessory_kind'
+    | 'part_number'
+    | 'model_number'
   >,
 ): string {
   if (isAccessoryModel(item)) {

@@ -660,7 +660,8 @@ export function AddLaptopWizard({
                 </div>
               )}
               <span className="inv-add-serials__hint">
-                Colour is taken from the catalogue spec for this model — no need to enter it per serial.
+                Colour is taken from the catalogue spec for this model — no need to enter it per
+                serial.
               </span>
               <label className="form-label">Number of units</label>
               <input

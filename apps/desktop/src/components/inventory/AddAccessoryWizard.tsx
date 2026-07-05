@@ -425,9 +425,7 @@ export function AddAccessoryWizard({
                   }
                 }}
                 placeholder={
-                  identifierType === 'part_number'
-                    ? 'e.g. 90XB09VN-BPW000'
-                    : 'e.g. MD100'
+                  identifierType === 'part_number' ? 'e.g. 90XB09VN-BPW000' : 'e.g. MD100'
                 }
                 autoFocus
               />
@@ -496,7 +494,11 @@ export function AddAccessoryWizard({
                 </button>
               </div>
               {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
-              <div className="add-laptop-wizard__tabs" role="tablist" aria-label="Accessory details">
+              <div
+                className="add-laptop-wizard__tabs"
+                role="tablist"
+                aria-label="Accessory details"
+              >
                 <button
                   type="button"
                   role="tab"

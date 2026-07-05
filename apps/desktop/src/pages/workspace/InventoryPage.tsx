@@ -68,7 +68,14 @@ export function InventoryPage(): JSX.Element {
     }
     rows = rows.filter((row) => matchesCategoryFilter(row.model, nav.productCategoryFilter));
     return rows;
-  }, [debouncedSearch, hierarchy, nav.brandId, nav.searchField, nav.showZeroStock, nav.productCategoryFilter]);
+  }, [
+    debouncedSearch,
+    hierarchy,
+    nav.brandId,
+    nav.searchField,
+    nav.showZeroStock,
+    nav.productCategoryFilter,
+  ]);
 
   const serialUnits = useMemo(
     () => (nav.modelId ? hierarchy.unitsForModel(nav.modelId, false) : []),
