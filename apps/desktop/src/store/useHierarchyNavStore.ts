@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { HierarchySearchField } from '../lib/hierarchySearch';
 import type { ProductCategoryFilter } from '../lib/productCategory';
-import { matchesCategoryFilter } from '../lib/inventoryHierarchy';
 
 export type HierarchyLevel = 'brands' | 'models' | 'serials';
 
