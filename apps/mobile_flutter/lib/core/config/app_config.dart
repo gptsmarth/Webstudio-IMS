@@ -42,21 +42,26 @@ class AppConfig {
       candidates.add(defaultApiUrlFromBuild);
     }
 
+    // Shop LAN probes first — physical phones must not waste time on localhost.
+    candidates.addAll([
+      suggestedShopServerUrl,
+      'http://192.168.1.100:8000',
+      'http://192.168.0.100:8000',
+      'http://192.168.1.1:8000',
+    ]);
+
     // Emulator alias — debug / Android Studio only.
     if (Platform.isAndroid && kDebugMode) {
       candidates.add(defaultAndroidEmulatorUrl);
     }
 
-    candidates.addAll([
-      'http://127.0.0.1:8000',
-      'http://localhost:8000',
-      // Common fixed server IPs on shop LANs (auto-probe during discovery).
-      'http://192.168.29.100:8000',
-      'http://192.168.1.100:8000',
-      'http://192.168.0.100:8000',
-      'http://192.168.1.1:8000',
-      if (!Platform.isAndroid) defaultLocalUrl,
-    ]);
+    if (!Platform.isAndroid || kDebugMode) {
+      candidates.addAll([
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
+        defaultLocalUrl,
+      ]);
+    }
 
     return _uniqueUrls(candidates);
   }

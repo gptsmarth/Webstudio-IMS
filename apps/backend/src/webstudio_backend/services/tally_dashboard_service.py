@@ -45,11 +45,13 @@ class TallyDashboardService:
     async def build_dashboard(self) -> dict:
         enabled = await self._sync.is_enabled()
         host, port, company_name, interval = await self._sync.get_connection_config()
-        companies = await self._company_sync.list_active()
-        if not companies and company_name:
-            companies = [await self._company_sync.get_or_create(company_name)]
+        company = await self._company_sync.resolve_primary(company_name)
+        if company is None and company_name:
+            company = await self._company_sync.get_or_create(company_name)
 
-        company = companies[0] if companies else None
+        companies = await self._company_sync.list_active()
+        if not companies and company is not None:
+            companies = [company]
         company_id = company.id if company else None
 
         connection_status = "disconnected"
@@ -407,13 +409,13 @@ class TallyDashboardService:
         }
 
     async def _primary_company_id(self) -> int | None:
-        companies = await self._company_sync.list_active()
-        if companies:
-            return companies[0].id
         _, _, company_name, _ = await self._sync.get_connection_config()
-        if company_name:
-            return (await self._company_sync.get_or_create(company_name)).id
-        return None
+        if not company_name:
+            return None
+        company = await self._company_sync.resolve_primary(company_name)
+        if company is not None:
+            return company.id
+        return (await self._company_sync.get_or_create(company_name)).id
 
     async def _pending_notification_count(self) -> int:
         statement = (

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/config/app_config.dart';
 import '../../../core/network/connection_diagnostics.dart';
 import '../../../core/network/host_validation.dart';
@@ -55,9 +57,20 @@ class ServerRepository {
     return urls;
   }
 
+  static const _probeTimeout = Duration(seconds: 8);
+
   Future<ConnectionTestResult?> discoverServer(List<String> candidates) async {
     for (final candidate in candidates) {
-      final result = await testConnection(candidate);
+      ConnectionTestResult result;
+      try {
+        result = await testConnection(candidate).timeout(_probeTimeout);
+      } on TimeoutException {
+        result = ConnectionTestResult(
+          success: false,
+          url: candidate,
+          errorMessage: 'Server did not respond in time.',
+        );
+      }
       if (result.success) {
         return result;
       }

@@ -2834,6 +2834,8 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | `invoice_number` | string |
 | `customer_name` | string \| null |
 | `payment_mode` | string \| null |
+| `sale_amount` | number \| null | GST-inclusive for Tally sync; manual entry as entered |
+| `sale_amount_excluding_gst` | number \| null | Base Tally amount before 18% GST |
 | `tally_company_name` | string \| null |
 | `tally_voucher_number` | string \| null |
 | `notes` | string \| null |

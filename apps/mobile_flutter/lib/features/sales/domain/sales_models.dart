@@ -39,6 +39,7 @@ class SaleListItem extends Equatable {
     this.customerName,
     this.paymentMode,
     this.saleAmount,
+    this.saleAmountExcludingGst,
     required this.saleSource,
     required this.soldAt,
     this.recordedByUserId,
@@ -56,6 +57,7 @@ class SaleListItem extends Equatable {
   final String? customerName;
   final String? paymentMode;
   final double? saleAmount;
+  final double? saleAmountExcludingGst;
   final String saleSource;
   final String soldAt;
   final int? recordedByUserId;
@@ -73,6 +75,7 @@ class SaleListItem extends Equatable {
         customerName: json['customer_name'] as String?,
         paymentMode: json['payment_mode'] as String?,
         saleAmount: (json['sale_amount'] as num?)?.toDouble(),
+        saleAmountExcludingGst: (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
         saleSource: json['sale_source'] as String,
         soldAt: json['sold_at'] as String,
         recordedByUserId: json['recorded_by_user_id'] as int?,
@@ -105,6 +108,7 @@ class SaleDetail extends Equatable {
     this.customerName,
     this.paymentMode,
     this.saleAmount,
+    this.saleAmountExcludingGst,
     required this.saleSource,
     required this.soldAt,
     this.recordedByUserId,
@@ -137,6 +141,7 @@ class SaleDetail extends Equatable {
   final String? customerName;
   final String? paymentMode;
   final double? saleAmount;
+  final double? saleAmountExcludingGst;
   final String saleSource;
   final String soldAt;
   final int? recordedByUserId;
@@ -174,6 +179,7 @@ class SaleDetail extends Equatable {
         customerName: json['customer_name'] as String?,
         paymentMode: json['payment_mode'] as String?,
         saleAmount: (json['sale_amount'] as num?)?.toDouble(),
+        saleAmountExcludingGst: (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
         saleSource: json['sale_source'] as String,
         soldAt: json['sold_at'] as String,
         recordedByUserId: json['recorded_by_user_id'] as int?,

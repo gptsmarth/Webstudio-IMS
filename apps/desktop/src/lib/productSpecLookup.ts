@@ -51,33 +51,54 @@ export async function lookupExistingModelInventory(
   };
 }
 
+const inflightSpecLookups = new Map<string, Promise<FetchedProductSpec | null>>();
+
 export async function fetchProductSpecFromInternet(
   modelNumber: string,
   options?: { modelName?: string; brandName?: string },
 ): Promise<FetchedProductSpec | null> {
-  const result = await ProductSpecService.lookupSpec({
-    model_number: modelNumber.trim(),
-    model_name: options?.modelName?.trim() || undefined,
-    brand_name: options?.brandName?.trim() || undefined,
-  });
+  const normalizedModel = modelNumber.trim();
+  const normalizedBrand = options?.brandName?.trim().toLowerCase() ?? '';
+  const inflightKey = `${normalizedModel.toLowerCase()}|${normalizedBrand}`;
+  const existing = inflightSpecLookups.get(inflightKey);
+  if (existing) {
+    return existing;
+  }
 
-  if (!result?.cpu) return null;
+  const lookupPromise = (async (): Promise<FetchedProductSpec | null> => {
+    const result = await ProductSpecService.lookupSpec({
+      model_number: normalizedModel,
+      model_name: options?.modelName?.trim() || undefined,
+      brand_name: options?.brandName?.trim() || undefined,
+    });
 
-  return {
-    model_name: result.model_name,
-    cpu: result.cpu,
-    gpu: result.gpu,
-    ram_gb: result.ram_gb,
-    storage_value: result.storage_value,
-    storage_unit: result.storage_unit,
-    storage_type: result.storage_type,
-    display: result.display,
-    color_options: result.color_options,
-    product_image_url: result.product_image_url,
-    description: result.description,
-    notes: result.notes,
-    source: 'gemini',
-  };
+    if (!result?.cpu) return null;
+
+    return {
+      model_name: result.model_name,
+      cpu: result.cpu,
+      gpu: result.gpu,
+      ram_gb: result.ram_gb,
+      storage_value: result.storage_value,
+      storage_unit: result.storage_unit,
+      storage_type: result.storage_type,
+      display: result.display,
+      color_options: result.color_options,
+      product_image_url: result.product_image_url,
+      description: result.description,
+      notes: result.notes,
+      source: 'gemini',
+    };
+  })();
+
+  inflightSpecLookups.set(inflightKey, lookupPromise);
+  try {
+    return await lookupPromise;
+  } finally {
+    if (inflightSpecLookups.get(inflightKey) === lookupPromise) {
+      inflightSpecLookups.delete(inflightKey);
+    }
+  }
 }
 
 export { isRetriableSpecLookupError };

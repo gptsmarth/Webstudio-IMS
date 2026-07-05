@@ -25,7 +25,10 @@ from webstudio_backend.infrastructure.repositories.release_download_repository i
     ReleaseDownloadRepository,
 )
 from webstudio_backend.services.github_release_client import GitHubRelease, GitHubReleaseAsset
-from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
+from webstudio_backend.services.github_release_sync_service import (
+    GitHubReleaseSyncService,
+    ensure_github_release_sync_enabled,
+)
 
 
 @pytest_asyncio.fixture
@@ -174,3 +177,20 @@ async def test_run_sync_cycle_enqueues_new_release(
     assert job is not None
     assert job.tag_name == "v1.1.0"
     assert job.status == ReleaseDownloadStatus.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_ensure_github_release_sync_enabled_when_repo_configured(
+    db_session: AsyncSession,
+    test_settings: Settings,
+) -> None:
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
+    settings = test_settings.model_copy(update={"github_repo": "webstudio/ims"})
+    enabled = await ensure_github_release_sync_enabled(db_session, settings)
+    await db_session.commit()
+
+    assert enabled is True
+    assert await SystemSettingRepository(db_session).get_bool("github_release_sync_enabled") is True

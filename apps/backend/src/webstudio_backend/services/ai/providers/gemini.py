@@ -10,6 +10,10 @@ from typing import Any
 import httpx
 from loguru import logger
 
+from webstudio_backend.services.ai.gemini_model_stats import (
+    most_successful_gemini_model,
+    record_gemini_model_success,
+)
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.json_utils import parse_json_object
 from webstudio_backend.services.ai.prompts import (
@@ -30,12 +34,10 @@ from webstudio_backend.services.ai.types import (
 )
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
-# flash-lite has a separate quota and often succeeds when flash models are rate-limited.
-GROUNDED_MODELS = (
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-)
+# Second attempt only — flash-lite is fastest and has a separate quota bucket.
+FAST_FALLBACK_MODEL = "gemini-2.5-flash"
+MAX_SPEC_LOOKUP_MODELS = 2
+RATE_LIMIT_MODEL_SWITCH_DELAY_SECONDS = 0.5
 
 
 class GeminiProvider(AIProvider):
@@ -49,13 +51,16 @@ class GeminiProvider(AIProvider):
     def is_configured(self) -> bool:
         return bool(self._api_key)
 
-    def _model_chain(self) -> list[str]:
+    def _model_chain(self, *, max_models: int = MAX_SPEC_LOOKUP_MODELS) -> list[str]:
         chain: list[str] = []
-        for candidate in (self._model, *GROUNDED_MODELS):
+        winner = most_successful_gemini_model()
+        if winner:
+            chain.append(winner)
+        for candidate in (self._model, DEFAULT_MODEL, FAST_FALLBACK_MODEL):
             name = candidate.strip()
             if name and name not in chain:
                 chain.append(name)
-        return chain
+        return chain[:max_models]
 
     async def enrich_product_spec(
         self,
@@ -115,7 +120,7 @@ class GeminiProvider(AIProvider):
             model_name=model_name,
             use_grounding=False,
             strict_validation=True,
-            models=[self._model, *GROUNDED_MODELS[:2]],
+            models=self._model_chain(max_models=1),
         )
         if parsed_knowledge is not None:
             return await self._finalize_spec_result(
@@ -180,6 +185,7 @@ class GeminiProvider(AIProvider):
                     gemini_model,
                     duration_ms,
                 )
+                record_gemini_model_success(gemini_model)
                 AIProviderHealthTracker.record_success("gemini")
                 return parsed, body, None
             except AIProviderError as exc:
@@ -188,7 +194,7 @@ class GeminiProvider(AIProvider):
                     rate_limited = True
                     AIProviderHealthTracker.record_rate_limit("gemini", message=exc.message)
                     logger.info("Gemini model {} rate-limited, trying next", gemini_model)
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(RATE_LIMIT_MODEL_SWITCH_DELAY_SECONDS)
                     continue
                 if exc.code in {"API_ERROR", "TIMEOUT"} and rate_limited:
                     continue
@@ -221,7 +227,7 @@ class GeminiProvider(AIProvider):
         grounding_body: dict[str, Any] | None,
         lookup_mode: str,
     ) -> EnrichmentResult:
-        image_query = await self.generate_image_search_query(
+        image_query = default_image_search_query(
             sku,
             brand_name=brand_name,
             model_name=parsed.get("model_name") or model_name,

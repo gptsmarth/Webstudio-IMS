@@ -17,7 +17,30 @@ DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_PRIMARY_PROVIDER: ProviderId = "gemini"
-DEFAULT_FALLBACK_CHAIN: list[ProviderId] = ["gemini", "openai"]
+DEFAULT_FALLBACK_CHAIN: list[ProviderId] = ["gemini"]
+
+
+def provider_has_api_key(config: AIProviderConfig, provider_id: ProviderId) -> bool:
+    keys: dict[ProviderId, str] = {
+        "gemini": config.gemini.api_key,
+        "openai": config.openai.api_key,
+        "groq": config.groq.api_key,
+        "openrouter": config.openrouter.api_key,
+        "mock": "mock",
+    }
+    if provider_id == "mock":
+        return True
+    return bool(keys.get(provider_id, "").strip())
+
+
+def filter_configured_fallback_chain(config: AIProviderConfig) -> list[ProviderId]:
+    """Only providers with API keys participate in spec lookup."""
+    chain = [provider for provider in config.fallback_chain if provider_has_api_key(config, provider)]
+    if chain:
+        return chain
+    if provider_has_api_key(config, config.primary_provider):
+        return [config.primary_provider]
+    return []
 
 
 def mask_api_key(api_key: str) -> str | None:
@@ -107,11 +130,11 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
 
     retry_raw = await repo.get_string("ai_retry_count")
     try:
-        retry_count = int(retry_raw) if retry_raw else 2
+        retry_count = int(retry_raw) if retry_raw else 1
     except ValueError:
-        retry_count = 2
+        retry_count = 1
 
-    return AIProviderConfig(
+    draft = AIProviderConfig(
         primary_provider=primary,
         fallback_chain=fallback,
         enrichment_enabled=enrichment_enabled,
@@ -125,6 +148,18 @@ async def resolve_ai_config(session: AsyncSession, app_settings: Settings) -> AI
             model=openrouter_model,
         ),
         openai=ProviderCredentials(provider="openai", api_key=openai_key, model=openai_model),
+    )
+    configured_fallback = filter_configured_fallback_chain(draft)
+    return AIProviderConfig(
+        primary_provider=primary,
+        fallback_chain=configured_fallback or fallback,
+        enrichment_enabled=draft.enrichment_enabled,
+        timeout_seconds=draft.timeout_seconds,
+        retry_count=draft.retry_count,
+        gemini=draft.gemini,
+        groq=draft.groq,
+        openrouter=draft.openrouter,
+        openai=draft.openai,
     )
 
 

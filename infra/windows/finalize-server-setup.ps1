@@ -44,6 +44,36 @@ $pythonExe = & "$PSScriptRoot\ensure-python-runtime.ps1" -InstallRoot $InstallRo
 Write-Step "Running database migrations..."
 & "$PSScriptRoot\run-alembic-upgrade.ps1" -InstallRoot $InstallRoot -PythonExe $pythonExe
 
+Write-Step "Ensuring GitHub release sync is enabled when repo is configured..."
+$envVars = Read-DotEnvFile -Path $envFile
+if ($envVars.ContainsKey("WEBSTUDIO_GITHUB_REPO") -and $envVars["WEBSTUDIO_GITHUB_REPO"]) {
+    $enableSyncSql = @"
+UPDATE webstudio.system_settings
+SET setting_value = 'true', value_type = 'boolean', updated_at = NOW()
+WHERE setting_key = 'github_release_sync_enabled';
+INSERT INTO webstudio.system_settings (setting_key, setting_value, value_type)
+VALUES ('github_release_sync_enabled', 'true', 'boolean')
+ON CONFLICT (setting_key)
+DO UPDATE SET setting_value = 'true', value_type = 'boolean', updated_at = NOW();
+"@
+    try {
+        $dbUrl = $envVars["DATABASE_URL"]
+        if ($dbUrl -match 'postgresql\+asyncpg://([^:]+):([^@]+)@([^:/]+):(\d+)/(.+)') {
+            $pgUser = $Matches[1]
+            $pgPass = [uri]::UnescapeDataString($Matches[2])
+            $pgHost = $Matches[3]
+            $pgPort = $Matches[4]
+            $pgDb = $Matches[5]
+            $env:PGPASSWORD = $pgPass
+            & psql -h $pgHost -p $pgPort -U $pgUser -d $pgDb -c $enableSyncSql 2>$null
+            Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+            Write-Host "  github_release_sync_enabled -> true" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "  Skipped DB sync toggle (run H3 SQL manually if needed): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 $service = Get-Service -Name "WEBSTUDIO Server" -ErrorAction SilentlyContinue
 if ($service) {
     Write-Step "Applying service environment and restarting..."

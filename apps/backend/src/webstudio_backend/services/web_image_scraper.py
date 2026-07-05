@@ -95,6 +95,7 @@ _UNWANTED_PATH_FRAGMENTS = (
 )
 _MAX_VALIDATE = 30
 _MAX_QUERIES = 18
+_SPEC_LOOKUP_MAX_QUERIES = 6
 
 # Official manufacturer / retailer domains used for site-targeted image search.
 _BRAND_IMAGE_SOURCES: dict[str, dict[str, tuple[str, ...]]] = {
@@ -482,6 +483,68 @@ async def persist_product_image_file(
     return f"/assets/product-images/{filename}"
 
 
+def _append_image_candidate(
+    ranked: list[tuple[int, str]],
+    *,
+    url: str | None,
+    model_number: str,
+    brand_name: str | None,
+    bonus: int = 0,
+) -> None:
+    normalized = _normalize_https_url(url)
+    if not normalized:
+        return
+    if not is_relevant_product_image(normalized, model_number, brand_name=brand_name):
+        return
+    ranked.append(
+        (
+            score_image_candidate_url(
+                normalized, brand_name=brand_name, model_number=model_number
+            )
+            + bonus,
+            normalized,
+        )
+    )
+
+
+async def _pick_validated_product_image(
+    ranked: list[tuple[int, str]],
+    *,
+    model_number: str,
+    client: httpx.AsyncClient,
+    persist_local: bool,
+    model_id: str | None,
+) -> str | None:
+    ranked.sort(key=lambda row: row[0], reverse=True)
+    seen: set[str] = set()
+    checked = 0
+    for score, url in ranked:
+        if checked >= _MAX_VALIDATE:
+            break
+        key = url.rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
+        if score < 10:
+            continue
+        if not is_safe_public_https_url(url) or is_suspicious_placeholder_image_url(url):
+            continue
+        checked += 1
+        if not await _is_usable_product_image(url, client=client):
+            continue
+        logger.info(
+            "Product image discovered for {} (score={}, host={})",
+            model_number,
+            score,
+            urlparse(url).hostname,
+        )
+        if persist_local and model_id:
+            stored = await persist_product_image_file(url, model_id=model_id, client=client)
+            return stored or url
+        return url
+    return None
+
+
 async def discover_product_image_url(
     *,
     model_number: str,
@@ -491,6 +554,7 @@ async def discover_product_image_url(
     model_id: str | None = None,
     persist_local: bool = False,
     image_search_queries: list[str] | None = None,
+    max_queries: int | None = None,
 ) -> str | None:
     """Discover product images across manufacturer CDNs, Bing, DuckDuckGo, and retailer pages."""
     queries = build_product_image_search_queries(
@@ -506,6 +570,9 @@ async def discover_product_image_url(
                 seen.add(normalized)
                 queries.insert(0, normalized)
 
+    query_limit = max(1, min(max_queries or _SPEC_LOOKUP_MAX_QUERIES, len(queries)))
+    queries = queries[:query_limit]
+
     logger.info(
         "Image discovery for {} using {} search queries (brand={})",
         model_number,
@@ -516,59 +583,57 @@ async def discover_product_image_url(
     ranked: list[tuple[int, str]] = []
 
     for raw in candidate_urls or []:
-        url = _normalize_https_url(raw)
-        if url and is_relevant_product_image(url, model_number, brand_name=brand_name):
-            ranked.append(
-                (
-                    score_image_candidate_url(url, brand_name=brand_name, model_number=model_number)
-                    + 8,
-                    url,
-                )
-            )
+        _append_image_candidate(
+            ranked,
+            url=raw,
+            model_number=model_number,
+            brand_name=brand_name,
+            bonus=8,
+        )
 
     for raw in build_brand_direct_image_candidates(model_number, brand_name=brand_name):
-        url = _normalize_https_url(raw)
-        if url:
-            ranked.append(
-                (
-                    score_image_candidate_url(url, brand_name=brand_name, model_number=model_number)
-                    + 10,
-                    url,
-                )
-            )
+        _append_image_candidate(
+            ranked,
+            url=raw,
+            model_number=model_number,
+            brand_name=brand_name,
+            bonus=12,
+        )
 
     async with httpx.AsyncClient(
         timeout=20.0,
         follow_redirects=True,
         headers=BROWSER_HEADERS,
     ) as client:
+        quick_hit = await _pick_validated_product_image(
+            ranked,
+            model_number=model_number,
+            client=client,
+            persist_local=persist_local,
+            model_id=model_id,
+        )
+        if quick_hit:
+            return quick_hit
+
+        checked_queries = 0
         for query in queries:
+            checked_queries += 1
             for url in await search_bing_image_urls(query, client=client):
-                if not is_relevant_product_image(url, model_number, brand_name=brand_name):
-                    continue
-                ranked.append(
-                    (
-                        score_image_candidate_url(
-                            url, brand_name=brand_name, model_number=model_number
-                        ),
-                        url,
-                    )
+                _append_image_candidate(
+                    ranked,
+                    url=url,
+                    model_number=model_number,
+                    brand_name=brand_name,
                 )
 
-        for query in queries:
             for url in await search_duckduckgo_image_urls(query, client=client):
-                if not is_relevant_product_image(url, model_number, brand_name=brand_name):
-                    continue
-                ranked.append(
-                    (
-                        score_image_candidate_url(
-                            url, brand_name=brand_name, model_number=model_number
-                        ),
-                        url,
-                    )
+                _append_image_candidate(
+                    ranked,
+                    url=url,
+                    model_number=model_number,
+                    brand_name=brand_name,
                 )
 
-        for query in queries:
             pages = await search_public_web_for_pages(query, client=client)
             await _rank_page_images_from_urls(
                 pages,
@@ -578,35 +643,20 @@ async def discover_product_image_url(
                 ranked=ranked,
             )
 
-        ranked.sort(key=lambda row: row[0], reverse=True)
-        seen: set[str] = set()
-        checked = 0
-        for score, url in ranked:
-            if checked >= _MAX_VALIDATE:
-                break
-            key = url.rstrip("/")
-            if key in seen:
-                continue
-            seen.add(key)
-            if score < 10:
-                continue
-            if not is_safe_public_https_url(url) or is_suspicious_placeholder_image_url(url):
-                continue
-            checked += 1
-            if not await _is_usable_product_image(url, client=client):
-                continue
-            logger.info(
-                "Product image discovered for {} (score={}, host={})",
-                model_number,
-                score,
-                urlparse(url).hostname,
+            hit = await _pick_validated_product_image(
+                ranked,
+                model_number=model_number,
+                client=client,
+                persist_local=persist_local,
+                model_id=model_id,
             )
-            if persist_local and model_id:
-                stored = await persist_product_image_file(url, model_id=model_id, client=client)
-                return stored or url
-            return url
+            if hit:
+                return hit
 
     logger.info(
-        "No product image found for {} (checked {} ranked candidates)", model_number, checked
+        "No product image found for {} (searched {} queries, {} ranked candidates)",
+        model_number,
+        checked_queries,
+        len(ranked),
     )
     return None

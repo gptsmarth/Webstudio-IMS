@@ -1,7 +1,15 @@
 import { createApiClient } from '@webstudio/api-client';
 import { ConfigService } from '../ConfigService';
 import { AuthTokenStore } from '../AuthTokenStore';
+import { VersionService } from '../VersionService';
+import { ClientUpdateService } from './ClientUpdateService';
 import { RetryingApiClient } from './client';
+
+function resolveApiClientPlatform(): string {
+  return ClientUpdateService.resolveDesktopPlatform() === 'desktop_windows'
+    ? 'windows_desktop'
+    : 'macos_desktop';
+}
 
 export class ApiClientProvider {
   private static instance: RetryingApiClient | null = null;
@@ -9,12 +17,13 @@ export class ApiClientProvider {
 
   static async getClient(): Promise<RetryingApiClient> {
     const env = await ConfigService.getEnvironment();
+    const versionInfo = await VersionService.getVersionInfo();
     if (!this.instance || this.lastUrl !== env.apiBaseUrl) {
       this.lastUrl = env.apiBaseUrl;
       const rawClient = createApiClient({
         baseUrl: env.apiBaseUrl,
-        clientVersion: '0.1.0',
-        clientPlatform: 'macos_desktop',
+        clientVersion: versionInfo.appVersion,
+        clientPlatform: resolveApiClientPlatform(),
       });
       this.instance = new RetryingApiClient(rawClient);
     }

@@ -47,13 +47,21 @@ def test_resolve_incremental_from_date_uses_last_successful_sync() -> None:
     sync_at = datetime(2026, 6, 27, 15, 30, tzinfo=UTC)
     company = TallyCompanySync(company_name="WEBSTUDIO")
     company.last_successful_sync_at = sync_at
+    company.last_imported_voucher_date = date(2026, 6, 27)
     assert resolve_incremental_from_date(company, today=date(2026, 7, 2)) == date(2026, 6, 27)
 
 
-def test_resolve_incremental_from_date_first_sync_uses_today() -> None:
+def test_resolve_incremental_from_date_widens_when_never_imported() -> None:
+    sync_at = datetime(2026, 7, 4, 14, 23, tzinfo=UTC)
+    company = TallyCompanySync(company_name="WEBSTUDIO")
+    company.last_successful_sync_at = sync_at
+    assert resolve_incremental_from_date(company, today=date(2026, 7, 4)) == date(2026, 6, 4)
+
+
+def test_resolve_incremental_from_date_first_sync_uses_lookback() -> None:
     company = TallyCompanySync(company_name="WEBSTUDIO")
     today = date(2026, 7, 2)
-    assert resolve_incremental_from_date(company, today=today) == today
+    assert resolve_incremental_from_date(company, today=today) == date(2026, 6, 2)
 
 
 def test_parse_inventory_line_amount() -> None:
@@ -260,10 +268,11 @@ async def test_process_voucher_xml_skips_already_imported(db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_offline_gap_uses_last_successful_sync_date(db_session: AsyncSession) -> None:
+async def test_offline_gap_uses_last_imported_voucher_date(db_session: AsyncSession) -> None:
     company_sync = await TallyCompanySyncRepository(db_session).get_or_create("WEBSTUDIO")
     friday = datetime(2026, 6, 27, 18, 0, tzinfo=UTC)
     company_sync.last_successful_sync_at = friday
+    company_sync.last_imported_voucher_date = date(2026, 6, 27)
     await db_session.commit()
 
     from_date = resolve_incremental_from_date(company_sync, today=date(2026, 7, 2))

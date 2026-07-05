@@ -17,13 +17,13 @@ import type {
 } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { formatInventoryPrice, parsePriceInput } from '../../lib/inventoryPrice';
+import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 import { ProductSpecService } from '../../services/api/ProductSpecService';
 
 export interface SerialUnitEntry {
   serial_number: string;
   current_location_id: number;
-  color: string;
   purchase_price: string;
 }
 
@@ -134,7 +134,6 @@ export function AddLaptopWizard({
       {
         serial_number: '',
         current_location_id: locations[0]?.id ?? 0,
-        color: '',
         purchase_price: '',
       },
     ]);
@@ -164,7 +163,6 @@ export function AddLaptopWizard({
         next.push({
           serial_number: '',
           current_location_id: locations[0]?.id ?? 0,
-          color: next[0]?.color ?? '',
           purchase_price: next[0]?.purchase_price ?? '',
         });
       }
@@ -333,7 +331,7 @@ export function AddLaptopWizard({
   const submit = async () => {
     const validUnits: Array<SerialUnitEntry & { parsedPurchasePrice: number | null }> = [];
     for (const unit of units) {
-      if (!unit.serial_number.trim() || !unit.color.trim() || !unit.current_location_id) {
+      if (!unit.serial_number.trim() || !unit.current_location_id) {
         continue;
       }
       let parsedPurchase: number | null = null;
@@ -347,9 +345,13 @@ export function AddLaptopWizard({
       validUnits.push({ ...unit, parsedPurchasePrice: parsedPurchase });
     }
     if (validUnits.length === 0) {
-      setError('Enter at least one serial number, color, and location.');
+      setError('Enter at least one serial number and location.');
       return;
     }
+
+    const resolvedColor = defaultUnitColorFromOptions(
+      mode === 'existing' ? selectedModel?.color_options : colorOptions,
+    );
 
     if (mode === 'existing' && !productModelId) {
       setError('Select or resolve a product model.');
@@ -369,7 +371,7 @@ export function AddLaptopWizard({
       productModelId: mode === 'existing' ? productModelId : undefined,
       units: validUnits.map((unit) => ({
         serial_number: unit.serial_number.trim(),
-        color: unit.color.trim(),
+        color: resolvedColor,
         current_location_id: unit.current_location_id,
         purchase_price: unit.parsedPurchasePrice,
       })),
@@ -658,6 +660,9 @@ export function AddLaptopWizard({
                   {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
                 </div>
               )}
+              <span className="inv-add-serials__hint">
+                Colour is taken from the catalogue spec for this model — no need to enter it per serial.
+              </span>
               <label className="form-label">Number of units</label>
               <input
                 type="number"
@@ -679,7 +684,6 @@ export function AddLaptopWizard({
               <div className="add-laptop-wizard__units">
                 <div className="add-laptop-wizard__unit-head" aria-hidden>
                   <span>Serial</span>
-                  <span>Color</span>
                   <span>Location</span>
                   <span>Purchase price</span>
                 </div>
@@ -696,18 +700,6 @@ export function AddLaptopWizard({
                         setUnits((current) =>
                           current.map((row, i) =>
                             i === index ? { ...row, serial_number: e.target.value } : row,
-                          ),
-                        )
-                      }
-                    />
-                    <input
-                      className="input"
-                      placeholder="Color"
-                      value={unit.color}
-                      onChange={(e) =>
-                        setUnits((current) =>
-                          current.map((row, i) =>
-                            i === index ? { ...row, color: e.target.value } : row,
                           ),
                         )
                       }
@@ -790,7 +782,6 @@ export function AddLaptopWizard({
                   .map((unit, index) => (
                     <li key={index}>
                       <span className="col-mono">{unit.serial_number}</span>
-                      <span>{unit.color}</span>
                       <span>{locations.find((l) => l.id === unit.current_location_id)?.name}</span>
                       <span>
                         {unit.purchase_price.trim()

@@ -102,6 +102,8 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
     super.dispose();
   }
 
+  static const _discoveryBudget = Duration(seconds: 25);
+
   Future<void> startAutoDiscovery() async {
     _cancelled = false;
     _messageTimer?.cancel();
@@ -124,6 +126,20 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
       );
     });
 
+    try {
+      await _runDiscoveryPass(suggestedUrl).timeout(_discoveryBudget);
+    } on TimeoutException {
+      if (_cancelled) return;
+      state = state.copyWith(
+        phase: ConnectionPhase.manual,
+        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : suggestedUrl,
+      );
+    } finally {
+      _messageTimer?.cancel();
+    }
+  }
+
+  Future<void> _runDiscoveryPass(String suggestedUrl) async {
     final repo = _ref.read(serverRepositoryProvider);
 
     final mdnsFuture = repo.discoverMdnsServers();
@@ -131,22 +147,21 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
     final mdnsServers = await mdnsFuture;
     final savedUrls = await savedUrlsFuture;
 
-    _messageTimer?.cancel();
     if (_cancelled) return;
 
     if (mdnsServers.isNotEmpty) {
       state = state.copyWith(
         phase: ConnectionPhase.manual,
         discoveredServers: mdnsServers,
-        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : suggestedUrl,
+        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : mdnsServers.first.url,
       );
       return;
     }
 
-    final candidates = <String>[
+    final candidates = <String>{
       ...savedUrls,
       ...repo.staticDiscoveryCandidates(),
-    ];
+    }.toList();
     final probeResult = await repo.discoverServer(candidates);
     if (_cancelled) return;
 

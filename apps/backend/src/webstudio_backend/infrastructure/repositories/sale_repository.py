@@ -86,6 +86,7 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
         idempotency_key: str,
         snapshot: SaleProductSnapshot | None = None,
         sale_amount: float | None = None,
+        sale_amount_excluding_gst: float | None = None,
     ) -> Sale:
         sale = Sale(
             inventory_item_id=inventory_item_id,
@@ -105,6 +106,7 @@ class SaleRepository(SqlAlchemyRepository[Sale]):
             notes=notes,
             idempotency_key=idempotency_key,
             sale_amount=sale_amount,
+            sale_amount_excluding_gst=sale_amount_excluding_gst,
         )
         if snapshot is not None:
             snapshot.apply_to(sale)

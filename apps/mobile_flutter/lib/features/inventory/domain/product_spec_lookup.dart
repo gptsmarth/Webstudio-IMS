@@ -25,6 +25,17 @@ String composeModelNotes(String? description, String? specNotes) {
   return '$desc\n---\n$specs';
 }
 
+String defaultUnitColorFromOptions(String? colorOptions) {
+  if (colorOptions == null || colorOptions.trim().isEmpty) {
+    return 'Not specified';
+  }
+  for (final entry in colorOptions.split(',')) {
+    final trimmed = entry.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+  }
+  return 'Not specified';
+}
+
 class FetchedProductSpec {
   const FetchedProductSpec({
     required this.modelName,

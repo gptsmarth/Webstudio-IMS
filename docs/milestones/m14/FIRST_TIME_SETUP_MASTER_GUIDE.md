@@ -865,7 +865,7 @@ APP_ENV=production
 
 GitHub PAT: fine-grained token, **Contents read-only** + **Metadata** on `WEBSTUDIO-IMS`.
 
-**Enable background sync in pgAdmin** (database **`webstudio`** → Query Tool):
+**Enable background sync** — the server auto-enables this on startup when `WEBSTUDIO_GITHUB_REPO` is set. You can also set it manually in pgAdmin (database **`webstudio`** → Query Tool):
 
 ```sql
 UPDATE webstudio.system_settings

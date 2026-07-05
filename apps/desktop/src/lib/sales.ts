@@ -62,3 +62,14 @@ export function formatSaleAmount(value: number | string | null | undefined): str
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+export function formatSaleAmountBreakdown(
+  inclusive: number | null | undefined,
+  excludingGst: number | null | undefined,
+): { listLabel: string; detailInclusive: string; detailExcluding: string | null } {
+  const listLabel = formatSaleAmount(inclusive);
+  const detailInclusive = formatSaleAmount(inclusive);
+  const detailExcluding =
+    excludingGst === null || excludingGst === undefined ? null : formatSaleAmount(excludingGst);
+  return { listLabel, detailInclusive, detailExcluding };
+}

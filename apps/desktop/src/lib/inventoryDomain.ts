@@ -48,6 +48,16 @@ export function colorVariantsLabel(model: ProductModel | null): string {
   return model.color_options;
 }
 
+/** First catalogue colour variant — used when adding serials without manual colour entry. */
+export function defaultUnitColorFromOptions(colorOptions: string | null | undefined): string {
+  if (!colorOptions?.trim()) return 'Not specified';
+  const first = colorOptions
+    .split(',')
+    .map((entry) => entry.trim())
+    .find(Boolean);
+  return first ?? 'Not specified';
+}
+
 export function modelDisplayName(
   item: Pick<InventoryItemDetail, 'model_number' | 'model_name'>,
 ): string {

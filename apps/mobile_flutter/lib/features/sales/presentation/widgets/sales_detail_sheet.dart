@@ -81,7 +81,12 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     const Divider(height: 32),
                     const _SectionTitle('Invoice'),
                     _InfoRow(label: 'Payment', value: detail.paymentMode ?? '—'),
-                    _InfoRow(label: 'Amount', value: formatSaleAmount(detail.saleAmount)),
+                    _InfoRow(label: 'Amount (incl. GST)', value: formatSaleAmount(detail.saleAmount)),
+                    if (detail.saleAmountExcludingGst != null)
+                      _InfoRow(
+                        label: 'Amount excluding GST',
+                        value: formatSaleAmount(detail.saleAmountExcludingGst),
+                      ),
                     _InfoRow(label: 'Sold by', value: detail.recordedByDisplayName ?? '—'),
                     const SizedBox(height: AppSpacing.md),
                     const _SectionTitle('Customer'),

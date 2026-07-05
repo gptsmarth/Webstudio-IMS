@@ -42,7 +42,7 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "gemini_api_key": ("", SettingValueType.STRING),
     "gemini_model": ("gemini-2.5-flash-lite", SettingValueType.STRING),
     "ai_primary_provider": ("gemini", SettingValueType.STRING),
-    "ai_fallback_chain": ('["gemini","openai"]', SettingValueType.JSON),
+    "ai_fallback_chain": ('["gemini"]', SettingValueType.JSON),
     "ai_enrichment_enabled": ("true", SettingValueType.BOOLEAN),
     "ai_timeout_seconds": ("90", SettingValueType.INTEGER),
     "ai_retry_count": ("2", SettingValueType.INTEGER),  # total lookup attempts (includes first try)

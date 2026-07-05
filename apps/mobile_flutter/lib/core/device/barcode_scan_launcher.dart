@@ -8,14 +8,17 @@ import 'device_permissions.dart';
 /// Opens the barcode scanner after a single camera permission flow.
 Future<BarcodeScanResult?> openBarcodeScanner(
   BuildContext context,
-  WidgetRef ref,
-) async {
+  WidgetRef ref, {
+  BarcodeFieldTarget preferredTarget = BarcodeFieldTarget.serialNumber,
+}) async {
   final outcome = await ref
       .read(devicePermissionsProvider)
       .requestWithContext(context, DevicePermissionKind.camera);
   if (!outcome.granted || !context.mounted) return null;
 
   return Navigator.of(context).push<BarcodeScanResult>(
-    MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    MaterialPageRoute(
+      builder: (_) => BarcodeScannerScreen(preferredTarget: preferredTarget),
+    ),
   );
 }

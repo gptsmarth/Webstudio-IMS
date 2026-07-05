@@ -45,6 +45,9 @@ from webstudio_backend.integrations.tally.connectivity import (
 )
 from webstudio_backend.integrations.tally.constants import DEFAULT_SYNC_INTERVAL_SECONDS
 from webstudio_backend.integrations.tally.incremental_sync import clamp_sync_interval_seconds
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
 from webstudio_backend.services.ai.config import mask_api_key, resolve_ai_config
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.backup_engine import BackupEngine
@@ -299,10 +302,11 @@ class SettingsService:
     ) -> TallySettingsGroup:
         normalized_host = normalize_tally_host(payload.tally_host)
         normalized_port = validate_tally_port(payload.tally_port)
+        normalized_company = payload.tally_company_name.strip()
         await self._set_bool("tally_enabled", payload.enabled, actor_id=actor_id)
         await self._set_str("tally_host", normalized_host, actor_id=actor_id)
         await self._set_str("tally_port", normalized_port, actor_id=actor_id)
-        await self._set_str("tally_company_name", payload.tally_company_name, actor_id=actor_id)
+        await self._set_str("tally_company_name", normalized_company, actor_id=actor_id)
         await self._set_int(
             "tally_sync_interval_seconds",
             clamp_sync_interval_seconds(payload.sync_interval_seconds),
@@ -311,6 +315,11 @@ class SettingsService:
         interval = clamp_sync_interval_seconds(payload.sync_interval_seconds)
         runtime = SchedulerRuntimeService(self._session)
         await runtime.sync_interval("tally_sync", interval)
+        company_repo = TallyCompanySyncRepository(self._session)
+        await company_repo.deactivate_except(normalized_company)
+        primary = await company_repo.get_or_create(normalized_company)
+        primary.is_active = True
+        await self._session.flush()
         workspace = await self.get_workspace()
         return workspace.tally
 

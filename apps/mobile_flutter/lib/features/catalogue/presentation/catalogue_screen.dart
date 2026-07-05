@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/compact_brand_grid.dart';
 import '../../../shared/widgets/placeholders.dart';
 import '../../../shared/widgets/scrollable_bottom_sheet.dart';
 import '../../../shared/widgets/workspace_lookup_sheet.dart';
@@ -147,48 +148,21 @@ class _BrandsList extends ConsumerWidget {
       );
     }
 
-    return ListView.separated(
+    return CompactBrandGrid(
       itemCount: items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final brand = items[index];
         final stock = workspace.stockByBrandId['${brand.id}'];
         final modelCount = workspace.modelCountsByBrand[brand.id] ?? 0;
-        return ListTile(
-          title: Text(brand.name),
-          subtitle: Text('$modelCount models · ${stock?.available ?? 0} available'),
-          onTap: canWrite ? () => showEditBrandSheet(context, ref, brand) : null,
-          trailing: canWrite
-              ? PopupMenuButton<String>(
-                  onSelected: (action) async {
-                    final ctrl = ref.read(catalogueWorkspaceProvider.notifier);
-                    if (action == 'edit') {
-                      await showEditBrandSheet(context, ref, brand);
-                    }
-                    if (action == 'delete') {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: Text('Delete ${brand.name}?'),
-                          content: const Text(
-                            'This permanently removes the brand. Deletion is blocked while product models or inventory still reference it. Past sales, reports, audit history, and backups are preserved.',
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                          ],
-                        ),
-                      );
-                      if (!context.mounted) return;
-                      if (confirmed == true) await ctrl.deleteBrand(brand.id);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                )
-              : null,
+        return CompactBrandTile(
+          brandName: brand.name,
+          logoFilename: brand.logoFilename,
+          subtitle: '$modelCount models · ${stock?.available ?? 0} avail',
+          onTap: () {
+            if (canWrite) {
+              showEditBrandSheet(context, ref, brand);
+            }
+          },
         );
       },
     );

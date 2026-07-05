@@ -114,6 +114,26 @@ function Repair-ProductionEnvFile {
     }
 
     if ($InstallRoot) {
+        $updatesRoot = Join-Path $InstallRoot "Updates"
+        if (-not $vars.ContainsKey("WEBSTUDIO_RELEASE_SYNC_SCHEDULER") -or -not $vars["WEBSTUDIO_RELEASE_SYNC_SCHEDULER"]) {
+            Set-DotEnvValue -Path $EnvFile -Key "WEBSTUDIO_RELEASE_SYNC_SCHEDULER" -Value "1"
+        }
+        if (-not $vars.ContainsKey("WEBSTUDIO_RELEASE_SYNC_INTERVAL_SECONDS") -or -not $vars["WEBSTUDIO_RELEASE_SYNC_INTERVAL_SECONDS"]) {
+            Set-DotEnvValue -Path $EnvFile -Key "WEBSTUDIO_RELEASE_SYNC_INTERVAL_SECONDS" -Value "900"
+        }
+        if (-not $vars.ContainsKey("WEBSTUDIO_RELEASE_UPDATES_ROOT") -or -not $vars["WEBSTUDIO_RELEASE_UPDATES_ROOT"]) {
+            Set-DotEnvValue -Path $EnvFile -Key "WEBSTUDIO_RELEASE_UPDATES_ROOT" -Value $updatesRoot
+        }
+        if (-not $vars.ContainsKey("WEBSTUDIO_RELEASE_CHANNEL") -or -not $vars["WEBSTUDIO_RELEASE_CHANNEL"]) {
+            Set-DotEnvValue -Path $EnvFile -Key "WEBSTUDIO_RELEASE_CHANNEL" -Value "stable"
+        }
+        if (-not (Test-Path $updatesRoot)) {
+            New-Item -ItemType Directory -Path $updatesRoot -Force | Out-Null
+        }
+        $vars = Read-DotEnvFile -Path $EnvFile
+    }
+
+    if ($InstallRoot) {
         Sync-BackendEnvFile -InstallRoot $InstallRoot
     }
 }

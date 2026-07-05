@@ -10,6 +10,7 @@ import type {
 } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
+import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
 
 export type ProductModelSelectionMode = 'existing' | 'new';
 
@@ -53,7 +54,6 @@ export function AddInventoryDialog({
   const [modelMode, setModelMode] = useState<ProductModelSelectionMode>('existing');
   const [productModelId, setProductModelId] = useState('');
   const [serialNumbersRaw, setSerialNumbersRaw] = useState('');
-  const [color, setColor] = useState('');
   const [locationId, setLocationId] = useState<number | null>(null);
   const [status, setStatus] = useState<InventoryStatus>('available');
   const [modelNumber, setModelNumber] = useState('');
@@ -74,7 +74,6 @@ export function AddInventoryDialog({
     setModelMode('existing');
     setProductModelId('');
     setSerialNumbersRaw('');
-    setColor('');
     setLocationId(locations[0]?.id ?? null);
     setStatus('available');
     setModelNumber('');
@@ -103,6 +102,14 @@ export function AddInventoryDialog({
       .filter(Boolean);
   }, [colorOptions, modelMode, selectedModel?.color_options]);
 
+  const resolvedUnitColor = useMemo(
+    () =>
+      defaultUnitColorFromOptions(
+        modelMode === 'existing' ? selectedModel?.color_options : colorOptions,
+      ),
+    [colorOptions, modelMode, selectedModel?.color_options],
+  );
+
   useEffect(() => {
     if (!brandId) return;
     if (brandModels.length === 0) {
@@ -119,8 +126,8 @@ export function AddInventoryDialog({
   if (!open) return null;
 
   const submit = async () => {
-    if (!brandId || !locationId || !color.trim() || serialNumbers.length === 0) {
-      setError('Brand, at least one serial number, color, and location are required.');
+    if (!brandId || !locationId || serialNumbers.length === 0) {
+      setError('Brand, at least one serial number, and location are required.');
       return;
     }
     if (modelMode === 'existing' && !productModelId) {
@@ -154,7 +161,7 @@ export function AddInventoryDialog({
               }
             : undefined,
         serialNumbers,
-        color: color.trim(),
+        color: resolvedUnitColor,
         current_location_id: locationId,
         status,
       });
@@ -383,26 +390,12 @@ export function AddInventoryDialog({
             </span>
           </label>
 
-          <label className="inv-filters__field">
-            <span className="inv-filters__label">Unit color</span>
-            {colorSuggestions.length > 0 ? (
-              <input
-                className="input"
-                list="add-inv-color-options"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-              />
-            ) : (
-              <input className="input" value={color} onChange={(e) => setColor(e.target.value)} />
-            )}
-            {colorSuggestions.length > 0 && (
-              <datalist id="add-inv-color-options">
-                {colorSuggestions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
-            )}
-          </label>
+          {colorSuggestions.length > 0 && (
+            <p className="inv-add-serials__hint">
+              Unit colour is taken from the catalogue spec ({colorSuggestions[0]}
+              {colorSuggestions.length > 1 ? ', …' : ''}).
+            </p>
+          )}
 
           <label className="inv-filters__field">
             <span className="inv-filters__label">Location</span>

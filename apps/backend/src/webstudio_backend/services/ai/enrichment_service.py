@@ -34,6 +34,8 @@ from webstudio_backend.services.ai.types import (
 )
 from webstudio_backend.services.product_image_service import resolve_product_image
 
+_inflight_spec_lookups: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
 
 def _spec_lookup_providers(config, app_settings: Settings):
     """Return configured providers in fallback order."""
@@ -66,6 +68,32 @@ class ProductEnrichmentService:
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.")
 
+        inflight_key = f"{sku.lower()}|{(brand_name or '').strip().lower()}"
+        existing_task = _inflight_spec_lookups.get(inflight_key)
+        if existing_task is not None:
+            return await asyncio.shield(existing_task)
+
+        task = asyncio.create_task(
+            self._lookup_laptop_spec_impl(
+                sku,
+                model_name=model_name,
+                brand_name=brand_name,
+            )
+        )
+        _inflight_spec_lookups[inflight_key] = task
+        try:
+            return await task
+        finally:
+            if _inflight_spec_lookups.get(inflight_key) is task:
+                _inflight_spec_lookups.pop(inflight_key, None)
+
+    async def _lookup_laptop_spec_impl(
+        self,
+        sku: str,
+        *,
+        model_name: str | None = None,
+        brand_name: str | None = None,
+    ) -> dict[str, Any]:
         config = await resolve_ai_config(self._session, self._app_settings)
         if not config.enrichment_enabled:
             raise AIProviderError(
@@ -77,7 +105,7 @@ class ProductEnrichmentService:
         if not configured_chain and not self._app_settings.is_test:
             raise AIProviderError(
                 "NOT_CONFIGURED",
-                "No AI provider is configured. Add a Gemini or OpenAI API key in System Settings → Integrations.",
+                "No AI provider is configured. Add a Gemini API key in System Settings → Integrations.",
             )
 
         cache = EnrichmentCacheService(self._session)
@@ -113,7 +141,7 @@ class ProductEnrichmentService:
         if not configured_chain:
             raise AIProviderError(
                 "NOT_CONFIGURED",
-                "No AI provider is configured. Add a Gemini or OpenAI API key in System Settings → Integrations.",
+                "No AI provider is configured. Add a Gemini API key in System Settings → Integrations.",
             )
 
         retry_attempts = max(1, config.retry_count)
@@ -152,6 +180,15 @@ class ProductEnrichmentService:
                         sku=sku,
                         duration_ms=duration_ms,
                         confidence=result.confidence_score,
+                    )
+                    spec_payload = result.to_dict()
+                    spec_payload["source"] = result.source
+                    spec_payload["provider"] = result.provider
+                    await cache.set(
+                        sku,
+                        brand_name=brand_name,
+                        payload=spec_payload,
+                        provider=provider.provider_id,
                     )
                     finalized = await self._finalize_result(
                         result,

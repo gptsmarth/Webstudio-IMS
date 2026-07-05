@@ -216,7 +216,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if scheduler_enabled:
         try:
             async with session_scope() as session:
-                await TallyCompanySyncRepository(session).clear_all_sync_in_progress()
+                company_repo = TallyCompanySyncRepository(session)
+                await company_repo.clear_all_sync_in_progress()
+                settings_repo = SystemSettingRepository(session)
+                configured = (await settings_repo.get_string("tally_company_name") or "").strip()
+                if configured:
+                    await company_repo.deactivate_except(configured)
+                    primary = await company_repo.get_or_create(configured)
+                    primary.is_active = True
                 await session.commit()
         except Exception:
             pass
@@ -236,6 +243,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if tally_probe_enabled:
         _tally_connectivity_probe_task = asyncio.create_task(tally_connectivity_probe_loop())
     if release_sync_enabled:
+        try:
+            async with session_scope() as session:
+                from webstudio_backend.services.github_release_sync_service import (
+                    ensure_github_release_sync_enabled,
+                )
+
+                await ensure_github_release_sync_enabled(session, settings)
+                await session.commit()
+        except Exception:
+            pass
         _release_sync_task = asyncio.create_task(release_sync_loop())
     if not settings.is_test:
         _scheduler_persist_task = asyncio.create_task(_persist_scheduler_state_loop(settings))

@@ -41,6 +41,9 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
     detail?.location_name ?? item.location_name,
   );
   const tallyLogs = workspace.auditLogs.filter((log) => log.source === 'TALLY_SYNC');
+  const saleAmountExcludingGst =
+    detail?.sale_amount_excluding_gst ?? item.sale_amount_excluding_gst ?? null;
+  const saleAmountInclusive = detail?.sale_amount ?? item.sale_amount ?? null;
 
   return (
     <aside className="sales-drawer animate-slide-in" aria-label="Sale details">
@@ -99,9 +102,15 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                   <dd>{detail?.payment_mode ?? item.payment_mode ?? '—'}</dd>
                 </div>
                 <div>
-                  <dt>Sale amount</dt>
-                  <dd>{formatSaleAmount(detail?.sale_amount ?? item.sale_amount)}</dd>
+                  <dt>Sale amount (incl. GST)</dt>
+                  <dd>{formatSaleAmount(saleAmountInclusive)}</dd>
                 </div>
+                {saleAmountExcludingGst != null && (
+                  <div>
+                    <dt>Amount excluding GST</dt>
+                    <dd>{formatSaleAmount(saleAmountExcludingGst)}</dd>
+                  </div>
+                )}
                 {showPurchasePrice && (
                   <div>
                     <dt>Purchase price</dt>

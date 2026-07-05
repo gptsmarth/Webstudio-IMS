@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_breakpoints.dart';
+import '../../../../shared/widgets/brand_logo_image.dart';
+import '../../../../shared/widgets/compact_brand_grid.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/placeholders.dart';
-import '../../../../shared/widgets/brand_logo_image.dart';
 import '../../domain/inventory_hierarchy.dart';
 
 /// Compact brand tiles with logos — mirrors desktop `StockBrandGrid` (compact).
@@ -29,85 +29,20 @@ class StockBrandGrid extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = AppBreakpoints.gridColumns(context, phone: 3, tablet: 4, desktop: 5);
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xl),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 0.92,
-          ),
-          itemCount: brands.length,
-          itemBuilder: (context, index) {
-            final brand = brands[index];
-            return StockBrandTile(
-              brand: brand,
-              showSoldUnits: showSoldUnits,
-              onTap: () => onSelect(brand),
-            );
-          },
+    return CompactBrandGrid(
+      itemCount: brands.length,
+      itemBuilder: (context, index) {
+        final brand = brands[index];
+        final subtitle = showSoldUnits && brand.soldUnits > 0
+            ? '${brand.availableUnits} avail · ${brand.soldUnits} sold'
+            : '${brand.availableUnits} available';
+        return CompactBrandTile(
+          brandName: brand.brandName,
+          logoFilename: brand.logoFilename,
+          subtitle: subtitle,
+          onTap: () => onSelect(brand),
         );
       },
-    );
-  }
-}
-
-class StockBrandTile extends StatelessWidget {
-  const StockBrandTile({
-    super.key,
-    required this.brand,
-    required this.onTap,
-    this.showSoldUnits = false,
-  });
-
-  final BrandInventorySummary brand;
-  final VoidCallback onTap;
-  final bool showSoldUnits;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Material(
-      color: colorScheme.surface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.7)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: BrandLogoImage(
-                    brandName: brand.brandName,
-                    logoFilename: brand.logoFilename,
-                    height: 56,
-                    maxWidth: 100,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                brand.brandName,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

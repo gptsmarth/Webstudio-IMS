@@ -9,7 +9,8 @@ from webstudio_backend.services.ai.config import DEFAULT_GEMINI_MODEL
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.json_utils import parse_json_object as _parse_json_object
 from webstudio_backend.services.ai.providers.factory import create_provider
-from webstudio_backend.services.ai.providers.gemini import GROUNDED_MODELS
+from webstudio_backend.services.ai.providers.gemini import DEFAULT_MODEL as GEMINI_DEFAULT_MODEL
+from webstudio_backend.services.ai.providers.gemini import FAST_FALLBACK_MODEL
 from webstudio_backend.services.ai.spec_normalization import (
     normalize_cpu as _normalize_cpu,
 )
@@ -26,6 +27,8 @@ from webstudio_backend.services.ai.types import (
 )
 
 DEFAULT_MODEL = DEFAULT_GEMINI_MODEL
+# Backward-compatible alias for tests/docs that referenced the old constant name.
+GROUNDED_MODELS = (GEMINI_DEFAULT_MODEL, FAST_FALLBACK_MODEL)
 
 
 class GeminiLookupError(Exception):

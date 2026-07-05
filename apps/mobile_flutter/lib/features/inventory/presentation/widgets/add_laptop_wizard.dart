@@ -118,8 +118,6 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
       row.serial.addListener(_onFormChanged);
-      row.color.removeListener(_onFormChanged);
-      row.color.addListener(_onFormChanged);
     }
   }
 
@@ -134,7 +132,6 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     _display.removeListener(_onFormChanged);
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
-      row.color.removeListener(_onFormChanged);
       row.dispose();
     }
     _modelNumber.dispose();
@@ -154,12 +151,11 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     final defaultLocation = widget.locations.isNotEmpty ? widget.locations.first.id : 0;
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
-      row.color.removeListener(_onFormChanged);
       row.dispose();
     }
     _units
       ..clear()
-      ..add(_UnitRow(serial: TextEditingController(), color: TextEditingController(), locationId: defaultLocation));
+      ..add(_UnitRow(serial: TextEditingController(), locationId: defaultLocation));
     _attachUnitListeners();
   }
 
@@ -275,15 +271,12 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     while (_units.length > clamped) {
       final removed = _units.removeLast();
       removed.serial.removeListener(_onFormChanged);
-      removed.color.removeListener(_onFormChanged);
       removed.dispose();
     }
-    final inheritedColor = _units.isNotEmpty ? _units.first.color.text : '';
     while (_units.length < clamped) {
       _units.add(
         _UnitRow(
           serial: TextEditingController(),
-          color: TextEditingController(text: inheritedColor),
           locationId: defaultLocation,
         ),
       );
@@ -291,16 +284,21 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     _attachUnitListeners();
   }
 
+  String _defaultUnitColor() {
+    final source = _mode == 'existing'
+        ? _existingModel?.colorOptions
+        : (_colorOptions.text.trim().isEmpty ? null : _colorOptions.text.trim());
+    return defaultUnitColorFromOptions(source);
+  }
+
   List<SerialUnitEntry> _validUnits() {
+    final color = _defaultUnitColor();
     return _units
-        .where((row) =>
-            row.serial.text.trim().isNotEmpty &&
-            row.color.text.trim().isNotEmpty &&
-            row.locationId > 0)
+        .where((row) => row.serial.text.trim().isNotEmpty && row.locationId > 0)
         .map(
           (row) => SerialUnitEntry(
             serialNumber: row.serial.text.trim(),
-            color: row.color.text.trim(),
+            color: color,
             currentLocationId: row.locationId,
           ),
         )
@@ -310,7 +308,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   Future<void> _submit() async {
     final units = _validUnits();
     if (units.isEmpty) {
-      setState(() => _error = 'Enter at least one serial number, color, and location.');
+      setState(() => _error = 'Enter at least one serial number and location.');
       return;
     }
 
@@ -384,7 +382,11 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   Future<void> _scanModelNumber() async {
-    final scan = await openBarcodeScanner(context, ref);
+    final scan = await openBarcodeScanner(
+      context,
+      ref,
+      preferredTarget: BarcodeFieldTarget.modelNumber,
+    );
     if (scan == null || !mounted) return;
     if (scan.targetField == BarcodeFieldTarget.serialNumber) {
       setState(() => _error = 'That looks like a serial number. Scan a model or part number barcode, or type it manually.');
@@ -397,7 +399,11 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   Future<void> _scanSerial(int index) async {
-    final scan = await openBarcodeScanner(context, ref);
+    final scan = await openBarcodeScanner(
+      context,
+      ref,
+      preferredTarget: BarcodeFieldTarget.serialNumber,
+    );
     if (scan == null || !mounted) return;
     setState(() {
       _units[index].serial.text = scan.rawValue;
@@ -754,11 +760,6 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        TextField(
-          controller: _units[i].color,
-          decoration: const InputDecoration(labelText: 'Color'),
-        ),
-        const SizedBox(height: AppSpacing.sm),
         DropdownButtonFormField<int>(
           // ignore: deprecated_member_use
           value: _resolvedLocationId(_units[i].locationId),
@@ -824,16 +825,13 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
 class _UnitRow {
   _UnitRow({
     required this.serial,
-    required this.color,
     required this.locationId,
   });
 
   final TextEditingController serial;
-  final TextEditingController color;
   int locationId;
 
   void dispose() {
     serial.dispose();
-    color.dispose();
   }
 }

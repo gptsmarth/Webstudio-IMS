@@ -37,6 +37,29 @@ class TallyCompanySyncRepository(SqlAlchemyRepository[TallyCompanySync]):
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def resolve_primary(self, configured_company_name: str) -> TallyCompanySync | None:
+        """Return the sync row for the configured company name, if it exists."""
+        normalized = configured_company_name.strip()
+        if not normalized:
+            return None
+        return await self.get_by_company_name(normalized)
+
+    async def deactivate_except(self, configured_company_name: str) -> None:
+        """Mark stale company rows inactive after settings change."""
+        normalized = configured_company_name.strip()
+        if not normalized:
+            return
+        statement = (
+            update(TallyCompanySync)
+            .where(
+                TallyCompanySync.is_active.is_(True),
+                TallyCompanySync.company_name != normalized,
+            )
+            .values(is_active=False)
+        )
+        await self._session.execute(statement)
+        await self._session.flush()
+
     async def update_sync_state(
         self,
         company_sync: TallyCompanySync,

@@ -66,7 +66,7 @@ const COLUMNS: ColumnDef[] = [
   },
   { id: 'soldBy', label: 'Sold By', minWidth: 120, defaultWidth: 140 },
   { id: 'purchasePrice', label: 'Purchase Price', minWidth: 110, defaultWidth: 120 },
-  { id: 'amount', label: 'Sale Amount', minWidth: 90, defaultWidth: 100 },
+  { id: 'amount', label: 'Amount (incl. GST)', minWidth: 90, defaultWidth: 120 },
   { id: 'status', label: 'Status', minWidth: 100, defaultWidth: 110 },
   { id: 'actions', label: '', minWidth: 48, defaultWidth: 48 },
 ];

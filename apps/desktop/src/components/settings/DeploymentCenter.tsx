@@ -108,7 +108,7 @@ export function DeploymentCenter({ canModify }: DeploymentCenterProps): JSX.Elem
       detail?: string;
     };
     if (payload.status === 'disabled') {
-      return 'GitHub sync is disabled. Enable github_release_sync_enabled in the database and restart the server.';
+      return 'GitHub sync is disabled. Set WEBSTUDIO_GITHUB_REPO in server .env, restart the service, or enable github_release_sync_enabled in Settings → Deployment.';
     }
     if (payload.status === 'failed') {
       return `Download failed: ${payload.detail ?? 'Check server logs.'}`;

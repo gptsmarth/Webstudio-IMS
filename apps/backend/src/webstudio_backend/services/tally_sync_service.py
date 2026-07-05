@@ -57,8 +57,10 @@ from webstudio_backend.integrations.tally.constants import (
     MONITORED_VOUCHER_TYPES,
     VOUCHER_TYPE_STORE_MAP,
 )
+from webstudio_backend.integrations.tally.gst import split_sale_amount_with_gst
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
+    STALE_SYNC_IN_PROGRESS_SECONDS,
     clamp_sync_interval_seconds,
     resolve_incremental_from_date,
 )
@@ -195,12 +197,32 @@ class TallySyncService:
         company_sync = await self._company_sync.get_or_create(company_name)
 
         if company_sync.sync_in_progress:
-            return TallySyncResult(
-                sync_run_id=str(sync_run_id),
-                success=False,
-                message="Synchronization already in progress.",
-                connection_status=company_sync.connection_status,
-            )
+            open_run = await self._sync_history.get_open_for_company(company_sync.id)
+            stale = False
+            if open_run is None:
+                stale = True
+            else:
+                age_seconds = (datetime.now(UTC) - open_run.started_at).total_seconds()
+                stale = age_seconds > STALE_SYNC_IN_PROGRESS_SECONDS
+            if stale:
+                await self._company_sync.update_sync_state(company_sync, sync_in_progress=False)
+                if open_run is not None:
+                    await self._sync_history.finalize(
+                        open_run,
+                        status="failed",
+                        invoices_checked=0,
+                        invoices_imported=0,
+                        invoices_skipped=0,
+                        errors_count=0,
+                        error_summary="Sync interrupted — stale lock cleared automatically.",
+                    )
+            else:
+                return TallySyncResult(
+                    sync_run_id=str(sync_run_id),
+                    success=False,
+                    message="Synchronization already in progress.",
+                    connection_status=company_sync.connection_status,
+                )
 
         history = await self._sync_history.create_started(
             company_sync_id=company_sync.id,
@@ -751,6 +773,9 @@ class TallySyncService:
         idempotency_key = f"{voucher.guid}:{inventory_item.id}"
         detail = await self._inventory.get_detail(inventory_item.id)
         snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
+        exclusive_amount, inclusive_amount = split_sale_amount_with_gst(
+            resolve_inventory_line_sale_amount(line, voucher),
+        )
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -766,7 +791,8 @@ class TallySyncService:
             notes=voucher.narration,
             idempotency_key=idempotency_key,
             snapshot=snapshot,
-            sale_amount=resolve_inventory_line_sale_amount(line, voucher),
+            sale_amount=inclusive_amount,
+            sale_amount_excluding_gst=exclusive_amount,
         )
 
         actor = AuditActor.system(display_name="Tally Sync", role="system")

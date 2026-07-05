@@ -14,7 +14,12 @@ class MdnsDiscoveryService {
   Future<List<DiscoveredServer>> discover({Duration timeout = discoveryTimeout}) async {
     _servers.clear();
     _discovery = BonsoirDiscovery(type: discoveryServiceType);
-    await _discovery!.ready;
+    try {
+      await _discovery!.ready.timeout(timeout);
+    } on TimeoutException {
+      await stop();
+      return const [];
+    }
 
     final subscription = _discovery!.eventStream?.listen((event) {
       final service = event.service;

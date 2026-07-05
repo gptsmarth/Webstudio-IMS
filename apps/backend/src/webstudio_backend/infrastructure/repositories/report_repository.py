@@ -130,6 +130,7 @@ class SalesReportRow:
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None
+    sale_amount_excluding_gst: float | None
     purchase_price: float | None
     sale_source: str
     sold_at: datetime
@@ -463,6 +464,7 @@ class ReportRepository:
                 Sale.customer_name,
                 Sale.payment_mode,
                 Sale.sale_amount,
+                Sale.sale_amount_excluding_gst,
                 Sale.snapshot_purchase_price,
                 Sale.sale_source,
                 Sale.sold_at,
@@ -491,6 +493,7 @@ class ReportRepository:
             Sale.customer_name,
             Sale.payment_mode,
             Sale.sale_amount,
+            Sale.sale_amount_excluding_gst,
             Sale.snapshot_purchase_price,
             Sale.sale_source,
             Sale.sold_at,
@@ -944,6 +947,7 @@ class ReportRepository:
             customer_name,
             payment_mode,
             sale_amount,
+            sale_amount_excluding_gst,
             purchase_price,
             sale_source,
             sold_at,
@@ -962,6 +966,9 @@ class ReportRepository:
             customer_name=customer_name,
             payment_mode=payment_mode,
             sale_amount=float(sale_amount) if sale_amount is not None else None,
+            sale_amount_excluding_gst=(
+                float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
+            ),
             purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,
@@ -986,6 +993,7 @@ class ReportRepository:
             customer_name,
             payment_mode,
             sale_amount,
+            sale_amount_excluding_gst,
             purchase_price,
             sale_source,
             sold_at,
@@ -1018,6 +1026,9 @@ class ReportRepository:
             customer_name=customer_name,
             payment_mode=payment_mode,
             sale_amount=float(sale_amount) if sale_amount is not None else None,
+            sale_amount_excluding_gst=(
+                float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
+            ),
             purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,

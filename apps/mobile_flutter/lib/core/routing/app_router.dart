@@ -49,7 +49,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       switch (auth.status) {
         case AuthStatus.unknown:
         case AuthStatus.authenticating:
-          return isBootstrap ? null : AppRoutes.bootstrap;
+          // Allow first-run server setup before auth bootstrap completes.
+          if (isBootstrap || isConnection) return null;
+          return AppRoutes.bootstrap;
         case AuthStatus.unauthenticated:
         case AuthStatus.sessionExpired:
           if (isLogin || isConnection) return null;

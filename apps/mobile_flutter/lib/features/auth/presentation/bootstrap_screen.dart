@@ -68,7 +68,6 @@ class _BootstrapScreenState extends ConsumerState<BootstrapScreen> {
     final client = ref.read(apiClientProvider);
 
     if (AppConfig.shouldOpenConnectionSetupFirst(config.apiBaseUrl)) {
-      setState(() => _status = 'Finding WEBSTUDIO Server on your Wi‑Fi…');
       if (!mounted) return;
       context.go(AppRoutes.connection);
       return;

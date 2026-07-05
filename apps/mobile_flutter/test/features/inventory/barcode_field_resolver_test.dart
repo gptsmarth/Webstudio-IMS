@@ -28,6 +28,30 @@ void main() {
       expect(result.targetField, BarcodeFieldTarget.partNumber);
     });
 
+    test('maps ASUS laptop serial numbers', () {
+      final result = BarcodeFieldResolver.resolve(
+        rawValue: 'G3N0CX14P199139',
+        format: 'code128',
+      );
+      expect(result.targetField, BarcodeFieldTarget.serialNumber);
+    });
+
+    test('maps ASUS part numbers separately from serials', () {
+      final result = BarcodeFieldResolver.resolve(
+        rawValue: '90NB0AU1-M00190',
+        format: 'code128',
+      );
+      expect(result.targetField, BarcodeFieldTarget.partNumber);
+    });
+
+    test('maps ASUS model numbers', () {
+      final result = BarcodeFieldResolver.resolve(
+        rawValue: 'UX501VW-FJ019T',
+        format: 'code128',
+      );
+      expect(result.targetField, BarcodeFieldTarget.modelNumber);
+    });
+
     test('maps EAN-8 to part number field', () {
       final result = BarcodeFieldResolver.resolve(
         rawValue: '96385074',

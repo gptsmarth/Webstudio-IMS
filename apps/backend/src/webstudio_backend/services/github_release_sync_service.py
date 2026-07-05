@@ -49,6 +49,32 @@ CHECKSUM_ASSET_NAMES = {"checksums.sha256"}
 NOTES_ASSET_NAMES = {"RELEASE_NOTES.md"}
 
 
+async def ensure_github_release_sync_enabled(
+    session: AsyncSession,
+    settings: Settings,
+) -> bool:
+    """Turn on GitHub release sync when production env is configured."""
+    if settings.is_test or not settings.webstudio_release_sync_scheduler:
+        return False
+    repo = settings.github_repo.strip() or (
+        await SystemSettingRepository(session).get_string("github_release_repo") or ""
+    ).strip()
+    if not repo:
+        return False
+    settings_repo = SystemSettingRepository(session)
+    if await settings_repo.get_bool("github_release_sync_enabled", default=False):
+        return True
+    from webstudio_backend.infrastructure.database.enums import SettingValueType
+
+    await settings_repo.set_value(
+        "github_release_sync_enabled",
+        True,
+        value_type=SettingValueType.BOOLEAN,
+    )
+    logger.info("github.release_sync.auto_enabled", repo=repo)
+    return True
+
+
 class GitHubReleaseSyncService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session
@@ -265,6 +291,7 @@ class GitHubReleaseSyncService:
             job.completed_at = datetime.now(UTC)
             job.next_retry_at = None
             await self._download_repo.save_job(job)
+            await self._publish_client_update_catalog(job)
             return "completed"
         except Exception as exc:
             job.status = ReleaseDownloadStatus.FAILED
@@ -279,6 +306,42 @@ class GitHubReleaseSyncService:
                 error=str(exc),
             )
             return "failed"
+
+    async def _publish_client_update_catalog(self, job: ReleaseDownloadJob) -> None:
+        """Expose a verified download to desktop/mobile clients without a full server deploy."""
+        release = await self._release_repo.find_existing(
+            release_version=job.release_version,
+            build_number=job.build_number,
+            channel=job.release_channel,
+        )
+        if release is None:
+            return
+
+        current = await self._release_repo.get_current(job.release_channel)
+        if current is not None and current.id != release.id:
+            try:
+                if compare_semver(release.release_version, current.release_version) < 0:
+                    return
+            except ValueError:
+                pass
+
+        await self._release_repo.clear_current_flags(job.release_channel)
+        release.is_current = True
+        if release.published_at is None:
+            release.published_at = datetime.now(UTC)
+        release = await self._release_repo.upsert_release(release)
+
+        from webstudio_backend.services.client_update_service import ClientUpdateService
+
+        payload = EnterpriseReleaseService._serialize_release(release)  # noqa: SLF001
+        await ClientUpdateService(self._session, self._settings).sync_platform_settings_from_release(
+            payload,
+        )
+        logger.info(
+            "github.release.client_catalog_published",
+            version=release.release_version,
+            build=release.build_number,
+        )
 
     async def _download_artifact(
         self,

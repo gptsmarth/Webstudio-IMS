@@ -36,13 +36,15 @@ export function TallySettingsForm({
 
   useEffect(() => setForm(tally), [tally]);
 
-  const refreshStatus = useCallback(async () => {
+  const refreshStatus = useCallback(async (): Promise<TallyOperationalSummary | null> => {
     setStatusLoading(true);
     try {
       const dashboard = await TallyService.getDashboard();
       if (dashboard?.operational) {
         setOperational(dashboard.operational);
+        return dashboard.operational;
       }
+      return null;
     } finally {
       setStatusLoading(false);
     }
@@ -101,10 +103,23 @@ export function TallySettingsForm({
               disabled={syncing || !form.enabled}
               onClick={() =>
                 void (async () => {
+                  const previousSync = operational?.last_successful_sync_at ?? null;
                   setSyncing(true);
                   try {
                     await TallyService.triggerSync();
-                    await handleSaved();
+                    for (let attempt = 0; attempt < 12; attempt += 1) {
+                      await new Promise((resolve) => setTimeout(resolve, 2500));
+                      const latest = await refreshStatus();
+                      if (
+                        latest?.last_successful_sync_at &&
+                        latest.last_successful_sync_at !== previousSync
+                      ) {
+                        break;
+                      }
+                      if (latest?.scheduler_status !== 'syncing') {
+                        break;
+                      }
+                    }
                   } finally {
                     setSyncing(false);
                   }

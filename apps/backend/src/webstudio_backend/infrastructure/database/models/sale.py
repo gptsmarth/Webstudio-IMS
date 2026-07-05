@@ -58,6 +58,7 @@ class Sale(Base, PrimaryKeyMixin):
     customer_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     payment_mode: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sale_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    sale_amount_excluding_gst: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     snapshot_purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     tally_company_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     tally_voucher_number: Mapped[str | None] = mapped_column(String(128), nullable=True)

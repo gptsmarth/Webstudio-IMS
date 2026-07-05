@@ -4,14 +4,24 @@ from __future__ import annotations
 
 import pytest
 
-from webstudio_backend.services.ai.config import _parse_fallback_chain
+from webstudio_backend.services.ai.config import (
+    _parse_fallback_chain,
+    filter_configured_fallback_chain,
+    provider_has_api_key,
+)
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
+from webstudio_backend.services.ai.gemini_model_stats import (
+    most_successful_gemini_model,
+    record_gemini_model_success,
+    reset_gemini_model_stats,
+)
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.providers.factory import build_provider_chain, create_provider
 from webstudio_backend.services.ai.providers.mock import MockProvider
 from webstudio_backend.services.ai.types import (
     AIProviderConfig,
     AIProviderError,
+    ProviderCredentials,
 )
 
 
@@ -103,14 +113,34 @@ def test_default_ai_config_uses_gemini_primary() -> None:
 
     config = AIProviderConfig()
     assert DEFAULT_PRIMARY_PROVIDER == "gemini"
-    assert DEFAULT_FALLBACK_CHAIN == ["gemini", "openai"]
+    assert DEFAULT_FALLBACK_CHAIN == ["gemini"]
     assert config.primary_provider == "gemini"
     assert config.fallback_chain == ["gemini"]
 
 
 def test_parse_fallback_chain_defaults_to_gemini() -> None:
-    assert _parse_fallback_chain(None) == ["gemini", "openai"]
-    assert _parse_fallback_chain("") == ["gemini", "openai"]
+    assert _parse_fallback_chain(None) == ["gemini"]
+    assert _parse_fallback_chain("") == ["gemini"]
+
+
+def test_filter_configured_fallback_chain_skips_openai_without_key() -> None:
+    config = AIProviderConfig(
+        primary_provider="gemini",
+        fallback_chain=["gemini", "openai"],
+        gemini=ProviderCredentials(provider="gemini", api_key="gem-key", model="gemini-2.5-flash-lite"),
+        openai=ProviderCredentials(provider="openai", api_key="", model="gpt-4o-mini"),
+    )
+    assert filter_configured_fallback_chain(config) == ["gemini"]
+    assert provider_has_api_key(config, "openai") is False
+
+
+def test_gemini_model_stats_prefers_most_successful_model() -> None:
+    reset_gemini_model_stats()
+    record_gemini_model_success("gemini-2.5-flash-lite")
+    record_gemini_model_success("gemini-2.5-flash-lite")
+    record_gemini_model_success("gemini-2.5-flash")
+    assert most_successful_gemini_model() == "gemini-2.5-flash-lite"
+    reset_gemini_model_stats()
 
 
 @pytest.mark.asyncio

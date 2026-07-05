@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
@@ -11,6 +11,8 @@ SYNC_INTERVAL_DEFAULT_SECONDS = 300
 SYNC_INTERVAL_MIN_SECONDS = 60
 SYNC_INTERVAL_MAX_SECONDS = 3600
 REPEATED_FAILURE_NOTIFICATION_THRESHOLD = 3
+INITIAL_SYNC_LOOKBACK_DAYS = 30
+STALE_SYNC_IN_PROGRESS_SECONDS = 600
 
 
 def clamp_sync_interval_seconds(raw: int) -> int:
@@ -20,13 +22,19 @@ def clamp_sync_interval_seconds(raw: int) -> int:
 def resolve_incremental_from_date(
     company_sync: TallyCompanySync, *, today: date | None = None
 ) -> date:
-    """Request Tally exports starting from the last successful sync date (never full history)."""
+    """Request Tally exports from the last imported voucher date, with lookback when none yet."""
     reference = today or datetime.now(UTC).date()
-    if company_sync.last_successful_sync_at is not None:
-        return company_sync.last_successful_sync_at.date()
+    lookback_start = reference - timedelta(days=INITIAL_SYNC_LOOKBACK_DAYS)
+
     if company_sync.last_imported_voucher_date is not None:
         return company_sync.last_imported_voucher_date
-    return reference
+
+    if company_sync.last_successful_sync_at is not None:
+        sync_date = company_sync.last_successful_sync_at.date()
+        # Sync ran but never imported — widen the window instead of same-day-only exports.
+        return min(sync_date, lookback_start)
+
+    return lookback_start
 
 
 def normalize_party_name(value: str | None) -> str:

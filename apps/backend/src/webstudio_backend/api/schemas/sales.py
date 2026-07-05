@@ -25,6 +25,7 @@ class SaleListItem(BaseModel):
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None = None
+    sale_amount_excluding_gst: float | None = None
     purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
@@ -45,6 +46,7 @@ class SaleListItem(BaseModel):
             customer_name=row.customer_name,
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
+            sale_amount_excluding_gst=row.sale_amount_excluding_gst,
             purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,
@@ -74,6 +76,7 @@ class SaleDetailResponse(BaseModel):
     customer_name: str | None
     payment_mode: str | None
     sale_amount: float | None = None
+    sale_amount_excluding_gst: float | None = None
     purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
@@ -111,6 +114,7 @@ class SaleDetailResponse(BaseModel):
             customer_name=row.customer_name,
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
+            sale_amount_excluding_gst=row.sale_amount_excluding_gst,
             purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,

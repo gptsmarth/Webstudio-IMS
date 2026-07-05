@@ -550,16 +550,10 @@ class _InventoryBody extends ConsumerWidget {
                   brands: workspace.visibleBrands,
                   onSelect: (brand) => ref.read(workspaceProvider.notifier).selectBrand(brand.brandId),
                 )
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  children: [
-                    for (final brand in workspace.visibleBrands)
-                      InventoryBrandCard(
-                        brand: brand,
-                        showSoldUnits: false,
-                        onTap: () => ref.read(workspaceProvider.notifier).selectBrand(brand.brandId),
-                      ),
-                  ],
+              : StockBrandGrid(
+                  brands: workspace.visibleBrands,
+                  showSoldUnits: true,
+                  onSelect: (brand) => ref.read(workspaceProvider.notifier).selectBrand(brand.brandId),
                 ),
         ),
       InventoryNavLevel.models => RefreshIndicator(

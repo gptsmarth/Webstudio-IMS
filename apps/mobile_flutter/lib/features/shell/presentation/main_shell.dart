@@ -232,6 +232,8 @@ class _MainShellState extends ConsumerState<MainShell> {
               ? null
               : NavigationBar(
                   selectedIndex: safeSelectedIndex,
+                  labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+                  animationDuration: const Duration(milliseconds: 200),
                   onDestinationSelected: (index) => _selectBranch(navItems[index].branchIndex),
                   destinations: [
                     for (final item in navItems)

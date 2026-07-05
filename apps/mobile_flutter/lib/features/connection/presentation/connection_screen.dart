@@ -96,7 +96,6 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
-          _StatusCard(connection: connection),
           if (connection.phase != ConnectionPhase.found)
             _ManualForm(
               controller: _urlController,
@@ -112,8 +111,9 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                   ? () => ref.read(connectionControllerProvider.notifier).skipToManualEntry()
                   : null,
             ),
+          _StatusCard(connection: connection),
           if (connection.discoveredServers.isNotEmpty &&
-              connection.phase == ConnectionPhase.manual) ...[
+              connection.phase != ConnectionPhase.found) ...[
             const SizedBox(height: AppSpacing.lg),
             Text('Discovered on your network', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
@@ -291,7 +291,7 @@ class _ManualForm extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         if (compact)
           Text(
-            'Or enter the server address manually while we search your network.',
+            'Searching your Wi‑Fi automatically. You can connect manually anytime using the address below.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         if (compact) const SizedBox(height: AppSpacing.sm),
@@ -343,22 +343,28 @@ class _ManualForm extends StatelessWidget {
           onSubmitted: (_) => onSubmit(),
         ),
         const SizedBox(height: AppSpacing.lg),
-        ElevatedButton(
-          onPressed: busy || controller.text.trim().isEmpty ? null : onSubmit,
-          child: busy
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Connect to server'),
-                    SizedBox(width: AppSpacing.sm),
-                    Icon(Icons.arrow_forward, size: 16),
-                  ],
-                ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            final canSubmit = !busy && value.text.trim().isNotEmpty;
+            return ElevatedButton(
+              onPressed: canSubmit ? onSubmit : null,
+              child: busy
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Connect to server'),
+                        SizedBox(width: AppSpacing.sm),
+                        Icon(Icons.arrow_forward, size: 16),
+                      ],
+                    ),
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.sm),
         if (onSkipDiscovery != null)
