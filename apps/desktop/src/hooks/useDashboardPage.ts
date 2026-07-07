@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  canViewDashboardWidget,
-  P,
-  PermissionService,
-} from '../services/PermissionService';
+import { canViewDashboardWidget, P, PermissionService } from '../services/PermissionService';
 import {
   DashboardService,
   type DashboardDistribution,
