@@ -1,4 +1,9 @@
 import { buildPermissionModules } from '../../lib/userPermissions';
+import {
+  applyCustomRolePermissionToggle,
+  DASHBOARD_WIDGET_PERMISSIONS,
+  P,
+} from '../../services/PermissionService';
 
 interface PermissionMatrixEditorProps {
   catalog: string[];
@@ -21,9 +26,7 @@ export function PermissionMatrixEditor({
   };
 
   const toggle = (permission: string) => {
-    const next = new Set(selectedSet);
-    if (next.has(permission)) next.delete(permission);
-    else next.add(permission);
+    const next = new Set(applyCustomRolePermissionToggle(selectedSet, permission));
     applySelection(next);
   };
 
@@ -31,8 +34,19 @@ export function PermissionMatrixEditor({
     const next = new Set(selectedSet);
     const allSelected = permissions.every((permission) => next.has(permission));
     for (const permission of permissions) {
-      if (allSelected) next.delete(permission);
-      else next.add(permission);
+      if (allSelected) {
+        if (permission === P.dashboard.view) {
+          for (const widget of DASHBOARD_WIDGET_PERMISSIONS) {
+            next.delete(widget);
+          }
+        }
+        next.delete(permission);
+      } else {
+        next.add(permission);
+        if (DASHBOARD_WIDGET_PERMISSIONS.includes(permission)) {
+          next.add(P.dashboard.view);
+        }
+      }
     }
     applySelection(next);
   };
@@ -49,8 +63,9 @@ export function PermissionMatrixEditor({
     <div className="usr-permission-matrix">
       <div className="usr-permission-matrix__toolbar">
         <p className="usr-permission-matrix__hint">
-          Choose which app sections this role can access. Dashboard permissions control individual
-          widgets on the operations center.
+          Choose which app sections this role can access. Unchecking &quot;View dashboard&quot;
+          removes all dashboard widgets. Picking a dashboard widget automatically enables the
+          dashboard tab.
         </p>
         <button type="button" className="btn btn-ghost btn-sm" onClick={toggleAll}>
           {allCatalogSelected ? 'Clear all' : 'Select all'}

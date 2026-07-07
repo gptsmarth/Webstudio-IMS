@@ -110,6 +110,30 @@ export const DASHBOARD_WIDGET_PERMISSIONS: readonly string[] = [
   P.dashboard.systemStatus,
 ] as const;
 
+const DASHBOARD_WIDGET_SET = new Set<string>(DASHBOARD_WIDGET_PERMISSIONS);
+
+/** Toggle one permission in a custom role editor (mirrors backend normalization rules). */
+export function applyCustomRolePermissionToggle(
+  selected: ReadonlySet<string>,
+  permission: string,
+): string[] {
+  const next = new Set(selected);
+  if (next.has(permission)) {
+    next.delete(permission);
+    if (permission === P.dashboard.view) {
+      for (const widget of DASHBOARD_WIDGET_PERMISSIONS) {
+        next.delete(widget);
+      }
+    }
+  } else {
+    next.add(permission);
+    if (DASHBOARD_WIDGET_SET.has(permission)) {
+      next.add(P.dashboard.view);
+    }
+  }
+  return [...next].sort();
+}
+
 /** Legacy roles with only dashboard:view still see all widgets until granular picks are saved. */
 export function canViewDashboardWidget(permissions: string[], widget: string): boolean {
   const granted = new Set(permissions);

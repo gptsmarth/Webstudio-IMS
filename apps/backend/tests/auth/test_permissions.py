@@ -55,6 +55,7 @@ def test_role_has_any_permission() -> None:
 def test_dashboard_widget_permissions() -> None:
     from webstudio_backend.core.permissions import (
         DASHBOARD_WIDGET_PERMISSIONS,
+        normalize_permission_set,
         user_has_dashboard_widget,
     )
 
@@ -67,3 +68,8 @@ def test_dashboard_widget_permissions() -> None:
     assert not user_has_dashboard_widget(salesperson, "dashboard:system_status")
     legacy = {"dashboard:view", "inventory:view"}
     assert user_has_dashboard_widget(legacy, DASHBOARD_WIDGET_PERMISSIONS[0])
+
+    normalized = normalize_permission_set({"dashboard:notifications", "dashboard:tally_status"})
+    assert "notifications:view" in normalized
+    assert "tally:view_status" in normalized
+    assert "dashboard:view" in normalized

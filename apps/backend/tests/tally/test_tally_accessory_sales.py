@@ -28,6 +28,9 @@ from webstudio_backend.infrastructure.repositories.sale_repository import SaleRe
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
+from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
+    TallyCompanySyncRepository,
+)
 from webstudio_backend.integrations.tally.xml_parser import (
     expand_inventory_lines,
     parse_vouchers_xml,
@@ -262,3 +265,152 @@ async def test_tally_sync_sells_by_serial_even_when_model_name_differs_and_seria
     assert sale.printed_invoice_number == "WEB/25-26/00502"
     assert sale.sale_amount == 2950.0
     assert sale.sale_amount_excluding_gst == 2500.0
+
+
+@pytest.mark.asyncio
+async def test_tally_sync_updates_last_successful_sync_at_when_one_sale_applied(
+    db_session: AsyncSession,
+    initialized_system,
+    brand,
+    location,
+) -> None:
+    suffix = uuid.uuid4().hex[:8].upper()
+    company_name = f"WEBSTUDIO-LAST-SYNC-{suffix}"
+    settings = SystemSettingRepository(db_session)
+    await settings.set_value(
+        "tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=1
+    )
+    await settings.set_value(
+        "tally_company_name",
+        company_name,
+        value_type=SettingValueType.STRING,
+        updated_by_user_id=1,
+    )
+
+    accessory_model = await _ensure_accessory_model(db_session, brand)
+    item = await _ensure_available_item(
+        db_session,
+        serial_number=f"SN-LAST-SYNC-{suffix}",
+        product_model_id=accessory_model.id,
+        location_id=location.id,
+    )
+    await db_session.commit()
+
+    company_sync = await TallyCompanySyncRepository(db_session).get_or_create(company_name)
+    assert company_sync.last_successful_sync_at is None
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER>
+  <GUID>last-sync-guid-{suffix}</GUID>
+  <MASTERID>30001</MASTERID>
+  <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+  <VOUCHERNUMBER>601</VOUCHERNUMBER>
+  <REFERENCE>WEB/25-26/00601</REFERENCE>
+  <DATE>20260707</DATE>
+  <PARTYLEDGERNAME>Last Sync Buyer</PARTYLEDGERNAME>
+  <ALLINVENTORYENTRIES.LIST>
+    <STOCKITEMNAME>ASUS MD100 Silent Wireless Mouse</STOCKITEMNAME>
+    <ACTUALQTY>1 Nos</ACTUALQTY>
+    <AMOUNT>2500.00</AMOUNT>
+    <BATCHALLOCATIONS.LIST>
+      <SERIALNUMBER>SN-LAST-SYNC-{suffix}</SERIALNUMBER>
+    </BATCHALLOCATIONS.LIST>
+  </ALLINVENTORYENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>"""
+
+    result = await TallySyncService(db_session).process_voucher_xml(
+        xml,
+        correlation_id="last-successful-sync-test",
+        company_name=company_name,
+    )
+    await db_session.commit()
+    await db_session.refresh(company_sync)
+    await db_session.refresh(item)
+
+    assert result.counters.sales_created == 1
+    assert company_sync.last_successful_sync_at is not None
+    assert item.status is InventoryStatus.SOLD
+
+
+@pytest.mark.asyncio
+async def test_tally_sync_updates_last_successful_sync_at_on_partial_run(
+    db_session: AsyncSession,
+    initialized_system,
+    brand,
+    location,
+) -> None:
+    suffix = uuid.uuid4().hex[:8].upper()
+    company_name = f"WEBSTUDIO-PARTIAL-SYNC-{suffix}"
+    settings = SystemSettingRepository(db_session)
+    await settings.set_value(
+        "tally_enabled", "true", value_type=SettingValueType.BOOLEAN, updated_by_user_id=1
+    )
+    await settings.set_value(
+        "tally_company_name",
+        company_name,
+        value_type=SettingValueType.STRING,
+        updated_by_user_id=1,
+    )
+
+    accessory_model = await _ensure_accessory_model(db_session, brand)
+    await _ensure_available_item(
+        db_session,
+        serial_number=f"SN-PARTIAL-OK-{suffix}",
+        product_model_id=accessory_model.id,
+        location_id=location.id,
+    )
+    await db_session.commit()
+
+    company_sync = await TallyCompanySyncRepository(db_session).get_or_create(company_name)
+    assert company_sync.last_successful_sync_at is None
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE><BODY><DATA><TALLYMESSAGE>
+<VOUCHER>
+  <GUID>partial-good-{suffix}</GUID>
+  <MASTERID>40001</MASTERID>
+  <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+  <VOUCHERNUMBER>701</VOUCHERNUMBER>
+  <REFERENCE>WEB/25-26/00701</REFERENCE>
+  <DATE>20260707</DATE>
+  <PARTYLEDGERNAME>Partial Buyer</PARTYLEDGERNAME>
+  <ALLINVENTORYENTRIES.LIST>
+    <STOCKITEMNAME>ASUS MD100 Silent Wireless Mouse</STOCKITEMNAME>
+    <ACTUALQTY>1 Nos</ACTUALQTY>
+    <AMOUNT>2500.00</AMOUNT>
+    <BATCHALLOCATIONS.LIST>
+      <SERIALNUMBER>SN-PARTIAL-OK-{suffix}</SERIALNUMBER>
+    </BATCHALLOCATIONS.LIST>
+  </ALLINVENTORYENTRIES.LIST>
+</VOUCHER>
+<VOUCHER>
+  <GUID>partial-bad-{suffix}</GUID>
+  <MASTERID>40002</MASTERID>
+  <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+  <VOUCHERNUMBER>702</VOUCHERNUMBER>
+  <REFERENCE>WEB/25-26/00702</REFERENCE>
+  <DATE>20260707</DATE>
+  <PARTYLEDGERNAME>Partial Buyer</PARTYLEDGERNAME>
+  <ALLINVENTORYENTRIES.LIST>
+    <STOCKITEMNAME>ASUS MD100 Silent Wireless Mouse</STOCKITEMNAME>
+    <ACTUALQTY>1 Nos</ACTUALQTY>
+    <AMOUNT>2500.00</AMOUNT>
+    <BATCHALLOCATIONS.LIST>
+      <SERIALNUMBER>SN-DOES-NOT-EXIST-{suffix}</SERIALNUMBER>
+    </BATCHALLOCATIONS.LIST>
+  </ALLINVENTORYENTRIES.LIST>
+</VOUCHER>
+</TALLYMESSAGE></DATA></BODY></ENVELOPE>"""
+
+    result = await TallySyncService(db_session).process_voucher_xml(
+        xml,
+        correlation_id="partial-last-successful-sync-test",
+        company_name=company_name,
+    )
+    await db_session.commit()
+    await db_session.refresh(company_sync)
+
+    assert result.success is False
+    assert result.counters.sales_created == 1
+    assert result.counters.failures == 1
+    assert company_sync.last_successful_sync_at is not None

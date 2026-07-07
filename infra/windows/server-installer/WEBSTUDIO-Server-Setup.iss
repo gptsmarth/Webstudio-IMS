@@ -31,6 +31,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "..\..\..\apps\desktop\public\assets\webstudio\icon.ico"; DestDir: "{#InstallRoot}\assets\webstudio"; Flags: ignoreversion
+Source: "..\..\..\VERSION.json"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
+Source: "..\..\..\VERSION"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
 Source: "..\..\..\apps\backend\*"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.pytest_cache\*"
 Source: "..\..\..\database\*"; DestDir: "{#InstallRoot}\database"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\..\config\env\.env.production.template"; DestDir: "{#InstallRoot}\config\env"; DestName: ".env.production.template"; Flags: ignoreversion

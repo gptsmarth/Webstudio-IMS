@@ -28,7 +28,7 @@ export function DashboardPage(): JSX.Element {
     resolveNotification,
     triggerTallySync,
     syncingTally,
-  } = useDashboardPage();
+  } = useDashboardPage(session.permissions);
 
   if (!session) {
     return (

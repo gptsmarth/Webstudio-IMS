@@ -2,11 +2,15 @@ import { TallyReadinessPanel } from '../../components/tally/TallyReadinessPanel'
 import { TallySettingsForm } from '../../components/settings/TallySettingsForm';
 import { useDashboardPage } from '../../hooks/useDashboardPage';
 import { useTallySettings } from '../../hooks/useTallySettings';
+import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { AlertCircle } from 'lucide-react';
 
 export function TallyPage(): JSX.Element {
-  const { data, loading, triggerTallySync, syncingTally } = useDashboardPage();
+  const session = useAuthStore((state) => state.session);
+  const { data, loading, triggerTallySync, syncingTally } = useDashboardPage(
+    session?.permissions ?? [],
+  );
   const tallySettings = useTallySettings();
 
   return (

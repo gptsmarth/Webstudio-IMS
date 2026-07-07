@@ -19,6 +19,15 @@ def clamp_sync_interval_seconds(raw: int) -> int:
     return max(SYNC_INTERVAL_MIN_SECONDS, min(SYNC_INTERVAL_MAX_SECONDS, raw))
 
 
+def tally_sync_had_meaningful_progress(
+    *,
+    invoices_imported: int,
+    sales_created: int,
+) -> bool:
+    """Return True when a sync run imported at least one bill or applied at least one sale."""
+    return invoices_imported > 0 or sales_created > 0
+
+
 def resolve_incremental_from_date(
     company_sync: TallyCompanySync, *, today: date | None = None
 ) -> date:

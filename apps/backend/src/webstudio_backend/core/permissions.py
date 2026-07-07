@@ -254,6 +254,18 @@ PERMISSION_REQUIRES: dict[str, str] = {
 for _widget in DASHBOARD_WIDGET_PERMISSIONS:
     PERMISSION_REQUIRES[_widget] = "dashboard:view"
 
+# Dashboard widgets call APIs that require separate module permissions.
+DASHBOARD_WIDGET_API_REQUIRES: dict[str, str] = {
+    "dashboard:inventory_distribution": "inventory:view",
+    "dashboard:brand_distribution": "inventory:view",
+    "dashboard:store_status": "inventory:view",
+    "dashboard:recent_sales": "sales:view",
+    "dashboard:recent_inventory": "inventory:view",
+    "dashboard:recent_transfers": "inventory:view",
+    "dashboard:notifications": "notifications:view",
+    "dashboard:tally_status": "tally:view_status",
+}
+
 # Legacy catalogue archive permissions map to delete for custom roles created before M12.
 LEGACY_PERMISSION_ALIASES: dict[str, str] = {
     "brands:archive": "brands:delete",
@@ -277,10 +289,9 @@ def normalize_permission_set(permissions: set[str] | frozenset[str]) -> set[str]
         required = PERMISSION_REQUIRES.get(permission)
         if required:
             normalized.add(required)
-    if "dashboard:view" not in normalized and normalized.intersection(
-        {"inventory:view", "sales:view", "reports:view", "brands:view"},
-    ):
-        normalized.add("dashboard:view")
+        api_required = DASHBOARD_WIDGET_API_REQUIRES.get(permission)
+        if api_required:
+            normalized.add(api_required)
     normalized.add("auth:login")
     return normalized
 

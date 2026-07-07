@@ -63,6 +63,7 @@ from webstudio_backend.integrations.tally.incremental_sync import (
     STALE_SYNC_IN_PROGRESS_SECONDS,
     clamp_sync_interval_seconds,
     resolve_incremental_from_date,
+    tally_sync_had_meaningful_progress,
 )
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
@@ -468,37 +469,24 @@ class TallySyncService:
         now = datetime.now(UTC)
         duration_ms = int((now - started_at).total_seconds() * 1000)
         run_success = counters.failures == 0
-        history_status = (
-            "success" if run_success else "partial" if counters.invoices_imported else "failed"
+        had_meaningful_progress = tally_sync_had_meaningful_progress(
+            invoices_imported=counters.invoices_imported,
+            sales_created=counters.sales_created,
         )
-
-        if run_success:
-            consecutive_failures = 0
-            await self._company_sync.update_sync_state(
-                company_sync,
-                last_successful_sync_at=now,
-                last_processed_guid=last_imported_guid,
-                last_imported_voucher_date=last_imported_voucher_date,
-                last_processed_master_id=(
-                    all_vouchers[-1].master_id
-                    if all_vouchers
-                    else company_sync.last_processed_master_id
-                ),
-                connection_status="connected",
-                consecutive_sync_failures=0,
-                last_sync_duration_ms=duration_ms,
-                last_invoices_imported_count=counters.invoices_imported,
-                clear_last_error=True,
-            )
-        else:
-            consecutive_failures = company_sync.consecutive_sync_failures + 1
-            await self._company_sync.update_sync_state(
-                company_sync,
-                consecutive_sync_failures=consecutive_failures,
-                last_sync_duration_ms=duration_ms,
-                last_invoices_imported_count=counters.invoices_imported,
-                connection_status="connected",
-            )
+        history_status = (
+            "success" if run_success else "partial" if had_meaningful_progress else "failed"
+        )
+        consecutive_failures = await self._finalize_company_sync_state(
+            company_sync=company_sync,
+            counters=counters,
+            run_success=run_success,
+            had_meaningful_progress=had_meaningful_progress,
+            finished_at=now,
+            duration_ms=duration_ms,
+            all_vouchers=all_vouchers,
+            last_imported_guid=last_imported_guid,
+            last_imported_voucher_date=last_imported_voucher_date,
+        )
 
         await self._sync_history.finalize(
             history,
@@ -560,6 +548,57 @@ class TallySyncService:
             by_fallback is not None
             and by_fallback.processing_status is TallyProcessingStatus.SUCCESS
         )
+
+    async def _finalize_company_sync_state(
+        self,
+        *,
+        company_sync: TallyCompanySync,
+        counters: TallySyncCounters,
+        run_success: bool,
+        had_meaningful_progress: bool,
+        finished_at: datetime,
+        duration_ms: int,
+        all_vouchers: list[TallyVoucher],
+        last_imported_guid: str | None,
+        last_imported_voucher_date: date | None,
+    ) -> int:
+        """Persist sync metadata and return consecutive failure count after this run."""
+        common_state = {
+            "last_sync_duration_ms": duration_ms,
+            "last_invoices_imported_count": counters.invoices_imported,
+            "connection_status": "connected",
+        }
+
+        if run_success or had_meaningful_progress:
+            progress_state: dict[str, object] = {"clear_last_error": True}
+            if had_meaningful_progress:
+                progress_state.update(
+                    {
+                        "last_successful_sync_at": finished_at,
+                        "last_processed_guid": last_imported_guid,
+                        "last_imported_voucher_date": last_imported_voucher_date,
+                        "last_processed_master_id": (
+                            all_vouchers[-1].master_id
+                            if all_vouchers
+                            else company_sync.last_processed_master_id
+                        ),
+                    },
+                )
+            await self._company_sync.update_sync_state(
+                company_sync,
+                consecutive_sync_failures=0,
+                **common_state,
+                **progress_state,
+            )
+            return 0
+
+        consecutive_failures = company_sync.consecutive_sync_failures + 1
+        await self._company_sync.update_sync_state(
+            company_sync,
+            consecutive_sync_failures=consecutive_failures,
+            **common_state,
+        )
+        return consecutive_failures
 
     async def _notify_sync_outcome(
         self,
@@ -914,6 +953,9 @@ class TallySyncService:
         sync_run_id = uuid.uuid4()
         counters = TallySyncCounters()
         vouchers = parse_vouchers_xml(xml_text)
+        started_at = datetime.now(UTC)
+        last_imported_guid = company_sync.last_processed_guid
+        last_imported_voucher_date = company_sync.last_imported_voucher_date
         for voucher in vouchers:
             if voucher.voucher_type not in MONITORED_VOUCHER_TYPES:
                 continue
@@ -955,10 +997,39 @@ class TallySyncService:
                 )
             else:
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
+            last_imported_guid = voucher.guid
+            if (
+                last_imported_voucher_date is None
+                or voucher.voucher_date >= last_imported_voucher_date
+            ):
+                last_imported_voucher_date = voucher.voucher_date
+
+        now = datetime.now(UTC)
+        duration_ms = int((now - started_at).total_seconds() * 1000)
+        run_success = counters.failures == 0
+        had_meaningful_progress = tally_sync_had_meaningful_progress(
+            invoices_imported=counters.invoices_imported,
+            sales_created=counters.sales_created,
+        )
+        await self._finalize_company_sync_state(
+            company_sync=company_sync,
+            counters=counters,
+            run_success=run_success,
+            had_meaningful_progress=had_meaningful_progress,
+            finished_at=now,
+            duration_ms=duration_ms,
+            all_vouchers=vouchers,
+            last_imported_guid=last_imported_guid,
+            last_imported_voucher_date=last_imported_voucher_date,
+        )
         return TallySyncResult(
             sync_run_id=str(sync_run_id),
-            success=True,
-            message="XML processed.",
+            success=run_success,
+            message=(
+                "XML processed."
+                if run_success
+                else "XML processed with issues."
+            ),
             counters=counters,
             connection_status="connected",
         )

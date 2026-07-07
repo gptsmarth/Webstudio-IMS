@@ -32,6 +32,7 @@ from webstudio_backend.integrations.tally.incremental_sync import (
     SYNC_INTERVAL_MIN_SECONDS,
     clamp_sync_interval_seconds,
     resolve_incremental_from_date,
+    tally_sync_had_meaningful_progress,
 )
 from webstudio_backend.integrations.tally.xml_parser import parse_vouchers_xml
 from webstudio_backend.services.tally_sync_service import TallySyncService
@@ -41,6 +42,12 @@ def test_clamp_sync_interval_seconds() -> None:
     assert clamp_sync_interval_seconds(30) == SYNC_INTERVAL_MIN_SECONDS
     assert clamp_sync_interval_seconds(300) == 300
     assert clamp_sync_interval_seconds(99999) == SYNC_INTERVAL_MAX_SECONDS
+
+
+def test_tally_sync_had_meaningful_progress() -> None:
+    assert tally_sync_had_meaningful_progress(invoices_imported=1, sales_created=0) is True
+    assert tally_sync_had_meaningful_progress(invoices_imported=0, sales_created=1) is True
+    assert tally_sync_had_meaningful_progress(invoices_imported=0, sales_created=0) is False
 
 
 def test_resolve_incremental_from_date_uses_last_successful_sync() -> None:
