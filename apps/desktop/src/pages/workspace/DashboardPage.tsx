@@ -19,6 +19,7 @@ import { canViewDashboardWidget, P } from '../../services/PermissionService';
 
 export function DashboardPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
+  const permissions = session?.permissions ?? [];
   const {
     data,
     loading,
@@ -28,7 +29,7 @@ export function DashboardPage(): JSX.Element {
     resolveNotification,
     triggerTallySync,
     syncingTally,
-  } = useDashboardPage(session.permissions);
+  } = useDashboardPage(permissions);
 
   if (!session) {
     return (
@@ -41,7 +42,6 @@ export function DashboardPage(): JSX.Element {
     );
   }
 
-  const permissions = session.permissions;
   const can = (widget: string) => canViewDashboardWidget(permissions, widget);
   const totalAvailable =
     data.distribution?.total_available_inventory ?? data.snapshot?.total_available_inventory ?? 0;
