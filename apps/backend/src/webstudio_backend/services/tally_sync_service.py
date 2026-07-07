@@ -1025,11 +1025,7 @@ class TallySyncService:
         return TallySyncResult(
             sync_run_id=str(sync_run_id),
             success=run_success,
-            message=(
-                "XML processed."
-                if run_success
-                else "XML processed with issues."
-            ),
+            message=("XML processed." if run_success else "XML processed with issues."),
             counters=counters,
             connection_status="connected",
         )
