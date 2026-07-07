@@ -364,9 +364,11 @@ async def test_tally_sync_updates_last_successful_sync_at_on_partial_run(
     company_sync = await TallyCompanySyncRepository(db_session).get_or_create(company_name)
     assert company_sync.last_successful_sync_at is None
 
+    # `parse_vouchers_xml` expects one voucher per TALLYMESSAGE. Use two messages to simulate a
+    # single sync run where one invoice succeeds and another fails.
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<ENVELOPE><BODY><DATA><TALLYMESSAGE>
-<VOUCHER>
+<ENVELOPE><BODY><DATA>
+<TALLYMESSAGE><VOUCHER>
   <GUID>partial-good-{suffix}</GUID>
   <MASTERID>40001</MASTERID>
   <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
@@ -382,8 +384,8 @@ async def test_tally_sync_updates_last_successful_sync_at_on_partial_run(
       <SERIALNUMBER>SN-PARTIAL-OK-{suffix}</SERIALNUMBER>
     </BATCHALLOCATIONS.LIST>
   </ALLINVENTORYENTRIES.LIST>
-</VOUCHER>
-<VOUCHER>
+</VOUCHER></TALLYMESSAGE>
+<TALLYMESSAGE><VOUCHER>
   <GUID>partial-bad-{suffix}</GUID>
   <MASTERID>40002</MASTERID>
   <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
@@ -399,8 +401,8 @@ async def test_tally_sync_updates_last_successful_sync_at_on_partial_run(
       <SERIALNUMBER>SN-DOES-NOT-EXIST-{suffix}</SERIALNUMBER>
     </BATCHALLOCATIONS.LIST>
   </ALLINVENTORYENTRIES.LIST>
-</VOUCHER>
-</TALLYMESSAGE></DATA></BODY></ENVELOPE>"""
+</VOUCHER></TALLYMESSAGE>
+</DATA></BODY></ENVELOPE>"""
 
     result = await TallySyncService(db_session).process_voucher_xml(
         xml,
