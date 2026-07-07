@@ -412,7 +412,8 @@ async def test_tally_sync_updates_last_successful_sync_at_on_partial_run(
     await db_session.commit()
     await db_session.refresh(company_sync)
 
-    assert result.success is False
+    # Missing serials are tracked as warnings (not "failures") — the sync still succeeds.
+    assert result.success is True
     assert result.counters.sales_created == 1
-    assert result.counters.failures == 1
+    assert result.counters.missing_serials == 1
     assert company_sync.last_successful_sync_at is not None
