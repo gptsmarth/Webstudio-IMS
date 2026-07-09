@@ -23,6 +23,7 @@ from webstudio_backend.services.ai.logging import (
 )
 from webstudio_backend.services.ai.providers.factory import build_provider_chain, create_provider
 from webstudio_backend.services.ai.providers.gemini import GeminiProvider
+from webstudio_backend.services.ai.spec_normalization import validate_enrichment_payload
 from webstudio_backend.services.ai.types import (
     AIProviderError,
     EnrichmentResult,
@@ -117,8 +118,6 @@ class ProductEnrichmentService:
         else:
             cached = await cache.get(sku, brand_name=brand_name)
             if cached and cached.get("cpu"):
-                from webstudio_backend.services.ai.spec_normalization import validate_enrichment_payload
-
                 provider = str(cached.get("provider") or config.primary_provider)
                 if validate_enrichment_payload(
                     cached,

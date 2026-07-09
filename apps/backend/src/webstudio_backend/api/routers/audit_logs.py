@@ -9,7 +9,11 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep, AuditViewOrLifecycleDep
+from webstudio_backend.api.dependencies.auth import (
+    AuditLifecycleDep,
+    AuditViewDep,
+    AuditViewOrLifecycleDep,
+)
 from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
