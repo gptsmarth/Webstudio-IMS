@@ -68,9 +68,7 @@ class ProductEnrichmentService:
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.")
 
-        inflight_key = (
-            f"{sku.lower()}|{(brand_name or '').strip().lower()}|refresh={force_refresh}"
-        )
+        inflight_key = f"{sku.lower()}|{(brand_name or '').strip().lower()}|refresh={force_refresh}"
         existing_task = _inflight_spec_lookups.get(inflight_key)
         if existing_task is not None:
             return await asyncio.shield(existing_task)
