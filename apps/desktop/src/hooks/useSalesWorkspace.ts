@@ -153,29 +153,32 @@ export function useSalesWorkspace(permissions: string[] = []): SalesWorkspaceSta
     setPage(1);
   }, []);
 
-  const loadDrawerData = useCallback(async (saleId: number) => {
-    setDrawerLoading(true);
-    try {
-      const detail = await SalesService.getSale(saleId);
-      setSaleDetail(detail);
-      if (detail.inventory_item_id) {
-        const plan = referenceDataFetchPlan(permissions);
-        if (plan.needsInventoryAudit) {
-          const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
-          setAuditLogs(logs);
+  const loadDrawerData = useCallback(
+    async (saleId: number) => {
+      setDrawerLoading(true);
+      try {
+        const detail = await SalesService.getSale(saleId);
+        setSaleDetail(detail);
+        if (detail.inventory_item_id) {
+          const plan = referenceDataFetchPlan(permissions);
+          if (plan.needsInventoryAudit) {
+            const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
+            setAuditLogs(logs);
+          } else {
+            setAuditLogs([]);
+          }
         } else {
           setAuditLogs([]);
         }
-      } else {
+      } catch {
+        setSaleDetail(null);
         setAuditLogs([]);
+      } finally {
+        setDrawerLoading(false);
       }
-    } catch {
-      setSaleDetail(null);
-      setAuditLogs([]);
-    } finally {
-      setDrawerLoading(false);
-    }
-  }, [permissions]);
+    },
+    [permissions],
+  );
 
   const selectItem = useCallback(
     (id: number | null) => {

@@ -213,47 +213,51 @@ export function AddLaptopWizard({
     [modelName],
   );
 
-  const runGeminiFetch = useCallback(async (forceRefresh = false): Promise<boolean> => {
-    if (!modelNumber.trim()) return false;
-    setFetching(true);
-    setFetchMessage(null);
-    setError(null);
-    try {
-      const internet = await fetchProductSpecFromInternet(modelNumber, {
-        modelName: modelName.trim() || undefined,
-        brandName,
-        forceRefresh,
-      });
-      if (internet) {
-        applyInternetSpec(internet);
-        const sourceNote = internet.notes?.includes('\n---\n')
-          ? internet.notes.split('\n---\n').pop()?.trim()
-          : null;
+  const runGeminiFetch = useCallback(
+    async (forceRefresh = false): Promise<boolean> => {
+      if (!modelNumber.trim()) return false;
+      setFetching(true);
+      setFetchMessage(null);
+      setError(null);
+      try {
+        const internet = await fetchProductSpecFromInternet(modelNumber, {
+          modelName: modelName.trim() || undefined,
+          brandName,
+          forceRefresh,
+        });
+        if (internet) {
+          applyInternetSpec(internet);
+          const sourceNote = internet.notes?.includes('\n---\n')
+            ? internet.notes.split('\n---\n').pop()?.trim()
+            : null;
+          setFetchMessage(
+            forceRefresh
+              ? sourceNote
+                ? `Configuration re-fetched. ${sourceNote}`
+                : 'Configuration re-fetched from internet — review and adjust if needed.'
+              : sourceNote
+                ? `Configuration auto-fetched. ${sourceNote}`
+                : 'Configuration auto-fetched — review and adjust if needed.',
+          );
+          return true;
+        }
         setFetchMessage(
-          forceRefresh
-            ? sourceNote
-              ? `Configuration re-fetched. ${sourceNote}`
-              : 'Configuration re-fetched from internet — review and adjust if needed.'
-            : sourceNote
-              ? `Configuration auto-fetched. ${sourceNote}`
-              : 'Configuration auto-fetched — review and adjust if needed.',
+          'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.',
         );
-        return true;
+        return false;
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setFetchMessage(
+          message.message ??
+            'Auto-fetch failed — enter details manually or tap Auto fetch to retry.',
+        );
+        return false;
+      } finally {
+        setFetching(false);
       }
-      setFetchMessage(
-        'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.',
-      );
-      return false;
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setFetchMessage(
-        message.message ?? 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.',
-      );
-      return false;
-    } finally {
-      setFetching(false);
-    }
-  }, [applyInternetSpec, brandName, modelName, modelNumber]);
+    },
+    [applyInternetSpec, brandName, modelName, modelNumber],
+  );
 
   useEffect(() => {
     if (!open || step !== 'specs' || mode !== 'new' || !modelNumber.trim()) {

@@ -11,9 +11,7 @@ import {
 } from '../../lib/accessorySpecLookup';
 import { lookupExistingModelInventory } from '../../lib/productSpecLookup';
 import type { Location } from '../../services/api/LocationService';
-import type {
-  ProductModel,
-} from '../../services/api/ProductModelService';
+import type { ProductModel } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { parsePriceInput } from '../../lib/inventoryPrice';
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
@@ -161,60 +159,64 @@ export function AddAccessoryWizard({
     setProductImageUrl(spec.product_image_url);
   }, []);
 
-  const runAutoFetch = useCallback(async (forceRefresh = false): Promise<boolean> => {
-    const trimmed = identifier.trim();
-    if (!trimmed) return false;
-    setFetching(true);
-    setFetchMessage(null);
-    setError(null);
-    try {
-      const internet = await fetchAccessorySpecFromInternet(trimmed, {
-        identifierType,
-        brandName,
-        forceRefresh,
-      });
-      if (internet) {
-        applyAccessorySpec(internet);
-        const sourceNote = internet.notes?.includes('\n---\n')
-          ? internet.notes.split('\n---\n').pop()?.trim()
-          : null;
-        if (!internet.accessory_kind) {
+  const runAutoFetch = useCallback(
+    async (forceRefresh = false): Promise<boolean> => {
+      const trimmed = identifier.trim();
+      if (!trimmed) return false;
+      setFetching(true);
+      setFetchMessage(null);
+      setError(null);
+      try {
+        const internet = await fetchAccessorySpecFromInternet(trimmed, {
+          identifierType,
+          brandName,
+          forceRefresh,
+        });
+        if (internet) {
+          applyAccessorySpec(internet);
+          const sourceNote = internet.notes?.includes('\n---\n')
+            ? internet.notes.split('\n---\n').pop()?.trim()
+            : null;
+          if (!internet.accessory_kind) {
+            setFetchMessage(
+              forceRefresh
+                ? sourceNote
+                  ? `Configuration re-fetched. ${sourceNote} Select accessory type manually if needed.`
+                  : 'Configuration re-fetched — select accessory type manually if auto-detect missed it.'
+                : sourceNote
+                  ? `Configuration partially fetched. ${sourceNote} Select accessory type manually if needed.`
+                  : 'Configuration partially fetched — select accessory type manually if auto-detect missed it.',
+            );
+            return true;
+          }
           setFetchMessage(
             forceRefresh
               ? sourceNote
-                ? `Configuration re-fetched. ${sourceNote} Select accessory type manually if needed.`
-                : 'Configuration re-fetched — select accessory type manually if auto-detect missed it.'
+                ? `Configuration re-fetched. ${sourceNote}`
+                : 'Configuration re-fetched from internet — review and adjust if needed.'
               : sourceNote
-                ? `Configuration partially fetched. ${sourceNote} Select accessory type manually if needed.`
-                : 'Configuration partially fetched — select accessory type manually if auto-detect missed it.',
+                ? `Configuration auto-fetched. ${sourceNote}`
+                : 'Configuration auto-fetched — review and adjust if needed.',
           );
           return true;
         }
         setFetchMessage(
-          forceRefresh
-            ? sourceNote
-              ? `Configuration re-fetched. ${sourceNote}`
-              : 'Configuration re-fetched from internet — review and adjust if needed.'
-            : sourceNote
-              ? `Configuration auto-fetched. ${sourceNote}`
-              : 'Configuration auto-fetched — review and adjust if needed.',
+          'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.',
         );
-        return true;
+        return false;
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setFetchMessage(
+          message.message ??
+            'Auto-fetch failed — enter details manually or tap Auto fetch to retry.',
+        );
+        return false;
+      } finally {
+        setFetching(false);
       }
-      setFetchMessage(
-        'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.',
-      );
-      return false;
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setFetchMessage(
-        message.message ?? 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.',
-      );
-      return false;
-    } finally {
-      setFetching(false);
-    }
-  }, [applyAccessorySpec, brandName, identifier, identifierType]);
+    },
+    [applyAccessorySpec, brandName, identifier, identifierType],
+  );
 
   useEffect(() => {
     if (!open || step !== 'specs' || mode !== 'new' || !identifier.trim()) {

@@ -42,7 +42,9 @@ export function sanitizeCreateProductModelPayload(
       ...sanitized,
       ram_gb: Number.isFinite(ram) && ram > 0 ? ram : payload.ram_gb,
       storage_value:
-        Number.isFinite(storage) && storage > 0 ? String(payload.storage_value).trim() : payload.storage_value,
+        Number.isFinite(storage) && storage > 0
+          ? String(payload.storage_value).trim()
+          : payload.storage_value,
     };
   }
 
