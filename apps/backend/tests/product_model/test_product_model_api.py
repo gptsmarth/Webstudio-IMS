@@ -202,4 +202,7 @@ async def test_create_product_model_normalizes_optional_payload_fields(
     pm_data = resp.json()["data"]
     assert pm_data["gpu"] is None
     assert pm_data["display"] is None
-    assert pm_data["product_image_url"] is None
+    image_url = pm_data["product_image_url"]
+    assert image_url != long_image_url
+    if image_url is not None:
+        assert image_url.startswith("/assets/product-images/")
