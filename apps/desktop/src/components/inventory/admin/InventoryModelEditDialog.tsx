@@ -163,7 +163,7 @@ export function InventoryModelEditDialog({
       setProductImageUrl(spec.product_image_url ?? '');
 
       const combinedNotes = composeModelNotes(spec.description || '', spec.notes || '');
-      setNotes(combinedNotes);
+      setNotes(combinedNotes ?? '');
     } catch (err: unknown) {
       const msg = err as { message?: string };
       setError(msg.message ?? 'Refetch failed.');

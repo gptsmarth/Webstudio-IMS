@@ -90,7 +90,7 @@ export function UsersPage(): JSX.Element {
       </header>
 
       <div className="usr-page__panel">
-        {session.role === 'main_admin' && (
+        {session?.role === 'main_admin' && (
           <CustomRolesPanel onRolesChanged={() => void workspace.refresh()} />
         )}
 
