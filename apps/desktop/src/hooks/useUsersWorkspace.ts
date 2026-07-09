@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import type { UserSortField } from '../lib/users';
 import { AuditService, type AuditLogEntry } from '../services/api/AuditService';
 import {
@@ -72,7 +73,7 @@ export interface UsersWorkspaceState {
   restoreUser: (userId: number) => Promise<UserDetail>;
 }
 
-export function useUsersWorkspace(): UsersWorkspaceState {
+export function useUsersWorkspace(permissions: string[] = []): UsersWorkspaceState {
   const [items, setItems] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -189,21 +190,25 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     setDrawerLoading(true);
     void (async () => {
       try {
-        const [detail, entityAudits, actorAudits] = await Promise.all([
-          UserService.getUser(selectedId),
-          AuditService.listLogs({
-            entity_type: 'user',
-            entity_id: String(selectedId),
-            page_size: 20,
-          }),
-          AuditService.listLogs({ actor_user_id: selectedId, page_size: 20 }),
-        ]);
+        const plan = referenceDataFetchPlan(permissions);
+        const detail = await UserService.getUser(selectedId);
+        let merged: AuditLogEntry[] = [];
+        if (plan.needsAudit) {
+          const [entityAudits, actorAudits] = await Promise.all([
+            AuditService.listLogs({
+              entity_type: 'user',
+              entity_id: String(selectedId),
+              page_size: 20,
+            }),
+            AuditService.listLogs({ actor_user_id: selectedId, page_size: 20 }),
+          ]);
+          merged = [...entityAudits.items, ...actorAudits.items]
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .filter((log, index, array) => array.findIndex((row) => row.id === log.id) === index)
+            .slice(0, 15);
+        }
         if (cancelled) return;
         setSelectedUser(detail);
-        const merged = [...entityAudits.items, ...actorAudits.items]
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .filter((log, index, array) => array.findIndex((row) => row.id === log.id) === index)
-          .slice(0, 15);
         setAuditLogs(merged);
       } catch (err: unknown) {
         if (cancelled) return;
@@ -216,7 +221,7 @@ export function useUsersWorkspace(): UsersWorkspaceState {
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [permissions, selectedId]);
 
   const runAction = useCallback(async <T>(action: () => Promise<T>): Promise<T> => {
     setActionLoading(true);

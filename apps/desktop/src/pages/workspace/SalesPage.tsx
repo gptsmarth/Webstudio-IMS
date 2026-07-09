@@ -13,7 +13,7 @@ import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 
 export function SalesPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
-  const workspace = useSalesWorkspace();
+  const workspace = useSalesWorkspace(session?.permissions ?? []);
 
   if (!session) {
     return (

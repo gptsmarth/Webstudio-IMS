@@ -3,6 +3,7 @@ import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import { ProductSpecService } from '../api/ProductSpecService';
 
 const CACHE_PREFIX = 'webstudio.product-image.';
+const LOCAL_UPLOAD_CACHE_SUFFIX = '__local__';
 
 export type ProductImageSource = 'cached' | 'placeholder' | 'remote' | 'none';
 
@@ -25,29 +26,50 @@ function blobToDataUrl(blob: Blob): Promise<string> {
  * Product image resolution: local cache → backend proxy (CORS-safe) → auto-resolve from web.
  */
 export class ProductImageService {
-  static cacheKey(productModelId: string): string {
-    return `${CACHE_PREFIX}${productModelId}`;
+  static cacheKey(productModelId: string, remoteUrl?: string | null): string {
+    const normalizedUrl = remoteUrl?.trim() || LOCAL_UPLOAD_CACHE_SUFFIX;
+    return `${CACHE_PREFIX}${productModelId}|${normalizedUrl}`;
   }
 
-  static getCachedDataUrl(productModelId: string): string | null {
+  static getCachedDataUrl(productModelId: string, remoteUrl?: string | null): string | null {
     try {
-      return localStorage.getItem(this.cacheKey(productModelId));
+      return localStorage.getItem(this.cacheKey(productModelId, remoteUrl));
     } catch {
       return null;
     }
   }
 
-  static setCachedDataUrl(productModelId: string, dataUrl: string): void {
+  static setCachedDataUrl(
+    productModelId: string,
+    dataUrl: string,
+    remoteUrl?: string | null,
+  ): void {
     try {
-      localStorage.setItem(this.cacheKey(productModelId), dataUrl);
+      localStorage.setItem(this.cacheKey(productModelId, remoteUrl), dataUrl);
     } catch {
       // Ignore quota errors — UI falls back to placeholder.
     }
   }
 
-  static clearCached(productModelId: string): void {
+  static clearCached(productModelId: string, remoteUrl?: string | null): void {
     try {
-      localStorage.removeItem(this.cacheKey(productModelId));
+      localStorage.removeItem(this.cacheKey(productModelId, remoteUrl));
+    } catch {
+      // no-op
+    }
+  }
+
+  static clearCachedForModel(productModelId: string): void {
+    try {
+      const prefix = `${CACHE_PREFIX}${productModelId}|`;
+      const keysToRemove: string[] = [];
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith(prefix)) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
     } catch {
       // no-op
     }
@@ -67,12 +89,20 @@ export class ProductImageService {
     },
   ): Promise<ProductImageResult> {
     const category = options?.category ?? 'laptop';
-    const cached = this.getCachedDataUrl(productModelId);
-    if (cached) {
-      return { src: cached, source: 'cached', canUpload: true };
+    const remoteUrl = options?.remoteUrl?.trim() || null;
+
+    if (remoteUrl) {
+      const cached = this.getCachedDataUrl(productModelId, remoteUrl);
+      if (cached) {
+        return { src: cached, source: 'cached', canUpload: true };
+      }
+    } else {
+      const uploaded = this.getCachedDataUrl(productModelId, LOCAL_UPLOAD_CACHE_SUFFIX);
+      if (uploaded) {
+        return { src: uploaded, source: 'cached', canUpload: true };
+      }
     }
 
-    let remoteUrl = options?.remoteUrl?.trim() || null;
     if (remoteUrl?.startsWith('/assets/')) {
       const bundledSrc = resolvePublicAsset(remoteUrl);
       if (await this.tryDirectImage(bundledSrc)) {
@@ -88,24 +118,31 @@ export class ProductImageService {
         canUpload: true,
       };
     }
-    if (!remoteUrl?.startsWith('https://')) {
+
+    let resolvedRemoteUrl = remoteUrl;
+    if (!resolvedRemoteUrl?.startsWith('https://')) {
       try {
         const resolved = await ProductSpecService.resolveModelImage(productModelId);
-        remoteUrl = resolved.product_image_url?.trim() || null;
+        resolvedRemoteUrl = resolved.product_image_url?.trim() || null;
       } catch {
-        remoteUrl = null;
+        resolvedRemoteUrl = null;
       }
     }
 
-    if (remoteUrl?.startsWith('https://')) {
-      const proxied = await this.loadViaBackendProxy(productModelId, remoteUrl);
+    if (resolvedRemoteUrl?.startsWith('https://')) {
+      const cached = this.getCachedDataUrl(productModelId, resolvedRemoteUrl);
+      if (cached) {
+        return { src: cached, source: 'cached', canUpload: true };
+      }
+
+      const proxied = await this.loadViaBackendProxy(productModelId, resolvedRemoteUrl);
       if (proxied) {
         return proxied;
       }
 
-      const direct = await this.tryDirectImage(remoteUrl);
+      const direct = await this.tryDirectImage(resolvedRemoteUrl);
       if (direct) {
-        return { src: remoteUrl, source: 'remote', canUpload: true };
+        return { src: resolvedRemoteUrl, source: 'remote', canUpload: true };
       }
     }
 
@@ -126,7 +163,7 @@ export class ProductImageService {
         return null;
       }
       const dataUrl = await blobToDataUrl(blob);
-      this.setCachedDataUrl(productModelId, dataUrl);
+      this.setCachedDataUrl(productModelId, dataUrl, remoteUrl);
       return { src: dataUrl, source: 'remote', canUpload: true };
     } catch {
       return null;
@@ -154,7 +191,8 @@ export class ProductImageService {
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     });
-    this.setCachedDataUrl(productModelId, dataUrl);
+    this.clearCachedForModel(productModelId);
+    this.setCachedDataUrl(productModelId, dataUrl, LOCAL_UPLOAD_CACHE_SUFFIX);
     return { src: dataUrl, source: 'cached', canUpload: true };
   }
 }

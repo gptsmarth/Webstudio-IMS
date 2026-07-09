@@ -6,19 +6,14 @@ import asyncio
 import time
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
-from webstudio_backend.infrastructure.database.enums import ProductCategory
-from webstudio_backend.infrastructure.database.models.brand import Brand
-from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.services.ai.cache import EnrichmentCacheService
 from webstudio_backend.services.ai.config import resolve_ai_config
 from webstudio_backend.services.ai.logging import (
     log_cache_hit,
     log_cache_stale,
-    log_database_reuse,
     log_enrichment_retry,
     log_enrichment_start,
     log_provider_attempt,
@@ -66,12 +61,15 @@ class ProductEnrichmentService:
         *,
         model_name: str | None = None,
         brand_name: str | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         sku = model_number.strip()
         if not sku:
             raise AIProviderError("NOT_FOUND", "Model number is required.")
 
-        inflight_key = f"{sku.lower()}|{(brand_name or '').strip().lower()}"
+        inflight_key = (
+            f"{sku.lower()}|{(brand_name or '').strip().lower()}|refresh={force_refresh}"
+        )
         existing_task = _inflight_spec_lookups.get(inflight_key)
         if existing_task is not None:
             return await asyncio.shield(existing_task)
@@ -81,6 +79,7 @@ class ProductEnrichmentService:
                 sku,
                 model_name=model_name,
                 brand_name=brand_name,
+                force_refresh=force_refresh,
             )
         )
         _inflight_spec_lookups[inflight_key] = task
@@ -96,6 +95,7 @@ class ProductEnrichmentService:
         *,
         model_name: str | None = None,
         brand_name: str | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         config = await resolve_ai_config(self._session, self._app_settings)
         if not config.enrichment_enabled:
@@ -112,34 +112,25 @@ class ProductEnrichmentService:
             )
 
         cache = EnrichmentCacheService(self._session)
-        cached = await cache.get(sku, brand_name=brand_name)
-        if cached and cached.get("cpu"):
-            from webstudio_backend.services.ai.spec_normalization import validate_enrichment_payload
-
-            provider = str(cached.get("provider") or config.primary_provider)
-            if validate_enrichment_payload(
-                cached,
-                model_number=sku,
-                provider=provider,
-                brand_name=brand_name,
-            ):
-                log_cache_hit(sku=sku, provider=provider)
-                cached["cached"] = True
-                return cached
-            log_cache_stale(sku=sku)
+        if force_refresh:
             await cache.delete(sku, brand_name=brand_name)
+        else:
+            cached = await cache.get(sku, brand_name=brand_name)
+            if cached and cached.get("cpu"):
+                from webstudio_backend.services.ai.spec_normalization import validate_enrichment_payload
 
-        existing = await self._lookup_existing_model(sku, brand_name=brand_name)
-        if existing:
-            log_database_reuse(sku=sku)
-            existing["cached"] = True
-            await cache.set(
-                sku,
-                brand_name=brand_name,
-                payload=existing,
-                provider=str(existing.get("provider") or "database"),
-            )
-            return existing
+                provider = str(cached.get("provider") or config.primary_provider)
+                if validate_enrichment_payload(
+                    cached,
+                    model_number=sku,
+                    provider=provider,
+                    brand_name=brand_name,
+                ):
+                    log_cache_hit(sku=sku, provider=provider)
+                    cached["cached"] = True
+                    return cached
+                log_cache_stale(sku=sku)
+                await cache.delete(sku, brand_name=brand_name)
 
         if not configured_chain:
             raise AIProviderError(
@@ -246,6 +237,7 @@ class ProductEnrichmentService:
         brand_name: str | None = None,
         accessory_kind: str | None = None,
         model_name: str | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         sku = identifier.strip()
         if not sku:
@@ -253,6 +245,7 @@ class ProductEnrichmentService:
 
         inflight_key = (
             f"accessory:{identifier_type}:{sku.lower()}|{(brand_name or '').strip().lower()}"
+            f"|refresh={force_refresh}"
         )
         existing_task = _inflight_accessory_lookups.get(inflight_key)
         if existing_task is not None:
@@ -265,6 +258,7 @@ class ProductEnrichmentService:
                 brand_name=brand_name,
                 accessory_kind=accessory_kind,
                 model_name=model_name,
+                force_refresh=force_refresh,
             )
         )
         _inflight_accessory_lookups[inflight_key] = task
@@ -282,6 +276,7 @@ class ProductEnrichmentService:
         brand_name: str | None,
         accessory_kind: str | None,
         model_name: str | None,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         config = await resolve_ai_config(self._session, self._app_settings)
         if not config.enrichment_enabled:
@@ -292,27 +287,14 @@ class ProductEnrichmentService:
 
         cache = EnrichmentCacheService(self._session)
         cache_key = f"accessory:{identifier_type}:{sku}"
-        cached = await cache.get(cache_key, brand_name=brand_name)
-        if cached and cached.get("model_name"):
-            log_cache_hit(sku=sku, provider=str(cached.get("provider") or "cache"))
-            cached["cached"] = True
-            return cached
-
-        existing = await self._lookup_existing_accessory(
-            sku,
-            brand_name=brand_name,
-            identifier_type=identifier_type,
-        )
-        if existing:
-            log_database_reuse(sku=sku)
-            existing["cached"] = True
-            await cache.set(
-                cache_key,
-                brand_name=brand_name,
-                payload=existing,
-                provider="database",
-            )
-            return existing
+        if force_refresh:
+            await cache.delete(cache_key, brand_name=brand_name)
+        else:
+            cached = await cache.get(cache_key, brand_name=brand_name)
+            if cached and cached.get("model_name"):
+                log_cache_hit(sku=sku, provider=str(cached.get("provider") or "cache"))
+                cached["cached"] = True
+                return cached
 
         provider = create_provider("gemini", config)
         if not isinstance(provider, GeminiProvider) or not provider.is_configured():
@@ -387,90 +369,6 @@ class ProductEnrichmentService:
             message=result.message,
         )
         return result
-
-    async def _lookup_existing_accessory(
-        self,
-        identifier: str,
-        *,
-        brand_name: str | None,
-        identifier_type: str,
-    ) -> dict[str, Any] | None:
-        from sqlalchemy import or_
-
-        statement = select(ProductModel, Brand.name).join(Brand, Brand.id == ProductModel.brand_id)
-        statement = statement.where(ProductModel.category == ProductCategory.ACCESSORY)
-        normalized = identifier.strip()
-        if identifier_type == "part_number":
-            statement = statement.where(
-                or_(
-                    ProductModel.part_number.ilike(normalized),
-                    ProductModel.model_number.ilike(normalized),
-                )
-            )
-        else:
-            statement = statement.where(
-                or_(
-                    ProductModel.model_number.ilike(normalized),
-                    ProductModel.part_number.ilike(normalized),
-                )
-            )
-        if brand_name:
-            statement = statement.where(Brand.name.ilike(brand_name.strip()))
-        row = (await self._session.execute(statement.limit(1))).first()
-        if row is None:
-            return None
-        product_model, _resolved_brand = row
-        return {
-            "model_name": product_model.model_name,
-            "model_number": product_model.model_number,
-            "part_number": product_model.part_number,
-            "accessory_kind": (
-                product_model.accessory_kind.value if product_model.accessory_kind else None
-            ),
-            "color_options": product_model.color_options,
-            "product_image_url": product_model.product_image_url,
-            "description": None,
-            "notes": product_model.notes,
-            "source": "database",
-            "provider": "database",
-            "confidence_score": 1.0,
-            "cached": True,
-        }
-
-    async def _lookup_existing_model(
-        self,
-        model_number: str,
-        *,
-        brand_name: str | None,
-    ) -> dict[str, Any] | None:
-        statement = select(ProductModel, Brand.name).join(Brand, Brand.id == ProductModel.brand_id)
-        statement = statement.where(ProductModel.model_number.ilike(model_number.strip()))
-        if brand_name:
-            statement = statement.where(Brand.name.ilike(brand_name.strip()))
-        row = (await self._session.execute(statement.limit(1))).first()
-        if row is None:
-            return None
-        product_model, resolved_brand = row
-        if not product_model.cpu:
-            return None
-        return {
-            "model_name": product_model.model_name,
-            "cpu": product_model.cpu,
-            "gpu": product_model.gpu,
-            "ram_gb": product_model.ram_gb,
-            "storage_value": str(product_model.storage_value),
-            "storage_unit": product_model.storage_unit.value,
-            "storage_type": product_model.storage_type.value,
-            "display": product_model.display,
-            "color_options": product_model.color_options,
-            "product_image_url": product_model.product_image_url,
-            "description": None,
-            "notes": product_model.notes,
-            "source": "database",
-            "provider": "database",
-            "confidence_score": 1.0,
-            "cached": True,
-        }
 
     async def _finalize_result(
         self,

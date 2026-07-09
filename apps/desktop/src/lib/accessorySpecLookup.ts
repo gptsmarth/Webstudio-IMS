@@ -43,12 +43,13 @@ export async function fetchAccessorySpecFromInternet(
     identifierType?: AccessoryIdentifierType;
     brandName?: string;
     modelName?: string;
+    forceRefresh?: boolean;
   },
 ): Promise<FetchedAccessorySpec | null> {
   const normalized = identifier.trim();
   const identifierType = options?.identifierType ?? 'model_number';
   const normalizedBrand = options?.brandName?.trim().toLowerCase() ?? '';
-  const inflightKey = `${identifierType}:${normalized.toLowerCase()}|${normalizedBrand}`;
+  const inflightKey = `${identifierType}:${normalized.toLowerCase()}|${normalizedBrand}${options?.forceRefresh ? '|refresh' : ''}`;
   const existing = inflightAccessoryLookups.get(inflightKey);
   if (existing) {
     return existing;
@@ -60,6 +61,7 @@ export async function fetchAccessorySpecFromInternet(
       identifier_type: identifierType,
       brand_name: options?.brandName?.trim() || undefined,
       model_name: options?.modelName?.trim() || undefined,
+      force_refresh: options?.forceRefresh ?? false,
     });
 
     if (!result?.model_name) return null;

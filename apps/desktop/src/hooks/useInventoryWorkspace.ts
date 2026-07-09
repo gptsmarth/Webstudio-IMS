@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
+import { parseApiError } from '../lib/apiError';
+import { sanitizeCreateProductModelPayload } from '../lib/productModelPayload';
 import { BrandService, type Brand } from '../services/api/BrandService';
 import { LocationService, type Location } from '../services/api/LocationService';
 import {
@@ -84,11 +87,6 @@ export interface InventoryWorkspaceState {
   clearActionError: () => void;
 }
 
-function parseApiError(err: unknown): string {
-  const message = err as { response?: { data?: { detail?: string } }; message?: string };
-  return message.response?.data?.detail ?? message.message ?? 'Request failed.';
-}
-
 function filtersToParams(
   filters: InventoryFilters,
   search: string,
@@ -144,7 +142,7 @@ function extractSaleFromAudit(logs: AuditLogEntry[]): SaleDetail | null {
   return null;
 }
 
-export function useInventoryWorkspace(): InventoryWorkspaceState {
+export function useInventoryWorkspace(permissions: string[] = []): InventoryWorkspaceState {
   const focus = useInventoryStore((state) => state.focus);
   const clearFocus = useInventoryStore((state) => state.clearFocus);
 
@@ -204,22 +202,31 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
   }, []);
 
   const loadReferenceData = useCallback(async () => {
+    const plan = referenceDataFetchPlan(permissions);
     const [brandList, locationList] = await Promise.all([
-      BrandService.listBrands(),
-      LocationService.listLocations(),
+      plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
+      plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
     ]);
     setBrands(brandList.filter((brand) => brand.is_active));
     setLocations(locationList.filter((location) => location.is_active));
-  }, []);
+  }, [permissions]);
 
-  const loadProductModels = useCallback(async (brandId: number | null) => {
-    try {
-      const models = await ProductModelService.listModels(brandId ?? undefined);
-      setProductModels(models);
-    } catch {
-      setProductModels([]);
-    }
-  }, []);
+  const loadProductModels = useCallback(
+    async (brandId: number | null) => {
+      const plan = referenceDataFetchPlan(permissions);
+      if (!plan.needsProductModels) {
+        setProductModels([]);
+        return;
+      }
+      try {
+        const models = await ProductModelService.listModels(brandId ?? undefined);
+        setProductModels(models);
+      } catch {
+        setProductModels([]);
+      }
+    },
+    [permissions],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -241,33 +248,43 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
     }
   }, [debouncedSearch, filters, page, pageSize, sort]);
 
-  const loadDrawerData = useCallback(async (itemId: string) => {
-    setDrawerLoading(true);
-    try {
-      const item = await InventoryService.getItem(itemId);
-      const [logs, siblingsResult, model] = await Promise.all([
-        AuditService.listForInventoryItem(itemId),
-        InventoryService.listItems({
-          product_model_id: item.product_model_id,
-          page_size: 50,
-          include_archived: true,
-        }),
-        ProductModelService.getModel(item.product_model_id).catch(() => null),
-      ]);
-      setItems((current) => current.map((row) => (row.id === itemId ? item : row)));
-      setAuditLogs(logs);
-      setSaleDetail(extractSaleFromAudit(logs));
-      setProductModel(model);
-      setSiblingUnits(siblingsResult.items);
-    } catch {
-      setAuditLogs([]);
-      setSaleDetail(null);
-      setProductModel(null);
-      setSiblingUnits([]);
-    } finally {
-      setDrawerLoading(false);
-    }
-  }, []);
+  const loadDrawerData = useCallback(
+    async (itemId: string) => {
+      const plan = referenceDataFetchPlan(permissions);
+      setDrawerLoading(true);
+      try {
+        const item = await InventoryService.getItem(itemId);
+        const [logs, siblingsResult, model] = await Promise.all([
+          plan.needsInventoryAudit
+            ? AuditService.listForInventoryItem(itemId)
+            : Promise.resolve([]),
+          plan.needsInventoryItems
+            ? InventoryService.listItems({
+                product_model_id: item.product_model_id,
+                page_size: 50,
+                include_archived: true,
+              })
+            : Promise.resolve({ items: [] }),
+          plan.needsProductModels
+            ? ProductModelService.getModel(item.product_model_id).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        setItems((current) => current.map((row) => (row.id === itemId ? item : row)));
+        setAuditLogs(logs);
+        setSaleDetail(extractSaleFromAudit(logs));
+        setProductModel(model);
+        setSiblingUnits(siblingsResult.items);
+      } catch {
+        setAuditLogs([]);
+        setSaleDetail(null);
+        setProductModel(null);
+        setSiblingUnits([]);
+      } finally {
+        setDrawerLoading(false);
+      }
+    },
+    [permissions],
+  );
 
   const selectItem = useCallback(
     (id: string | null) => {
@@ -384,7 +401,9 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
       try {
         let modelId = payload.productModelId;
         if (payload.mode === 'new' && payload.newProductModel) {
-          const model = await ProductModelService.createModel(payload.newProductModel);
+          const model = await ProductModelService.createModel(
+            sanitizeCreateProductModelPayload(payload.newProductModel),
+          );
           modelId = model.id;
           await loadProductModels(payload.newProductModel.brand_id);
         }
@@ -424,9 +443,11 @@ export function useInventoryWorkspace(): InventoryWorkspaceState {
       try {
         let modelId = payload.productModelId;
         if (payload.mode === 'new' && payload.newProductModel) {
-          const model = await ProductModelService.createModel(payload.newProductModel);
+          const model = await ProductModelService.createModel(
+            sanitizeCreateProductModelPayload(payload.newProductModel),
+          );
           modelId = model.id;
-          await loadProductModels(payload.brandId);
+          await loadProductModels(payload.newProductModel.brand_id);
         }
         if (!modelId) throw new Error('Product model is required.');
 

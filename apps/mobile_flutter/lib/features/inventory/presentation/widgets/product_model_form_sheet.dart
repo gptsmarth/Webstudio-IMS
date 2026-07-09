@@ -103,6 +103,7 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
             brandName: brand.name,
             modelNumber: _modelNumber.text.trim(),
             modelName: _modelName.text.trim().isEmpty ? null : _modelName.text.trim(),
+            forceRefresh: true,
           );
       if (!mounted) return;
       setState(() {

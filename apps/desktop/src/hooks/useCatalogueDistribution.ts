@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { DashboardService, type DashboardDistribution } from '../services/api/DashboardService';
 
-export function useCatalogueDistribution(): {
+export function useCatalogueDistribution(permissions: string[] = []): {
   distribution: DashboardDistribution | null;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -10,8 +11,13 @@ export function useCatalogueDistribution(): {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    const plan = referenceDataFetchPlan(permissions);
     setLoading(true);
     try {
+      if (!plan.needsDistribution) {
+        setDistribution(null);
+        return;
+      }
       const data = await DashboardService.getDistribution();
       setDistribution(data);
     } catch {
@@ -19,7 +25,7 @@ export function useCatalogueDistribution(): {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [permissions]);
 
   useEffect(() => {
     void refresh();

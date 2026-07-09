@@ -237,7 +237,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     await _runAutoFetch();
   }
 
-  Future<void> _runAutoFetch() async {
+  Future<void> _runAutoFetch({bool forceRefresh = false}) async {
     final trimmed = _modelNumber.text.trim();
     if (trimmed.isEmpty) return;
     setState(() {
@@ -250,6 +250,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
             brandName: widget.brandName,
             modelNumber: trimmed,
             modelName: _modelName.text.trim().isEmpty ? null : _modelName.text.trim(),
+            forceRefresh: forceRefresh,
           );
       final spec = FetchedProductSpec.fromApi(raw);
       if (spec.cpu.trim().isEmpty) {
@@ -262,7 +263,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       _applySpec(spec);
       setState(() {
         _fetching = false;
-        _message = 'Configuration auto-fetched — review and adjust if needed.';
+        _message = forceRefresh
+            ? 'Configuration re-fetched — review and adjust if needed.'
+            : 'Configuration auto-fetched — review and adjust if needed.';
       });
     } catch (error) {
       setState(() {
@@ -672,7 +675,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: _fetching ? null : _runAutoFetch,
+          onPressed: _fetching ? null : () => _runAutoFetch(forceRefresh: true),
           child: Text(_fetching ? 'Fetching…' : 'Auto fetch'),
         ),
       ),

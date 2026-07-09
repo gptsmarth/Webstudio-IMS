@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { auditFiltersToExportParams } from '../lib/auditExport';
 import type { AuditViewMode, AuditSeverity } from '../lib/audit';
 import { LocationService, type Location } from '../services/api/LocationService';
@@ -76,7 +77,7 @@ export interface AuditWorkspaceState {
   clearActionError: () => void;
 }
 
-export function useAuditWorkspace(): AuditWorkspaceState {
+export function useAuditWorkspace(permissions: string[] = []): AuditWorkspaceState {
   const [items, setItems] = useState<AuditListEntry[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -109,10 +110,13 @@ export function useAuditWorkspace(): AuditWorkspaceState {
 
   useEffect(() => {
     void (async () => {
+      const plan = referenceDataFetchPlan(permissions);
       try {
         const [userResult, locationRows] = await Promise.all([
-          UserService.listUsers({ page_size: 100 }),
-          LocationService.listLocations(),
+          plan.needsUsers
+            ? UserService.listUsers({ page_size: 100 })
+            : Promise.resolve({ items: [] }),
+          plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
         ]);
         setUsers(userResult.items);
         setLocations(locationRows);
@@ -121,7 +125,7 @@ export function useAuditWorkspace(): AuditWorkspaceState {
         setLocations([]);
       }
     })();
-  }, []);
+  }, [permissions]);
 
   const refresh = useCallback(async () => {
     setLoading(true);

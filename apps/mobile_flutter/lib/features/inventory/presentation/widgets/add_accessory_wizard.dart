@@ -227,7 +227,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     await _runAutoFetch();
   }
 
-  Future<void> _runAutoFetch() async {
+  Future<void> _runAutoFetch({bool forceRefresh = false}) async {
     final trimmed = _identifier.text.trim();
     if (trimmed.isEmpty) return;
     setState(() {
@@ -243,6 +243,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
                 identifierType: _identifierType,
                 brandName: widget.brandName,
                 modelName: _modelName.text.trim().isEmpty ? null : _modelName.text.trim(),
+                forceRefresh: forceRefresh,
               );
           if ((raw['model_name'] as String?)?.trim().isEmpty ?? true) return null;
           return fetchedAccessorySpecFromApi(raw);
@@ -250,6 +251,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
         identifier: trimmed,
         identifierType: _identifierType,
         brandName: widget.brandName,
+        forceRefresh: forceRefresh,
       );
       if (spec == null || spec.modelName.trim().isEmpty) {
         setState(() {
@@ -262,8 +264,12 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
       setState(() {
         _fetching = false;
         _message = spec.accessoryKind == null
-            ? 'Configuration partially fetched — select accessory type manually if needed.'
-            : 'Configuration auto-fetched — review and adjust if needed.';
+            ? (forceRefresh
+                ? 'Configuration re-fetched — select accessory type manually if needed.'
+                : 'Configuration partially fetched — select accessory type manually if needed.')
+            : (forceRefresh
+                ? 'Configuration re-fetched — review and adjust if needed.'
+                : 'Configuration auto-fetched — review and adjust if needed.');
       });
     } catch (_) {
       setState(() {
@@ -685,7 +691,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
       SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: _fetching ? null : _runAutoFetch,
+          onPressed: _fetching ? null : () => _runAutoFetch(forceRefresh: true),
           child: Text(_fetching ? 'Fetching…' : 'Auto fetch'),
         ),
       ),

@@ -145,23 +145,25 @@ export function InventoryModelEditDialog({
       const spec = await fetchProductSpecFromInternet(modelNumber, {
         modelName: modelName || model.model_name,
         brandName: model.brand_name || undefined,
+        forceRefresh: true,
       });
       if (!spec) {
         setError('Could not find online specifications or image for this model.');
         return;
       }
-      if (spec.cpu) setCpu(spec.cpu);
-      if (spec.gpu) setGpu(spec.gpu);
-      if (spec.ram_gb) setRamGb(String(spec.ram_gb));
-      if (spec.storage_value) setStorageValue(String(spec.storage_value));
+      if (spec.model_name) setModelName(spec.model_name);
+      setCpu(spec.cpu || '');
+      setGpu(spec.gpu ?? '');
+      setRamGb(spec.ram_gb ? String(spec.ram_gb) : '');
+      setStorageValue(spec.storage_value ? String(spec.storage_value) : '');
       if (spec.storage_unit) setStorageUnit(spec.storage_unit);
       if (spec.storage_type) setStorageType(spec.storage_type);
-      if (spec.display) setDisplay(spec.display);
-      if (spec.color_options) setColorOptions(spec.color_options);
-      if (spec.product_image_url) setProductImageUrl(spec.product_image_url);
+      setDisplay(spec.display ?? '');
+      setColorOptions(spec.color_options ?? '');
+      setProductImageUrl(spec.product_image_url ?? '');
 
       const combinedNotes = composeModelNotes(spec.description || '', spec.notes || '');
-      if (combinedNotes) setNotes(combinedNotes);
+      setNotes(combinedNotes);
     } catch (err: unknown) {
       const msg = err as { message?: string };
       setError(msg.message ?? 'Refetch failed.');

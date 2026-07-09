@@ -254,6 +254,14 @@ PERMISSION_REQUIRES: dict[str, str] = {
 for _widget in DASHBOARD_WIDGET_PERMISSIONS:
     PERMISSION_REQUIRES[_widget] = "dashboard:view"
 
+# Tab-level permissions need catalogue reference data for filters and stock views.
+PERMISSION_IMPLIES: dict[str, tuple[str, ...]] = {
+    "inventory:view": ("brands:view", "product_models:view", "locations:view"),
+    "inventory:create": ("product_models:create",),
+    "sales:view": ("brands:view", "product_models:view", "locations:view"),
+    "reports:view": ("brands:view", "product_models:view", "locations:view"),
+}
+
 # Dashboard widgets call APIs that require separate module permissions.
 DASHBOARD_WIDGET_API_REQUIRES: dict[str, str] = {
     "dashboard:inventory_distribution": "inventory:view",
@@ -289,6 +297,8 @@ def normalize_permission_set(permissions: set[str] | frozenset[str]) -> set[str]
         required = PERMISSION_REQUIRES.get(permission)
         if required:
             normalized.add(required)
+        for implied in PERMISSION_IMPLIES.get(permission, ()):
+            normalized.add(implied)
         api_required = DASHBOARD_WIDGET_API_REQUIRES.get(permission)
         if api_required:
             normalized.add(api_required)

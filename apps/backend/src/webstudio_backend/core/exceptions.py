@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from webstudio_backend.api.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
@@ -93,6 +94,14 @@ def register_exception_handlers(app: FastAPI) -> None:
             )
             for error in exc.errors()
         ]
+        if details:
+            logger.bind(
+                request_id=get_request_id(request),
+                correlation_id=get_correlation_id(request),
+                method=request.method,
+                path=request.url.path,
+                validation_details=[detail.model_dump() for detail in details],
+            ).warning("request_validation_failed")
         return JSONResponse(
             status_code=422,
             content=_error_payload(

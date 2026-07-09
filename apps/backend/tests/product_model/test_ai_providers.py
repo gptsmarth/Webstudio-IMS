@@ -85,6 +85,34 @@ async def test_enrichment_service_uses_mock_provider(db_session, test_settings) 
 
 
 @pytest.mark.asyncio
+async def test_enrichment_force_refresh_bypasses_cache(db_session, test_settings) -> None:
+    AIProviderHealthTracker.reset()
+    from webstudio_backend.infrastructure.database.enums import SettingValueType
+    from webstudio_backend.infrastructure.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
+    repo = SystemSettingRepository(db_session)
+    await repo.set_value("ai_primary_provider", "mock", value_type=SettingValueType.STRING)
+    await repo.set_value("ai_fallback_chain", '["mock"]', value_type=SettingValueType.JSON)
+    await repo.set_value("ai_enrichment_enabled", "true", value_type=SettingValueType.BOOLEAN)
+
+    service = ProductEnrichmentService(db_session, test_settings)
+    first = await service.lookup_laptop_spec("MOCK-REFRESH-001", brand_name="ASUS")
+    assert first["cached"] is False
+
+    cached = await service.lookup_laptop_spec("MOCK-REFRESH-001", brand_name="ASUS")
+    assert cached["cached"] is True
+
+    refreshed = await service.lookup_laptop_spec(
+        "MOCK-REFRESH-001",
+        brand_name="ASUS",
+        force_refresh=True,
+    )
+    assert refreshed["cached"] is False
+
+
+@pytest.mark.asyncio
 async def test_enrichment_service_fallback_to_mock_when_gemini_not_configured(
     db_session, test_settings
 ) -> None:

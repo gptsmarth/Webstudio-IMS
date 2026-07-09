@@ -470,6 +470,7 @@ async def lookup_product_model_spec(
             body.model_number,
             model_name=body.model_name,
             brand_name=body.brand_name,
+            force_refresh=body.force_refresh,
         )
     except AIProviderError as exc:
         status_code = status.HTTP_404_NOT_FOUND
@@ -519,6 +520,7 @@ async def lookup_accessory_spec(
             brand_name=body.brand_name,
             accessory_kind=body.accessory_kind,
             model_name=body.model_name,
+            force_refresh=body.force_refresh,
         )
     except AIProviderError as exc:
         status_code = status.HTTP_404_NOT_FOUND

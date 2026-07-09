@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import DashboardViewDep, InventoryViewDep
+from webstudio_backend.api.dependencies.auth import DashboardViewDep, InventoryDistributionViewDep
 from webstudio_backend.api.schemas.dashboard import (
     DashboardDistributionResponse,
     OperationsDashboardResponse,
@@ -65,7 +65,7 @@ async def get_recent_activity(
 @router.get("/distribution")
 async def get_distribution(
     request: Request,
-    current: InventoryViewDep,
+    current: InventoryDistributionViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current

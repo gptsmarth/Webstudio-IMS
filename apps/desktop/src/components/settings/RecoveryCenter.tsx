@@ -66,14 +66,16 @@ export function RecoveryCenter({
     try {
       const [dashboard, reportData] = await Promise.all([
         SettingsService.getRecoveryCenter(),
-        SettingsService.getRecoveryReports(),
+        canViewRestore
+          ? SettingsService.getRecoveryReports()
+          : Promise.resolve<RecoveryReports | null>(null),
       ]);
       setCenter(dashboard);
       setReports(reportData);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canViewRestore]);
 
   useEffect(() => {
     void load();

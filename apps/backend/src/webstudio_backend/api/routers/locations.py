@@ -12,7 +12,7 @@ from webstudio_backend.api.dependencies.auth import (
     LocationsCreateDep,
     LocationsDeleteDep,
     LocationsEditDep,
-    LocationsViewDep,
+    LocationsOrInventoryViewDep,
 )
 from webstudio_backend.api.response_helpers import build_envelope, build_page_meta
 from webstudio_backend.api.schemas.catalogue_deletion import (
@@ -53,7 +53,7 @@ def _actor(current: AuthenticatedUser) -> AuditActor:
 @router.get("")
 async def list_locations(
     request: Request,
-    current: LocationsViewDep,
+    current: LocationsOrInventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
     page: int | None = Query(default=None, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
@@ -115,7 +115,7 @@ async def create_location(
 async def get_location(
     request: Request,
     location_id: int,
-    current: LocationsViewDep,
+    current: LocationsOrInventoryViewDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
     del current

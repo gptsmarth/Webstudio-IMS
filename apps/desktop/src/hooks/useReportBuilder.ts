@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import {
   buildReportQueryParams,
   DEFAULT_REPORT_FILTERS,
@@ -26,7 +27,7 @@ export type PreviewRow =
   | AuditReportRow
   | NotificationReportRow;
 
-export function useReportBuilder() {
+export function useReportBuilder(permissions: string[] = []) {
   const [reportType, setReportType] = useState<BuilderReportType>('inventory');
   const [filters, setFiltersState] = useState<ReportBuilderFilters>(DEFAULT_REPORT_FILTERS);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -136,10 +137,11 @@ export function useReportBuilder() {
 
   useEffect(() => {
     void (async () => {
+      const plan = referenceDataFetchPlan(permissions);
       try {
         const [brandList, locationList] = await Promise.all([
-          BrandService.listBrands(),
-          LocationService.listLocations(),
+          plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
+          plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
         ]);
         setBrands(brandList);
         setLocations(locationList);
@@ -147,10 +149,15 @@ export function useReportBuilder() {
         // Reference data optional for page shell
       }
     })();
-  }, []);
+  }, [permissions]);
 
   useEffect(() => {
     void (async () => {
+      const plan = referenceDataFetchPlan(permissions);
+      if (!plan.needsProductModels) {
+        setProductModels([]);
+        return;
+      }
       try {
         const models = await ProductModelService.listModels(filters.brandId ?? undefined);
         setProductModels(models);
@@ -158,7 +165,7 @@ export function useReportBuilder() {
         setProductModels([]);
       }
     })();
-  }, [filters.brandId]);
+  }, [filters.brandId, permissions]);
 
   useEffect(() => {
     if (!hasPreviewedRef.current) return;

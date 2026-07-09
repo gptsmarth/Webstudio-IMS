@@ -19,6 +19,13 @@ def test_inventory_create_requires_view() -> None:
     assert "inventory:create" in normalized
 
 
+def test_inventory_view_implies_catalogue_reads() -> None:
+    normalized = normalize_permission_set({"inventory:view"})
+    assert "brands:view" in normalized
+    assert "product_models:view" in normalized
+    assert "locations:view" in normalized
+
+
 def test_inventory_view_does_not_force_dashboard() -> None:
     normalized = normalize_permission_set({"inventory:view", "sales:view"})
     assert "inventory:view" in normalized

@@ -23,7 +23,7 @@ import { UserService } from '../../services/api/UserService';
 
 export function UsersPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
-  const workspace = useUsersWorkspace();
+  const workspace = useUsersWorkspace(session?.permissions ?? []);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserDetail | null>(null);
@@ -90,7 +90,9 @@ export function UsersPage(): JSX.Element {
       </header>
 
       <div className="usr-page__panel">
-        <CustomRolesPanel onRolesChanged={() => void workspace.refresh()} />
+        {session.role === 'main_admin' && (
+          <CustomRolesPanel onRolesChanged={() => void workspace.refresh()} />
+        )}
 
         <UsersToolbar
           workspace={workspace}

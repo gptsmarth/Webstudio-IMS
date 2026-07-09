@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { salesFiltersToExportParams } from '../lib/salesExport';
 import { AuditService, type AuditLogEntry } from '../services/api/AuditService';
 import { BrandService, type Brand } from '../services/api/BrandService';
@@ -102,7 +103,7 @@ function mergeSalespeople(
   return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-export function useSalesWorkspace(): SalesWorkspaceState {
+export function useSalesWorkspace(permissions: string[] = []): SalesWorkspaceState {
   const [items, setItems] = useState<SaleListItem[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -158,8 +159,13 @@ export function useSalesWorkspace(): SalesWorkspaceState {
       const detail = await SalesService.getSale(saleId);
       setSaleDetail(detail);
       if (detail.inventory_item_id) {
-        const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
-        setAuditLogs(logs);
+        const plan = referenceDataFetchPlan(permissions);
+        if (plan.needsInventoryAudit) {
+          const logs = await AuditService.listForInventoryItem(detail.inventory_item_id);
+          setAuditLogs(logs);
+        } else {
+          setAuditLogs([]);
+        }
       } else {
         setAuditLogs([]);
       }
@@ -169,7 +175,7 @@ export function useSalesWorkspace(): SalesWorkspaceState {
     } finally {
       setDrawerLoading(false);
     }
-  }, []);
+  }, [permissions]);
 
   const selectItem = useCallback(
     (id: number | null) => {
@@ -236,13 +242,18 @@ export function useSalesWorkspace(): SalesWorkspaceState {
   );
 
   useEffect(() => {
-    void Promise.all([BrandService.listBrands(), LocationService.listLocations()])
+    const plan = referenceDataFetchPlan(permissions);
+    if (!plan.needsBrands && !plan.needsLocations) return;
+    void Promise.all([
+      plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
+      plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
+    ])
       .then(([brandList, locationList]) => {
         setBrands(brandList.filter((brand) => brand.is_active));
         setLocations(locationList.filter((location) => location.is_active));
       })
       .catch(() => undefined);
-  }, []);
+  }, [permissions]);
 
   useEffect(() => {
     void refresh();

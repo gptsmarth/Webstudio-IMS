@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { referenceDataFetchPlan } from '../../lib/permissionFetchPlan';
 import type { CatalogueTab } from '../../lib/catalogue';
 import { useCatalogueDistribution } from '../../hooks/useCatalogueDistribution';
 import { ProductModelService } from '../../services/api/ProductModelService';
@@ -10,18 +11,25 @@ import { countModelsByBrand } from '../../components/catalogue/BrandsTab';
 export function CataloguePage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const [activeTab, setActiveTab] = useState<CatalogueTab>('brands');
-  const { distribution, refresh: refreshDistribution } = useCatalogueDistribution();
+  const { distribution, refresh: refreshDistribution } = useCatalogueDistribution(
+    session?.permissions ?? [],
+  );
   const [models, setModels] = useState<Awaited<ReturnType<typeof ProductModelService.listModels>>>(
     [],
   );
 
   const loadReferenceData = useCallback(async () => {
+    const plan = referenceDataFetchPlan(session?.permissions ?? []);
+    if (!plan.needsProductModels) {
+      setModels([]);
+      return;
+    }
     try {
       setModels(await ProductModelService.listModels());
     } catch {
       setModels([]);
     }
-  }, []);
+  }, [session?.permissions]);
 
   useEffect(() => {
     void loadReferenceData();

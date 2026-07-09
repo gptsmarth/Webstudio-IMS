@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { composeModelNotes } from '../../lib/modelNotes';
+import { parseApiError } from '../../lib/apiError';
+import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload';
 import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import {
   accessoryToDisplaySpec,
@@ -10,7 +12,6 @@ import {
 import { lookupExistingModelInventory } from '../../lib/productSpecLookup';
 import type { Location } from '../../services/api/LocationService';
 import type {
-  CreateProductModelRequest,
   ProductModel,
 } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
@@ -95,6 +96,7 @@ export function AddAccessoryWizard({
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoFetchKeyRef = useRef<string | null>(null);
+  const forceRefreshOnNextSpecsFetch = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -128,6 +130,7 @@ export function AddAccessoryWizard({
     setProductImagePreview(null);
     setError(null);
     autoFetchKeyRef.current = null;
+    forceRefreshOnNextSpecsFetch.current = false;
   }, [open, locations]);
 
   useEffect(() => {
@@ -158,7 +161,7 @@ export function AddAccessoryWizard({
     setProductImageUrl(spec.product_image_url);
   }, []);
 
-  const runAutoFetch = useCallback(async (): Promise<boolean> => {
+  const runAutoFetch = useCallback(async (forceRefresh = false): Promise<boolean> => {
     const trimmed = identifier.trim();
     if (!trimmed) return false;
     setFetching(true);
@@ -168,6 +171,7 @@ export function AddAccessoryWizard({
       const internet = await fetchAccessorySpecFromInternet(trimmed, {
         identifierType,
         brandName,
+        forceRefresh,
       });
       if (internet) {
         applyAccessorySpec(internet);
@@ -176,16 +180,24 @@ export function AddAccessoryWizard({
           : null;
         if (!internet.accessory_kind) {
           setFetchMessage(
-            sourceNote
-              ? `Configuration partially fetched. ${sourceNote} Select accessory type manually if needed.`
-              : 'Configuration partially fetched — select accessory type manually if auto-detect missed it.',
+            forceRefresh
+              ? sourceNote
+                ? `Configuration re-fetched. ${sourceNote} Select accessory type manually if needed.`
+                : 'Configuration re-fetched — select accessory type manually if auto-detect missed it.'
+              : sourceNote
+                ? `Configuration partially fetched. ${sourceNote} Select accessory type manually if needed.`
+                : 'Configuration partially fetched — select accessory type manually if auto-detect missed it.',
           );
           return true;
         }
         setFetchMessage(
-          sourceNote
-            ? `Configuration auto-fetched. ${sourceNote}`
-            : 'Configuration auto-fetched — review and adjust if needed.',
+          forceRefresh
+            ? sourceNote
+              ? `Configuration re-fetched. ${sourceNote}`
+              : 'Configuration re-fetched from internet — review and adjust if needed.'
+            : sourceNote
+              ? `Configuration auto-fetched. ${sourceNote}`
+              : 'Configuration auto-fetched — review and adjust if needed.',
         );
         return true;
       }
@@ -213,7 +225,9 @@ export function AddAccessoryWizard({
       return;
     }
     autoFetchKeyRef.current = fetchKey;
-    void runAutoFetch();
+    const forceRefresh = forceRefreshOnNextSpecsFetch.current;
+    forceRefreshOnNextSpecsFetch.current = false;
+    void runAutoFetch(forceRefresh);
   }, [open, step, mode, identifier, identifierType, runAutoFetch]);
 
   useEffect(() => {
@@ -310,6 +324,14 @@ export function AddAccessoryWizard({
       setError('Enter at least one serial number and location.');
       return;
     }
+    if (locations.length === 0) {
+      setError('No store locations are available. Add a location in Catalogue first.');
+      return;
+    }
+    if (validUnits.some((unit) => !unit.current_location_id || unit.current_location_id <= 0)) {
+      setError('Select a valid location for each serial number.');
+      return;
+    }
     if (!accessoryKind) {
       setError('Accessory type is required — use Auto fetch or pick a type manually.');
       return;
@@ -330,7 +352,7 @@ export function AddAccessoryWizard({
       productModelId: mode === 'existing' ? productModelId : undefined,
       newProductModel:
         mode === 'new'
-          ? ({
+          ? sanitizeCreateProductModelPayload({
               brand_id: brandId,
               category: 'accessory',
               accessory_kind: accessoryKind,
@@ -340,7 +362,7 @@ export function AddAccessoryWizard({
               color_options: colorOptions.trim() || null,
               product_image_url: productImageUrl,
               notes: composeModelNotes(description, specNotes) || null,
-            } satisfies CreateProductModelRequest)
+            })
           : undefined,
       units: validUnits,
       status,
@@ -350,8 +372,8 @@ export function AddAccessoryWizard({
       setError(null);
       await onConfirm(payload);
       onClose();
-    } catch {
-      // parent sets error
+    } catch (err: unknown) {
+      setError(parseApiError(err, 'Unable to add accessory inventory.'));
     }
   };
 
@@ -488,7 +510,7 @@ export function AddAccessoryWizard({
                   type="button"
                   className="btn btn-secondary btn-sm"
                   disabled={fetching || !enteredIdentifier}
-                  onClick={() => void runAutoFetch()}
+                  onClick={() => void runAutoFetch(true)}
                 >
                   {fetching ? 'Fetching…' : 'Auto fetch'}
                 </button>
@@ -600,8 +622,10 @@ export function AddAccessoryWizard({
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => {
+                    forceRefreshOnNextSpecsFetch.current = true;
                     autoFetchKeyRef.current = null;
                     setAccessoryKind(null);
+                    setProductImagePreview(null);
                     setStep('model');
                   }}
                 >

@@ -66,8 +66,12 @@ export class ProductSpecService {
     model_number: string;
     model_name?: string;
     brand_name?: string;
+    force_refresh?: boolean;
   }): Promise<ProductSpecLookupResult | null> {
-    LoggingService.info('API', 'Looking up product spec via Gemini', { model: input.model_number });
+    LoggingService.info('API', 'Looking up product spec via Gemini', {
+      model: input.model_number,
+      forceRefresh: Boolean(input.force_refresh),
+    });
     const client = await ApiClientProvider.getClient();
     try {
       return await client.post<ProductSpecLookupResult>(
@@ -91,6 +95,7 @@ export class ProductSpecService {
     identifier_type?: AccessoryIdentifierType;
     brand_name?: string;
     model_name?: string;
+    force_refresh?: boolean;
   }): Promise<AccessorySpecLookupResult | null> {
     LoggingService.info('API', 'Looking up accessory spec via Gemini', { id: input.identifier });
     const client = await ApiClientProvider.getClient();

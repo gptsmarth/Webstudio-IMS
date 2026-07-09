@@ -14,6 +14,7 @@ class AiEnrichmentRepository {
     required String brandName,
     required String modelNumber,
     String? modelName,
+    bool forceRefresh = false,
   }) async {
     return _api.post(
       ApiPaths.productModelsSpecLookup,
@@ -21,6 +22,7 @@ class AiEnrichmentRepository {
         'brand_name': brandName,
         'model_number': modelNumber,
         if (modelName != null) 'model_name': modelName,
+        if (forceRefresh) 'force_refresh': true,
       },
       parser: (json) => asJsonMap(json),
     );
@@ -31,6 +33,7 @@ class AiEnrichmentRepository {
     AccessoryIdentifierType identifierType = AccessoryIdentifierType.modelNumber,
     String? brandName,
     String? modelName,
+    bool forceRefresh = false,
   }) async {
     return _api.post(
       ApiPaths.productModelsAccessorySpecLookup,
@@ -39,6 +42,7 @@ class AiEnrichmentRepository {
         'identifier_type': identifierTypeToApi(identifierType),
         if (brandName != null && brandName.trim().isNotEmpty) 'brand_name': brandName.trim(),
         if (modelName != null && modelName.trim().isNotEmpty) 'model_name': modelName.trim(),
+        if (forceRefresh) 'force_refresh': true,
       },
       parser: (json) => asJsonMap(json),
     );

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { STORAGE_TYPES, STORAGE_UNITS } from '../../lib/catalogue';
 import { composeModelNotes } from '../../lib/modelNotes';
+import { parseApiError } from '../../lib/apiError';
+import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload';
 import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import {
   fetchProductSpecFromInternet,
@@ -112,6 +114,7 @@ export function AddLaptopWizard({
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoFetchTriggered = useRef(false);
+  const forceRefreshOnNextSpecsFetch = useRef(false);
 
   const brandModels = productModels.filter((model) => model.brand_id === brandId);
   const selectedModel =
@@ -152,6 +155,7 @@ export function AddLaptopWizard({
     setProductImagePreview(null);
     setError(null);
     autoFetchTriggered.current = false;
+    forceRefreshOnNextSpecsFetch.current = false;
   }, [open, locations]);
 
   useEffect(() => {
@@ -209,7 +213,7 @@ export function AddLaptopWizard({
     [modelName],
   );
 
-  const runGeminiFetch = useCallback(async (): Promise<boolean> => {
+  const runGeminiFetch = useCallback(async (forceRefresh = false): Promise<boolean> => {
     if (!modelNumber.trim()) return false;
     setFetching(true);
     setFetchMessage(null);
@@ -218,6 +222,7 @@ export function AddLaptopWizard({
       const internet = await fetchProductSpecFromInternet(modelNumber, {
         modelName: modelName.trim() || undefined,
         brandName,
+        forceRefresh,
       });
       if (internet) {
         applyInternetSpec(internet);
@@ -225,9 +230,13 @@ export function AddLaptopWizard({
           ? internet.notes.split('\n---\n').pop()?.trim()
           : null;
         setFetchMessage(
-          sourceNote
-            ? `Configuration auto-fetched. ${sourceNote}`
-            : 'Configuration auto-fetched — review and adjust if needed.',
+          forceRefresh
+            ? sourceNote
+              ? `Configuration re-fetched. ${sourceNote}`
+              : 'Configuration re-fetched from internet — review and adjust if needed.'
+            : sourceNote
+              ? `Configuration auto-fetched. ${sourceNote}`
+              : 'Configuration auto-fetched — review and adjust if needed.',
         );
         return true;
       }
@@ -254,7 +263,9 @@ export function AddLaptopWizard({
       return;
     }
     autoFetchTriggered.current = true;
-    void runGeminiFetch();
+    const forceRefresh = forceRefreshOnNextSpecsFetch.current;
+    forceRefreshOnNextSpecsFetch.current = false;
+    void runGeminiFetch(forceRefresh);
   }, [open, step, mode, modelNumber, runGeminiFetch]);
 
   useEffect(() => {
@@ -347,6 +358,14 @@ export function AddLaptopWizard({
       setError('Enter at least one serial number and location.');
       return;
     }
+    if (locations.length === 0) {
+      setError('No store locations are available. Add a location in Catalogue first.');
+      return;
+    }
+    if (validUnits.some((unit) => !unit.current_location_id || unit.current_location_id <= 0)) {
+      setError('Select a valid location for each serial number.');
+      return;
+    }
 
     const resolvedColor = defaultUnitColorFromOptions(
       mode === 'existing' ? selectedModel?.color_options : colorOptions,
@@ -360,6 +379,16 @@ export function AddLaptopWizard({
     if (mode === 'new') {
       if (!modelNumber.trim() || !modelName.trim() || !cpu.trim()) {
         setError('Model number, name, and CPU are required.');
+        return;
+      }
+      const ram = Number(ramGb);
+      const storage = Number(storageValue);
+      if (!Number.isFinite(ram) || ram <= 0) {
+        setError('Enter a valid RAM size (GB).');
+        return;
+      }
+      if (!Number.isFinite(storage) || storage <= 0) {
+        setError('Enter a valid storage size.');
         return;
       }
     }
@@ -377,7 +406,7 @@ export function AddLaptopWizard({
       status,
       newProductModel:
         mode === 'new'
-          ? {
+          ? sanitizeCreateProductModelPayload({
               brand_id: brandId,
               model_number: modelNumber.trim(),
               model_name: modelName.trim(),
@@ -391,15 +420,15 @@ export function AddLaptopWizard({
               color_options: colorOptions.trim() || null,
               product_image_url: productImageUrl,
               notes: composeModelNotes(description, specNotes),
-            }
+            })
           : undefined,
     };
 
     try {
       await onConfirm(payload);
       onClose();
-    } catch {
-      // parent sets error
+    } catch (err: unknown) {
+      setError(parseApiError(err, 'Unable to add laptop inventory.'));
     }
   };
 
@@ -506,7 +535,7 @@ export function AddLaptopWizard({
                   type="button"
                   className="btn btn-secondary btn-sm"
                   disabled={fetching || !modelNumber.trim()}
-                  onClick={() => void runGeminiFetch()}
+                  onClick={() => void runGeminiFetch(true)}
                 >
                   {fetching ? 'Fetching…' : 'Auto fetch'}
                 </button>
@@ -633,7 +662,9 @@ export function AddLaptopWizard({
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => {
+                    forceRefreshOnNextSpecsFetch.current = true;
                     autoFetchTriggered.current = false;
+                    setProductImagePreview(null);
                     setStep('model');
                   }}
                 >

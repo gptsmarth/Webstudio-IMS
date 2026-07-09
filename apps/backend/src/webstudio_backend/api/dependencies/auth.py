@@ -126,6 +126,17 @@ MainAdminDep = Annotated[AuthenticatedUser, Depends(require_main_admin)]
 
 # Inventory
 InventoryViewDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:view"))]
+InventoryDistributionViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(
+        require_any_permission(
+            "inventory:view",
+            "brands:view",
+            "product_models:view",
+            "reports:view",
+        ),
+    ),
+]
 InventoryCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:create"))]
 InventoryEditDep = Annotated[AuthenticatedUser, Depends(require_permission("inventory:edit"))]
 InventoryTransferDep = Annotated[
@@ -148,11 +159,17 @@ DashboardViewDep = Annotated[AuthenticatedUser, Depends(require_permission("dash
 
 # Catalogue
 BrandsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("brands:view"))]
-# Stock browse and inventory screens need the full brand catalogue for users with inventory access.
+# Stock, sales, reports, and audit screens need catalogue reads for filters and hierarchy views.
 BrandsOrInventoryViewDep = Annotated[
     AuthenticatedUser,
     Depends(
-        require_any_permission("brands:view", "inventory:view", "inventory:create"),
+        require_any_permission(
+            "brands:view",
+            "inventory:view",
+            "inventory:create",
+            "sales:view",
+            "reports:view",
+        ),
     ),
 ]
 BrandsCreateDep = Annotated[
@@ -171,11 +188,19 @@ ProductModelsOrInventoryViewDep = Annotated[
             "product_models:view",
             "inventory:view",
             "inventory:create",
+            "sales:view",
+            "reports:view",
         ),
     ),
 ]
 ProductModelsCreateDep = Annotated[
-    AuthenticatedUser, Depends(require_permission("product_models:create"))
+    AuthenticatedUser,
+    Depends(
+        require_any_permission(
+            "product_models:create",
+            "inventory:create",
+        ),
+    ),
 ]
 ProductModelsEditDep = Annotated[
     AuthenticatedUser,
@@ -198,12 +223,31 @@ ProductModelsSellingPriceDep = Annotated[
 ]
 
 LocationsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:view"))]
+# Stock browse, transfers, and inventory screens need location names for users with inventory access.
+LocationsOrInventoryViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(
+        require_any_permission(
+            "locations:view",
+            "inventory:view",
+            "inventory:create",
+            "inventory:transfer",
+            "sales:view",
+            "reports:view",
+            "audit:view",
+        ),
+    ),
+]
 LocationsCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:create"))]
 LocationsEditDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:edit"))]
 LocationsDeleteDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:delete"))]
 
 # Users
 UsersViewDep = Annotated[AuthenticatedUser, Depends(require_permission("users:view"))]
+UsersOrAuditViewDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_any_permission("users:view", "audit:view")),
+]
 UsersCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("users:create"))]
 UsersEditDep = Annotated[AuthenticatedUser, Depends(require_permission("users:edit"))]
 UsersResetPasswordDep = Annotated[
@@ -214,6 +258,10 @@ UsersDeactivateDep = Annotated[AuthenticatedUser, Depends(require_permission("us
 
 # Audit
 AuditViewDep = Annotated[AuthenticatedUser, Depends(require_permission("audit:view"))]
+AuditViewOrLifecycleDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_any_permission("audit:view", "audit:lifecycle")),
+]
 AuditLifecycleDep = Annotated[AuthenticatedUser, Depends(require_permission("audit:lifecycle"))]
 
 # Notifications

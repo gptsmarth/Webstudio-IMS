@@ -21,6 +21,7 @@ import { canArchiveProductModels, canWriteInventory } from '../../lib/inventory'
 import { matchesCategoryFilter } from '../../lib/inventoryHierarchy';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
+import { ProductImageService } from '../../services/images/ProductImageService';
 import { useInventoryNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore, useNavigationStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
@@ -28,8 +29,8 @@ import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 export function InventoryPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const setRoute = useNavigationStore((state) => state.setRoute);
-  const hierarchy = useInventoryHierarchyData();
-  const workspace = useInventoryWorkspace();
+  const hierarchy = useInventoryHierarchyData(session?.permissions ?? []);
+  const workspace = useInventoryWorkspace(session?.permissions ?? []);
   const nav = useInventoryNavStore();
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [addOpen, setAddOpen] = useState(false);
@@ -125,6 +126,9 @@ export function InventoryPage(): JSX.Element {
       setModelActionLoading(true);
       try {
         await ProductModelService.updateModel(editModel.id, patch);
+        if (patch.product_image_url !== undefined) {
+          ProductImageService.clearCachedForModel(editModel.id);
+        }
         await hierarchy.refresh();
         await workspace.refresh();
         if (workspace.selectedItem?.product_model_id === editModel.id) {

@@ -16,7 +16,7 @@ import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 
 export function AuditPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
-  const workspace = useAuditWorkspace();
+  const workspace = useAuditWorkspace(session?.permissions ?? []);
 
   const permissionDenied = useMemo(() => {
     if (!session) return 'Sign in again to access the audit center.';

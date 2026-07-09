@@ -13,6 +13,7 @@ from webstudio_backend.api.dependencies.auth import (
     UsersCreateDep,
     UsersDeactivateDep,
     UsersEditDep,
+    UsersOrAuditViewDep,
     UsersResetPasswordDep,
     UsersViewDep,
 )
@@ -149,7 +150,7 @@ async def _custom_role_name_map(db_session: AsyncSession, users: list[User]) -> 
 @router.get("")
 async def list_users(
     request: Request,
-    current: UsersViewDep,
+    current: UsersOrAuditViewDep,
     db_session: AsyncSession = DbSessionDep,
     status_filter: UserStatus | None = Query(default=None, alias="status"),
     role: UserRole | None = None,

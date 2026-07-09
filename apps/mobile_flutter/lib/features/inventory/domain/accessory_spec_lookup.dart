@@ -84,10 +84,12 @@ Future<FetchedAccessorySpec?> fetchAccessorySpecFromInternet(
   required String identifier,
   required AccessoryIdentifierType identifierType,
   String? brandName,
+  bool forceRefresh = false,
 }) {
   final normalized = identifier.trim();
   final normalizedBrand = brandName?.trim().toLowerCase() ?? '';
-  final inflightKey = '${identifierTypeToApi(identifierType)}:${normalized.toLowerCase()}|$normalizedBrand';
+  final inflightKey =
+      '${identifierTypeToApi(identifierType)}:${normalized.toLowerCase()}|$normalizedBrand${forceRefresh ? '|refresh' : ''}';
   final existing = _inflightAccessoryLookups[inflightKey];
   if (existing != null) return existing;
 

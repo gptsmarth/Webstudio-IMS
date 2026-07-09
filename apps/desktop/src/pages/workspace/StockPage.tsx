@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useInventoryHierarchyData';
 import { InventoryService } from '../../services/api/InventoryService';
 import { ProductModelService } from '../../services/api/ProductModelService';
+import { ProductImageService } from '../../services/images/ProductImageService';
 import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
@@ -25,7 +26,7 @@ import { BrandLogoImage } from '../../components/branding/BrandLogoImage';
 
 export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
-  const hierarchy = useInventoryHierarchyData();
+  const hierarchy = useInventoryHierarchyData(session?.permissions ?? []);
   const nav = useStockNavStore();
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
@@ -110,6 +111,9 @@ export function StockPage(): JSX.Element {
       setActionError(null);
       try {
         await ProductModelService.updateModel(editModelId, patch);
+        if (patch.product_image_url !== undefined) {
+          ProductImageService.clearCachedForModel(editModelId);
+        }
         await hierarchy.refresh();
       } catch (err: unknown) {
         const message = err as { message?: string };

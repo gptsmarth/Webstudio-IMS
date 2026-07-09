@@ -167,3 +167,39 @@ async def test_create_product_model_validates_brand(
     resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
     assert resp.status_code == 400
     assert "does not exist" in resp.json()["error"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_product_model_normalizes_optional_payload_fields(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    admin_headers: dict[str, str],
+) -> None:
+    brand_repo = BrandRepository(db_session)
+    brand = await brand_repo.create("Lenovo")
+    await db_session.commit()
+
+    long_image_url = "https://example.com/" + ("a" * 600)
+    payload = {
+        "brand_id": brand.id,
+        "model_number": "82VG00XXIN",
+        "model_name": "IdeaPad Slim 3",
+        "cpu": "Intel Core i5",
+        "gpu": "",
+        "ram_gb": 16,
+        "storage_value": 512,
+        "storage_unit": "GB",
+        "storage_type": "SSD",
+        "display": "  ",
+        "color_options": "",
+        "product_image_url": long_image_url,
+        "search_aliases": "",
+        "notes": "",
+    }
+
+    resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
+    assert resp.status_code == 201
+    pm_data = resp.json()["data"]
+    assert pm_data["gpu"] is None
+    assert pm_data["display"] is None
+    assert pm_data["product_image_url"] is None

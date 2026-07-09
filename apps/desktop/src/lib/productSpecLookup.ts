@@ -55,11 +55,11 @@ const inflightSpecLookups = new Map<string, Promise<FetchedProductSpec | null>>(
 
 export async function fetchProductSpecFromInternet(
   modelNumber: string,
-  options?: { modelName?: string; brandName?: string },
+  options?: { modelName?: string; brandName?: string; forceRefresh?: boolean },
 ): Promise<FetchedProductSpec | null> {
   const normalizedModel = modelNumber.trim();
   const normalizedBrand = options?.brandName?.trim().toLowerCase() ?? '';
-  const inflightKey = `${normalizedModel.toLowerCase()}|${normalizedBrand}`;
+  const inflightKey = `${normalizedModel.toLowerCase()}|${normalizedBrand}${options?.forceRefresh ? '|refresh' : ''}`;
   const existing = inflightSpecLookups.get(inflightKey);
   if (existing) {
     return existing;
@@ -70,6 +70,7 @@ export async function fetchProductSpecFromInternet(
       model_number: normalizedModel,
       model_name: options?.modelName?.trim() || undefined,
       brand_name: options?.brandName?.trim() || undefined,
+      force_refresh: options?.forceRefresh ?? false,
     });
 
     if (!result?.cpu) return null;

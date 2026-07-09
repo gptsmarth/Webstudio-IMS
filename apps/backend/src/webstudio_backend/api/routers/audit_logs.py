@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep
+from webstudio_backend.api.dependencies.auth import AuditLifecycleDep, AuditViewDep, AuditViewOrLifecycleDep
 from webstudio_backend.api.response_helpers import build_page_meta
 from webstudio_backend.api.schemas.audit_log import AuditLogDetail, AuditLogListEntry
 from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_now_iso
@@ -217,7 +217,7 @@ async def audit_history_by_entity(
 @router.get("/by-inventory-item/{inventory_item_id}")
 async def audit_history_by_inventory_item(
     request: Request,
-    current: AuditViewDep,
+    current: AuditViewOrLifecycleDep,
     inventory_item_id: uuid.UUID,
     db_session: AsyncSession = DbSessionDep,
     page: int = Query(default=1, ge=1),

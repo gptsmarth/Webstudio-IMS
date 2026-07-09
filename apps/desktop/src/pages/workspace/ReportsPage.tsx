@@ -12,7 +12,7 @@ import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 export function ReportsPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const canExport = session ? canExportReports(session.permissions) : false;
-  const builder = useReportBuilder();
+  const builder = useReportBuilder(session?.permissions ?? []);
 
   return (
     <div className="reports-page report-center animate-fade-in">

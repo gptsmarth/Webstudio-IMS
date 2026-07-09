@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
+import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { BrandService, type Brand } from '../services/api/BrandService';
 import { DashboardService, type DashboardDistribution } from '../services/api/DashboardService';
 import { InventoryService, type InventoryItemDetail } from '../services/api/InventoryService';
@@ -67,7 +68,7 @@ async function fetchAllInventoryItems(): Promise<InventoryItemDetail[]> {
   return items;
 }
 
-export function useInventoryHierarchyData(): InventoryHierarchyData {
+export function useInventoryHierarchyData(permissions: string[] = []): InventoryHierarchyData {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<ProductModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -80,12 +81,15 @@ export function useInventoryHierarchyData(): InventoryHierarchyData {
     setLoading(true);
     setError(null);
     try {
+      const plan = referenceDataFetchPlan(permissions);
       const [brandList, modelList, locationList, dist, inventoryItems] = await Promise.all([
-        BrandService.listBrands(),
-        ProductModelService.listModels({ archived: false }),
-        LocationService.listLocations(),
-        DashboardService.getDistribution(),
-        fetchAllInventoryItems(),
+        plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
+        plan.needsProductModels
+          ? ProductModelService.listModels({ archived: false })
+          : Promise.resolve([]),
+        plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
+        plan.needsDistribution ? DashboardService.getDistribution() : Promise.resolve(null),
+        plan.needsInventoryItems ? fetchAllInventoryItems() : Promise.resolve([]),
       ]);
       setBrands(brandList);
       setModels(modelList);
@@ -98,7 +102,7 @@ export function useInventoryHierarchyData(): InventoryHierarchyData {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [permissions]);
 
   useEffect(() => {
     void refresh();

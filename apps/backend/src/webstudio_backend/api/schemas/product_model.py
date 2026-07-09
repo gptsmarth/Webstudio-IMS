@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -39,6 +39,39 @@ class CreateProductModelRequest(BaseModel):
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
     purchase_price: Decimal | None = Field(default=None, ge=0)
     selling_price: Decimal | None = Field(default=None, ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_optional_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        for field in (
+            "part_number",
+            "cpu",
+            "gpu",
+            "display",
+            "color_options",
+            "product_image_url",
+            "search_aliases",
+            "notes",
+        ):
+            value = normalized.get(field)
+            if not isinstance(value, str):
+                continue
+            stripped = value.strip()
+            if not stripped:
+                normalized[field] = None
+            else:
+                normalized[field] = stripped
+
+        image_url = normalized.get("product_image_url")
+        if isinstance(image_url, str) and len(image_url) > 512:
+            # Long remote URLs are resolved after create; omit to avoid 422 validation.
+            normalized["product_image_url"] = None
+
+        return normalized
 
     @model_validator(mode="after")
     def validate_category_fields(self) -> CreateProductModelRequest:
@@ -89,6 +122,7 @@ class ProductModelSpecLookupRequest(BaseModel):
     model_number: str = Field(min_length=1, max_length=64)
     model_name: str | None = Field(default=None, max_length=128)
     brand_name: str | None = Field(default=None, max_length=128)
+    force_refresh: bool = False
 
 
 class AccessorySpecLookupRequest(BaseModel):
@@ -97,6 +131,7 @@ class AccessorySpecLookupRequest(BaseModel):
     brand_name: str | None = Field(default=None, max_length=128)
     accessory_kind: AccessoryKind | None = None
     model_name: str | None = Field(default=None, max_length=128)
+    force_refresh: bool = False
 
 
 class ProductModelSpecLookupResponse(BaseModel):
