@@ -4,12 +4,18 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../domain/tally_models.dart';
 
 class TallyOperationalMetricsGrid extends StatelessWidget {
-  const TallyOperationalMetricsGrid({super.key, required this.operational});
+  const TallyOperationalMetricsGrid({
+    super.key,
+    required this.operational,
+    this.showSyncCheckpoint = false,
+  });
 
   final TallyOperationalSummary operational;
+  final bool showSyncCheckpoint;
 
   @override
   Widget build(BuildContext context) {
+    final checkpoint = operational.syncCheckpoint;
     final items = <_MetricItem>[
       _MetricItem('Connected', operational.connectionLabel, highlight: operational.isConnected),
       _MetricItem('Auto sync', operational.autoSyncEnabled ? 'Enabled' : 'Disabled'),
@@ -26,6 +32,15 @@ class TallyOperationalMetricsGrid extends StatelessWidget {
       _MetricItem('Scheduler status', operational.schedulerStatusLabel, wide: true),
       if (operational.pendingRetry && operational.retryCountdownLabel != null)
         _MetricItem('Retry countdown', operational.retryCountdownLabel!, warn: true),
+      if (showSyncCheckpoint && checkpoint != null) ...[
+        _MetricItem('Last imported voucher date', checkpoint.lastImportedVoucherDate ?? '—'),
+        _MetricItem('Last processed GUID', checkpoint.lastProcessedGuid ?? '—'),
+        _MetricItem('Last processed Master ID', checkpoint.lastProcessedMasterId ?? '—'),
+        _MetricItem('Last processed voucher type', checkpoint.lastProcessedVoucherType ?? '—'),
+        _MetricItem('Last printed invoice', checkpoint.lastProcessedInvoiceNumber ?? '—'),
+        _MetricItem('Checkpoint sync', _formatDateTime(checkpoint.lastSuccessfulSyncAt)),
+        _MetricItem('Scheduler state', checkpoint.schedulerStatusLabel, wide: true),
+      ],
     ];
 
     return LayoutBuilder(

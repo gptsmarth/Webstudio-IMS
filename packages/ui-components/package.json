@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/ui-components",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -14,9 +14,9 @@
     "react": "^18.3.1"
   },
   "webstudio": {
-    "buildNumber": 11,
+    "buildNumber": 12,
     "releaseChannel": "stable",
-    "releaseDate": "2026-07-09",
+    "releaseDate": "2026-07-10",
     "gitCommit": "",
     "gitShort": ""
   }

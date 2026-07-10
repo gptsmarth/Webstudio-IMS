@@ -1,4 +1,16 @@
-/** Business-facing Tally display helpers — no technical identifiers. */
+/** Business-facing Tally display helpers. */
+
+/** Main Admin diagnostics — GUID watermark checkpoint (not sync identity for UI). */
+export interface TallySyncCheckpoint {
+  last_imported_voucher_date: string | null;
+  last_processed_guid: string | null;
+  last_processed_master_id: string | null;
+  last_processed_voucher_type: string | null;
+  last_processed_invoice_number: string | null;
+  last_successful_sync_at: string | null;
+  scheduler_status: string;
+  scheduler_status_label: string;
+}
 
 export interface TallyOperationalSummary {
   connection_label: string;
@@ -23,6 +35,8 @@ export interface TallyOperationalSummary {
   sync_health: 'healthy' | 'degraded' | 'offline';
   pending_retry: boolean;
   todays_imports: number;
+  /** Present on dashboard; show GUID fields only to Main Admin. */
+  sync_checkpoint?: TallySyncCheckpoint | null;
 }
 
 export interface TallySyncHistoryEntry {

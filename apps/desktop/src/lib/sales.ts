@@ -18,6 +18,22 @@ export function saleSourceLabel(source: string): string {
   }
 }
 
+/** Operator-facing Tally invoice processing status (from backend label). */
+export function tallyInvoiceStatusLabel(status: string | null | undefined): string {
+  switch (status) {
+    case 'processed':
+      return 'Processed';
+    case 'processed_with_warnings':
+      return 'Processed With Warnings';
+    case 'skipped':
+      return 'Skipped';
+    case 'failed':
+      return 'Failed';
+    default:
+      return status ? status.replaceAll('_', ' ') : '—';
+  }
+}
+
 export function saleSourceBadgeClass(source: string): string {
   switch (source) {
     case 'manual':

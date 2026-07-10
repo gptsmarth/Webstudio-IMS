@@ -1,5 +1,43 @@
 import 'package:equatable/equatable.dart';
 
+class TallySyncCheckpoint extends Equatable {
+  const TallySyncCheckpoint({
+    this.lastImportedVoucherDate,
+    this.lastProcessedGuid,
+    this.lastProcessedMasterId,
+    this.lastProcessedVoucherType,
+    this.lastProcessedInvoiceNumber,
+    this.lastSuccessfulSyncAt,
+    required this.schedulerStatus,
+    required this.schedulerStatusLabel,
+  });
+
+  final String? lastImportedVoucherDate;
+  final String? lastProcessedGuid;
+  final String? lastProcessedMasterId;
+  final String? lastProcessedVoucherType;
+  final String? lastProcessedInvoiceNumber;
+  final String? lastSuccessfulSyncAt;
+  final String schedulerStatus;
+  final String schedulerStatusLabel;
+
+  factory TallySyncCheckpoint.fromJson(Map<String, dynamic> json) {
+    return TallySyncCheckpoint(
+      lastImportedVoucherDate: json['last_imported_voucher_date'] as String?,
+      lastProcessedGuid: json['last_processed_guid'] as String?,
+      lastProcessedMasterId: json['last_processed_master_id'] as String?,
+      lastProcessedVoucherType: json['last_processed_voucher_type'] as String?,
+      lastProcessedInvoiceNumber: json['last_processed_invoice_number'] as String?,
+      lastSuccessfulSyncAt: json['last_successful_sync_at'] as String?,
+      schedulerStatus: json['scheduler_status'] as String? ?? 'disabled',
+      schedulerStatusLabel: json['scheduler_status_label'] as String? ?? '—',
+    );
+  }
+
+  @override
+  List<Object?> get props => [lastProcessedGuid, lastImportedVoucherDate, schedulerStatus];
+}
+
 class TallyOperationalSummary extends Equatable {
   const TallyOperationalSummary({
     required this.connectionLabel,
@@ -24,6 +62,7 @@ class TallyOperationalSummary extends Equatable {
     required this.syncHealth,
     required this.pendingRetry,
     required this.todaysImports,
+    this.syncCheckpoint,
   });
 
   final String connectionLabel;
@@ -48,8 +87,10 @@ class TallyOperationalSummary extends Equatable {
   final String syncHealth;
   final bool pendingRetry;
   final int todaysImports;
+  final TallySyncCheckpoint? syncCheckpoint;
 
   factory TallyOperationalSummary.fromJson(Map<String, dynamic> json) {
+    final checkpointJson = json['sync_checkpoint'];
     return TallyOperationalSummary(
       connectionLabel: json['connection_label'] as String? ?? 'Disconnected',
       isConnected: json['is_connected'] as bool? ?? false,
@@ -73,6 +114,9 @@ class TallyOperationalSummary extends Equatable {
       syncHealth: json['sync_health'] as String? ?? 'offline',
       pendingRetry: json['pending_retry'] as bool? ?? false,
       todaysImports: json['todays_imports'] as int? ?? 0,
+      syncCheckpoint: checkpointJson is Map<String, dynamic>
+          ? TallySyncCheckpoint.fromJson(checkpointJson)
+          : null,
     );
   }
 

@@ -21,6 +21,55 @@ export interface SaleListItem {
   recorded_by_display_name: string | null;
 }
 
+export interface TrackedInvoiceProduct {
+  line_index: number;
+  product_name: string | null;
+  serial_number: string | null;
+  serial_source?: string | null;
+  serial_source_label?: string | null;
+  sale_id: number | null;
+  rate: string | number | null;
+  line_total: string | number | null;
+  review_required: boolean;
+}
+
+export interface AdditionalInvoiceProduct {
+  line_index: number;
+  stock_item_name: string | null;
+  quantity: string | null;
+  rate: string | number | null;
+  taxable_amount: string | number | null;
+  cgst_amount: string | number | null;
+  sgst_amount: string | number | null;
+  igst_amount: string | number | null;
+  cess_amount: string | number | null;
+  line_total: string | number | null;
+  extracted_serial: string | null;
+  match_result: string | null;
+  decision_reason: string | null;
+}
+
+export interface UnmatchedSerializedItem {
+  line_index: number;
+  product_name: string | null;
+  serial_number: string | null;
+  serial_source?: string | null;
+  serial_source_label?: string | null;
+  invoice_amount: string | number | null;
+  reason: string;
+}
+
+export interface InvoiceTotals {
+  subtotal: string | number | null;
+  discount_amount: string | number | null;
+  round_off: string | number | null;
+  cgst_amount: string | number | null;
+  sgst_amount: string | number | null;
+  igst_amount: string | number | null;
+  cess_amount: string | number | null;
+  grand_total: string | number | null;
+}
+
 export interface SaleDetail extends SaleListItem {
   brand_id: number | null;
   product_model_id: string | null;
@@ -35,7 +84,22 @@ export interface SaleDetail extends SaleListItem {
   tally_company_name: string | null;
   tally_voucher_number: string | null;
   printed_invoice_number: string | null;
+  tally_voucher_guid?: string | null;
+  tally_master_id?: string | null;
   tally_voucher_type: string | null;
+  review_required?: boolean;
+  review_reason?: string | null;
+  invoice_model_name?: string | null;
+  ims_model_name?: string | null;
+  serial_source?: string | null;
+  serial_source_label?: string | null;
+  invoice_status?: string | null;
+  tracked_products?: TrackedInvoiceProduct[];
+  additional_products?: AdditionalInvoiceProduct[];
+  unmatched_serialized_items?: UnmatchedSerializedItem[];
+  invoice_totals?: InvoiceTotals | null;
+  original_xml_available?: boolean;
+  imported_at?: string | null;
   created_at: string;
 }
 

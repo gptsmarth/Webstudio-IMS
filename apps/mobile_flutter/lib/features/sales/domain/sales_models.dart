@@ -118,6 +118,17 @@ class SaleDetail extends Equatable {
     this.tallyVoucherNumber,
     this.printedInvoiceNumber,
     this.tallyVoucherType,
+    this.tallyVoucherGuid,
+    this.tallyMasterId,
+    this.reviewRequired = false,
+    this.reviewReason,
+    this.invoiceStatus,
+    this.serialSourceLabel,
+    this.trackedProducts = const [],
+    this.additionalProducts = const [],
+    this.unmatchedSerializedItems = const [],
+    this.invoiceTotals,
+    this.importedAt,
     required this.createdAt,
   });
 
@@ -151,6 +162,17 @@ class SaleDetail extends Equatable {
   final String? tallyVoucherNumber;
   final String? printedInvoiceNumber;
   final String? tallyVoucherType;
+  final String? tallyVoucherGuid;
+  final String? tallyMasterId;
+  final bool reviewRequired;
+  final String? reviewReason;
+  final String? invoiceStatus;
+  final String? serialSourceLabel;
+  final List<Map<String, dynamic>> trackedProducts;
+  final List<Map<String, dynamic>> additionalProducts;
+  final List<Map<String, dynamic>> unmatchedSerializedItems;
+  final Map<String, dynamic>? invoiceTotals;
+  final String? importedAt;
   final String createdAt;
 
   String get specsLabel {
@@ -189,6 +211,23 @@ class SaleDetail extends Equatable {
         tallyVoucherNumber: json['tally_voucher_number'] as String?,
         printedInvoiceNumber: json['printed_invoice_number'] as String?,
         tallyVoucherType: json['tally_voucher_type'] as String?,
+        tallyVoucherGuid: json['tally_voucher_guid'] as String?,
+        tallyMasterId: json['tally_master_id'] as String?,
+        reviewRequired: json['review_required'] as bool? ?? false,
+        reviewReason: json['review_reason'] as String?,
+        invoiceStatus: json['invoice_status'] as String?,
+        serialSourceLabel: json['serial_source_label'] as String?,
+        trackedProducts: (json['tracked_products'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
+        additionalProducts: (json['additional_products'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
+        unmatchedSerializedItems: (json['unmatched_serialized_items'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
+        invoiceTotals: json['invoice_totals'] as Map<String, dynamic>?,
+        importedAt: json['imported_at'] as String?,
         createdAt: json['created_at'] as String,
       );
 

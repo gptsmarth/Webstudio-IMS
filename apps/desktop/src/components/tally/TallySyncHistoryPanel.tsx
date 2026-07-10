@@ -7,6 +7,7 @@ import {
   type TallySyncHistoryEntry,
 } from '../../lib/tallyDisplay';
 import { TallyService, type TallySyncHistoryFilters } from '../../services/api/TallyService';
+import { useAuthStore } from '../../store';
 
 interface TallySyncHistoryPanelProps {
   open: boolean;
@@ -222,6 +223,10 @@ export function TallyOperationalMetrics({
 }: {
   operational: TallyOperationalSummary;
 }): JSX.Element {
+  const session = useAuthStore((state) => state.session);
+  const isMainAdmin = session?.role === 'main_admin';
+  const checkpoint = operational.sync_checkpoint;
+
   return (
     <div className="tally-ops-grid">
       <div className="tally-ops-card">
@@ -298,6 +303,61 @@ export function TallyOperationalMetrics({
           </span>
         </div>
       )}
+
+      {isMainAdmin && checkpoint ? (
+        <>
+          <div className="tally-ops-card tally-ops-card--wide">
+            <span className="tally-ops-card__label">Sync checkpoint (diagnostics)</span>
+            <span className="tally-ops-card__value tally-ops-card__value--muted">
+              GUID watermark — Main Admin only
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Last imported voucher date</span>
+            <span className="tally-ops-card__value">
+              {checkpoint.last_imported_voucher_date ?? '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Last processed GUID</span>
+            <span className="tally-ops-card__value col-mono">
+              {checkpoint.last_processed_guid ?? '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Last processed Master ID</span>
+            <span className="tally-ops-card__value col-mono">
+              {checkpoint.last_processed_master_id ?? '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Last processed voucher type</span>
+            <span className="tally-ops-card__value">
+              {checkpoint.last_processed_voucher_type ?? '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Last printed invoice number</span>
+            <span className="tally-ops-card__value">
+              {checkpoint.last_processed_invoice_number ?? '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card">
+            <span className="tally-ops-card__label">Checkpoint last successful sync</span>
+            <span className="tally-ops-card__value">
+              {checkpoint.last_successful_sync_at
+                ? formatDateTime(checkpoint.last_successful_sync_at)
+                : '—'}
+            </span>
+          </div>
+          <div className="tally-ops-card tally-ops-card--wide">
+            <span className="tally-ops-card__label">Current scheduler state</span>
+            <span className="tally-ops-card__value">
+              {checkpoint.scheduler_status_label || checkpoint.scheduler_status || '—'}
+            </span>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

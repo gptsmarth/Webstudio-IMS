@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../../settings/data/settings_repository.dart';
 import '../data/tally_repository.dart';
 import 'widgets/tally_operational_widgets.dart';
@@ -102,10 +103,15 @@ class _TallyScreenState extends ConsumerState<TallyScreen> {
             loading: () => const LinearProgressIndicator(),
             error: (error, _) => Text(error.toString()),
             data: (data) {
+              final isMainAdmin =
+                  ref.watch(authControllerProvider).user?.role == 'main_admin';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TallyOperationalMetricsGrid(operational: data.operational),
+                  TallyOperationalMetricsGrid(
+                    operational: data.operational,
+                    showSyncCheckpoint: isMainAdmin,
+                  ),
                   if (data.lastError != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text(

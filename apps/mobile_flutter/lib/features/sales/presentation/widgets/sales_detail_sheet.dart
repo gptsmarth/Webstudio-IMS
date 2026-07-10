@@ -75,6 +75,15 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
 
     final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
     final canDelete = canDeleteSale(permissions, detail.inventoryItemId);
+    final isMainAdmin = ref.watch(authControllerProvider).user?.role == 'main_admin';
+    final invoiceStatusLabel = switch (detail.invoiceStatus) {
+      'processed' => 'Processed',
+      'processed_with_warnings' => 'Processed With Warnings',
+      'skipped' => 'Skipped',
+      'failed' => 'Failed',
+      null => null,
+      final other => other.replaceAll('_', ' '),
+    };
 
     return DraggableScrollableSheet(
       initialChildSize: 0.78,
@@ -107,6 +116,17 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                         Chip(label: Text(saleSourceLabel(detail.saleSource))),
                       ],
                     ),
+                    if (detail.reviewRequired) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Card(
+                        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.35),
+                        child: ListTile(
+                          dense: true,
+                          title: const Text('Review required'),
+                          subtitle: Text(detail.reviewReason ?? 'This Tally invoice needs operator review.'),
+                        ),
+                      ),
+                    ],
                     if (canDelete) ...[
                       const SizedBox(height: AppSpacing.md),
                       Align(
@@ -128,6 +148,8 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     _TimelineTile(label: 'Sold on', date: detail.soldAt),
                     const Divider(height: 32),
                     const _SectionTitle('Invoice'),
+                    if (invoiceStatusLabel != null)
+                      _InfoRow(label: 'Invoice status', value: invoiceStatusLabel),
                     _InfoRow(label: 'Payment', value: detail.paymentMode ?? '—'),
                     _InfoRow(label: 'Amount (incl. GST)', value: formatSaleAmount(detail.saleAmount)),
                     if (detail.saleAmountExcludingGst != null)
@@ -149,12 +171,47 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     _InfoRow(label: 'Store', value: detail.locationName),
                     _InfoRow(label: 'Color', value: detail.color),
                     _InfoRow(label: 'Specs', value: detail.specsLabel),
+                    if (isMainAdmin && detail.serialSourceLabel != null)
+                      _InfoRow(label: 'Serial source', value: detail.serialSourceLabel!),
+                    if (detail.trackedProducts.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const _SectionTitle('Tracked products'),
+                      for (final line in detail.trackedProducts)
+                        _InfoRow(
+                          label: (line['product_name'] as String?) ?? 'Product',
+                          value: (line['serial_number'] as String?) ?? '—',
+                        ),
+                    ],
+                    if (detail.additionalProducts.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const _SectionTitle('Additional products'),
+                      for (final line in detail.additionalProducts)
+                        _InfoRow(
+                          label: (line['stock_item_name'] as String?) ?? 'Item',
+                          value: (line['quantity'] as String?) ?? '—',
+                        ),
+                    ],
+                    if (detail.unmatchedSerializedItems.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const _SectionTitle('Unmatched serialized items'),
+                      for (final line in detail.unmatchedSerializedItems)
+                        _InfoRow(
+                          label: (line['product_name'] as String?) ?? 'Item',
+                          value: (line['serial_number'] as String?) ?? '—',
+                        ),
+                    ],
                     if (detail.saleSource == 'tally') ...[
                       const SizedBox(height: AppSpacing.md),
                       const _SectionTitle('Tally'),
                       _InfoRow(label: 'Company', value: detail.tallyCompanyName ?? '—'),
                       _InfoRow(label: 'Voucher', value: detail.tallyVoucherNumber ?? '—'),
                       _InfoRow(label: 'Printed invoice', value: detail.printedInvoiceNumber ?? '—'),
+                      if (invoiceStatusLabel != null)
+                        _InfoRow(label: 'Invoice status', value: invoiceStatusLabel),
+                      if (isMainAdmin && detail.tallyVoucherGuid != null)
+                        _InfoRow(label: 'Voucher GUID', value: detail.tallyVoucherGuid!),
+                      if (isMainAdmin && detail.tallyMasterId != null)
+                        _InfoRow(label: 'Master ID', value: detail.tallyMasterId!),
                     ],
                     const Divider(height: 32),
                     const _SectionTitle('Audit'),
