@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
+from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
@@ -22,9 +23,6 @@ from webstudio_backend.infrastructure.database.enums import (
     TallyProcessingStatus,
     TallySyncRunStatus,
 )
-from webstudio_backend.infrastructure.database.models.brand import Brand
-from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
-from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
@@ -39,6 +37,9 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 )
 from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
     TallyCompanySyncRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_line_decision_log_repository import (
+    TallyLineDecisionLogRepository,
 )
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_repository import (
     TallyProcessedInvoiceLineRepository,
@@ -57,19 +58,20 @@ from webstudio_backend.integrations.tally.constants import (
     MONITORED_VOUCHER_TYPES,
     VOUCHER_TYPE_STORE_MAP,
 )
-from webstudio_backend.integrations.tally.gst import split_sale_amount_with_gst
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
     STALE_SYNC_IN_PROGRESS_SECONDS,
     clamp_sync_interval_seconds,
+    partition_by_guid_watermark,
     resolve_incremental_from_date,
     tally_sync_had_meaningful_progress,
 )
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.integrations.tally.xml_parser import (
+    catalog_model_matches_invoice,
     expand_inventory_lines,
-    models_equivalent,
+    normalize_serial,
     parse_vouchers_xml,
     resolve_inventory_line_sale_amount,
 )
@@ -90,6 +92,7 @@ class TallySyncCounters:
     invoices_checked: int = 0
     invoices_imported: int = 0
     invoices_skipped: int = 0
+    watermark_skipped: int = 0
     inventory_entries_processed: int = 0
     sales_created: int = 0
     duplicates: int = 0
@@ -117,6 +120,7 @@ class TallySyncService:
         self._company_sync = TallyCompanySyncRepository(session)
         self._processed_invoices = TallyProcessedInvoiceRepository(session)
         self._processed_lines = TallyProcessedInvoiceLineRepository(session)
+        self._decision_logs = TallyLineDecisionLogRepository(session)
         self._sync_logs = TallySyncLogRepository(session)
         self._sync_history = TallySyncHistoryRepository(session)
         self._inventory = InventoryItemRepository(session)
@@ -355,12 +359,21 @@ class TallySyncService:
         all_vouchers.sort(key=lambda voucher: (voucher.voucher_date, voucher.guid))
         last_imported_guid: str | None = company_sync.last_processed_guid
         last_imported_voucher_date: date | None = company_sync.last_imported_voucher_date
+        last_processed_master_id: str | None = company_sync.last_processed_master_id
+        last_processed_invoice_number: str | None = company_sync.last_processed_invoice_number
+        last_processed_voucher_type: str | None = company_sync.last_processed_voucher_type
         error_messages: list[str] = []
 
-        for voucher in all_vouchers:
-            if voucher.voucher_type not in MONITORED_VOUCHER_TYPES:
-                continue
+        monitored = [
+            voucher for voucher in all_vouchers if voucher.voucher_type in MONITORED_VOUCHER_TYPES
+        ]
+        watermark = partition_by_guid_watermark(monitored, last_imported_guid)
+        if watermark.historical_skipped:
+            counters.invoices_checked += watermark.historical_skipped
+            counters.invoices_skipped += watermark.historical_skipped
+            counters.watermark_skipped += watermark.historical_skipped
 
+        for voucher in watermark.to_process:
             counters.invoices_checked += 1
             if await self._should_skip_voucher(company_sync.id, voucher):
                 counters.invoices_skipped += 1
@@ -388,7 +401,11 @@ class TallySyncService:
                 party_name=voucher.party_name,
                 amount=voucher.amount,
             )
-            if not created and invoice.processing_status is TallyProcessingStatus.SUCCESS:
+            if not created and invoice.processing_status in {
+                TallyProcessingStatus.SUCCESS,
+                TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                TallyProcessingStatus.SKIPPED,
+            }:
                 counters.invoices_skipped += 1
                 continue
 
@@ -396,31 +413,64 @@ class TallySyncService:
             if created:
                 counters.invoices_imported += 1
 
-            line_stats = await self._process_voucher(
-                voucher=voucher,
-                company_sync=company_sync,
-                invoice_id=invoice.id,
-                company_name=company_name,
-                sync_run_id=sync_run_id,
-                correlation_id=correlation_id,
-                counters=counters,
-            )
-
-            if line_stats["failed"] == 0 and line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.SUCCESS)
-                run_status = TallySyncRunStatus.SUCCESS
-            elif line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(
-                    invoice, TallyProcessingStatus.PARTIAL_SUCCESS
+            try:
+                line_stats = await self._process_voucher(
+                    voucher=voucher,
+                    company_sync=company_sync,
+                    invoice_id=invoice.id,
+                    company_name=company_name,
+                    sync_run_id=sync_run_id,
+                    correlation_id=correlation_id,
+                    counters=counters,
                 )
-                run_status = TallySyncRunStatus.PARTIAL_SUCCESS
-            else:
+                status = self._derive_voucher_status(line_stats)
+                await self._processed_invoices.update_status(invoice, status)
+                run_status = (
+                    TallySyncRunStatus.SUCCESS
+                    if status
+                    in {
+                        TallyProcessingStatus.SUCCESS,
+                        TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                    }
+                    else (
+                        TallySyncRunStatus.PARTIAL_SUCCESS
+                        if status is TallyProcessingStatus.PARTIAL_SUCCESS
+                        else TallySyncRunStatus.FAILED
+                    )
+                )
+                if status is TallyProcessingStatus.FAILED:
+                    counters.failures += 1
+                    error_messages.append(
+                        f"{voucher.printed_invoice_number}: processing failed",
+                    )
+            except Exception as exc:  # noqa: BLE001
+                counters.failures += 1
+                error_messages.append(f"{voucher.printed_invoice_number}: {exc}")
+                company_sync = await self._company_sync.get_or_create(company_name)
+                invoice, _ = await self._processed_invoices.get_or_create_pending(
+                    company_sync_id=company_sync.id,
+                    guid=voucher.guid,
+                    master_id=voucher.master_id,
+                    voucher_number=voucher.voucher_number,
+                    printed_invoice_number=voucher.printed_invoice_number,
+                    voucher_type=voucher.voucher_type,
+                    voucher_date=voucher.voucher_date,
+                    party_name=voucher.party_name,
+                    amount=voucher.amount,
+                )
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
                 run_status = TallySyncRunStatus.FAILED
-                counters.failures += 1
-                error_messages.append(
-                    f"{voucher.printed_invoice_number}: processing failed",
-                )
+                line_stats = {
+                    "total": 0,
+                    "completed": 0,
+                    "failed": 1,
+                    "sales": 0,
+                    "duplicates": 0,
+                    "missing_serial": 0,
+                    "missing_model": 0,
+                    "model_mismatches": 0,
+                    "ignored": 0,
+                }
 
             log = await self._sync_logs.create_run_log(
                 sync_run_id=sync_run_id,
@@ -447,6 +497,9 @@ class TallySyncService:
             )
 
             last_imported_guid = voucher.guid
+            last_processed_master_id = voucher.master_id
+            last_processed_invoice_number = voucher.printed_invoice_number or voucher.voucher_number
+            last_processed_voucher_type = voucher.voucher_type
             if (
                 last_imported_voucher_date is None
                 or voucher.voucher_date >= last_imported_voucher_date
@@ -483,9 +536,11 @@ class TallySyncService:
             had_meaningful_progress=had_meaningful_progress,
             finished_at=now,
             duration_ms=duration_ms,
-            all_vouchers=all_vouchers,
             last_imported_guid=last_imported_guid,
             last_imported_voucher_date=last_imported_voucher_date,
+            last_processed_master_id=last_processed_master_id,
+            last_processed_invoice_number=last_processed_invoice_number,
+            last_processed_voucher_type=last_processed_voucher_type,
         )
 
         await self._sync_history.finalize(
@@ -534,8 +589,13 @@ class TallySyncService:
         )
 
     async def _should_skip_voucher(self, company_sync_id: int, voucher: TallyVoucher) -> bool:
+        terminal = {
+            TallyProcessingStatus.SUCCESS,
+            TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+            TallyProcessingStatus.SKIPPED,
+        }
         by_guid = await self._processed_invoices.find_by_guid(company_sync_id, voucher.guid)
-        if by_guid is not None and by_guid.processing_status is TallyProcessingStatus.SUCCESS:
+        if by_guid is not None and by_guid.processing_status in terminal:
             return True
         by_fallback = await self._processed_invoices.find_by_fallback_fingerprint(
             company_sync_id,
@@ -544,10 +604,7 @@ class TallySyncService:
             amount=voucher.amount,
             party_name=voucher.party_name,
         )
-        return (
-            by_fallback is not None
-            and by_fallback.processing_status is TallyProcessingStatus.SUCCESS
-        )
+        return by_fallback is not None and by_fallback.processing_status in terminal
 
     async def _finalize_company_sync_state(
         self,
@@ -558,9 +615,11 @@ class TallySyncService:
         had_meaningful_progress: bool,
         finished_at: datetime,
         duration_ms: int,
-        all_vouchers: list[TallyVoucher],
         last_imported_guid: str | None,
         last_imported_voucher_date: date | None,
+        last_processed_master_id: str | None = None,
+        last_processed_invoice_number: str | None = None,
+        last_processed_voucher_type: str | None = None,
     ) -> int:
         """Persist sync metadata and return consecutive failure count after this run."""
         common_state = {
@@ -571,19 +630,19 @@ class TallySyncService:
 
         if run_success or had_meaningful_progress:
             progress_state: dict[str, object] = {"clear_last_error": True}
-            if had_meaningful_progress:
-                progress_state.update(
-                    {
-                        "last_successful_sync_at": finished_at,
-                        "last_processed_guid": last_imported_guid,
-                        "last_imported_voucher_date": last_imported_voucher_date,
-                        "last_processed_master_id": (
-                            all_vouchers[-1].master_id
-                            if all_vouchers
-                            else company_sync.last_processed_master_id
-                        ),
-                    },
-                )
+            if run_success:
+                progress_state["last_successful_sync_at"] = finished_at
+            if had_meaningful_progress or run_success:
+                if last_imported_guid is not None:
+                    progress_state["last_processed_guid"] = last_imported_guid
+                if last_imported_voucher_date is not None:
+                    progress_state["last_imported_voucher_date"] = last_imported_voucher_date
+                if last_processed_master_id is not None:
+                    progress_state["last_processed_master_id"] = last_processed_master_id
+                if last_processed_invoice_number is not None:
+                    progress_state["last_processed_invoice_number"] = last_processed_invoice_number
+                if last_processed_voucher_type is not None:
+                    progress_state["last_processed_voucher_type"] = last_processed_voucher_type
             await self._company_sync.update_sync_state(
                 company_sync,
                 consecutive_sync_failures=0,
@@ -646,6 +705,13 @@ class TallySyncService:
         correlation_id: str,
         counters: TallySyncCounters,
     ) -> dict[str, int]:
+        """
+        Process one voucher atomically.
+
+        Technical exceptions roll back the voucher. Business outcomes
+        (additional product / review required) complete the voucher safely.
+        """
+        del company_sync, sync_run_id, correlation_id  # reserved for future tracing
         stats = {
             "total": 0,
             "completed": 0,
@@ -656,161 +722,300 @@ class TallySyncService:
             "missing_model": 0,
             "model_mismatches": 0,
             "ignored": 0,
+            "additional_products": 0,
+            "review_required": 0,
         }
         mapped_location = await self._resolve_store_location(voucher.voucher_type)
+        invoice = await self._processed_invoices.get_by_id(invoice_id)
+        if invoice is None:
+            raise RuntimeError(f"Processed invoice {invoice_id} missing")
 
-        for line in expand_inventory_lines(voucher.inventory_lines):
-            stats["total"] += 1
-            counters.inventory_entries_processed += 1
-            line_row = await self._processed_lines.get_or_create_line(
-                invoice_id=invoice_id,
-                line_index=line.line_index,
-                serial_number=line.serial_number,
-                stock_item_name=line.stock_item_name,
-            )
-            if line_row.line_status.value == "completed":
-                stats["completed"] += 1
-                continue
+        try:
+            async with self._session.begin_nested():
+                await self._attach_invoice_archive_and_totals(invoice, voucher)
+                for line in expand_inventory_lines(voucher.inventory_lines):
+                    stats["total"] += 1
+                    counters.inventory_entries_processed += 1
+                    line_row = await self._processed_lines.get_or_create_line(
+                        invoice_id=invoice_id,
+                        line_index=line.line_index,
+                        serial_number=line.serial_number,
+                        stock_item_name=line.stock_item_name,
+                        serial_source=line.serial_source,
+                        normalized_serial=line.normalized_serial,
+                        quantity=line.quantity,
+                        rate=line.rate,
+                        taxable_amount=line.taxable_amount,
+                        cgst_amount=line.cgst_amount,
+                        sgst_amount=line.sgst_amount,
+                        igst_amount=line.igst_amount,
+                        cess_amount=line.cess_amount,
+                        line_total=line.line_total or line.amount,
+                    )
+                    if line_row.line_status.value == "completed":
+                        stats["completed"] += 1
+                        continue
 
-            try:
-                outcome = await self._process_inventory_line(
-                    voucher=voucher,
-                    line=line,
-                    company_name=company_name,
-                    mapped_location_id=mapped_location.id if mapped_location else None,
-                )
-            except Exception as exc:  # noqa: BLE001 — line isolation
-                await self._processed_lines.fail_line(
-                    line_row,
-                    outcome=TallyLineOutcome.ERROR,
-                    error_message=str(exc),
-                )
-                stats["failed"] += 1
-                counters.failures += 1
-                continue
+                    await self._process_inventory_line(
+                        voucher=voucher,
+                        line=line,
+                        line_row=line_row,
+                        invoice_id=invoice_id,
+                        company_name=company_name,
+                        mapped_location_id=mapped_location.id if mapped_location else None,
+                        stats=stats,
+                        counters=counters,
+                    )
+        except Exception:
+            # Nested transaction rolls back only this voucher's work.
+            raise
 
-            if outcome == TallyLineOutcome.SALE_APPLIED:
-                await self._processed_lines.complete_line(line_row, outcome=outcome)
-                stats["completed"] += 1
-                stats["sales"] += 1
-                counters.sales_created += 1
-            elif outcome == TallyLineOutcome.DUPLICATE_SALE:
-                await self._processed_lines.complete_line(line_row, outcome=outcome)
-                stats["completed"] += 1
-                stats["duplicates"] += 1
-                counters.duplicates += 1
-            elif outcome == TallyLineOutcome.SERIAL_NUMBER_MISSING:
-                await self._processed_lines.fail_line(line_row, outcome=outcome)
-                stats["failed"] += 1
-                stats["missing_serial"] += 1
-                counters.missing_serials += 1
-            elif outcome == TallyLineOutcome.PRODUCT_MODEL_MISSING:
-                await self._processed_lines.fail_line(line_row, outcome=outcome)
-                stats["failed"] += 1
-                stats["missing_model"] += 1
-                counters.missing_models += 1
-            elif outcome == TallyLineOutcome.PRODUCT_MODEL_MISMATCH:
-                await self._processed_lines.complete_line(line_row, outcome=outcome)
-                stats["completed"] += 1
-                stats["sales"] += 1
-                stats["model_mismatches"] += 1
-                counters.sales_created += 1
-                counters.model_mismatches += 1
-            else:
-                await self._processed_lines.complete_line(line_row, outcome=outcome)
-                stats["completed"] += 1
-                stats["ignored"] += 1
+        if stats["review_required"] > 0 and stats["failed"] == 0:
+            invoice.review_required = True
+            await self._session.flush()
 
         return stats
+
+    async def _attach_invoice_archive_and_totals(
+        self,
+        invoice,
+        voucher: TallyVoucher,
+    ) -> None:
+        if voucher.raw_xml and not invoice.raw_xml_gzip:
+            invoice.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
+        invoice.payment_mode = voucher.payment_mode
+        invoice.narration = voucher.narration
+        invoice.imported_at = datetime.now(UTC)
+        totals = voucher.totals
+        invoice.subtotal = totals.subtotal
+        invoice.discount_amount = totals.discount_amount
+        invoice.round_off = totals.round_off
+        invoice.cgst_amount = totals.cgst_amount
+        invoice.sgst_amount = totals.sgst_amount
+        invoice.igst_amount = totals.igst_amount
+        invoice.cess_amount = totals.cess_amount
+        invoice.grand_total = totals.grand_total or (
+            Decimal(voucher.amount) if voucher.amount else None
+        )
+        await self._session.flush()
 
     async def _process_inventory_line(
         self,
         *,
         voucher: TallyVoucher,
         line: TallyInventoryLine,
+        line_row,
+        invoice_id: int,
         company_name: str,
         mapped_location_id: int | None,
+        stats: dict[str, int],
+        counters: TallySyncCounters,
     ) -> TallyLineOutcome:
-        """Match by serial first; model name is verification-only and never blocks a serial sale."""
-        inventory_item: InventoryItem | None = None
-        model_mismatch = False
+        """
+        Deterministic serial-only matching.
 
-        if line.serial_number:
-            inventory_item = await self._inventory.find_by_serial_number(line.serial_number)
-            if inventory_item is None:
-                await self._notifications.create_notification(
-                    notification_type=NotificationType.SERIAL_NUMBER_MISSING,
-                    severity=NotificationSeverity.WARNING,
-                    title="Missing serial number",
-                    message=(
-                        f"Serial {line.serial_number} from invoice {voucher.printed_invoice_number} "
-                        "was not found in inventory."
-                    ),
-                    category=NotificationCategory.TALLY_SYNC,
-                    invoice_number=voucher.printed_invoice_number,
-                    tally_company_name=company_name,
-                    tally_voucher_number=voucher.voucher_number,
-                    voucher_type=voucher.voucher_type,
-                    customer_name=voucher.party_name,
-                    serial_number=line.serial_number,
-                    product_model_number=line.stock_item_name,
-                )
-                return TallyLineOutcome.SERIAL_NUMBER_MISSING
+        CASE A — serial found, model matches → sell
+        CASE B — serial found, model differs → sell + review required
+        CASE C1 — no serial extracted → additional product (no inventory change)
+        CASE C2 — serial extracted but not in IMS → unmatched serialized item (visible, no sell)
+        CASE D — duplicate serial rows in IMS → review required (no sell)
+        CASE E — serial already sold → review required (no duplicate sale)
+        """
+        extracted = line.serial_number
+        normalized = line.normalized_serial or normalize_serial(extracted)
 
-            if inventory_item.status is InventoryStatus.SOLD:
-                await self._notifications.create_duplicate_sale_notification(
-                    title="Duplicate sale detected",
-                    message=(
-                        f"Invoice {voucher.printed_invoice_number} references serial {line.serial_number} "
-                        "which is already sold."
-                    ),
-                    invoice_number=voucher.printed_invoice_number,
-                    serial_number=line.serial_number,
-                    tally_company_name=company_name,
-                    tally_voucher_number=voucher.voucher_number,
-                    voucher_type=voucher.voucher_type,
-                    customer_name=voucher.party_name,
-                    product_model_number=line.stock_item_name,
-                    inventory_item_id=inventory_item.id,
-                )
-                return TallyLineOutcome.DUPLICATE_SALE
+        # CASE C1 — no serial: bag / warranty / software / consumables → additional product
+        if not normalized:
+            await self._complete_additional_product(
+                voucher=voucher,
+                line=line,
+                line_row=line_row,
+                invoice_id=invoice_id,
+                reason="No serial on invoice line — stored as additional product.",
+            )
+            stats["completed"] += 1
+            stats["additional_products"] += 1
+            stats["ignored"] += 1
+            return TallyLineOutcome.ADDITIONAL_PRODUCT
 
-            if inventory_item.status is not InventoryStatus.AVAILABLE:
-                return TallyLineOutcome.IGNORED
+        matches = await self._inventory.find_all_by_serial_number(normalized)
 
-            detail = await self._inventory.get_detail(inventory_item.id)
-            if detail and not models_equivalent(
-                self._inventory_catalog_label(
-                    detail.brand.name,
-                    model_name=detail.product_model.model_name,
-                    model_number=detail.product_model.model_number,
-                    part_number=detail.product_model.part_number,
+        # CASE D — duplicate serials in IMS
+        if len(matches) > 1:
+            reason = (
+                f"Duplicate serial {normalized} found in IMS "
+                f"({len(matches)} rows) — review required."
+            )
+            await self._processed_lines.complete_line(
+                line_row,
+                outcome=TallyLineOutcome.REVIEW_REQUIRED_DUPLICATE_SERIAL,
+                match_result="duplicate_serial_in_ims",
+                decision="review_required",
+                decision_reason=reason,
+                review_required=True,
+            )
+            await self._decision_logs.record(
+                invoice_id=invoice_id,
+                line_id=line_row.id,
+                voucher_guid=voucher.guid,
+                line_index=line.line_index,
+                serial_source=line.serial_source,
+                extracted_serial=extracted,
+                normalized_serial=normalized,
+                inventory_item_id=None,
+                match_result="duplicate_serial_in_ims",
+                decision="review_required",
+                reason=reason,
+            )
+            await self._notifications.create_notification(
+                notification_type=NotificationType.DUPLICATE_SALE,
+                severity=NotificationSeverity.WARNING,
+                title="Duplicate serial in inventory",
+                message=reason,
+                category=NotificationCategory.TALLY_SYNC,
+                invoice_number=voucher.printed_invoice_number,
+                tally_company_name=company_name,
+                tally_voucher_number=voucher.voucher_number,
+                voucher_type=voucher.voucher_type,
+                customer_name=voucher.party_name,
+                serial_number=normalized,
+                product_model_number=line.stock_item_name,
+            )
+            stats["completed"] += 1
+            stats["review_required"] += 1
+            return TallyLineOutcome.REVIEW_REQUIRED_DUPLICATE_SERIAL
+
+        # CASE C2 — serial extracted but not managed in IMS
+        if not matches:
+            await self._complete_unmatched_serialized_item(
+                voucher=voucher,
+                line=line,
+                line_row=line_row,
+                invoice_id=invoice_id,
+                reason="Serial not managed in IMS",
+            )
+            stats["completed"] += 1
+            stats["missing_serial"] += 1
+            counters.missing_serials += 1
+            return TallyLineOutcome.UNMATCHED_SERIALIZED_ITEM
+
+        inventory_item = matches[0]
+
+        # CASE E — already sold
+        if inventory_item.status is InventoryStatus.SOLD:
+            reason = (
+                f"Serial {normalized} is already sold in IMS — "
+                "duplicate sale blocked; review required."
+            )
+            await self._processed_lines.complete_line(
+                line_row,
+                outcome=TallyLineOutcome.REVIEW_REQUIRED_ALREADY_SOLD,
+                inventory_item_id=inventory_item.id,
+                match_result="already_sold",
+                decision="review_required",
+                decision_reason=reason,
+                review_required=True,
+            )
+            await self._decision_logs.record(
+                invoice_id=invoice_id,
+                line_id=line_row.id,
+                voucher_guid=voucher.guid,
+                line_index=line.line_index,
+                serial_source=line.serial_source,
+                extracted_serial=extracted,
+                normalized_serial=normalized,
+                inventory_item_id=inventory_item.id,
+                match_result="already_sold",
+                decision="review_required",
+                reason=reason,
+            )
+            await self._notifications.create_duplicate_sale_notification(
+                title="Duplicate sale detected",
+                message=(
+                    f"Invoice {voucher.printed_invoice_number} references serial {normalized} "
+                    "which is already sold."
                 ),
-                line.stock_item_name,
-            ):
-                model_mismatch = True
-        else:
-            inventory_item = await self._match_inventory_by_model(line.stock_item_name)
-            if inventory_item is None:
-                await self._notifications.create_notification(
-                    notification_type=NotificationType.PRODUCT_MODEL_MISSING,
-                    severity=NotificationSeverity.WARNING,
-                    title="Product model not matched",
-                    message=(
-                        f"Could not match product '{line.stock_item_name}' from invoice "
-                        f"{voucher.printed_invoice_number}."
-                    ),
-                    category=NotificationCategory.TALLY_SYNC,
-                    invoice_number=voucher.printed_invoice_number,
-                    tally_company_name=company_name,
-                    tally_voucher_number=voucher.voucher_number,
-                    voucher_type=voucher.voucher_type,
-                    customer_name=voucher.party_name,
-                    product_model_number=line.stock_item_name,
-                )
-                return TallyLineOutcome.PRODUCT_MODEL_MISSING
+                invoice_number=voucher.printed_invoice_number,
+                serial_number=normalized,
+                tally_company_name=company_name,
+                tally_voucher_number=voucher.voucher_number,
+                voucher_type=voucher.voucher_type,
+                customer_name=voucher.party_name,
+                product_model_number=line.stock_item_name,
+                inventory_item_id=inventory_item.id,
+            )
+            stats["completed"] += 1
+            stats["duplicates"] += 1
+            stats["review_required"] += 1
+            counters.duplicates += 1
+            return TallyLineOutcome.REVIEW_REQUIRED_ALREADY_SOLD
 
-        assert inventory_item is not None
+        if inventory_item.status is not InventoryStatus.AVAILABLE:
+            reason = (
+                f"Serial {normalized} status is {inventory_item.status.value} — "
+                "not available for sale; review required (no inventory change)."
+            )
+            await self._processed_lines.complete_line(
+                line_row,
+                outcome=TallyLineOutcome.REVIEW_REQUIRED_NOT_AVAILABLE,
+                inventory_item_id=inventory_item.id,
+                match_result="not_available",
+                decision="review_required",
+                decision_reason=reason,
+                review_required=True,
+            )
+            await self._decision_logs.record(
+                invoice_id=invoice_id,
+                line_id=line_row.id,
+                voucher_guid=voucher.guid,
+                line_index=line.line_index,
+                serial_source=line.serial_source,
+                extracted_serial=extracted,
+                normalized_serial=normalized,
+                inventory_item_id=inventory_item.id,
+                match_result="not_available",
+                decision="review_required",
+                reason=reason,
+            )
+            await self._notifications.create_notification(
+                notification_type=NotificationType.SERIAL_NUMBER_MISSING,
+                severity=NotificationSeverity.WARNING,
+                title="Serial not available for sale",
+                message=reason,
+                category=NotificationCategory.TALLY_SYNC,
+                invoice_number=voucher.printed_invoice_number,
+                tally_company_name=company_name,
+                tally_voucher_number=voucher.voucher_number,
+                voucher_type=voucher.voucher_type,
+                customer_name=voucher.party_name,
+                serial_number=normalized,
+                product_model_number=line.stock_item_name,
+                inventory_item_id=inventory_item.id,
+            )
+            stats["completed"] += 1
+            stats["review_required"] += 1
+            return TallyLineOutcome.REVIEW_REQUIRED_NOT_AVAILABLE
+
+        detail = await self._inventory.get_detail(inventory_item.id)
+        ims_label = ""
+        if detail:
+            ims_label = self._inventory_catalog_label(
+                detail.brand.name,
+                model_name=detail.product_model.model_name,
+                model_number=detail.product_model.model_number,
+                part_number=detail.product_model.part_number,
+            )
+        model_matches = catalog_model_matches_invoice(ims_label, line.stock_item_name)
+        review_required = not model_matches
+        review_reason = None
+        if review_required:
+            review_reason = (
+                f"Serial matched but invoice model '{line.stock_item_name}' "
+                f"differs from IMS model '{ims_label}'. "
+                "Inventory updated because serial uniquely identifies the unit."
+            )
+
+        # CASE A / B — create sale (serial authoritative)
         old_status = inventory_item.status
         inventory_item.status = InventoryStatus.SOLD
         if mapped_location_id is not None:
@@ -819,11 +1024,9 @@ class TallySyncService:
 
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         idempotency_key = f"{voucher.guid}:{inventory_item.id}"
-        detail = await self._inventory.get_detail(inventory_item.id)
         snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
-        exclusive_amount, inclusive_amount = split_sale_amount_with_gst(
-            resolve_inventory_line_sale_amount(line, voucher),
-        )
+        line_amount = resolve_inventory_line_sale_amount(line, voucher)
+        taxable = float(line.taxable_amount) if line.taxable_amount else None
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -839,8 +1042,13 @@ class TallySyncService:
             notes=voucher.narration,
             idempotency_key=idempotency_key,
             snapshot=snapshot,
-            sale_amount=inclusive_amount,
-            sale_amount_excluding_gst=exclusive_amount,
+            sale_amount=line_amount,
+            sale_amount_excluding_gst=taxable,
+            review_required=review_required,
+            review_reason=review_reason,
+            invoice_model_name=line.stock_item_name,
+            ims_model_name=ims_label or None,
+            serial_source=line.serial_source,
         )
 
         actor = AuditActor.system(display_name="Tally Sync", role="system")
@@ -864,61 +1072,129 @@ class TallySyncService:
             source=AuditSource.TALLY_SYNC,
         )
 
-        if model_mismatch:
-            detail = await self._inventory.get_detail(inventory_item.id)
-            inventory_model = (
-                f"{detail.brand.name} {detail.product_model.model_name}" if detail else "Unknown"
-            )
+        outcome = (
+            TallyLineOutcome.SALE_APPLIED_WITH_REVIEW
+            if review_required
+            else TallyLineOutcome.SALE_APPLIED
+        )
+        await self._processed_lines.complete_line(
+            line_row,
+            outcome=outcome,
+            inventory_item_id=inventory_item.id,
+            match_result="serial_exact_match",
+            decision="sale_applied_with_review" if review_required else "sale_applied",
+            decision_reason=review_reason or "Exact serial match — inventory deducted.",
+            ims_model_name=ims_label or None,
+            sale_id=sale.id,
+            review_required=review_required,
+        )
+        await self._decision_logs.record(
+            invoice_id=invoice_id,
+            line_id=line_row.id,
+            voucher_guid=voucher.guid,
+            line_index=line.line_index,
+            serial_source=line.serial_source,
+            extracted_serial=extracted,
+            normalized_serial=normalized,
+            inventory_item_id=inventory_item.id,
+            match_result="serial_exact_match",
+            decision="sale_applied_with_review" if review_required else "sale_applied",
+            reason=review_reason or "Exact serial match.",
+        )
+
+        if review_required:
             await self._notifications.create_notification(
                 notification_type=NotificationType.PRODUCT_MODEL_MISMATCH,
                 severity=NotificationSeverity.INFO,
-                title="Product model mismatch",
-                message=(
-                    f"Serial {line.serial_number} was sold from invoice {voucher.printed_invoice_number}, "
-                    f"but invoice model '{line.stock_item_name}' differs from inventory model '{inventory_model}'."
-                ),
+                title="Sale completed with review required",
+                message=review_reason or "Model description differs after serial match.",
                 category=NotificationCategory.TALLY_SYNC,
                 invoice_number=voucher.printed_invoice_number,
                 tally_company_name=company_name,
                 tally_voucher_number=voucher.voucher_number,
                 voucher_type=voucher.voucher_type,
                 customer_name=voucher.party_name,
-                serial_number=line.serial_number,
+                serial_number=normalized,
                 product_model_number=line.stock_item_name,
                 inventory_item_id=inventory_item.id,
             )
-            return TallyLineOutcome.PRODUCT_MODEL_MISMATCH
+            stats["model_mismatches"] += 1
+            stats["review_required"] += 1
+            counters.model_mismatches += 1
 
-        return TallyLineOutcome.SALE_APPLIED
+        stats["completed"] += 1
+        stats["sales"] += 1
+        counters.sales_created += 1
+        return outcome
 
-    async def _match_inventory_by_model(self, stock_item_name: str) -> InventoryItem | None:
-        statement = (
-            select(
-                InventoryItem,
-                Brand.name,
-                ProductModel.model_name,
-                ProductModel.model_number,
-                ProductModel.part_number,
-            )
-            .join(ProductModel, InventoryItem.product_model_id == ProductModel.id)
-            .join(Brand, ProductModel.brand_id == Brand.id)
-            .where(InventoryItem.status == InventoryStatus.AVAILABLE)
-            .where(InventoryItem.is_archived.is_(False))
+    async def _complete_additional_product(
+        self,
+        *,
+        voucher: TallyVoucher,
+        line: TallyInventoryLine,
+        line_row,
+        invoice_id: int,
+        reason: str,
+        inventory_item_id: uuid.UUID | None = None,
+    ) -> None:
+        await self._processed_lines.complete_line(
+            line_row,
+            outcome=TallyLineOutcome.ADDITIONAL_PRODUCT,
+            inventory_item_id=inventory_item_id,
+            match_result="additional_product",
+            decision="store_additional_product",
+            decision_reason=reason,
+            is_additional_product=True,
+            is_unmatched_serialized=False,
+            review_required=False,
         )
-        result = await self._session.execute(statement)
-        matches: list[InventoryItem] = []
-        for item, brand_name, model_name, model_number, part_number in result.all():
-            inventory_label = self._inventory_catalog_label(
-                brand_name,
-                model_name=model_name,
-                model_number=model_number,
-                part_number=part_number,
-            )
-            if models_equivalent(inventory_label, stock_item_name):
-                matches.append(item)
-        if len(matches) == 1:
-            return matches[0]
-        return None
+        await self._decision_logs.record(
+            invoice_id=invoice_id,
+            line_id=line_row.id,
+            voucher_guid=voucher.guid,
+            line_index=line.line_index,
+            serial_source=line.serial_source,
+            extracted_serial=line.serial_number,
+            normalized_serial=line.normalized_serial,
+            inventory_item_id=inventory_item_id,
+            match_result="additional_product",
+            decision="store_additional_product",
+            reason=reason,
+        )
+
+    async def _complete_unmatched_serialized_item(
+        self,
+        *,
+        voucher: TallyVoucher,
+        line: TallyInventoryLine,
+        line_row,
+        invoice_id: int,
+        reason: str,
+    ) -> None:
+        """Case C2 — serial present but not managed in IMS (visible, no inventory change)."""
+        await self._processed_lines.complete_line(
+            line_row,
+            outcome=TallyLineOutcome.UNMATCHED_SERIALIZED_ITEM,
+            match_result="unmatched_serialized_item",
+            decision="store_unmatched_serialized",
+            decision_reason=reason,
+            is_additional_product=False,
+            is_unmatched_serialized=True,
+            review_required=False,
+        )
+        await self._decision_logs.record(
+            invoice_id=invoice_id,
+            line_id=line_row.id,
+            voucher_guid=voucher.guid,
+            line_index=line.line_index,
+            serial_source=line.serial_source,
+            extracted_serial=line.serial_number,
+            normalized_serial=line.normalized_serial,
+            inventory_item_id=None,
+            match_result="unmatched_serialized_item",
+            decision="store_unmatched_serialized",
+            reason=reason,
+        )
 
     @staticmethod
     def _inventory_catalog_label(
@@ -939,6 +1215,22 @@ class TallySyncService:
             return None
         return await self._locations.get_by_name(store_name)
 
+    def _derive_voucher_status(self, line_stats: dict[str, int]) -> TallyProcessingStatus:
+        """
+        Invoice-level status:
+          Failed | Processed With Warnings | Processed
+        (Skipped is set by GUID idempotency before processing.)
+        """
+        if line_stats["failed"] > 0 and line_stats["completed"] == 0:
+            return TallyProcessingStatus.FAILED
+        if line_stats["failed"] > 0:
+            return TallyProcessingStatus.PARTIAL_SUCCESS
+        if line_stats["review_required"] > 0:
+            return TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED
+        if line_stats["completed"] > 0:
+            return TallyProcessingStatus.SUCCESS
+        return TallyProcessingStatus.FAILED
+
     async def process_voucher_xml(
         self,
         xml_text: str,
@@ -956,9 +1248,19 @@ class TallySyncService:
         started_at = datetime.now(UTC)
         last_imported_guid = company_sync.last_processed_guid
         last_imported_voucher_date = company_sync.last_imported_voucher_date
-        for voucher in vouchers:
-            if voucher.voucher_type not in MONITORED_VOUCHER_TYPES:
-                continue
+        last_processed_master_id = company_sync.last_processed_master_id
+        last_processed_invoice_number = company_sync.last_processed_invoice_number
+        last_processed_voucher_type = company_sync.last_processed_voucher_type
+        vouchers.sort(key=lambda voucher: (voucher.voucher_date, voucher.guid))
+        monitored = [
+            voucher for voucher in vouchers if voucher.voucher_type in MONITORED_VOUCHER_TYPES
+        ]
+        watermark = partition_by_guid_watermark(monitored, last_imported_guid)
+        if watermark.historical_skipped:
+            counters.invoices_checked += watermark.historical_skipped
+            counters.invoices_skipped += watermark.historical_skipped
+            counters.watermark_skipped += watermark.historical_skipped
+        for voucher in watermark.to_process:
             counters.invoices_checked += 1
             if await self._should_skip_voucher(company_sync.id, voucher):
                 counters.invoices_skipped += 1
@@ -974,30 +1276,48 @@ class TallySyncService:
                 party_name=voucher.party_name,
                 amount=voucher.amount,
             )
-            if not created and invoice.processing_status is TallyProcessingStatus.SUCCESS:
+            if not created and invoice.processing_status in {
+                TallyProcessingStatus.SUCCESS,
+                TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+            }:
                 counters.invoices_skipped += 1
                 continue
             counters.vouchers_processed += 1
             if created:
                 counters.invoices_imported += 1
-            line_stats = await self._process_voucher(
-                voucher=voucher,
-                company_sync=company_sync,
-                invoice_id=invoice.id,
-                company_name=resolved_company,
-                sync_run_id=sync_run_id,
-                correlation_id=correlation_id,
-                counters=counters,
-            )
-            if line_stats["failed"] == 0 and line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.SUCCESS)
-            elif line_stats["completed"] > 0:
-                await self._processed_invoices.update_status(
-                    invoice, TallyProcessingStatus.PARTIAL_SUCCESS
+            try:
+                line_stats = await self._process_voucher(
+                    voucher=voucher,
+                    company_sync=company_sync,
+                    invoice_id=invoice.id,
+                    company_name=resolved_company,
+                    sync_run_id=sync_run_id,
+                    correlation_id=correlation_id,
+                    counters=counters,
                 )
-            else:
+                status = self._derive_voucher_status(line_stats)
+                await self._processed_invoices.update_status(invoice, status)
+            except Exception as exc:  # noqa: BLE001
+                counters.failures += 1
+                # Re-load invoice after rollback
+                company_sync = await self._company_sync.get_or_create(resolved_company)
+                invoice, _ = await self._processed_invoices.get_or_create_pending(
+                    company_sync_id=company_sync.id,
+                    guid=voucher.guid,
+                    master_id=voucher.master_id,
+                    voucher_number=voucher.voucher_number,
+                    printed_invoice_number=voucher.printed_invoice_number,
+                    voucher_type=voucher.voucher_type,
+                    voucher_date=voucher.voucher_date,
+                    party_name=voucher.party_name,
+                    amount=voucher.amount,
+                )
                 await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
+                del exc
             last_imported_guid = voucher.guid
+            last_processed_master_id = voucher.master_id
+            last_processed_invoice_number = voucher.printed_invoice_number or voucher.voucher_number
+            last_processed_voucher_type = voucher.voucher_type
             if (
                 last_imported_voucher_date is None
                 or voucher.voucher_date >= last_imported_voucher_date
@@ -1018,9 +1338,11 @@ class TallySyncService:
             had_meaningful_progress=had_meaningful_progress,
             finished_at=now,
             duration_ms=duration_ms,
-            all_vouchers=vouchers,
             last_imported_guid=last_imported_guid,
             last_imported_voucher_date=last_imported_voucher_date,
+            last_processed_master_id=last_processed_master_id,
+            last_processed_invoice_number=last_processed_invoice_number,
+            last_processed_voucher_type=last_processed_voucher_type,
         )
         return TallySyncResult(
             sync_run_id=str(sync_run_id),

@@ -67,6 +67,8 @@ class TallyCompanySyncRepository(SqlAlchemyRepository[TallyCompanySync]):
         last_successful_sync_at: datetime | None = None,
         last_processed_guid: str | None = None,
         last_processed_master_id: str | None = None,
+        last_processed_invoice_number: str | None = None,
+        last_processed_voucher_type: str | None = None,
         last_error: str | None = None,
         connection_status: str | None = None,
         connectivity_status: str | None = None,
@@ -86,6 +88,10 @@ class TallyCompanySyncRepository(SqlAlchemyRepository[TallyCompanySync]):
             company_sync.last_processed_guid = last_processed_guid
         if last_processed_master_id is not None:
             company_sync.last_processed_master_id = last_processed_master_id
+        if last_processed_invoice_number is not None:
+            company_sync.last_processed_invoice_number = last_processed_invoice_number
+        if last_processed_voucher_type is not None:
+            company_sync.last_processed_voucher_type = last_processed_voucher_type
         if clear_last_error:
             company_sync.last_error = ""
         elif last_error is not None:

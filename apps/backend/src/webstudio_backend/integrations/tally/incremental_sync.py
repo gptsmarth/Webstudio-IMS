@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
+from webstudio_backend.integrations.tally.types import TallyVoucher
 
 SYNC_INTERVAL_DEFAULT_SECONDS = 300
 SYNC_INTERVAL_MIN_SECONDS = 60
@@ -31,7 +34,14 @@ def tally_sync_had_meaningful_progress(
 def resolve_incremental_from_date(
     company_sync: TallyCompanySync, *, today: date | None = None
 ) -> date:
-    """Request Tally exports from the last imported voucher date, with lookback when none yet."""
+    """
+    Restart-safe incremental window start.
+
+    After power failure / Windows restart / scheduler restart:
+      From = last_imported_voucher_date (preferred)
+      To   = current date (caller)
+    Duplicate GUIDs are filtered later — overnight invoices are never skipped.
+    """
     reference = today or datetime.now(UTC).date()
     lookback_start = reference - timedelta(days=INITIAL_SYNC_LOOKBACK_DAYS)
 
@@ -44,6 +54,64 @@ def resolve_incremental_from_date(
         return min(sync_date, lookback_start)
 
     return lookback_start
+
+
+@dataclass(frozen=True, slots=True)
+class GuidWatermarkPartition:
+    """Result of partitioning a chronological voucher list by GUID watermark.
+
+    Does not reduce XML downloaded from Tally. It only avoids full matching /
+    inventory work for vouchers at or before the last successfully processed GUID.
+
+    GUID remains the sole synchronization identity — this is an efficiency cursor.
+    """
+
+    to_process: tuple[TallyVoucher, ...]
+    historical_skipped: int
+    watermark_found: bool
+    watermark_guid: str | None
+
+
+def partition_by_guid_watermark(
+    vouchers: Sequence[TallyVoucher],
+    last_processed_guid: str | None,
+) -> GuidWatermarkPartition:
+    """
+    Fast-skip vouchers at/before the stored GUID watermark.
+
+    Preconditions:
+      - ``vouchers`` are already sorted chronologically (date, then GUID).
+      - Watermark GUID was persisted only after successful processing.
+
+    Behaviour:
+      - No watermark → process all (safe; GUID idempotency still applies).
+      - Watermark found at index i → skip 0..i inclusive; process i+1..
+      - Watermark missing from batch → process all (safe fallback).
+    """
+    watermark = (last_processed_guid or "").strip()
+    if not watermark:
+        return GuidWatermarkPartition(
+            to_process=tuple(vouchers),
+            historical_skipped=0,
+            watermark_found=False,
+            watermark_guid=None,
+        )
+
+    for index, voucher in enumerate(vouchers):
+        if (voucher.guid or "").strip() == watermark:
+            return GuidWatermarkPartition(
+                to_process=tuple(vouchers[index + 1 :]),
+                historical_skipped=index + 1,
+                watermark_found=True,
+                watermark_guid=watermark,
+            )
+
+    return GuidWatermarkPartition(
+        to_process=tuple(vouchers),
+        historical_skipped=0,
+        watermark_found=False,
+        watermark_guid=watermark,
+    )
 
 
 def normalize_party_name(value: str | None) -> str:

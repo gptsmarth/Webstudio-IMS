@@ -31,6 +31,17 @@ class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
+    async def find_latest_by_guid(self, guid: str) -> TallyProcessedInvoice | None:
+        """Lookup by voucher GUID alone (sale detail enrichment)."""
+        statement = (
+            select(TallyProcessedInvoice)
+            .where(TallyProcessedInvoice.tally_voucher_guid == guid)
+            .order_by(TallyProcessedInvoice.id.desc())
+            .limit(1)
+        )
+        result = await self._session.execute(statement)
+        return result.scalars().first()
+
     async def find_by_fallback_fingerprint(
         self,
         company_sync_id: int,
@@ -99,10 +110,19 @@ class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice
     ) -> TallyProcessedInvoice:
         invoice.processing_status = status
         invoice.last_attempt_at = datetime.now(UTC)
-        if status is TallyProcessingStatus.SUCCESS:
+        if status in {
+            TallyProcessingStatus.SUCCESS,
+            TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+            TallyProcessingStatus.SKIPPED,
+        }:
             invoice.completed_at = datetime.now(UTC)
+            if status is TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED:
+                invoice.review_required = True
         await self._session.flush()
         return invoice
+
+    async def get_by_id(self, invoice_id: int) -> TallyProcessedInvoice | None:
+        return await self._session.get(TallyProcessedInvoice, invoice_id)
 
     async def get_last_successful_import(
         self,

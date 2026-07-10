@@ -26,9 +26,21 @@ FORBIDDEN_PUBLIC_KEYS = frozenset(
         "alter_id",
         "tally_voucher_guid",
         "tally_master_id",
+        "sync_run_id",
+    }
+)
+
+# Main Admin diagnostics under operational.sync_checkpoint (GUID watermark audit).
+CHECKPOINT_DIAGNOSTIC_KEYS = frozenset(
+    {
         "last_processed_guid",
         "last_processed_master_id",
-        "sync_run_id",
+        "last_processed_voucher_type",
+        "last_processed_invoice_number",
+        "last_imported_voucher_date",
+        "last_successful_sync_at",
+        "scheduler_status",
+        "scheduler_status_label",
     }
 )
 
@@ -36,9 +48,17 @@ FORBIDDEN_PUBLIC_KEYS = frozenset(
 def _assert_no_forbidden_keys(payload: object, *, path: str = "root") -> None:
     if isinstance(payload, dict):
         for key, value in payload.items():
+            child_path = f"{path}.{key}"
             normalized = key.lower()
+            if path.endswith(".sync_checkpoint") or key == "sync_checkpoint":
+                _assert_no_forbidden_keys(value, path=child_path)
+                continue
             assert normalized not in FORBIDDEN_PUBLIC_KEYS, f"Forbidden key {key!r} at {path}"
-            _assert_no_forbidden_keys(value, path=f"{path}.{key}")
+            assert normalized not in {
+                "last_processed_guid",
+                "last_processed_master_id",
+            }, f"Checkpoint key {key!r} must live under operational.sync_checkpoint (at {path})"
+            _assert_no_forbidden_keys(value, path=child_path)
     elif isinstance(payload, list):
         for index, item in enumerate(payload):
             _assert_no_forbidden_keys(item, path=f"{path}[{index}]")
@@ -78,8 +98,13 @@ async def test_tally_dashboard_operational_fields_without_internal_metadata(
         "imported_this_week",
         "imported_this_month",
         "sync_health",
+        "sync_checkpoint",
     ):
         assert field in operational, f"Missing operational field: {field}"
+
+    checkpoint = operational["sync_checkpoint"]
+    for field in CHECKPOINT_DIAGNOSTIC_KEYS:
+        assert field in checkpoint, f"Missing sync_checkpoint field: {field}"
 
 
 @pytest.mark.asyncio
@@ -94,7 +119,7 @@ async def test_tally_sync_history_without_internal_metadata(
 
 
 @pytest.mark.asyncio
-async def test_sale_detail_omits_tally_internal_identifiers(
+async def test_sale_detail_exposes_tally_identifiers_and_review_fields(
     api_client: AsyncClient,
     initialized_system,
     db_session: AsyncSession,
@@ -105,15 +130,19 @@ async def test_sale_detail_omits_tally_internal_identifiers(
         sale_source=SaleSource.TALLY,
         sold_at=datetime.now(UTC),
         invoice_number="TALLY-INV-001",
-        snapshot_serial_number="SN-HIDDEN-001",
+        snapshot_serial_number="SN-VISIBLE-001",
         snapshot_brand_name="HP",
         snapshot_model_number="840",
         snapshot_model_name="EliteBook",
         snapshot_location_name="Store",
-        tally_voucher_guid="secret-guid-must-not-leak",
+        tally_voucher_guid="guid-for-sale-detail",
         tally_master_id="99999",
         printed_invoice_number="WEB/25-26/00001",
         tally_voucher_number="101",
+        review_required=True,
+        review_reason="Model description differs after serial match.",
+        invoice_model_name="Invoice Model",
+        ims_model_name="IMS Model",
     )
     db_session.add(sale)
     await db_session.commit()
@@ -122,7 +151,12 @@ async def test_sale_detail_omits_tally_internal_identifiers(
     response = await api_client.get(f"/api/v1/sales/{sale.id}", headers=headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    _assert_no_forbidden_keys(data)
-    assert "tally_voucher_guid" not in data
-    assert "tally_master_id" not in data
+    assert data["tally_voucher_guid"] == "guid-for-sale-detail"
+    assert data["tally_master_id"] == "99999"
     assert data["printed_invoice_number"] == "WEB/25-26/00001"
+    assert data["review_required"] is True
+    assert data["review_reason"] == "Model description differs after serial match."
+    assert data["invoice_model_name"] == "Invoice Model"
+    assert data["ims_model_name"] == "IMS Model"
+    assert data["original_xml_available"] is False
+    assert data["additional_products"] == []

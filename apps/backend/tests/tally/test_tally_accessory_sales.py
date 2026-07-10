@@ -189,10 +189,10 @@ async def test_tally_sync_marks_laptop_and_accessory_sold_on_same_invoice(
     assert laptop_sale.printed_invoice_number == "WEB/25-26/00501"
     assert accessory_sale.printed_invoice_number == "WEB/25-26/00501"
 
-    assert laptop_sale.sale_amount == 147500.0
-    assert laptop_sale.sale_amount_excluding_gst == 125000.0
-    assert accessory_sale.sale_amount == 2950.0
-    assert accessory_sale.sale_amount_excluding_gst == 2500.0
+    assert laptop_sale.sale_amount == 125000.0
+    assert laptop_sale.sale_amount_excluding_gst is None
+    assert accessory_sale.sale_amount == 2500.0
+    assert accessory_sale.sale_amount_excluding_gst is None
 
 
 @pytest.mark.asyncio
@@ -263,8 +263,11 @@ async def test_tally_sync_sells_by_serial_even_when_model_name_differs_and_seria
     sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
     assert sale is not None
     assert sale.printed_invoice_number == "WEB/25-26/00502"
-    assert sale.sale_amount == 2950.0
-    assert sale.sale_amount_excluding_gst == 2500.0
+    assert sale.sale_amount == 2500.0
+    assert sale.sale_amount_excluding_gst is None
+    assert sale.review_required is True
+    assert sale.review_reason is not None
+    assert sale.invoice_model_name == "Totally Different Product Name In Tally"
 
 
 @pytest.mark.asyncio

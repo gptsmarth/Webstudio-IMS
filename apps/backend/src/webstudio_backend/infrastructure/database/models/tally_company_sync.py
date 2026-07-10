@@ -21,6 +21,8 @@ class TallyCompanySync(Base, PrimaryKeyMixin, TimestampMixin):
     )
     last_processed_guid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_processed_master_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_processed_invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_processed_voucher_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_imported_voucher_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     consecutive_sync_failures: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"

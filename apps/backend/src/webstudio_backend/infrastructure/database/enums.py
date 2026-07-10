@@ -145,9 +145,33 @@ class SettingValueType(StrEnum):
 
 
 class TallyProcessingStatus(StrEnum):
+    """Persisted voucher processing status.
+
+    Invoice-level operator labels (API):
+      success / partial_success → processed
+      completed_with_review_required → processed_with_warnings
+      skipped → skipped
+      failed → failed
+    """
+
     SUCCESS = "success"
     PARTIAL_SUCCESS = "partial_success"
     FAILED = "failed"
+    COMPLETED_WITH_REVIEW_REQUIRED = "completed_with_review_required"
+    SKIPPED = "skipped"
+
+
+def tally_invoice_status_label(status: TallyProcessingStatus | str) -> str:
+    """Map persisted processing_status to operator-facing invoice status."""
+    value = status.value if isinstance(status, TallyProcessingStatus) else str(status)
+    mapping = {
+        TallyProcessingStatus.SUCCESS.value: "processed",
+        TallyProcessingStatus.PARTIAL_SUCCESS.value: "processed_with_warnings",
+        TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED.value: "processed_with_warnings",
+        TallyProcessingStatus.SKIPPED.value: "skipped",
+        TallyProcessingStatus.FAILED.value: "failed",
+    }
+    return mapping.get(value, value)
 
 
 class TallySyncRunStatus(StrEnum):
@@ -165,10 +189,16 @@ class TallyLineStatus(StrEnum):
 
 class TallyLineOutcome(StrEnum):
     SALE_APPLIED = "sale_applied"
+    SALE_APPLIED_WITH_REVIEW = "sale_applied_with_review"
+    ADDITIONAL_PRODUCT = "additional_product"  # Case C1 — no serial
+    UNMATCHED_SERIALIZED_ITEM = "unmatched_serialized_item"  # Case C2 — serial not in IMS
     DUPLICATE_SALE = "duplicate_sale"
-    SERIAL_NUMBER_MISSING = "serial_number_missing"
-    PRODUCT_MODEL_MISSING = "product_model_missing"
-    PRODUCT_MODEL_MISMATCH = "product_model_mismatch"
+    REVIEW_REQUIRED_DUPLICATE_SERIAL = "review_required_duplicate_serial"
+    REVIEW_REQUIRED_ALREADY_SOLD = "review_required_already_sold"
+    REVIEW_REQUIRED_NOT_AVAILABLE = "review_required_not_available"
+    SERIAL_NUMBER_MISSING = "serial_number_missing"  # legacy; prefer ADDITIONAL_PRODUCT / C2
+    PRODUCT_MODEL_MISSING = "product_model_missing"  # legacy; no longer used for auto-sell
+    PRODUCT_MODEL_MISMATCH = "product_model_mismatch"  # legacy alias of sale_applied_with_review
     IGNORED = "ignored"
     ERROR = "error"
 
@@ -248,6 +278,7 @@ __all__ = [
     "TallyLineOutcome",
     "TallyLineStatus",
     "TallyProcessingStatus",
+    "tally_invoice_status_label",
     "TallySyncRunStatus",
     "TALLY_LINE_OUTCOME_ENUM_NAME",
     "TALLY_LINE_STATUS_ENUM_NAME",

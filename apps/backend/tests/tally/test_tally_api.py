@@ -156,8 +156,8 @@ async def test_tally_xml_processing_creates_sale(
 
     sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
     assert sale is not None
-    assert sale.sale_amount == 147500.0
-    assert sale.sale_amount_excluding_gst == 125000.0
+    assert sale.sale_amount == 125000.0
+    assert sale.sale_amount_excluding_gst is None
 
 
 @pytest.mark.asyncio

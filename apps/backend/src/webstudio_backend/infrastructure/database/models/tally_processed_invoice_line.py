@@ -4,8 +4,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -32,7 +44,26 @@ class TallyProcessedInvoiceLine(Base, PrimaryKeyMixin, TimestampMixin):
     )
     line_index: Mapped[int] = mapped_column(Integer, nullable=False)
     serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    serial_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_serial: Mapped[str | None] = mapped_column(String(128), nullable=True)
     stock_item_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    quantity: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    taxable_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    cgst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    sgst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    igst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    cess_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    line_total: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    match_result: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    invoice_model_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ims_model_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sale_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_additional_product: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_unmatched_serialized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     line_status: Mapped[TallyLineStatus] = mapped_column(
         Enum(
             TallyLineStatus,

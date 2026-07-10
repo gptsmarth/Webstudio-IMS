@@ -157,6 +157,11 @@ class SaleDetailRow(SalesReportRow):
     tally_master_id: str | None
     tally_voucher_type: str | None
     created_at: datetime
+    review_required: bool = False
+    review_reason: str | None = None
+    invoice_model_name: str | None = None
+    ims_model_name: str | None = None
+    serial_source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -516,6 +521,11 @@ class ReportRepository:
             Sale.tally_master_id,
             Sale.tally_voucher_type,
             Sale.created_at,
+            Sale.review_required,
+            Sale.review_reason,
+            Sale.invoice_model_name,
+            Sale.ims_model_name,
+            Sale.serial_source,
         ).select_from(
             _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
         )
@@ -1016,6 +1026,11 @@ class ReportRepository:
             tally_master_id,
             tally_voucher_type,
             created_at,
+            review_required,
+            review_reason,
+            invoice_model_name,
+            ims_model_name,
+            serial_source,
         ) = row
         return SaleDetailRow(
             id=sale_id,
@@ -1054,6 +1069,11 @@ class ReportRepository:
             tally_master_id=tally_master_id,
             tally_voucher_type=tally_voucher_type,
             created_at=created_at,
+            review_required=bool(review_required),
+            review_reason=review_reason,
+            invoice_model_name=invoice_model_name,
+            ims_model_name=ims_model_name,
+            serial_source=serial_source,
         )
 
     @staticmethod

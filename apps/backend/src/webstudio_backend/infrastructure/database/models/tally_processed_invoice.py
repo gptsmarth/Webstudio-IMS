@@ -5,7 +5,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, Numeric, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    LargeBinary,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -36,6 +47,19 @@ class TallyProcessedInvoice(Base, PrimaryKeyMixin, TimestampMixin):
     voucher_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     party_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     voucher_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    subtotal: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    round_off: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    cgst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    sgst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    igst_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    cess_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    grand_total: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    payment_mode: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    narration: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    raw_xml_gzip: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     processing_status: Mapped[TallyProcessingStatus] = mapped_column(
         Enum(
             TallyProcessingStatus,

@@ -10,12 +10,18 @@ from webstudio_backend.infrastructure.database.models.custom_access_role import 
     CustomAccessRole,
     CustomAccessRolePermission,
 )
+from webstudio_backend.infrastructure.database.models.enterprise_rollback_run import (
+    EnterpriseRollbackRun,
+)
 from webstudio_backend.infrastructure.database.models.integration_api_key import IntegrationApiKey
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.notification import Notification
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.refresh_token import RefreshToken
+from webstudio_backend.infrastructure.database.models.release_deployment_event import (
+    ReleaseDeploymentEvent,
+)
 from webstudio_backend.infrastructure.database.models.release_deployment_run import (
     ReleaseDeploymentRun,
 )
@@ -30,30 +36,48 @@ from webstudio_backend.infrastructure.database.models.scheduler_runtime_state im
 )
 from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
 from webstudio_backend.infrastructure.database.models.system_setting import SystemSetting
+from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
+from webstudio_backend.infrastructure.database.models.tally_line_decision_log import (
+    TallyLineDecisionLog,
+)
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice import (
+    TallyProcessedInvoice,
+)
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice_line import (
+    TallyProcessedInvoiceLine,
+)
+from webstudio_backend.infrastructure.database.models.tally_sync_history import TallySyncHistory
+from webstudio_backend.infrastructure.database.models.tally_sync_log import TallySyncLog
 from webstudio_backend.infrastructure.database.models.user import User
 
 __all__ = [
     "AuditLog",
     "BackupRun",
     "Brand",
+    "ClientVersionObservation",
     "CustomAccessRole",
     "CustomAccessRolePermission",
+    "EnterpriseRollbackRun",
     "IntegrationApiKey",
     "InventoryItem",
     "Location",
     "Notification",
     "ProductModel",
     "RefreshToken",
-    "RestoreRun",
-    "Sale",
-    "ClientVersionObservation",
-    "EnterpriseRollbackRun",
     "ReleaseDeploymentEvent",
     "ReleaseDeploymentRun",
     "ReleaseDownloadArtifact",
     "ReleaseDownloadJob",
+    "RestoreRun",
+    "Sale",
     "SchedulerRuntimeState",
     "SoftwareRelease",
     "SystemSetting",
+    "TallyCompanySync",
+    "TallyLineDecisionLog",
+    "TallyProcessedInvoice",
+    "TallyProcessedInvoiceLine",
+    "TallySyncHistory",
+    "TallySyncLog",
     "User",
 ]

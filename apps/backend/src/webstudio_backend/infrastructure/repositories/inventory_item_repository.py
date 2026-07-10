@@ -68,12 +68,21 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         return await self._session.get(self._model, entity_id)
 
     async def find_by_serial_number(self, serial_number: str) -> InventoryItem | None:
+        matches = await self.find_all_by_serial_number(serial_number)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            # Ambiguous — callers must use find_all_by_serial_number for Case D.
+            return matches[0]
+        return matches[0]
+
+    async def find_all_by_serial_number(self, serial_number: str) -> list[InventoryItem]:
         normalized = validate_serial_number(serial_number)
         statement = select(InventoryItem).where(
             func.lower(InventoryItem.serial_number) == normalized.lower(),
         )
         result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        return list(result.scalars().all())
 
     async def get_detail_by_serial(self, serial_number: str) -> InventoryItemDetailRow | None:
         normalized = validate_serial_number(serial_number)

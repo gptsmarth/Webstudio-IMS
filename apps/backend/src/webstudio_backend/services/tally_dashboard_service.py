@@ -275,6 +275,24 @@ class TallyDashboardService:
             "sync_health": sync_health,
             "pending_retry": pending_retry,
             "todays_imports": imported_today,
+            "sync_checkpoint": {
+                "last_imported_voucher_date": (
+                    company.last_imported_voucher_date.isoformat()
+                    if company and company.last_imported_voucher_date
+                    else None
+                ),
+                "last_processed_guid": company.last_processed_guid if company else None,
+                "last_processed_master_id": (company.last_processed_master_id if company else None),
+                "last_processed_voucher_type": (
+                    company.last_processed_voucher_type if company else None
+                ),
+                "last_processed_invoice_number": (
+                    company.last_processed_invoice_number if company else None
+                ),
+                "last_successful_sync_at": last_sync.isoformat() if last_sync else None,
+                "scheduler_status": scheduler_status,
+                "scheduler_status_label": scheduler_label,
+            },
         }
 
     @staticmethod

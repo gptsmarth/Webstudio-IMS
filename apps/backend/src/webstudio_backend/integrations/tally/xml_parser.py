@@ -1,4 +1,4 @@
-"""Tally voucher XML parser."""
+"""Tally voucher XML parser — deterministic serial extraction (no fuzzy matching)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,15 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree as ET
 
-from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
+from webstudio_backend.integrations.tally.types import (
+    TallyInventoryLine,
+    TallyVoucher,
+    TallyVoucherTotals,
+)
+
+SERIAL_SOURCE_BASICUSERDESCRIPTION = "basicuserdescription"
+SERIAL_SOURCE_SERIALNUMBER = "serialnumber"
+SERIAL_SOURCE_BATCH_ALLOCATION = "batch_allocations.serialnumber"
 
 
 def _local_name(tag: str) -> str:
@@ -51,22 +59,72 @@ def _sanitize_xml_text(xml_text: str) -> str:
     )
 
 
-def _extract_serials_from_line(line: ET.Element) -> list[str]:
-    serials: list[str] = []
-    for batch in line.iter():
-        if _local_name(batch.tag).upper() == "SERIALNUMBER":
-            text = (batch.text or "").strip()
+def normalize_serial(value: str | None) -> str | None:
+    """Trim + uppercase for comparison. Original value is kept separately."""
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    return cleaned.upper()
+
+
+def _extract_serial_from_line(line: ET.Element) -> tuple[str | None, str | None, list[str]]:
+    """
+    Production serial priority (WEBSTUDIO):
+      1. BASICUSERDESCRIPTION.LIST → FIRST BASICUSERDESCRIPTION only (if non-empty)
+      2. Direct SERIALNUMBER child
+      3. BATCHALLOCATIONS.LIST / SERIALNUMBER
+
+    Do NOT regex-scan remarks. Second+ BASICUSERDESCRIPTION entries are ignored.
+    Empty BASICUSERDESCRIPTION.LIST must never raise — fall through to SERIALNUMBER.
+    """
+    try:
+        # 1) First BASICUSERDESCRIPTION only when present and non-empty
+        for desc_list in _children_by_name(line, "BASICUSERDESCRIPTION.LIST"):
+            descriptions = _children_by_name(desc_list, "BASICUSERDESCRIPTION")
+            if not descriptions:
+                continue
+            text = (descriptions[0].text or "").strip()
             if text:
-                serials.append(text)
-    direct = _child_text(line, "SERIALNUMBER")
-    if direct:
-        serials.append(direct)
-    for desc_list in _children_by_name(line, "BASICUSERDESCRIPTION.LIST"):
-        for item in _children_by_name(desc_list, "BASICUSERDESCRIPTION"):
-            text = (item.text or "").strip()
-            if text and re.match(r"^[A-Z0-9]{8,}$", text, re.I):
-                serials.append(text.upper())
-    return list(dict.fromkeys(serials))
+                return text, SERIAL_SOURCE_BASICUSERDESCRIPTION, [text]
+
+        # 2) Direct SERIALNUMBER
+        direct = _child_text(line, "SERIALNUMBER")
+        if direct:
+            return direct, SERIAL_SOURCE_SERIALNUMBER, [direct]
+
+        # 3) Batch allocations
+        batch_serials: list[str] = []
+        for batch in _children_by_name(line, "BATCHALLOCATIONS.LIST"):
+            serial = _child_text(batch, "SERIALNUMBER")
+            if serial:
+                batch_serials.append(serial)
+            for nested in batch.iter():
+                if nested is batch:
+                    continue
+                if _local_name(nested.tag).upper() == "SERIALNUMBER":
+                    text = (nested.text or "").strip()
+                    if text and text not in batch_serials:
+                        batch_serials.append(text)
+        if batch_serials:
+            return batch_serials[0], SERIAL_SOURCE_BATCH_ALLOCATION, batch_serials
+    except Exception:  # noqa: BLE001 — never fail voucher parse on serial extraction
+        return None, None, []
+
+    return None, None, []
+
+
+def format_serial_source_label(serial_source: str | None) -> str | None:
+    """Operator-facing serial source label for Main Admin audit."""
+    if not serial_source:
+        return None
+    labels = {
+        SERIAL_SOURCE_BASICUSERDESCRIPTION: "BASICUSERDESCRIPTION[0]",
+        SERIAL_SOURCE_SERIALNUMBER: "SERIALNUMBER",
+        SERIAL_SOURCE_BATCH_ALLOCATION: "BATCHALLOCATIONS.SERIALNUMBER",
+    }
+    return labels.get(serial_source, serial_source)
 
 
 def _parse_tally_money(value: str | None) -> str | None:
@@ -77,13 +135,20 @@ def _parse_tally_money(value: str | None) -> str | None:
         cleaned = cleaned.split("/", 1)[0].strip()
     try:
         amount = abs(Decimal(cleaned))
-        return str(amount.quantize(Decimal("0.01")))
     except InvalidOperation:
         return None
+    return str(amount.quantize(Decimal("0.01")))
+
+
+def _money_decimal(value: str | None) -> Decimal | None:
+    parsed = _parse_tally_money(value)
+    if parsed is None:
+        return None
+    return Decimal(parsed)
 
 
 def _line_amount(line: ET.Element) -> str | None:
-    """Sale value for one inventory line (AMOUNT or RATE from Tally export)."""
+    """Sale value for one inventory line (AMOUNT preferred; RATE fallback)."""
     direct = _parse_tally_money(_child_text(line, "AMOUNT"))
     if direct:
         return direct
@@ -94,9 +159,12 @@ def _line_amount(line: ET.Element) -> str | None:
     for child in line.iter():
         if _local_name(child.tag).upper() != "AMOUNT":
             continue
-        parsed = _parse_tally_money(child.text)
-        if parsed:
-            amounts.append(Decimal(parsed))
+        # Prefer inventory-line amounts; skip deep ledger noise when possible.
+        if child is not line and _local_name(child.tag).upper() == "AMOUNT":
+            # ElementTree has no parent pointer; collect all and take max as last resort.
+            parsed = _parse_tally_money(child.text)
+            if parsed:
+                amounts.append(Decimal(parsed))
     if not amounts:
         return None
     return str(max(amounts).quantize(Decimal("0.01")))
@@ -106,7 +174,9 @@ def resolve_inventory_line_sale_amount(
     line: TallyInventoryLine,
     voucher: TallyVoucher,
 ) -> float | None:
-    """Best-effort selling price for a synced sale row."""
+    """Line total from XML only — never estimate GST."""
+    if line.line_total:
+        return float(line.line_total)
     if line.amount:
         return float(line.amount)
     if len(voucher.inventory_lines) == 1 and voucher.amount:
@@ -130,6 +200,17 @@ def expand_inventory_lines(lines: list[TallyInventoryLine]) -> list[TallyInvento
                     serial_number=serials[0] if serials else line.serial_number,
                     batch_allocations=serials,
                     amount=line.amount,
+                    rate=line.rate,
+                    taxable_amount=line.taxable_amount,
+                    cgst_amount=line.cgst_amount,
+                    sgst_amount=line.sgst_amount,
+                    igst_amount=line.igst_amount,
+                    cess_amount=line.cess_amount,
+                    line_total=line.line_total,
+                    serial_source=line.serial_source,
+                    normalized_serial=normalize_serial(
+                        serials[0] if serials else line.serial_number
+                    ),
                 )
             )
             continue
@@ -151,6 +232,15 @@ def expand_inventory_lines(lines: list[TallyInventoryLine]) -> list[TallyInvento
                     serial_number=serial,
                     batch_allocations=[serial],
                     amount=unit_amount,
+                    rate=line.rate,
+                    taxable_amount=None,
+                    cgst_amount=None,
+                    sgst_amount=None,
+                    igst_amount=None,
+                    cess_amount=None,
+                    line_total=unit_amount,
+                    serial_source=line.serial_source,
+                    normalized_serial=normalize_serial(serial),
                 )
             )
     return expanded
@@ -159,14 +249,25 @@ def expand_inventory_lines(lines: list[TallyInventoryLine]) -> list[TallyInvento
 def _parse_inventory_line(line: ET.Element, index: int) -> TallyInventoryLine:
     stock_item = _child_text(line, "STOCKITEMNAME") or ""
     quantity = _child_text(line, "ACTUALQTY") or _child_text(line, "BILLEDQTY") or "1"
-    serials = _extract_serials_from_line(line)
+    serial, serial_source, serials = _extract_serial_from_line(line)
+    amount = _line_amount(line)
+    rate = _parse_tally_money(_child_text(line, "RATE"))
     return TallyInventoryLine(
         line_index=index,
         stock_item_name=stock_item,
         quantity=quantity,
-        serial_number=serials[0] if serials else None,
+        serial_number=serial,
         batch_allocations=serials,
-        amount=_line_amount(line),
+        amount=amount,
+        rate=rate,
+        taxable_amount=_parse_tally_money(_child_text(line, "TAXABLEAMOUNT")),
+        cgst_amount=_parse_tally_money(_child_text(line, "CGSTAMOUNT")),
+        sgst_amount=_parse_tally_money(_child_text(line, "SGSTAMOUNT")),
+        igst_amount=_parse_tally_money(_child_text(line, "IGSTAMOUNT")),
+        cess_amount=_parse_tally_money(_child_text(line, "CESSAMOUNT")),
+        line_total=amount,
+        serial_source=serial_source,
+        normalized_serial=normalize_serial(serial),
     )
 
 
@@ -187,6 +288,54 @@ def _voucher_amount(voucher: ET.Element) -> str | None:
     return str(max(amounts).quantize(Decimal("0.01")))
 
 
+def _parse_voucher_totals(voucher: ET.Element, voucher_amount: str | None) -> TallyVoucherTotals:
+    """Read tax/total fields from XML when present — never invent GST."""
+    cgst = Decimal("0")
+    sgst = Decimal("0")
+    igst = Decimal("0")
+    cess = Decimal("0")
+    discount = Decimal("0")
+    round_off = Decimal("0")
+    found_tax = False
+
+    for ledger in voucher.iter():
+        tag = _local_name(ledger.tag).upper()
+        if tag not in {"LEDGERENTRIES.LIST", "ALLLEDGERENTRIES.LIST"}:
+            continue
+        name = (_child_text(ledger, "LEDGERNAME") or "").upper()
+        amount = _money_decimal(_child_text(ledger, "AMOUNT"))
+        if amount is None:
+            continue
+        if "CGST" in name:
+            cgst += amount
+            found_tax = True
+        elif "SGST" in name:
+            sgst += amount
+            found_tax = True
+        elif "IGST" in name:
+            igst += amount
+            found_tax = True
+        elif "CESS" in name:
+            cess += amount
+            found_tax = True
+        elif "ROUND" in name:
+            round_off += amount
+        elif "DISCOUNT" in name:
+            discount += amount
+
+    grand = _money_decimal(voucher_amount)
+    return TallyVoucherTotals(
+        subtotal=None,
+        discount_amount=discount if discount else None,
+        round_off=round_off if round_off else None,
+        cgst_amount=cgst if found_tax and cgst else None,
+        sgst_amount=sgst if found_tax and sgst else None,
+        igst_amount=igst if found_tax and igst else None,
+        cess_amount=cess if found_tax and cess else None,
+        grand_total=grand,
+    )
+
+
 def _printed_invoice_number(voucher: ET.Element, voucher_number: str) -> str:
     for candidate in (
         "REFERENCE",
@@ -202,7 +351,9 @@ def _printed_invoice_number(voucher: ET.Element, voucher_number: str) -> str:
     return voucher_number
 
 
-def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
+def parse_voucher_element(
+    voucher: ET.Element, *, raw_xml: str | None = None
+) -> TallyVoucher | None:
     guid = _child_text(voucher, "GUID")
     voucher_number = _child_text(voucher, "VOUCHERNUMBER")
     voucher_type = _child_text(voucher, "VOUCHERTYPENAME")
@@ -227,6 +378,7 @@ def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
                 inventory_lines.append(_parse_inventory_line(child, line_index))
                 line_index += 1
 
+    amount = _voucher_amount(voucher)
     return TallyVoucher(
         guid=guid,
         master_id=_child_text(voucher, "MASTERID"),
@@ -239,7 +391,9 @@ def parse_voucher_element(voucher: ET.Element) -> TallyVoucher | None:
         inventory_lines=inventory_lines,
         payment_mode=_child_text(voucher, "BASICPAYMENTTYPE")
         or _child_text(voucher, "PAYMENTMODE"),
-        amount=_voucher_amount(voucher),
+        amount=amount,
+        totals=_parse_voucher_totals(voucher, amount),
+        raw_xml=raw_xml,
     )
 
 
@@ -257,7 +411,12 @@ def parse_vouchers_xml(xml_text: str) -> list[TallyVoucher]:
     for element in root.iter():
         if _local_name(element.tag).upper() != "VOUCHER":
             continue
-        parsed = parse_voucher_element(element)
+        # Preserve per-voucher XML fragment for archive when possible.
+        try:
+            fragment = ET.tostring(element, encoding="unicode")
+        except Exception:  # noqa: BLE001
+            fragment = cleaned
+        parsed = parse_voucher_element(element, raw_xml=fragment)
         if parsed is None or parsed.guid in seen_guids:
             continue
         seen_guids.add(parsed.guid)
@@ -265,28 +424,21 @@ def parse_vouchers_xml(xml_text: str) -> list[TallyVoucher]:
     return vouchers
 
 
-def normalize_model_name(value: str) -> str:
-    text = re.sub(r"[^\w\s-]", " ", value.upper())
-    text = re.sub(r"\s+", " ", text).strip()
-    for prefix in ("VIVOBOOK", "INSPIRON", "PAVILION", "IDEAPAD", "THINKPAD", "NOTEBOOK", "LAPTOP"):
-        text = re.sub(rf"\b{prefix}\b", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+def catalog_model_matches_invoice(ims_catalog_label: str, invoice_stock_item: str) -> bool:
+    """
+    Strict verification helper for Case A/B — NOT used to select inventory.
 
-
-def extract_model_tokens(value: str) -> set[str]:
-    normalized = normalize_model_name(value)
-    tokens = {token for token in normalized.split() if len(token) >= 4}
-    compact = re.sub(r"[^A-Z0-9]", "", normalized)
-    if len(compact) >= 6:
-        tokens.add(compact)
-    return tokens
-
-
-def models_equivalent(inventory_model: str, invoice_model: str) -> bool:
-    inv_tokens = extract_model_tokens(inventory_model)
-    inv_tokens.update(extract_model_tokens(invoice_model))
-    left = extract_model_tokens(inventory_model)
-    right = extract_model_tokens(invoice_model)
+    Match when normalized strings are equal, or IMS model number token appears
+    as a contiguous substring in the invoice stock item name.
+    """
+    left = re.sub(r"\s+", " ", (ims_catalog_label or "").strip().upper())
+    right = re.sub(r"\s+", " ", (invoice_stock_item or "").strip().upper())
     if not left or not right:
-        return normalize_model_name(inventory_model) == normalize_model_name(invoice_model)
-    return bool(left & right)
+        return False
+    if left == right:
+        return True
+    # Prefer model-number style tokens (contain digits).
+    for token in left.replace("(", " ").replace(")", " ").split():
+        if any(ch.isdigit() for ch in token) and len(token) >= 5 and token in right:
+            return True
+    return False

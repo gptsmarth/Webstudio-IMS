@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -77,6 +78,11 @@ class Sale(Base, PrimaryKeyMixin):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    invoice_model_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ims_model_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    serial_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
     snapshot_serial_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_product_model_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), nullable=True

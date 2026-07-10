@@ -2851,20 +2851,38 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | Field | Type |
 |-------|------|
 | `id` | integer |
-| `inventory_item_id` | UUID |
+| `inventory_item_id` | UUID \| null |
 | `serial_number` | string |
 | `sale_source` | `manual` \| `tally` |
 | `sold_at` | datetime |
-| `recorded_by` | UserSummary \| null |
 | `invoice_number` | string |
 | `customer_name` | string \| null |
 | `payment_mode` | string \| null |
-| `sale_amount` | number \| null | GST-inclusive for Tally sync; manual entry as entered |
-| `sale_amount_excluding_gst` | number \| null | Base Tally amount before 18% GST |
+| `sale_amount` | number \| null | XML line total for Tally (no GST estimation) |
+| `sale_amount_excluding_gst` | number \| null | XML taxable amount when present |
 | `tally_company_name` | string \| null |
 | `tally_voucher_number` | string \| null |
+| `printed_invoice_number` | string \| null |
+| `tally_voucher_guid` | string \| null | Authoritative voucher identity |
+| `tally_master_id` | string \| null |
+| `tally_voucher_type` | string \| null |
+| `review_required` | boolean |
+| `review_reason` | string \| null |
+| `invoice_model_name` | string \| null |
+| `ims_model_name` | string \| null |
+| `serial_source` | string \| null | Main Admin only — raw extraction key |
+| `serial_source_label` | string \| null | Main Admin only — e.g. `BASICUSERDESCRIPTION[0]` |
+| `invoice_status` | string \| null | `processed` \| `processed_with_warnings` \| `skipped` \| `failed` |
+| `tracked_products` | array | Inventory lines that produced sales |
+| `additional_products` | array | Case C1 — no serial |
+| `unmatched_serialized_items` | array | Case C2 — serial not managed in IMS |
+| `invoice_totals` | object \| null | Subtotal, taxes, grand total from XML |
+| `original_xml_available` | boolean |
+| `imported_at` | datetime \| null |
 | `notes` | string \| null |
 | `created_at` | datetime |
+
+**Admin-only:** `GET /api/v1/sales/{sale_id}/original-xml` returns archived Tally voucher XML when available.
 
 ### 19.9 SyncJob
 
