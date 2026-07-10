@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Minus, Moon, Plus, Sun } from 'lucide-react';
 import { breadcrumbTrail } from '../../config/navigation';
 import type { WorkspaceRoute } from '../../config/navigation';
+import { useUiZoom } from '../../hooks/useUiZoom';
 import { useNavigationStore, useSearchStore, useThemeStore } from '../../store';
 import type { AuthSession } from '../../store/useAuthStore';
 import type { ConnectionStatus } from './ConnectionBadge';
@@ -39,6 +40,7 @@ export function TopToolbar({
   const { currentRoute, setRoute } = useNavigationStore();
   const { open: openSearch } = useSearchStore();
   const { resolvedTheme, toggleTheme } = useThemeStore();
+  const { zoomPercentLabel, zoomIn, zoomOut, available: zoomAvailable } = useUiZoom();
   const crumbs = breadcrumbTrail(currentRoute);
 
   return (
@@ -56,6 +58,31 @@ export function TopToolbar({
         {showTallyStatus && <TallyStatusBadge status={tallyStatus} compact />}
         {showNotifications && (
           <NotificationBell count={notificationCount} onClick={onNotificationsClick} />
+        )}
+        {zoomAvailable && (
+          <div className="app-toolbar-zoom" role="group" aria-label="Display zoom">
+            <button
+              type="button"
+              className="app-toolbar-icon-btn"
+              onClick={() => void zoomOut()}
+              aria-label="Zoom out"
+              title="Zoom out (Ctrl+-)"
+            >
+              <Minus size={16} aria-hidden />
+            </button>
+            <span className="app-toolbar-zoom__label" title="Current zoom">
+              {zoomPercentLabel}
+            </span>
+            <button
+              type="button"
+              className="app-toolbar-icon-btn"
+              onClick={() => void zoomIn()}
+              aria-label="Zoom in"
+              title="Zoom in (Ctrl+=)"
+            >
+              <Plus size={16} aria-hidden />
+            </button>
+          </div>
         )}
         <button
           type="button"

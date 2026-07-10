@@ -1,4 +1,4 @@
-import { app, BrowserWindow, crashReporter, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, crashReporter, ipcMain, screen, shell } from 'electron';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
@@ -104,6 +104,38 @@ if (!gotTheLock) {
     isMaximized: boolean;
   }
 
+  const ZOOM_MIN = 0.75;
+  const ZOOM_MAX = 1.25;
+  const ZOOM_STEP = 0.05;
+  const ZOOM_DEFAULT = 1;
+
+  const clampZoomFactor = (value: number): number => {
+    const rounded = Math.round(value * 100) / 100;
+    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, rounded));
+  };
+
+  const readZoomFactor = (): number => {
+    const config = readJson(getConfigPath());
+    const raw = config.uiZoomFactor;
+    return typeof raw === 'number' && Number.isFinite(raw) ? clampZoomFactor(raw) : ZOOM_DEFAULT;
+  };
+
+  const persistZoomFactor = (factor: number): number => {
+    const clamped = clampZoomFactor(factor);
+    const config = readJson(getConfigPath());
+    config.uiZoomFactor = clamped;
+    writeJson(getConfigPath(), config);
+    return clamped;
+  };
+
+  const applyZoomFactor = (factor: number): number => {
+    const clamped = persistZoomFactor(factor);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.setZoomFactor(clamped);
+    }
+    return clamped;
+  };
+
   const getSavedWindowState = (): WindowState => {
     const saved = readJson(getWindowStatePath());
     return {
@@ -115,10 +147,66 @@ if (!gotTheLock) {
     };
   };
 
+  /** Keep the window fully inside the display work area (above the taskbar/dock). */
+  const fitWindowStateToWorkArea = (
+    state: WindowState,
+  ): WindowState & { minWidth: number; minHeight: number } => {
+    const anchorX =
+      typeof state.x === 'number' ? state.x : screen.getPrimaryDisplay().workArea.x + 40;
+    const anchorY =
+      typeof state.y === 'number' ? state.y : screen.getPrimaryDisplay().workArea.y + 40;
+    const { workArea } = screen.getDisplayNearestPoint({ x: anchorX, y: anchorY });
+
+    // Never force a minimum larger than the usable desktop (14" + taskbar often < 768px tall).
+    const minWidth = Math.max(800, Math.min(1024, workArea.width));
+    const minHeight = Math.max(560, Math.min(700, workArea.height));
+
+    const width = Math.min(Math.max(state.width, minWidth), workArea.width);
+    const height = Math.min(Math.max(state.height, minHeight), workArea.height);
+
+    let x =
+      typeof state.x === 'number'
+        ? state.x
+        : workArea.x + Math.max(0, Math.floor((workArea.width - width) / 2));
+    let y =
+      typeof state.y === 'number'
+        ? state.y
+        : workArea.y + Math.max(0, Math.floor((workArea.height - height) / 2));
+
+    x = Math.min(Math.max(x, workArea.x), workArea.x + workArea.width - width);
+    y = Math.min(Math.max(y, workArea.y), workArea.y + workArea.height - height);
+
+    return {
+      width,
+      height,
+      x,
+      y,
+      isMaximized: state.isMaximized,
+      minWidth,
+      minHeight,
+    };
+  };
+
+  const ensureWindowInWorkArea = (): void => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized()) return;
+    const fitted = fitWindowStateToWorkArea({
+      ...mainWindow.getBounds(),
+      isMaximized: false,
+    });
+    mainWindow.setMinimumSize(fitted.minWidth, fitted.minHeight);
+    mainWindow.setBounds({
+      x: fitted.x,
+      y: fitted.y,
+      width: fitted.width,
+      height: fitted.height,
+    });
+  };
+
   const saveWindowState = (): void => {
     if (!mainWindow) return;
     const isMaximized = mainWindow.isMaximized();
-    const bounds = mainWindow.getBounds();
+    // Persist normal bounds so restore after maximize does not keep oversized taskbar-overlapping size.
+    const bounds = isMaximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
     writeJson(getWindowStatePath(), {
       width: bounds.width,
       height: bounds.height,
@@ -158,16 +246,16 @@ if (!gotTheLock) {
   };
 
   function createWindow(): void {
-    const windowState = getSavedWindowState();
+    const fitted = fitWindowStateToWorkArea(getSavedWindowState());
     const brandingIcon = resolveBrandingIcon();
 
     mainWindow = new BrowserWindow({
-      width: windowState.width,
-      height: windowState.height,
-      x: windowState.x,
-      y: windowState.y,
-      minWidth: 1024,
-      minHeight: 768,
+      width: fitted.width,
+      height: fitted.height,
+      x: fitted.x,
+      y: fitted.y,
+      minWidth: fitted.minWidth,
+      minHeight: fitted.minHeight,
       show: false,
       title: 'WEBSTUDIO Desktop',
       icon: brandingIcon,
@@ -181,17 +269,23 @@ if (!gotTheLock) {
       },
     });
 
-    if (windowState.isMaximized) {
+    if (fitted.isMaximized) {
       mainWindow.maximize();
     }
 
     mainWindow.once('ready-to-show', () => {
+      ensureWindowInWorkArea();
+      applyZoomFactor(readZoomFactor());
       mainWindow?.show();
     });
 
     mainWindow.on('resize', saveWindowState);
     mainWindow.on('move', saveWindowState);
     mainWindow.on('close', saveWindowState);
+
+    screen.on('display-metrics-changed', () => {
+      ensureWindowInWorkArea();
+    });
 
     if (process.env.VITE_DEV_SERVER_URL) {
       void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -201,6 +295,7 @@ if (!gotTheLock) {
     }
 
     mainWindow.webContents.on('did-finish-load', () => {
+      applyZoomFactor(readZoomFactor());
       writeLog('Main', 'info', `Renderer loaded: ${mainWindow?.webContents.getURL()}`);
     });
 
@@ -242,6 +337,15 @@ if (!gotTheLock) {
     mode: APP_MODE,
     apiBaseUrl: API_BASE_URL,
   }));
+
+  ipcMain.handle('window:getZoomFactor', () => readZoomFactor());
+  ipcMain.handle('window:setZoomFactor', (_event, factor: unknown) => {
+    const numeric = typeof factor === 'number' ? factor : Number(factor);
+    return applyZoomFactor(Number.isFinite(numeric) ? numeric : ZOOM_DEFAULT);
+  });
+  ipcMain.handle('window:zoomIn', () => applyZoomFactor(readZoomFactor() + ZOOM_STEP));
+  ipcMain.handle('window:zoomOut', () => applyZoomFactor(readZoomFactor() - ZOOM_STEP));
+  ipcMain.handle('window:resetZoom', () => applyZoomFactor(ZOOM_DEFAULT));
 
   ipcMain.handle('system:getVersionInfo', () => {
     let webstudioMeta: {
@@ -416,7 +520,17 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     registerAppProtocol();
-    configureApplicationMenu();
+    configureApplicationMenu({
+      zoomIn: () => {
+        applyZoomFactor(readZoomFactor() + ZOOM_STEP);
+      },
+      zoomOut: () => {
+        applyZoomFactor(readZoomFactor() - ZOOM_STEP);
+      },
+      resetZoom: () => {
+        applyZoomFactor(ZOOM_DEFAULT);
+      },
+    });
     writeLog('Main', 'info', 'Application bootstrap started');
     createWindow();
 

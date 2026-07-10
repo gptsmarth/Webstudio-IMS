@@ -37,3 +37,12 @@ contextBridge.exposeInMainWorld('update', {
   installAndRestart: (installerPath: string) =>
     ipcRenderer.invoke('update:installAndRestart', installerPath),
 });
+
+contextBridge.exposeInMainWorld('windowControls', {
+  getZoomFactor: () => ipcRenderer.invoke('window:getZoomFactor') as Promise<number>,
+  setZoomFactor: (factor: number) =>
+    ipcRenderer.invoke('window:setZoomFactor', factor) as Promise<number>,
+  zoomIn: () => ipcRenderer.invoke('window:zoomIn') as Promise<number>,
+  zoomOut: () => ipcRenderer.invoke('window:zoomOut') as Promise<number>,
+  resetZoom: () => ipcRenderer.invoke('window:resetZoom') as Promise<number>,
+});

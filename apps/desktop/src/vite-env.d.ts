@@ -96,6 +96,14 @@ interface UpdateNamespace {
   installAndRestart: (installerPath: string) => Promise<void>;
 }
 
+interface WindowControlsNamespace {
+  getZoomFactor: () => Promise<number>;
+  setZoomFactor: (factor: number) => Promise<number>;
+  zoomIn: () => Promise<number>;
+  zoomOut: () => Promise<number>;
+  resetZoom: () => Promise<number>;
+}
+
 interface Window {
   api?: ApiNamespace;
   config?: ConfigNamespace;
@@ -103,4 +111,5 @@ interface Window {
   storage?: StorageNamespace;
   network?: NetworkNamespace;
   update?: UpdateNamespace;
+  windowControls?: WindowControlsNamespace;
 }

@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/shared-kernel",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "webstudio": {
-    "buildNumber": 13,
+    "buildNumber": 14,
     "releaseChannel": "stable",
     "releaseDate": "2026-07-10",
     "gitCommit": "",

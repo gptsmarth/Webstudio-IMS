@@ -10,6 +10,7 @@ import {
   type AppearancePreferences,
 } from '../../lib/settingsUi';
 import type { SettingsWorkspaceState } from '../../hooks/useSettingsWorkspace';
+import { useUiZoom } from '../../hooks/useUiZoom';
 import {
   AuthenticationService,
   type SecurityDashboard,
@@ -1612,6 +1613,15 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
 export function AppearancePanel(): JSX.Element {
   const { theme, setTheme } = useThemeStore();
   const [appearance, setAppearance] = useState<AppearancePreferences>(loadAppearancePreferences());
+  const {
+    zoomFactor,
+    zoomPercentLabel,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    setZoomFactor,
+    available: zoomAvailable,
+  } = useUiZoom();
 
   return (
     <Section title="Branding">
@@ -1628,6 +1638,50 @@ export function AppearancePanel(): JSX.Element {
           </select>
         </Field>
         <Readonly label="Accent color" value="Default (future-ready)" />
+        {zoomAvailable && (
+          <Field label="Display zoom">
+            <div className="stg-zoom-controls">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void zoomOut()}
+                disabled={zoomFactor <= 0.75}
+              >
+                Zoom out
+              </button>
+              <span className="stg-zoom-controls__value">{zoomPercentLabel}</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void zoomIn()}
+                disabled={zoomFactor >= 1.25}
+              >
+                Zoom in
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => void resetZoom()}
+              >
+                Reset
+              </button>
+            </div>
+            <input
+              className="stg-zoom-controls__slider"
+              type="range"
+              min={75}
+              max={125}
+              step={5}
+              value={Math.round(zoomFactor * 100)}
+              onChange={(e) => void setZoomFactor(Number(e.target.value) / 100)}
+              aria-label="Display zoom percent"
+            />
+            <p className="stg-field-hint">
+              Scales the whole desktop UI (75%–125%). Use Zoom out on 14&quot; screens. Shortcuts:
+              Ctrl+= / Ctrl+- / Ctrl+0.
+            </p>
+          </Field>
+        )}
         <label className="stg-check">
           <input
             type="checkbox"

@@ -2,6 +2,12 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
+export interface ApplicationMenuHandlers {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+}
+
 /** Enables Cut/Copy/Paste/Select All — required for OS shortcuts in Electron text fields. */
 const editMenu: MenuItemConstructorOptions = {
   label: 'Edit',
@@ -16,12 +22,59 @@ const editMenu: MenuItemConstructorOptions = {
   ],
 };
 
+function viewMenu(handlers?: ApplicationMenuHandlers): MenuItemConstructorOptions {
+  const zoomItems: MenuItemConstructorOptions[] = handlers
+    ? [
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+=',
+          click: () => handlers.zoomIn(),
+        },
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+Plus',
+          visible: false,
+          acceleratorWorksWhenHidden: true,
+          click: () => handlers.zoomIn(),
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => handlers.zoomOut(),
+        },
+        {
+          label: 'Actual Size',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => handlers.resetZoom(),
+        },
+      ]
+    : [];
+
+  const submenu: MenuItemConstructorOptions[] = [
+    ...zoomItems,
+    ...(zoomItems.length > 0 && isDev ? [{ type: 'separator' as const }] : []),
+    ...(isDev
+      ? [
+          { role: 'reload' as const },
+          { role: 'forceReload' as const },
+          { role: 'toggleDevTools' as const },
+        ]
+      : []),
+  ];
+
+  return {
+    label: 'View',
+    submenu:
+      submenu.length > 0 ? submenu : [{ label: 'Zoom controls unavailable', enabled: false }],
+  };
+}
+
 /**
  * macOS: Edit menu is always visible (platform convention).
- * Windows/Linux production: Edit menu is registered for Ctrl+C/V/X but the bar is auto-hidden (Alt to show).
- * Dev: Edit + View (DevTools).
+ * Windows/Linux production: menu bar auto-hidden (Alt to show); accelerators still work.
+ * Zoom shortcuts work even when the bar is hidden.
  */
-export function configureApplicationMenu(): void {
+export function configureApplicationMenu(handlers?: ApplicationMenuHandlers): void {
   if (process.platform === 'darwin') {
     const template: MenuItemConstructorOptions[] = [
       {
@@ -29,37 +82,16 @@ export function configureApplicationMenu(): void {
         submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }],
       },
       editMenu,
+      viewMenu(handlers),
     ];
-
-    if (isDev) {
-      template.push({
-        label: 'View',
-        submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
-      });
-    }
-
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
     return;
   }
 
-  if (isDev) {
-    Menu.setApplicationMenu(
-      Menu.buildFromTemplate([
-        editMenu,
-        {
-          label: 'View',
-          submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }],
-        },
-      ]),
-    );
-    return;
-  }
-
-  // Windows/Linux production: Edit-only menu; window uses autoHideMenuBar (see main.ts).
-  Menu.setApplicationMenu(Menu.buildFromTemplate([editMenu]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([editMenu, viewMenu(handlers)]));
 }
 
-/** Hide the menu bar on Windows/Linux production while keeping clipboard accelerators active. */
+/** Hide the menu bar on Windows/Linux production while keeping clipboard/zoom accelerators active. */
 export function shouldAutoHideMenuBar(): boolean {
   return !isDev && process.platform !== 'darwin';
 }
