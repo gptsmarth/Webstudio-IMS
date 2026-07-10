@@ -115,13 +115,21 @@ export function AddLaptopWizard({
   const [error, setError] = useState<string | null>(null);
   const autoFetchTriggered = useRef(false);
   const forceRefreshOnNextSpecsFetch = useRef(false);
+  const wasOpenRef = useRef(false);
 
   const brandModels = productModels.filter((model) => model.brand_id === brandId);
   const selectedModel =
     brandModels.find((model) => model.id === productModelId) ?? existingLookup?.model ?? null;
 
+  // Reset only when the dialog opens — not when `locations` is refreshed
+  // (e.g. window focus / hierarchy reload), which previously wiped mid-wizard state.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setStep('model');
     setModelNumber('');
     setModelName('');
@@ -156,6 +164,19 @@ export function AddLaptopWizard({
     setError(null);
     autoFetchTriggered.current = false;
     forceRefreshOnNextSpecsFetch.current = false;
+  }, [open, locations]);
+
+  // If locations load after open, fill missing default location ids without resetting the step.
+  useEffect(() => {
+    if (!open) return;
+    const defaultId = locations[0]?.id;
+    if (!defaultId) return;
+    setUnits((current) => {
+      if (!current.some((unit) => !unit.current_location_id)) return current;
+      return current.map((unit) =>
+        unit.current_location_id ? unit : { ...unit, current_location_id: defaultId },
+      );
+    });
   }, [open, locations]);
 
   useEffect(() => {

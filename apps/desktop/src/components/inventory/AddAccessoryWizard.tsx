@@ -95,9 +95,16 @@ export function AddAccessoryWizard({
   const [error, setError] = useState<string | null>(null);
   const autoFetchKeyRef = useRef<string | null>(null);
   const forceRefreshOnNextSpecsFetch = useRef(false);
+  const wasOpenRef = useRef(false);
 
+  // Reset only when the dialog opens — not when `locations` is refreshed mid-wizard.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setStep('model');
     setIdentifierType('part_number');
     setIdentifier('');
@@ -129,6 +136,18 @@ export function AddAccessoryWizard({
     setError(null);
     autoFetchKeyRef.current = null;
     forceRefreshOnNextSpecsFetch.current = false;
+  }, [open, locations]);
+
+  useEffect(() => {
+    if (!open) return;
+    const defaultId = locations[0]?.id;
+    if (!defaultId) return;
+    setUnits((current) => {
+      if (!current.some((unit) => !unit.current_location_id)) return current;
+      return current.map((unit) =>
+        unit.current_location_id ? unit : { ...unit, current_location_id: defaultId },
+      );
+    });
   }, [open, locations]);
 
   useEffect(() => {
