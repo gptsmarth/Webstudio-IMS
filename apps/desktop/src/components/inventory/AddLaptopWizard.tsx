@@ -460,13 +460,8 @@ export function AddLaptopWizard({
   if (!open) return null;
 
   return (
-    <div className="inv-dialog-overlay" role="presentation" onClick={onClose}>
-      <div
-        className="inv-dialog inv-dialog--wide animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="inv-dialog-overlay" role="presentation">
+      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
         <header className="inv-dialog__header">
           <div>
             <h2 className="inv-dialog__title">Add laptop — {brandName}</h2>

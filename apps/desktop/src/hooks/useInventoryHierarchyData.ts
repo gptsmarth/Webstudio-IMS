@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
-import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
+import { permissionsDependencyKey, referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { BrandService, type Brand } from '../services/api/BrandService';
 import { DashboardService, type DashboardDistribution } from '../services/api/DashboardService';
 import { InventoryService, type InventoryItemDetail } from '../services/api/InventoryService';
@@ -76,12 +76,15 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
   const [distribution, setDistribution] = useState<DashboardDistribution | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const permissionsRef = useRef(permissions);
+  permissionsRef.current = permissions;
+  const permissionsKey = permissionsDependencyKey(permissions);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const plan = referenceDataFetchPlan(permissions);
+      const plan = referenceDataFetchPlan(permissionsRef.current);
       const [brandList, modelList, locationList, dist, inventoryItems] = await Promise.all([
         plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
         plan.needsProductModels
@@ -102,7 +105,7 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
     } finally {
       setLoading(false);
     }
-  }, [permissions]);
+  }, [permissionsKey]);
 
   useEffect(() => {
     void refresh();

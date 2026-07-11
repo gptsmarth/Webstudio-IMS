@@ -955,6 +955,8 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 **Error Codes:** `409` `VALIDATION_ERROR` (Duplicate model number for brand)
 
+**Notes:** Create commits the model immediately and does **not** block on product-image discovery. When `product_image_url` is omitted, the server schedules background image discovery. Clients may also call `POST /api/v1/product-models/{id}/resolve-image` (returns `source=pending` by default while work continues in the background).
+
 **Audit Behaviour:** `product_model.create`
 
 ---

@@ -1,5 +1,6 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
+import { isConflictError } from '../../lib/apiError';
 import type { StorageType, StorageUnit } from './InventoryService';
 import type { AccessoryKind, ProductCategory } from '../../lib/productCategory';
 
@@ -87,6 +88,31 @@ export class ProductModelService {
   static async createModel(data: CreateProductModelRequest): Promise<ProductModel> {
     const client = await ApiClientProvider.getClient();
     return client.post<ProductModel>('/api/v1/product-models', data);
+  }
+
+  /**
+   * Create a product model, or return the existing one when the brand+model_number
+   * unique constraint already holds (409). Used by add-inventory wizards so a
+   * prior timed-out create does not abort serial/unit creation.
+   */
+  static async createOrFindModel(data: CreateProductModelRequest): Promise<ProductModel> {
+    try {
+      return await ProductModelService.createModel(data);
+    } catch (err: unknown) {
+      if (!isConflictError(err)) throw err;
+      const models = await ProductModelService.listModels({
+        brand_id: data.brand_id,
+        archived: false,
+      });
+      const needle = data.model_number.trim().toLowerCase();
+      const existing = models.find((model) => model.model_number.trim().toLowerCase() === needle);
+      if (!existing) throw err;
+      LoggingService.warn(
+        'API',
+        `Product model already exists; reusing ${existing.id} for ${data.model_number}`,
+      );
+      return existing;
+    }
   }
 
   static async updateModel(id: string, data: UpdateProductModelRequest): Promise<ProductModel> {

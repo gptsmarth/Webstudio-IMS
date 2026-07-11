@@ -13,6 +13,18 @@ interface ApiErrorBody {
   message?: string;
 }
 
+export function getApiStatus(err: unknown): number {
+  const error = err as {
+    response?: { status?: number };
+    status?: number;
+  };
+  return error.response?.status ?? error.status ?? 0;
+}
+
+export function isConflictError(err: unknown): boolean {
+  return getApiStatus(err) === 409;
+}
+
 export function parseApiError(err: unknown, fallback = 'Request failed.'): string {
   const error = err as {
     response?: { data?: ApiErrorBody };

@@ -120,10 +120,18 @@ export class ProductImageService {
     }
 
     let resolvedRemoteUrl = remoteUrl;
-    if (!resolvedRemoteUrl?.startsWith('https://')) {
+    if (!resolvedRemoteUrl?.startsWith('https://') && !resolvedRemoteUrl?.startsWith('/assets/')) {
       try {
         const resolved = await ProductSpecService.resolveModelImage(productModelId);
+        // Backend may return source=pending while discovery runs in the background.
         resolvedRemoteUrl = resolved.product_image_url?.trim() || null;
+        if (!resolvedRemoteUrl && resolved.source === 'pending') {
+          return {
+            src: ProductPlaceholderRegistry.getPlaceholder(category),
+            source: 'placeholder',
+            canUpload: true,
+          };
+        }
       } catch {
         resolvedRemoteUrl = null;
       }

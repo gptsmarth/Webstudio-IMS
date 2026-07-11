@@ -1,5 +1,10 @@
 import { P, PermissionService } from '../services/PermissionService';
 
+/** Stable dependency key so session object identity changes do not re-fetch. */
+export function permissionsDependencyKey(permissions: string[]): string {
+  return permissions.join('|');
+}
+
 /** Shared fetch gates for catalogue / reference APIs used across workspace tabs. */
 export function referenceDataFetchPlan(permissions: string[]) {
   const permissionService = PermissionService.from(permissions);

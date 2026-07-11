@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebounce } from '../lib/useDebounce';
-import { referenceDataFetchPlan } from '../lib/permissionFetchPlan';
+import { permissionsDependencyKey, referenceDataFetchPlan } from '../lib/permissionFetchPlan';
 import { parseApiError } from '../lib/apiError';
 import { sanitizeCreateProductModelPayload } from '../lib/productModelPayload';
 import { BrandService, type Brand } from '../services/api/BrandService';
@@ -170,6 +170,9 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
   const [actionError, setActionError] = useState<string | null>(null);
 
   const clearActionError = useCallback(() => setActionError(null), []);
+  const permissionsRef = useRef(permissions);
+  permissionsRef.current = permissions;
+  const permissionsKey = permissionsDependencyKey(permissions);
 
   const debouncedSearch = useDebounce(search, 300);
   const sort = `${sortField}:${sortDirection}`;
@@ -202,18 +205,18 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
   }, []);
 
   const loadReferenceData = useCallback(async () => {
-    const plan = referenceDataFetchPlan(permissions);
+    const plan = referenceDataFetchPlan(permissionsRef.current);
     const [brandList, locationList] = await Promise.all([
       plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
       plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
     ]);
     setBrands(brandList.filter((brand) => brand.is_active));
     setLocations(locationList.filter((location) => location.is_active));
-  }, [permissions]);
+  }, [permissionsKey]);
 
   const loadProductModels = useCallback(
     async (brandId: number | null) => {
-      const plan = referenceDataFetchPlan(permissions);
+      const plan = referenceDataFetchPlan(permissionsRef.current);
       if (!plan.needsProductModels) {
         setProductModels([]);
         return;
@@ -225,7 +228,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
         setProductModels([]);
       }
     },
-    [permissions],
+    [permissionsKey],
   );
 
   const refresh = useCallback(async () => {
@@ -250,7 +253,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
 
   const loadDrawerData = useCallback(
     async (itemId: string) => {
-      const plan = referenceDataFetchPlan(permissions);
+      const plan = referenceDataFetchPlan(permissionsRef.current);
       setDrawerLoading(true);
       try {
         const item = await InventoryService.getItem(itemId);
@@ -283,7 +286,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
         setDrawerLoading(false);
       }
     },
-    [permissions],
+    [permissionsKey],
   );
 
   const selectItem = useCallback(
@@ -401,7 +404,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
       try {
         let modelId = payload.productModelId;
         if (payload.mode === 'new' && payload.newProductModel) {
-          const model = await ProductModelService.createModel(
+          const model = await ProductModelService.createOrFindModel(
             sanitizeCreateProductModelPayload(payload.newProductModel),
           );
           modelId = model.id;
@@ -443,7 +446,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
       try {
         let modelId = payload.productModelId;
         if (payload.mode === 'new' && payload.newProductModel) {
-          const model = await ProductModelService.createModel(
+          const model = await ProductModelService.createOrFindModel(
             sanitizeCreateProductModelPayload(payload.newProductModel),
           );
           modelId = model.id;

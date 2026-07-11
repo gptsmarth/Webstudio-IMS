@@ -66,9 +66,13 @@ export class RetryingApiClient {
           !error.response ||
           error.code === 'ECONNREFUSED' ||
           error.code === 'ERR_NETWORK' ||
+          error.code === 'ECONNABORTED' ||
           status >= 500;
+        // Never auto-retry mutating calls — a timed-out POST may already have
+        // committed (e.g. product-model create), and retry creates orphans / duplicates.
+        const isMutating = /^(POST|PUT|PATCH|DELETE)\b/i.test(operationName);
 
-        if (isNetworkError && attempt < this.maxRetries) {
+        if (isNetworkError && !isMutating && attempt < this.maxRetries) {
           LoggingService.warn(
             'API',
             `Network error during ${operationName} (Attempt ${attempt}/${this.maxRetries}). Retrying...`,

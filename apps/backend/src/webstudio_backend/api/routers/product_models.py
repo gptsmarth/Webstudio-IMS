@@ -6,6 +6,7 @@ import uuid
 
 from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.catalogue_errors import raise_catalogue_deletion_error
@@ -49,6 +50,10 @@ from webstudio_backend.infrastructure.repositories.product_model_repository impo
 )
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.types import AIProviderError
+from webstudio_backend.services.product_image_jobs import (
+    is_product_image_job_running,
+    schedule_product_image_resolve,
+)
 from webstudio_backend.services.product_image_service import resolve_product_image
 from webstudio_backend.services.product_model_deletion_service import ProductModelDeletionService
 
@@ -217,7 +222,6 @@ async def create_product_model(
     body: CreateProductModelRequest,
     current: ProductModelsCreateDep,
     db_session: AsyncSession = DbSessionDep,
-    app_settings=AppSettingsDep,
 ) -> dict:
     # Validate brand exists and is active
     brand_repo = BrandRepository(db_session)
@@ -235,6 +239,10 @@ async def create_product_model(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    # Commit the model immediately. Do not block create on image discovery
+    # (can take 15–20s+); clients call POST .../resolve-image separately.
+    # Blocking image work previously caused API client timeouts, retries, and
+    # orphan models with zero stock when the retry hit the unique constraint.
     repo = ProductModelRepository(db_session)
     try:
         pm = await repo.create(
@@ -260,20 +268,21 @@ async def create_product_model(
             selling_price=body.selling_price,
             actor=_actor(current),
         )
-        if not pm.product_image_url:
-            pm = await _resolve_and_store_product_image(
-                pm,
-                brand_name=brand.name,
-                db_session=db_session,
-                repo=repo,
-                actor=_actor(current),
-                app_settings=app_settings,
-                candidate_url=body.product_image_url,
-            )
         await db_session.commit()
+        # Image discovery is slow and optional — run in background so create stays fast.
+        if not pm.product_image_url:
+            schedule_product_image_resolve(pm.id)
         return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
+        await db_session.rollback()
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
+    except IntegrityError as err:
+        await db_session.rollback()
+        raise AppError(
+            "VALIDATION_ERROR",
+            str(DuplicateModelNumberError(body.brand_id, body.model_number)),
+            status_code=status.HTTP_409_CONFLICT,
+        ) from err
 
 
 @router.get("/{model_id}")
@@ -555,6 +564,10 @@ async def resolve_product_model_image(
     model_id: uuid.UUID,
     current_user: ProductModelsEditDep,
     db_session: AsyncSession = DbSessionDep,
+    wait: bool = Query(
+        default=False,
+        description="If true, block until discovery finishes. Default is background (pending).",
+    ),
     app_settings=AppSettingsDep,
 ) -> dict:
     repo = ProductModelRepository(db_session)
@@ -574,6 +587,16 @@ async def resolve_product_model_image(
         response = ProductModelImageResolveResponse(
             product_image_url=pm.product_image_url,
             source="database",
+        )
+        return _envelope(request, response.model_dump())
+
+    if not wait:
+        scheduled = schedule_product_image_resolve(model_id)
+        response = ProductModelImageResolveResponse(
+            product_image_url=None,
+            source=(
+                "pending" if scheduled or is_product_image_job_running(model_id) else "unresolved"
+            ),
         )
         return _envelope(request, response.model_dump())
 

@@ -174,7 +174,9 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     const onFocus = () => {
-      if (activeView === 'login' || activeView === 'workspace') {
+      // While already in workspace, avoid full session restore on every OS focus —
+      // that recreated the session object and re-fetched inventory behind open wizards.
+      if (activeView === 'login') {
         void evaluateServerState();
       }
     };

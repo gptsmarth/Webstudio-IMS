@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/desktop",
-  "version": "1.7.3",
+  "version": "1.7.4",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -40,9 +40,9 @@
     "vitest": "^2.1.8"
   },
   "webstudio": {
-    "buildNumber": 14,
+    "buildNumber": 15,
     "releaseChannel": "stable",
-    "releaseDate": "2026-07-10",
+    "releaseDate": "2026-07-11",
     "gitCommit": "",
     "gitShort": ""
   }

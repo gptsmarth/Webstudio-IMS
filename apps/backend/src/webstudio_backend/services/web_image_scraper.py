@@ -36,7 +36,7 @@ BROWSER_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-_PREFERRED_HOST_FRAGMENTS = (
+_PREFERRED_MANUFACTURER_HOST_FRAGMENTS = (
     "asus.com",
     "in.store.asus.com",
     "dlcdnwebimgs.asus.com",
@@ -49,15 +49,26 @@ _PREFERRED_HOST_FRAGMENTS = (
     "samsung.com",
     "apple.com",
     "dlcdn",
+    "ssl-product-images.www8-hp.com",
+    "psref.lenovo.com",
+    "static.lenovo.com",
+    "store.storeimages.apple.com",
+    "image-us.samsung.com",
+)
+_RETAILER_HOST_FRAGMENTS = (
     "amazon.",
+    "media-amazon.com",
+    "ssl-images-amazon.com",
     "flipkart.",
+    "rukminim",
     "jiostore",
     "slatic.net",
-    "cloudfront.net",
     "reliancedigital",
     "croma.com",
     "vijaysales",
+    "mdcomputers",
 )
+_PREFERRED_HOST_FRAGMENTS = _PREFERRED_MANUFACTURER_HOST_FRAGMENTS + _RETAILER_HOST_FRAGMENTS
 _BLOCKED_HOST_FRAGMENTS = (
     "scribd.com",
     "flickr.com",
@@ -78,6 +89,9 @@ _BLOCKED_HOST_FRAGMENTS = (
     "pngtree.com",
     "geomancy.net",
     "bestlifeonline.com",
+    "goodreads.com",
+    "barnesandnoble.com",
+    "bookdepository",
 )
 _UNWANTED_PATH_FRAGMENTS = (
     "icon",
@@ -92,6 +106,19 @@ _UNWANTED_PATH_FRAGMENTS = (
     "zodiac",
     "meme",
     "hysteresis",
+    "kindle",
+    "paperback",
+    "hardcover",
+    "textbook",
+    "audiobook",
+    "magazine",
+    "poster",
+    "wallpaper",
+    "/books/",
+    "/book/",
+    "books/",
+    "/ebook",
+    "ebooks/",
 )
 _MAX_VALIDATE = 30
 _MAX_QUERIES = 18
@@ -224,6 +251,13 @@ def url_mentions_model(url: str, model_number: str) -> bool:
     return sku in _normalize_sku(url)
 
 
+def text_mentions_model(text: str, model_number: str) -> bool:
+    sku = _normalize_sku(model_number)
+    if len(sku) < 5:
+        return False
+    return sku in _normalize_sku(text)
+
+
 def is_blocked_image_host(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower()
     path = urlparse(url).path.lower()
@@ -232,37 +266,59 @@ def is_blocked_image_host(url: str) -> bool:
     return any(fragment in path for fragment in _UNWANTED_PATH_FRAGMENTS)
 
 
-def url_from_trusted_catalog(url: str, *, brand_name: str | None = None) -> bool:
+def is_manufacturer_image_host(url: str, *, brand_name: str | None = None) -> bool:
     host = (urlparse(url).hostname or "").lower()
-    if not any(fragment in host for fragment in _PREFERRED_HOST_FRAGMENTS):
+    if not any(fragment in host for fragment in _PREFERRED_MANUFACTURER_HOST_FRAGMENTS):
         return False
-    if brand_name:
-        token = brand_name.lower().split()[0]
-        if token and (token in host or token in url.lower()):
-            return True
-    return any(
-        fragment in host
-        for fragment in (
-            "dlcdn",
-            "asus.com",
-            "dell.com",
-            "hp.com",
-            "lenovo.com",
-            "acer.com",
-            "amazon.",
-            "flipkart.",
-        )
-    )
+    if not brand_name:
+        return True
+    token = brand_name.lower().split()[0]
+    if not token:
+        return True
+    brand_sources = _BRAND_IMAGE_SOURCES.get(token, {})
+    brand_domains = brand_sources.get("domains", ())
+    if brand_domains and any(domain in host for domain in brand_domains):
+        return True
+    return token in host
+
+
+def is_retailer_image_host(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return any(fragment in host for fragment in _RETAILER_HOST_FRAGMENTS)
+
+
+def url_from_trusted_catalog(url: str, *, brand_name: str | None = None) -> bool:
+    """Manufacturer CDN/store hosts only — retailer CDNs are not trusted without SKU match."""
+    return is_manufacturer_image_host(url, brand_name=brand_name)
 
 
 def is_relevant_product_image(
-    url: str, model_number: str, *, brand_name: str | None = None
+    url: str,
+    model_number: str,
+    *,
+    brand_name: str | None = None,
+    page_mentions_sku: bool = False,
 ) -> bool:
+    """Accept only images that are clearly tied to the SKU or manufacturer catalog.
+
+    Amazon/Flipkart CDN URLs without the model number in the path are rejected —
+    those were the source of random book/unrelated product images.
+    """
     if is_blocked_image_host(url):
         return False
     if url_mentions_model(url, model_number):
         return True
-    return url_from_trusted_catalog(url, brand_name=brand_name)
+    if is_manufacturer_image_host(url, brand_name=brand_name):
+        return True
+    # Retailer images are only allowed when scraped from a page that mentions the SKU.
+    if page_mentions_sku and is_retailer_image_host(url):
+        path = urlparse(url).path.lower()
+        if any(token in path for token in ("laptop", "notebook", "product", "catalog")):
+            return True
+        # Amazon media paths rarely include product words; require stronger page context
+        # and a high enough score later (SKU-in-page already required).
+        return True
+    return False
 
 
 def score_image_candidate_url(
@@ -279,9 +335,19 @@ def score_image_candidate_url(
             score += 25
     if model_number and url_mentions_model(url, model_number):
         score += 40
-    for fragment in _PREFERRED_HOST_FRAGMENTS:
-        if fragment in host:
-            score += 12
+    if is_manufacturer_image_host(url, brand_name=brand_name):
+        score += 20
+    elif is_retailer_image_host(url):
+        # Retailer CDN without SKU in URL is weak evidence.
+        if model_number and url_mentions_model(url, model_number):
+            score += 10
+        else:
+            score += 2
+    else:
+        for fragment in _PREFERRED_HOST_FRAGMENTS:
+            if fragment in host:
+                score += 8
+                break
     if any(path.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".avif")):
         score += 6
     if any(
@@ -289,7 +355,7 @@ def score_image_candidate_url(
     ):
         score += 4
     if any(token in path for token in _UNWANTED_PATH_FRAGMENTS):
-        score -= 30
+        score -= 40
     if "thumb" in path or "thumbnail" in path:
         score -= 5
     return score
@@ -330,8 +396,16 @@ async def _rank_page_images_from_urls(
     ranked: list[tuple[int, str]],
 ) -> None:
     for page_url in page_urls:
+        page_sku = url_mentions_model(page_url, model_number)
+        manufacturer_page = is_manufacturer_image_host(page_url, brand_name=brand_name)
+
         if page_url.endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):
-            if is_relevant_product_image(page_url, model_number, brand_name=brand_name):
+            if is_relevant_product_image(
+                page_url,
+                model_number,
+                brand_name=brand_name,
+                page_mentions_sku=page_sku,
+            ):
                 ranked.append(
                     (
                         score_image_candidate_url(
@@ -341,17 +415,27 @@ async def _rank_page_images_from_urls(
                     )
                 )
             continue
+
         html = await fetch_page_html(page_url, client=client)
         if not html:
             continue
+        page_sku = page_sku or text_mentions_model(html[:80_000], model_number)
+        if not page_sku and not manufacturer_page:
+            # Skip unrelated search-result pages (common source of book/random images).
+            continue
+
         for url in extract_image_urls_from_html(html, page_url):
-            if not is_relevant_product_image(url, model_number, brand_name=brand_name):
+            if not is_relevant_product_image(
+                url,
+                model_number,
+                brand_name=brand_name,
+                page_mentions_sku=page_sku,
+            ):
                 continue
             ranked.append(
                 (
-                    score_image_candidate_url(
-                        url, brand_name=brand_name, model_number=model_number
-                    ),
+                    score_image_candidate_url(url, brand_name=brand_name, model_number=model_number)
+                    + (6 if page_sku else 0),
                     url,
                 )
             )
@@ -524,6 +608,9 @@ async def _pick_validated_product_image(
             continue
         seen.add(key)
         if score < 10:
+            continue
+        # Retailer CDN hits without SKU in the URL need stronger evidence.
+        if is_retailer_image_host(url) and not url_mentions_model(url, model_number) and score < 16:
             continue
         if not is_safe_public_https_url(url) or is_suspicious_placeholder_image_url(url):
             continue

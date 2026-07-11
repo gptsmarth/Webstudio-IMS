@@ -378,14 +378,23 @@ class ProductEnrichmentService:
         if self._app_settings.is_test:
             payload["product_image_url"] = result.product_image_url
         else:
-            image_url = await resolve_product_image(
-                model_number=model_number,
-                brand_name=brand_name,
-                model_name=result.model_name,
-                candidate_url=result.product_image_url,
-                grounding_body=result.grounding_body,
-                image_search_query=result.image_search_query,
-            )
+            # Prefer a quick candidate only — full web discovery runs in background
+            # after model create / resolve-image so spec lookup stays responsive.
+            try:
+                image_url = await asyncio.wait_for(
+                    resolve_product_image(
+                        model_number=model_number,
+                        brand_name=brand_name,
+                        model_name=result.model_name,
+                        candidate_url=result.product_image_url,
+                        grounding_body=result.grounding_body,
+                        image_search_query=result.image_search_query,
+                        fast=True,
+                    ),
+                    timeout=4.0,
+                )
+            except TimeoutError:
+                image_url = result.product_image_url
             payload["product_image_url"] = image_url
         payload["source"] = result.source
         payload["provider"] = result.provider

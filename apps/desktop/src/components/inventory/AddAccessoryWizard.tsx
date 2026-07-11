@@ -404,13 +404,8 @@ export function AddAccessoryWizard({
   const identifierDisplay = identifierLabel(identifierType);
 
   return (
-    <div className="inv-dialog-overlay" role="presentation" onClick={onClose}>
-      <div
-        className="inv-dialog inv-dialog--wide animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <div className="inv-dialog-overlay" role="presentation">
+      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
         <header className="inv-dialog__header">
           <div>
             <h2 className="inv-dialog__title">Add accessory — {brandName}</h2>

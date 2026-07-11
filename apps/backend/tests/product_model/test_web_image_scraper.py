@@ -34,3 +34,42 @@ def test_score_image_candidate_url_prefers_manufacturer_cdn() -> None:
         brand_name="ASUS",
         model_number="X1502ZA",
     )
+
+
+def test_amazon_cdn_without_sku_is_not_relevant() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    amazon_bookish = "https://m.media-amazon.com/images/I/81XDTbkpMpL._AC_SL1500_.jpg"
+    assert not is_relevant_product_image(
+        amazon_bookish,
+        "X1504VA-BQ342WS",
+        brand_name="ASUS",
+    )
+
+
+def test_amazon_cdn_allowed_when_page_mentions_sku() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    amazon = "https://m.media-amazon.com/images/I/81XDTbkpMpL._AC_SL1500_.jpg"
+    assert is_relevant_product_image(
+        amazon,
+        "X1504VA-BQ342WS",
+        brand_name="ASUS",
+        page_mentions_sku=True,
+    )
+
+
+def test_manufacturer_url_with_sku_is_relevant() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    asus = "https://dlcdnwebimgs.asus.com/pub/ASUS/nb/X1504VA-BQ342WS/hero.jpg"
+    assert is_relevant_product_image(asus, "X1504VA-BQ342WS", brand_name="ASUS")
+
+
+def test_book_path_fragments_are_blocked() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    book = "https://dlcdnwebimgs.asus.com/media/books/cover.jpg"
+    assert not is_relevant_product_image(book, "X1504VA-BQ342WS", brand_name="ASUS")
+    notebook = "https://dlcdnwebimgs.asus.com/pub/ASUS/notebook/X1504VA.jpg"
+    assert is_relevant_product_image(notebook, "X1504VA-BQ342WS", brand_name="ASUS")

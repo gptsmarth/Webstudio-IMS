@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from webstudio_backend.core.config import Settings
@@ -99,14 +100,21 @@ class GeminiSpecService:
             from webstudio_backend.services.product_image_service import resolve_product_image
 
             payload = result.to_dict()
-            payload["product_image_url"] = await resolve_product_image(
-                model_number=model_number,
-                brand_name=brand_name,
-                model_name=result.model_name,
-                candidate_url=result.product_image_url,
-                grounding_body=result.grounding_body,
-                image_search_query=result.image_search_query,
-            )
+            try:
+                payload["product_image_url"] = await asyncio.wait_for(
+                    resolve_product_image(
+                        model_number=model_number,
+                        brand_name=brand_name,
+                        model_name=result.model_name,
+                        candidate_url=result.product_image_url,
+                        grounding_body=result.grounding_body,
+                        image_search_query=result.image_search_query,
+                        fast=True,
+                    ),
+                    timeout=4.0,
+                )
+            except TimeoutError:
+                payload["product_image_url"] = result.product_image_url
             return payload
         except AIProviderError as exc:
             raise _to_gemini_error(exc) from exc
