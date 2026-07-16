@@ -118,6 +118,7 @@ class OfflineInventoryService {
                 'storage_type': m.storageType,
                 'display': m.display,
                 'status': m.status,
+                'product_image_url': m.productImageUrl,
               })
           .toList(),
     );

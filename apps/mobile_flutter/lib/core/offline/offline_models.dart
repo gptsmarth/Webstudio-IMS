@@ -185,6 +185,16 @@ class SyncStateSnapshot {
     }
     return false;
   }
+
+  static const _inventoryEntities = {'inventory', 'product_models', 'brands', 'locations'};
+
+  bool hasInventoryEntityChanges(SyncStateSnapshot? previous) {
+    if (previous == null) return true;
+    for (final key in _inventoryEntities) {
+      if (highWaterMarks[key] != previous.highWaterMarks[key]) return true;
+    }
+    return false;
+  }
 }
 
 class SyncWorkspaceState {

@@ -123,9 +123,19 @@ Future<void> showProductImageSheet(
           Navigator.pop(context);
           final messenger = ScaffoldMessenger.of(context);
           try {
-            await ref.read(productImageRepositoryProvider).resolveViaAi(productModelId);
+            final url = await ref
+                .read(productImageRepositoryProvider)
+                .resolveAndWaitForImage(productModelId);
             if (!context.mounted) return;
-            messenger.showSnackBar(const SnackBar(content: Text('AI image fetch requested')));
+            if (url != null && url.isNotEmpty) {
+              await onPatchModel(productModelId, {'product_image_url': url});
+              if (!context.mounted) return;
+              messenger.showSnackBar(const SnackBar(content: Text('Product image updated')));
+            } else {
+              messenger.showSnackBar(
+                const SnackBar(content: Text('No suitable product image was found')),
+              );
+            }
           } catch (error) {
             messenger.showSnackBar(SnackBar(content: Text(error.toString())));
           }
@@ -281,6 +291,7 @@ class ProductModelImage extends ConsumerStatefulWidget {
 class _ProductModelImageState extends ConsumerState<ProductModelImage> {
   Uint8List? _bytes;
   bool _loading = true;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -298,12 +309,13 @@ class _ProductModelImageState extends ConsumerState<ProductModelImage> {
 
   Future<void> _load() async {
     if (!mounted) return;
+    final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
       _bytes = null;
     });
     final bytes = await ref.read(productImageRepositoryProvider).fetchImageBytes(widget.imageUrl);
-    if (!mounted) return;
+    if (!mounted || generation != _loadGeneration) return;
     setState(() {
       _bytes = bytes;
       _loading = false;

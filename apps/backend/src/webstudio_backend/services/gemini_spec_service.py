@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from webstudio_backend.core.config import Settings
@@ -97,24 +96,9 @@ class GeminiSpecService:
                 brand_name=brand_name,
                 model_name=model_name,
             )
-            from webstudio_backend.services.product_image_service import resolve_product_image
-
             payload = result.to_dict()
-            try:
-                payload["product_image_url"] = await asyncio.wait_for(
-                    resolve_product_image(
-                        model_number=model_number,
-                        brand_name=brand_name,
-                        model_name=result.model_name,
-                        candidate_url=result.product_image_url,
-                        grounding_body=result.grounding_body,
-                        image_search_query=result.image_search_query,
-                        fast=True,
-                    ),
-                    timeout=4.0,
-                )
-            except TimeoutError:
-                payload["product_image_url"] = result.product_image_url
+            # Keep auto-fetch fast — image scraping runs after model create in background.
+            payload["product_image_url"] = result.product_image_url
             return payload
         except AIProviderError as exc:
             raise _to_gemini_error(exc) from exc
@@ -125,16 +109,15 @@ class GeminiSpecService:
         model_name: str | None = None,
         brand_name: str | None = None,
     ) -> tuple[str | None, dict[str, Any] | None]:
-        if not self.is_configured:
-            return None, None
-        provider = create_provider("gemini", _build_inline_config(self._api_key, self._model))
-        query = await provider.generate_image_search_query(
+        from webstudio_backend.services.ai.prompts import default_image_search_query
+        from webstudio_backend.services.product_image_service import resolve_product_image
+
+        # Free scraping only — never spend Gemini tokens on image query generation.
+        query = default_image_search_query(
             model_number,
             brand_name=brand_name,
             model_name=model_name,
         )
-        from webstudio_backend.services.product_image_service import resolve_product_image
-
         image_url = await resolve_product_image(
             model_number=model_number,
             brand_name=brand_name,

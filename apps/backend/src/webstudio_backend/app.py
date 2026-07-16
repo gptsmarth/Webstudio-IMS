@@ -91,6 +91,7 @@ _notification_scheduler_task: asyncio.Task | None = None
 _maintenance_scheduler_task: asyncio.Task | None = None
 _tally_connectivity_probe_task: asyncio.Task | None = None
 _release_sync_task: asyncio.Task | None = None
+_product_image_backfill_task: asyncio.Task | None = None
 _scheduler_persist_task: asyncio.Task | None = None
 _mdns_service: MdnsAdvertisementService | None = None
 
@@ -170,7 +171,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _tally_scheduler_task, _backup_scheduler_task, _audit_retention_task
     global _notification_scheduler_task, _maintenance_scheduler_task, _scheduler_persist_task
     global _tally_connectivity_probe_task
-    global _release_sync_task
+    global _release_sync_task, _product_image_backfill_task
     global _mdns_service
 
     settings: Settings = app.state.settings
@@ -255,6 +256,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pass
         _release_sync_task = asyncio.create_task(release_sync_loop())
     if not settings.is_test:
+        from webstudio_backend.services.product_image_jobs import (
+            product_image_backfill_loop,
+            schedule_missing_product_image_backfill,
+        )
+
+        # Kick off a small backfill soon after startup, then keep the periodic loop.
+        asyncio.create_task(schedule_missing_product_image_backfill())
+        _product_image_backfill_task = asyncio.create_task(product_image_backfill_loop())
+    if not settings.is_test:
         _scheduler_persist_task = asyncio.create_task(_persist_scheduler_state_loop(settings))
 
     yield
@@ -275,6 +285,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _tally_connectivity_probe_task = None
     await _cancel_task(_release_sync_task)
     _release_sync_task = None
+    await _cancel_task(_product_image_backfill_task)
+    _product_image_backfill_task = None
     await _cancel_task(_notification_scheduler_task)
     _notification_scheduler_task = None
     await _cancel_task(_audit_retention_task)

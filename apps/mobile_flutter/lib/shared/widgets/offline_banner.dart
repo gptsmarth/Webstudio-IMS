@@ -82,7 +82,7 @@ class _OfflineBannerState extends ConsumerState<OfflineBanner> {
         iconColor: theme.colorScheme.error,
         title: 'Unable to synchronize.',
         trailing: TextButton(
-          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(),
+          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(showBanner: true),
           child: const Text('Retry'),
         ),
       );
@@ -120,7 +120,7 @@ class _OfflineBannerState extends ConsumerState<OfflineBanner> {
             : pendingLabel,
         subtitle: sync.conflictCount > 0 ? pendingLabel : 'Will sync automatically when online',
         trailing: TextButton(
-          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(),
+          onPressed: () => ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(showBanner: true),
           child: const Text('Sync'),
         ),
       );

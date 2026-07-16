@@ -36,12 +36,29 @@ def normalize_gpu(gpu: Any) -> str | None:
 
 
 def normalize_color_options(value: Any) -> str | None:
+    """Keep colour lists short and API-safe (unit color uses the first entry, max 64 chars)."""
     if value is None:
         return None
     text = str(value).strip()
     if not text or text.lower() in {"null", "none", "n/a"}:
         return None
-    return text[:256]
+
+    parts: list[str] = []
+    for raw in re.split(r"[,;/|]", text):
+        cleaned = re.sub(r"\s+", " ", raw).strip()
+        if not cleaned:
+            continue
+        # Drop marketing fluff that is not a colour name.
+        if len(cleaned) > 48:
+            cleaned = cleaned[:48].rsplit(" ", 1)[0].strip() or cleaned[:48]
+        if cleaned and cleaned not in parts:
+            parts.append(cleaned)
+        if len(parts) >= 6:
+            break
+    if not parts:
+        return text[:256]
+    joined = ", ".join(parts)
+    return joined[:256]
 
 
 def compose_spec_notes(data: dict[str, Any]) -> str | None:
@@ -158,10 +175,13 @@ def validate_enrichment_payload(
         return False
     if not product_line_matches_sku(model_number, normalized, brand_name=brand_name):
         return False
+    confidence = float(normalized.get("confidence_score") or 0.0)
     if strict:
-        confidence = float(normalized.get("confidence_score") or 0.0)
         if confidence < 0.95:
             return False
+    elif confidence < 0.45:
+        # Reject obvious guesses even when Gemini web search was used.
+        return False
     return True
 
 

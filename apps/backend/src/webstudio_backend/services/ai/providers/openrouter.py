@@ -11,7 +11,6 @@ from loguru import logger
 from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.json_utils import parse_json_object
 from webstudio_backend.services.ai.prompts import (
-    build_image_search_query_prompt,
     build_spec_lookup_prompt,
     default_image_search_query,
 )
@@ -91,7 +90,7 @@ class OpenRouterProvider(AIProvider):
             duration_ms = int((time.perf_counter() - started) * 1000)
             logger.info("OpenRouter enrichment succeeded for {} in {}ms", sku, duration_ms)
             AIProviderHealthTracker.record_success("openrouter")
-            image_query = await self.generate_image_search_query(
+            image_query = default_image_search_query(
                 sku,
                 brand_name=brand_name,
                 model_name=normalized.get("model_name") or model_name,
@@ -130,24 +129,9 @@ class OpenRouterProvider(AIProvider):
         brand_name: str | None = None,
         model_name: str | None = None,
     ) -> str:
-        fallback = default_image_search_query(
+        return default_image_search_query(
             model_number, brand_name=brand_name, model_name=model_name
         )
-        if not self.is_configured():
-            return fallback
-        prompt = build_image_search_query_prompt(
-            model_number, brand_name=brand_name, model_name=model_name
-        )
-        try:
-            body = await self._chat(prompt, json_mode=True)
-            parsed = parse_json_object(_extract_chat_text(body) or "")
-            if parsed and isinstance(parsed.get("image_search_query"), str):
-                query = parsed["image_search_query"].strip()
-                if query:
-                    return query[:256]
-        except AIProviderError:
-            pass
-        return fallback
 
     async def test_connection(self) -> ProviderTestResult:
         if not self.is_configured():

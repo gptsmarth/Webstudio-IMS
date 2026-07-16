@@ -1,4 +1,5 @@
 import '../../../core/constants/api_paths.dart';
+import '../../../core/errors/api_exception.dart';
 import '../../../core/network/api_client.dart';
 import '../../dashboard/domain/dashboard_models.dart';
 import '../../inventory/domain/inventory_models.dart';
@@ -129,6 +130,38 @@ class CatalogueRepository {
     return _api.post(
       ApiPaths.productModels,
       data: data,
+      parser: (json) => ProductModel.fromJson(json! as Map<String, dynamic>),
+    );
+  }
+
+  /// Create a product model, or return the existing one when brand+model_number
+  /// already exists (409). Prevents add-inventory wizards from orphaning models
+  /// when a prior create succeeded but the client timed out or retried.
+  Future<ProductModel> createOrFindProductModel(Map<String, dynamic> data) async {
+    try {
+      return await createProductModel(data);
+    } catch (error) {
+      if (!isConflictError(error)) rethrow;
+      final brandId = data['brand_id'];
+      final modelNumber = (data['model_number'] as String?)?.trim().toLowerCase();
+      if (brandId is! int || modelNumber == null || modelNumber.isEmpty) rethrow;
+      final models = await listProductModels();
+      ProductModel? existing;
+      for (final model in models) {
+        if (model.brandId == brandId &&
+            model.modelNumber.trim().toLowerCase() == modelNumber) {
+          existing = model;
+          break;
+        }
+      }
+      if (existing == null) rethrow;
+      return existing;
+    }
+  }
+
+  Future<ProductModel> getProductModel(String id) async {
+    return _api.get(
+      '${ApiPaths.productModels}/$id',
       parser: (json) => ProductModel.fromJson(json! as Map<String, dynamic>),
     );
   }

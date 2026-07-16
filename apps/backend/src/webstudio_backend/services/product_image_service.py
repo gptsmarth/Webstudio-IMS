@@ -21,7 +21,8 @@ IMAGE_CONTENT_TYPES = (
 )
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; WebstudioIMS/1.0; +https://webstudio.local/product-image-fetch)"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 MAX_PAGE_FETCHES = 4
 MAX_CANDIDATES = 12
@@ -122,7 +123,12 @@ def extract_grounding_page_urls(body: dict[str, Any] | None) -> list[str]:
     return _dedupe_urls(urls)
 
 
-def extract_image_urls_from_html(html: str, page_url: str) -> list[str]:
+def extract_image_urls_from_html(
+    html: str,
+    page_url: str,
+    *,
+    include_all_images: bool = False,
+) -> list[str]:
     urls: list[str] = []
     patterns = (
         r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
@@ -138,15 +144,29 @@ def extract_image_urls_from_html(html: str, page_url: str) -> list[str]:
         for match in re.finditer(pattern, html, flags=re.IGNORECASE):
             urls.append(match.group(1).strip())
 
-    for match in re.finditer(
+    img_attr_patterns = (
         r'<img[^>]+src=["\']([^"\']+)["\']',
+        r'<img[^>]+data-src=["\']([^"\']+)["\']',
+        r'<img[^>]+data-lazy-src=["\']([^"\']+)["\']',
+    )
+    for pattern in img_attr_patterns:
+        for match in re.finditer(pattern, html, flags=re.IGNORECASE):
+            src = match.group(1).strip()
+            lowered = src.lower()
+            if include_all_images or any(
+                token in lowered for token in ("product", "laptop", "notebook", "hero", "gallery")
+            ):
+                urls.append(src)
+
+    for match in re.finditer(
+        r'srcset=["\']([^"\']+)["\']',
         html,
         flags=re.IGNORECASE,
     ):
-        src = match.group(1).strip()
-        lowered = src.lower()
-        if any(token in lowered for token in ("product", "laptop", "notebook", "hero", "gallery")):
-            urls.append(src)
+        for part in match.group(1).split(","):
+            candidate = part.strip().split(" ", 1)[0].strip()
+            if candidate:
+                urls.append(candidate)
 
     resolved: list[str] = []
     page = urlparse(page_url)
@@ -364,6 +384,7 @@ async def resolve_product_image(
     persist_local: bool = False,
     image_search_query: str | None = None,
     fast: bool = False,
+    max_queries: int | None = None,
 ) -> str | None:
     """Find a loadable product image using free web scraping (DuckDuckGo + page HTML)."""
 
@@ -398,5 +419,5 @@ async def resolve_product_image(
         model_id=model_id,
         persist_local=persist_local,
         image_search_queries=image_search_queries,
-        max_queries=2 if fast else None,
+        max_queries=max_queries if max_queries is not None else (2 if fast else None),
     )

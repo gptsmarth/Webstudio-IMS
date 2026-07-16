@@ -48,14 +48,20 @@ export function colorVariantsLabel(model: ProductModel | null): string {
   return model.color_options;
 }
 
+/** Inventory unit `color` is capped at 64 chars by the API. */
+export const INVENTORY_COLOR_MAX_LENGTH = 64;
+
 /** First catalogue colour variant — used when adding serials without manual colour entry. */
 export function defaultUnitColorFromOptions(colorOptions: string | null | undefined): string {
   if (!colorOptions?.trim()) return 'Not specified';
+  // AI / catalogue often returns "Black / Silver" or long prose without commas.
   const first = colorOptions
-    .split(',')
+    .split(/[,;/|]/)
     .map((entry) => entry.trim())
     .find(Boolean);
-  return first ?? 'Not specified';
+  if (!first) return 'Not specified';
+  if (first.length <= INVENTORY_COLOR_MAX_LENGTH) return first;
+  return first.slice(0, INVENTORY_COLOR_MAX_LENGTH).trimEnd();
 }
 
 export function modelDisplayName(

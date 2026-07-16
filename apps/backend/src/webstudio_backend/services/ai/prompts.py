@@ -13,7 +13,9 @@ def build_spec_lookup_prompt(
     brand_line = f"Brand: {brand_name}\n" if brand_name else ""
     name_line = f"Marketing name (if known): {model_name}\n" if model_name else ""
     search_line = (
-        f'Use Google Search with the exact query: "{model_number} specifications" (include brand if known).\n\n'
+        f"Use Google Search with these queries in order: "
+        f'1) "{model_number}" {brand_name or ""} specifications '
+        f'2) site: manufacturer "{model_number}". Prefer the official brand/PSREF/support page.\n\n'
         if use_web_search
         else (
             "Use your knowledge of published manufacturer specifications.\n\n"
@@ -30,27 +32,27 @@ Find the official manufacturer specification page or major retailer listing for 
 
 Important rules:
 1. The SKU "{model_number}" is authoritative — do NOT substitute a different model, product line, or regional variant unless the exact SKU cannot be found anywhere online.
-2. Do NOT guess from similar ASUS/Dell/HP model prefixes. If you cannot find this exact SKU, set cpu to null and explain in "notes" — never invent specs.
-3. model_name must match the official marketing name from the listing (e.g. "ASUS TUF Gaming A14", not "Vivobook" unless the listing says Vivobook).
-4. If only a very close regional variant exists, use its specs but explain in "notes".
+2. Do NOT guess from similar ASUS/Dell/HP/Lenovo model prefixes. If you cannot find this exact SKU, set cpu to null and explain in "notes" — never invent specs.
+3. model_name must match the official marketing name from the listing (e.g. "Lenovo LOQ 15IAX9", not a sibling SKU).
+4. If only a very close regional variant exists, use its specs but explain in "notes" and lower confidence_score.
 5. Extract the full configuration for this SKU: CPU, GPU, RAM, storage, display, colors, OS, battery, weight, ports/wireless.
-6. CPU must be the exact chip (e.g. "Intel Core i5-1335U", "AMD Ryzen 5 7530U") — not a generic family.
-7. ram_gb is system RAM as an integer.
+6. CPU must be the exact chip (e.g. "Intel Core i5-12450HX", "AMD Ryzen 5 7530U") — not a generic family.
+7. ram_gb is system RAM as an integer (e.g. 12, 16, 24).
 8. storage_value is the primary SSD/HDD size (digits only).
 9. gpu is the discrete GPU name, integrated graphics name, or null.
 10. display must include size, resolution, panel type, and refresh rate when available.
-11. color_options: comma-separated available colors for this SKU, or null.
+11. color_options: SHORT colour names only, comma-separated (e.g. "Luna Grey, Storm Grey"). Max 6 colours. No marketing sentences.
 12. operating_system, battery, weight, connectivity, keyboard, memory_type, warranty, webcam, audio, charger — include when published, else null.
 13. description: 2–5 sentences for retail staff — product positioning, key selling points, and ideal use case. Plain text only.
-14. confidence_score: float 0.0–1.0 indicating how confident you are the specs match this exact SKU.
-15. Do NOT return product_image_url — images are resolved separately.
+14. confidence_score: float 0.0–1.0 for how confident you are the specs match this EXACT SKU (use <0.5 if unsure).
+15. Do NOT return product_image_url — images are resolved separately (saves tokens / latency).
 
 Respond with ONLY valid JSON (no markdown fences) using exactly these keys:
 model_name, cpu, gpu, ram_gb, storage_value, storage_unit, storage_type, display, color_options,
 operating_system, battery, weight, connectivity, keyboard, memory_type, warranty, webcam, audio, charger,
 description, notes, confidence_score
 
-notes: brief source or caveat only (e.g. "Matched official ASUS India listing for X1504VA-D5321WS")."""
+notes: brief source or caveat only (e.g. "Matched official Lenovo PSREF for 15IAX9")."""
 
 
 def build_image_search_query_prompt(
@@ -80,8 +82,16 @@ def default_image_search_query(
     brand_name: str | None = None,
     model_name: str | None = None,
 ) -> str:
-    parts = [brand_name, model_name, model_number, "official product"]
-    return " ".join(part.strip() for part in parts if part and part.strip())
+    """Deterministic image query — no AI tokens required."""
+    sku = model_number.strip()
+    brand = (brand_name or "").strip()
+    name = (model_name or "").strip()
+    # Prefer brand + exact SKU + official product photo terms for Bing/DDG.
+    if brand and name and name.lower() not in sku.lower():
+        return f'{brand} {name} "{sku}" official product photo'
+    if brand:
+        return f'{brand} "{sku}" official product photo laptop'
+    return f'"{sku}" official product photo laptop'
 
 
 def build_accessory_spec_lookup_prompt(
@@ -130,10 +140,10 @@ Important rules:
 2. model_name must be the official marketing product name (e.g. "ASUS MD100 Silent Wireless Mouse") — NOT the raw part number alone.
 3. part_number and model_number are separate fields when the manufacturer publishes both. Do not copy the part number into model_number unless they are genuinely the same on the official listing.
 4. accessory_kind must be one of: mouse, keyboard, charger, headset, bag, dock, cable, adapter, storage, other — infer from the product (do not default to "other" if obvious).
-5. color_options: comma-separated colors/variants when published, else null.
+5. color_options: SHORT colour/variant names only, comma-separated (e.g. "Black, White"). No long sentences.
 6. description: 2–4 sentences for retail staff — key features and compatibility. Plain text only.
 7. confidence_score: float 0.0–1.0 for match confidence on this exact identifier.
-8. Do NOT return product_image_url — images are resolved separately.
+8. Do NOT return product_image_url — images are resolved separately (saves tokens / latency).
 
 Respond with ONLY valid JSON (no markdown fences) using exactly these keys:
 model_name, model_number, part_number, accessory_kind, color_options, description, notes, confidence_score

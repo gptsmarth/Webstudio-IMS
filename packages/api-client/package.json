@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/api-client",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -15,7 +15,7 @@
     "axios": "^1.7.9"
   },
   "webstudio": {
-    "buildNumber": 15,
+    "buildNumber": 16,
     "releaseChannel": "stable",
     "releaseDate": "2026-07-11",
     "gitCommit": "",

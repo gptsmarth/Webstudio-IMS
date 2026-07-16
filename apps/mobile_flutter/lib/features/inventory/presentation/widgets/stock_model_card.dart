@@ -95,6 +95,7 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
                   ? Padding(
                       padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
                       child: ProductModelImage(
+                        key: ValueKey(model.id),
                         imageUrl: model.productImageUrl!,
                         height: 134,
                         bordered: false,

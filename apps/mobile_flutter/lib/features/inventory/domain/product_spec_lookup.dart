@@ -25,13 +25,19 @@ String composeModelNotes(String? description, String? specNotes) {
   return '$desc\n---\n$specs';
 }
 
+/// Inventory unit `color` is capped at 64 chars by the API.
+const int kInventoryColorMaxLength = 64;
+
 String defaultUnitColorFromOptions(String? colorOptions) {
   if (colorOptions == null || colorOptions.trim().isEmpty) {
     return 'Not specified';
   }
-  for (final entry in colorOptions.split(',')) {
+  // AI / catalogue often returns "Black / Silver" or long prose without commas.
+  for (final entry in colorOptions.split(RegExp(r'[,;/|]'))) {
     final trimmed = entry.trim();
-    if (trimmed.isNotEmpty) return trimmed;
+    if (trimmed.isEmpty) continue;
+    if (trimmed.length <= kInventoryColorMaxLength) return trimmed;
+    return trimmed.substring(0, kInventoryColorMaxLength).trimRight();
   }
   return 'Not specified';
 }

@@ -591,7 +591,7 @@ async def resolve_product_model_image(
         return _envelope(request, response.model_dump())
 
     if not wait:
-        scheduled = schedule_product_image_resolve(model_id)
+        scheduled = schedule_product_image_resolve(model_id, force=True)
         response = ProductModelImageResolveResponse(
             product_image_url=None,
             source=(

@@ -311,6 +311,20 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def list_ids_missing_product_image(self, *, limit: int = 20) -> list[uuid.UUID]:
+        """Active models with no product_image_url, oldest first (for background backfill)."""
+        statement = (
+            select(ProductModel.id)
+            .where(
+                ProductModel.status == ProductModelStatus.ACTIVE,
+                ProductModel.product_image_url.is_(None),
+            )
+            .order_by(ProductModel.created_at.asc())
+            .limit(max(1, min(limit, 100)))
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
     async def archive_all_active_for_brand(
         self,
         brand_id: int,

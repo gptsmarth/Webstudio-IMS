@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-07-16
+
+### Fixed
+
+- **Mobile add inventory:** create-or-find product model on 409 so serials still save (no orphan zero-stock models)
+- **Mobile:** colour field capped at 64 chars; clearer API error messages in add wizards
+- **Mobile sync:** silent background polls (no repeating “Syncing…” banner); narrower inventory refresh
+- **Sales GST:** Tally lines with tax breakdown store inclusive amount in `sale_amount` and taxable in `sale_amount_excluding_gst`
+- **Product images:** broken placeholder fallback on desktop; intermittent mobile image loading (cache + retry)
+
+### Changed
+
+- **Spec auto-fetch:** Gemini-only path stays fast — no image scraping during configuration lookup (saves tokens)
+- **Images:** background discovery + periodic backfill for models missing images (free web scrape, no AI tokens)
+- **Image search:** deterministic queries instead of extra AI calls for image-query generation
+
 ## [1.0.3] - 2026-07-05
 
 ### Added

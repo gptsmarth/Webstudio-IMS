@@ -18,7 +18,6 @@ from webstudio_backend.services.ai.health import AIProviderHealthTracker
 from webstudio_backend.services.ai.json_utils import parse_json_object
 from webstudio_backend.services.ai.prompts import (
     build_accessory_spec_lookup_prompt,
-    build_image_search_query_prompt,
     build_spec_lookup_prompt,
     default_image_search_query,
 )
@@ -390,33 +389,13 @@ class GeminiProvider(AIProvider):
         brand_name: str | None = None,
         model_name: str | None = None,
     ) -> str:
-        fallback = default_image_search_query(
+        # Never spend Gemini tokens on image-query generation — free web scraping
+        # uses this deterministic query in the background image job.
+        return default_image_search_query(
             model_number,
             brand_name=brand_name,
             model_name=model_name,
         )
-        if not self.is_configured():
-            return fallback
-
-        prompt = build_image_search_query_prompt(
-            model_number,
-            brand_name=brand_name,
-            model_name=model_name,
-        )
-        for use_grounding in (True, False):
-            for gemini_model in self._model_chain()[:2]:
-                try:
-                    payload = _build_payload(prompt, use_grounding=use_grounding)
-                    body = await self._generate(gemini_model, payload)
-                    text = _extract_text(body)
-                    parsed = parse_json_object(text or "")
-                    if parsed and isinstance(parsed.get("image_search_query"), str):
-                        query = parsed["image_search_query"].strip()
-                        if query:
-                            return query[:256]
-                except AIProviderError:
-                    continue
-        return fallback
 
     async def test_connection(self) -> ProviderTestResult:
         if not self.is_configured():

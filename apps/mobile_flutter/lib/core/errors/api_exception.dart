@@ -29,6 +29,13 @@ class NetworkException extends ApiException {
       : super(code: 'NETWORK_ERROR', message: message);
 }
 
+bool isConflictError(Object error) => error is ApiException && error.statusCode == 409;
+
+String formatApiError(Object error) {
+  if (error is ApiException) return error.message;
+  return error.toString();
+}
+
 class ApiEnvelope<T> extends Equatable {
   const ApiEnvelope({
     required this.data,

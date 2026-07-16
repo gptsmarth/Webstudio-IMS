@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../ai/data/ai_enrichment_repository.dart';
 import '../../../auth/presentation/auth_controller.dart';
@@ -348,7 +349,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     });
 
     try {
-      await ref.read(widget.workspaceProvider.notifier).addLaptopWizard(
+      final ok = await ref.read(widget.workspaceProvider.notifier).addLaptopWizard(
             AddLaptopWizardRequest(
               brandId: widget.brandId,
               mode: _mode,
@@ -377,6 +378,13 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
             ),
           );
       if (!mounted) return;
+      if (!ok) {
+        setState(() {
+          _submitting = false;
+          _error = ref.read(widget.workspaceProvider).error ?? 'Could not save laptop.';
+        });
+        return;
+      }
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Added ${units.length} unit(s) to ${widget.brandName}.')),
@@ -385,7 +393,7 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       if (mounted) {
         setState(() {
           _submitting = false;
-          _error = error.toString();
+          _error = formatApiError(error);
         });
       }
     }

@@ -25,11 +25,35 @@ export function ProductImagePanel({
 
   useEffect(() => {
     let cancelled = false;
-    void ProductImageService.resolve(productModelId, { remoteUrl: imageUrl }).then((result) => {
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const apply = (result: ProductImageResult) => {
       if (!cancelled) setImage(result);
+    };
+
+    void ProductImageService.resolve(productModelId, { remoteUrl: imageUrl }).then((result) => {
+      apply(result);
+      // If the model has no image yet, background discovery may finish shortly —
+      // re-check a couple of times without blocking the add flow.
+      if (!imageUrl?.trim() && result.source === 'placeholder') {
+        pollTimer = setTimeout(() => {
+          if (cancelled) return;
+          void ProductImageService.resolve(productModelId, { remoteUrl: null }).then((again) => {
+            apply(again);
+            if (again.source === 'placeholder' && !cancelled) {
+              pollTimer = setTimeout(() => {
+                if (cancelled) return;
+                void ProductImageService.resolve(productModelId, { remoteUrl: null }).then(apply);
+              }, 12_000);
+            }
+          });
+        }, 6_000);
+      }
     });
+
     return () => {
       cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [productModelId, imageUrl]);
 
@@ -47,18 +71,29 @@ export function ProductImagePanel({
     }
   };
 
+  const placeholderSrc = ProductImageService.getPlaceholderSrc();
+
   return (
     <div className="inv-product-image">
       <div className="inv-product-image__frame">
         {image ? (
-          <img src={image.src} alt={modelName} className="inv-product-image__img" />
+          <img
+            src={image.src}
+            alt={modelName}
+            className="inv-product-image__img"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = placeholderSrc;
+            }}
+          />
         ) : (
           <div className="skeleton inv-product-image__skeleton" />
         )}
       </div>
       {readOnly ? (
         <p className="inv-product-image__hint">
-          Inherited from the product model. Images can be set when adding laptops in Inventory.
+          Inherited from the product model. Images are fetched in the background after a model is
+          added, or you can upload one from Inventory.
         </p>
       ) : (
         <>
@@ -73,7 +108,7 @@ export function ProductImagePanel({
             />
           </label>
           <p className="inv-product-image__hint">
-            Local cache only. Remote fetching will be enabled in a future release.
+            Upload a photo, or leave blank — the server fetches images in the background.
           </p>
         </>
       )}

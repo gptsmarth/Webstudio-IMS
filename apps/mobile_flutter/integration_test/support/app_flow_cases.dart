@@ -226,7 +226,7 @@ class _StaticSyncCoordinator extends BackgroundSyncCoordinator {
   }
 
   @override
-  Future<void> syncNow() async {}
+  Future<void> syncNow({bool showBanner = false}) async {}
 }
 
 Future<void> initIntegrationHarness() async {

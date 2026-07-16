@@ -50,7 +50,7 @@ class DashboardScreen extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            await ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow();
+            await ref.read(backgroundSyncCoordinatorProvider.notifier).syncNow(showBanner: true);
             ref.invalidate(dashboardDataProvider);
           },
           child: ListView(

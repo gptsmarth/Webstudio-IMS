@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 
 from loguru import logger
@@ -13,9 +14,17 @@ from webstudio_backend.infrastructure.repositories.brand_repository import Brand
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
+from webstudio_backend.services.ai.prompts import default_image_search_query
 from webstudio_backend.services.product_image_service import resolve_product_image
+from webstudio_backend.services.scheduler_runtime_service import sleep_until_next_run
+from webstudio_backend.services.web_image_scraper import _BACKGROUND_MAX_QUERIES
 
 _inflight: dict[str, asyncio.Task[None]] = {}
+# model_id -> unix timestamp when a failed attempt may be retried
+_retry_after: dict[str, float] = {}
+_FAILURE_COOLDOWN_SECONDS = 6 * 60 * 60  # 6 hours
+_BACKFILL_BATCH_SIZE = 3
+_BACKFILL_INTERVAL_SECONDS = 600  # 10 minutes
 
 
 def is_product_image_job_running(model_id: uuid.UUID | str) -> bool:
@@ -24,12 +33,23 @@ def is_product_image_job_running(model_id: uuid.UUID | str) -> bool:
     return task is not None and not task.done()
 
 
-def schedule_product_image_resolve(model_id: uuid.UUID | str) -> bool:
+def schedule_product_image_resolve(
+    model_id: uuid.UUID | str,
+    *,
+    force: bool = False,
+) -> bool:
     """Start background image discovery if not already running. Returns True if scheduled."""
     key = str(model_id)
     existing = _inflight.get(key)
     if existing is not None and not existing.done():
         return False
+
+    now = time.monotonic()
+    retry_at = _retry_after.get(key)
+    if not force and retry_at is not None and now < retry_at:
+        return False
+    if force:
+        _retry_after.pop(key, None)
 
     task = asyncio.create_task(
         _run_product_image_resolve(uuid.UUID(str(model_id))), name=f"product-image:{key}"
@@ -46,6 +66,7 @@ def schedule_product_image_resolve(model_id: uuid.UUID | str) -> bool:
 
 
 async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
+    key = str(model_id)
     try:
         factory = get_session_factory()
         async with factory() as session:
@@ -58,16 +79,25 @@ async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
                 logger.debug(
                     "Background image resolve skipped; model {} already has image", model_id
                 )
+                _retry_after.pop(key, None)
                 return
 
             brand = await BrandRepository(session).get_by_id(pm.brand_id)
             brand_name = brand.name if brand else None
+            # Free web scraping only — never call AI for image discovery (saves tokens).
+            image_query = default_image_search_query(
+                pm.model_number,
+                brand_name=brand_name,
+                model_name=pm.model_name,
+            )
             image_url = await resolve_product_image(
                 model_number=pm.model_number,
                 brand_name=brand_name,
                 model_name=pm.model_name,
                 model_id=str(pm.id),
                 persist_local=True,
+                image_search_query=image_query,
+                max_queries=_BACKGROUND_MAX_QUERIES,
             )
             if not image_url:
                 logger.info(
@@ -75,6 +105,7 @@ async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
                     pm.model_number,
                     model_id,
                 )
+                _retry_after[key] = time.monotonic() + _FAILURE_COOLDOWN_SECONDS
                 return
 
             await repo.update(
@@ -83,10 +114,48 @@ async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
                 actor=AuditActor.system(display_name="Image Resolver", role="system"),
             )
             await session.commit()
+            _retry_after.pop(key, None)
             logger.info(
                 "Background image resolve stored image for {} ({})",
                 pm.model_number,
                 model_id,
             )
     except Exception:
+        _retry_after[key] = time.monotonic() + _FAILURE_COOLDOWN_SECONDS
         logger.exception("Background image resolve failed for model {}", model_id)
+
+
+async def schedule_missing_product_image_backfill(*, limit: int = _BACKFILL_BATCH_SIZE) -> int:
+    """Queue background resolve for active models that still lack an image.
+
+    Returns how many jobs were newly scheduled. Safe to call from a scheduler —
+    does not block on discovery.
+    """
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = ProductModelRepository(session)
+        model_ids = await repo.list_ids_missing_product_image(limit=max(limit * 3, limit))
+
+    scheduled = 0
+    for model_id in model_ids:
+        if scheduled >= limit:
+            break
+        if schedule_product_image_resolve(model_id):
+            scheduled += 1
+    if scheduled:
+        logger.info("Product image backfill scheduled {} model(s)", scheduled)
+    return scheduled
+
+
+async def product_image_backfill_loop() -> None:
+    """Periodically backfill missing product images without blocking API traffic."""
+    while True:
+        if not await sleep_until_next_run(
+            "product_image_backfill",
+            interval_seconds=_BACKFILL_INTERVAL_SECONDS,
+        ):
+            return
+        try:
+            await schedule_missing_product_image_backfill()
+        except Exception:
+            logger.exception("Product image backfill cycle failed")

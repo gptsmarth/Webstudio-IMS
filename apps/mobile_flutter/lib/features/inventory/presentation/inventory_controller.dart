@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/api_exception.dart';
 import '../../../core/offline/offline_dashboard_service.dart';
 import '../../../core/offline/offline_models.dart';
 import '../../../core/offline/offline_providers.dart';
@@ -498,7 +499,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         .length;
   }
 
-  Future<void> addLaptopWizard(AddLaptopWizardRequest request) async {
+  /// Returns true when model and all serials were saved successfully.
+  Future<bool> addLaptopWizard(AddLaptopWizardRequest request) async {
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
       var modelId = request.productModelId;
@@ -507,7 +509,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         if (payload == null) {
           throw StateError('New product model details are required.');
         }
-        final created = await _ref.read(catalogueRepositoryProvider).createProductModel(payload);
+        final created =
+            await _ref.read(catalogueRepositoryProvider).createOrFindProductModel(payload);
         modelId = created.id;
       }
       if (modelId == null || modelId.isEmpty) {
@@ -518,7 +521,11 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         final itemRequest = CreateInventoryItemRequest(
           serialNumber: unit.serialNumber.trim(),
           productModelId: modelId,
-          color: unit.color.trim(),
+          color: unit.color.trim().isEmpty
+              ? 'Not specified'
+              : (unit.color.trim().length <= kInventoryColorMaxLength
+                  ? unit.color.trim()
+                  : unit.color.trim().substring(0, kInventoryColorMaxLength).trimRight()),
           currentLocationId: unit.currentLocationId,
         );
         if (!_isOnline) {
@@ -535,9 +542,10 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         state = state.copyWith(actionInProgress: false, isStale: true);
       }
       state = state.copyWith(actionInProgress: false);
+      return true;
     } catch (error) {
-      state = state.copyWith(actionInProgress: false, error: error.toString());
-      rethrow;
+      state = state.copyWith(actionInProgress: false, error: formatApiError(error));
+      return false;
     }
   }
 

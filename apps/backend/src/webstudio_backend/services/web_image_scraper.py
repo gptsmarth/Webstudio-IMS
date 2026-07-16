@@ -123,6 +123,27 @@ _UNWANTED_PATH_FRAGMENTS = (
 _MAX_VALIDATE = 30
 _MAX_QUERIES = 18
 _SPEC_LOOKUP_MAX_QUERIES = 6
+_BACKGROUND_MAX_QUERIES = 18
+
+# Path fragments that are always rejected, even on manufacturer CDNs.
+_HARD_BLOCKED_PATH_FRAGMENTS = (
+    "icon",
+    "logo",
+    "favicon",
+    "sprite",
+    "1x1",
+    "pixel",
+)
+
+
+def _normalize_brand_key(brand_name: str | None) -> str:
+    raw = (brand_name or "").strip().lower()
+    if not raw:
+        return ""
+    if raw.startswith("hewlett"):
+        return "hp"
+    return raw.split()[0]
+
 
 # Official manufacturer / retailer domains used for site-targeted image search.
 _BRAND_IMAGE_SOURCES: dict[str, dict[str, tuple[str, ...]]] = {
@@ -180,36 +201,38 @@ def build_product_image_search_queries(
     sku = model_number.strip()
     brand = (brand_name or "").strip()
     name = (model_name or "").strip()
-    queries: list[str] = []
 
-    if brand:
-        queries.append(f'"{sku}" {brand} laptop official product image')
-        queries.append(f'"{sku}" {brand} laptop')
-        queries.append(f"{brand} {sku} laptop product photo")
-
-    brand_key = brand.lower().split()[0] if brand else ""
+    brand_key = _normalize_brand_key(brand)
     brand_sources = _BRAND_IMAGE_SOURCES.get(brand_key, {})
+    site_queries: list[str] = []
     for site in brand_sources.get("sites", ()):
-        queries.append(f'{site} "{sku}"')
-        queries.append(f"{site} {sku} product")
-    for site in _RETAILER_SITE_QUERIES[:4]:
-        queries.append(f'{site} "{sku}" {brand}'.strip())
+        site_queries.append(f'{site} "{sku}"')
+        site_queries.append(f"{site} {sku} product")
 
-    if brand and name:
-        queries.append(f"{brand} {name} {sku} official")
-        queries.append(f"{brand} {name} {sku}")
-    queries.append(f'"{sku}" laptop official product')
-    queries.append(f'"{sku}" laptop')
-
-    for site in _RETAILER_SITE_QUERIES[4:]:
-        queries.append(f"{site} {sku} laptop")
-
+    brand_queries: list[str] = []
     if brand:
-        queries.append(f"{brand} {sku}")
+        brand_queries.append(f'"{sku}" {brand} laptop official product image')
+        brand_queries.append(f'"{sku}" {brand} laptop')
+        brand_queries.append(f"{brand} {sku} laptop product photo")
+
+    retailer_queries: list[str] = []
+    for site in _RETAILER_SITE_QUERIES[:4]:
+        retailer_queries.append(f'{site} "{sku}" {brand}'.strip())
+
+    generic_queries: list[str] = []
+    if brand and name:
+        generic_queries.append(f"{brand} {name} {sku} official")
+        generic_queries.append(f"{brand} {name} {sku}")
+    generic_queries.append(f'"{sku}" laptop official product')
+    generic_queries.append(f'"{sku}" laptop')
+    for site in _RETAILER_SITE_QUERIES[4:]:
+        generic_queries.append(f"{site} {sku} laptop")
+    if brand:
+        generic_queries.append(f"{brand} {sku}")
 
     seen: set[str] = set()
     ordered: list[str] = []
-    for query in queries:
+    for query in site_queries + brand_queries + retailer_queries + generic_queries:
         normalized = " ".join(query.split())
         if normalized and normalized not in seen:
             seen.add(normalized)
@@ -226,7 +249,7 @@ def build_brand_direct_image_candidates(
     sku = model_number.strip().lower()
     if len(sku) < 4:
         return []
-    brand_key = (brand_name or "").strip().lower().split()[0]
+    brand_key = _normalize_brand_key(brand_name)
     candidates: list[str] = []
 
     if brand_key == "asus":
@@ -258,11 +281,13 @@ def text_mentions_model(text: str, model_number: str) -> bool:
     return sku in _normalize_sku(text)
 
 
-def is_blocked_image_host(url: str) -> bool:
+def is_blocked_image_host(url: str, *, brand_name: str | None = None) -> bool:
     host = (urlparse(url).hostname or "").lower()
     path = urlparse(url).path.lower()
     if any(fragment in host for fragment in _BLOCKED_HOST_FRAGMENTS):
         return True
+    if is_manufacturer_image_host(url, brand_name=brand_name):
+        return any(fragment in path for fragment in _HARD_BLOCKED_PATH_FRAGMENTS)
     return any(fragment in path for fragment in _UNWANTED_PATH_FRAGMENTS)
 
 
@@ -272,7 +297,7 @@ def is_manufacturer_image_host(url: str, *, brand_name: str | None = None) -> bo
         return False
     if not brand_name:
         return True
-    token = brand_name.lower().split()[0]
+    token = _normalize_brand_key(brand_name)
     if not token:
         return True
     brand_sources = _BRAND_IMAGE_SOURCES.get(token, {})
@@ -304,7 +329,7 @@ def is_relevant_product_image(
     Amazon/Flipkart CDN URLs without the model number in the path are rejected —
     those were the source of random book/unrelated product images.
     """
-    if is_blocked_image_host(url):
+    if is_blocked_image_host(url, brand_name=brand_name):
         return False
     if url_mentions_model(url, model_number):
         return True
@@ -324,7 +349,7 @@ def is_relevant_product_image(
 def score_image_candidate_url(
     url: str, *, brand_name: str | None = None, model_number: str | None = None
 ) -> int:
-    if is_blocked_image_host(url):
+    if is_blocked_image_host(url, brand_name=brand_name):
         return -100
     host = (urlparse(url).hostname or "").lower()
     path = urlparse(url).path.lower()
@@ -424,7 +449,11 @@ async def _rank_page_images_from_urls(
             # Skip unrelated search-result pages (common source of book/random images).
             continue
 
-        for url in extract_image_urls_from_html(html, page_url):
+        for url in extract_image_urls_from_html(
+            html,
+            page_url,
+            include_all_images=manufacturer_page,
+        ):
             if not is_relevant_product_image(
                 url,
                 model_number,

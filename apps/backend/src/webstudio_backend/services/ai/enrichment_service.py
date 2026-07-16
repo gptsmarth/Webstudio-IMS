@@ -30,7 +30,6 @@ from webstudio_backend.services.ai.types import (
     ProviderId,
     ProviderTestResult,
 )
-from webstudio_backend.services.product_image_service import resolve_product_image
 
 _inflight_spec_lookups: dict[str, asyncio.Task[dict[str, Any]]] = {}
 _inflight_accessory_lookups: dict[str, asyncio.Task[dict[str, Any]]] = {}
@@ -172,20 +171,12 @@ class ProductEnrichmentService:
                         duration_ms=duration_ms,
                         confidence=result.confidence_score,
                     )
-                    spec_payload = result.to_dict()
-                    spec_payload["source"] = result.source
-                    spec_payload["provider"] = result.provider
-                    await cache.set(
-                        sku,
-                        brand_name=brand_name,
-                        payload=spec_payload,
-                        provider=provider.provider_id,
-                    )
                     finalized = await self._finalize_result(
                         result,
                         model_number=sku,
                         brand_name=brand_name,
                     )
+                    # Single cache write — avoid duplicate token-costly round trips being re-run.
                     await cache.set(
                         sku,
                         brand_name=brand_name,
@@ -335,13 +326,6 @@ class ProductEnrichmentService:
             duration_ms=duration_ms,
             confidence=float(result.get("confidence_score") or 0.85),
         )
-        spec_payload = self._accessory_spec_cache_payload(result)
-        await cache.set(
-            cache_key,
-            brand_name=brand_name,
-            payload=spec_payload,
-            provider="gemini",
-        )
         finalized = await self._finalize_accessory_result(
             result,
             identifier=sku,
@@ -375,29 +359,14 @@ class ProductEnrichmentService:
         brand_name: str | None,
     ) -> dict[str, Any]:
         payload = result.to_dict()
-        if self._app_settings.is_test:
-            payload["product_image_url"] = result.product_image_url
-        else:
-            # Prefer a quick candidate only — full web discovery runs in background
-            # after model create / resolve-image so spec lookup stays responsive.
-            try:
-                image_url = await asyncio.wait_for(
-                    resolve_product_image(
-                        model_number=model_number,
-                        brand_name=brand_name,
-                        model_name=result.model_name,
-                        candidate_url=result.product_image_url,
-                        grounding_body=result.grounding_body,
-                        image_search_query=result.image_search_query,
-                        fast=True,
-                    ),
-                    timeout=4.0,
-                )
-            except TimeoutError:
-                image_url = result.product_image_url
-            payload["product_image_url"] = image_url
+        # Spec lookup must stay fast and token-cheap — never scrape images here.
+        # Background image jobs rebuild a deterministic search query (no AI tokens).
+        payload["product_image_url"] = None
+        payload.pop("image_search_query", None)
+        payload.pop("grounding_body", None)
         payload["source"] = result.source
         payload["provider"] = result.provider
+        payload["cached"] = False
         return payload
 
     @staticmethod
@@ -416,27 +385,10 @@ class ProductEnrichmentService:
         identifier: str,
         brand_name: str | None,
     ) -> dict[str, Any]:
+        del identifier, brand_name
         payload = dict(result)
-        if self._app_settings.is_test:
-            payload["product_image_url"] = result.get("product_image_url")
-        else:
-            lookup_number = payload.get("model_number") or payload.get("part_number") or identifier
-            try:
-                image_url = await asyncio.wait_for(
-                    resolve_product_image(
-                        model_number=lookup_number,
-                        brand_name=brand_name,
-                        model_name=result.get("model_name"),
-                        candidate_url=result.get("product_image_url"),
-                        grounding_body=result.get("grounding_body"),
-                        image_search_query=result.get("image_search_query"),
-                        fast=True,
-                    ),
-                    timeout=6.0,
-                )
-            except TimeoutError:
-                image_url = None
-            payload["product_image_url"] = image_url
+        # Keep accessory auto-fetch fast — images run after model create (no AI tokens).
+        payload["product_image_url"] = None
         payload.pop("grounding_body", None)
         payload.pop("image_search_query", None)
         payload["cached"] = False

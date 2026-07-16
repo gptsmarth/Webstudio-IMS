@@ -24,6 +24,7 @@ DEFAULT_INTERVALS: dict[str, int] = {
     "maintenance": 3600,
     "tally_connectivity_probe": 120,
     "github_release_sync": 900,
+    "product_image_backfill": 600,
 }
 
 _shutdown_requested = asyncio.Event()

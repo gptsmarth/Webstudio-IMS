@@ -955,7 +955,7 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 **Error Codes:** `409` `VALIDATION_ERROR` (Duplicate model number for brand)
 
-**Notes:** Create commits the model immediately and does **not** block on product-image discovery. When `product_image_url` is omitted, the server schedules background image discovery. Clients may also call `POST /api/v1/product-models/{id}/resolve-image` (returns `source=pending` by default while work continues in the background).
+**Notes:** Create commits the model immediately and does **not** block on product-image discovery. When `product_image_url` is omitted, the server schedules background image discovery (free web scrape — no AI tokens). A periodic backfill also retries active models that still lack images. Spec auto-fetch returns configuration only; images are resolved after create. Clients may also call `POST /api/v1/product-models/{id}/resolve-image` (returns `source=pending` by default while work continues in the background).
 
 **Audit Behaviour:** `product_model.create`
 
@@ -2860,8 +2860,8 @@ Subset for lists: `id`, `serial_number`, `brand_name`, `model_number`, `color`, 
 | `invoice_number` | string |
 | `customer_name` | string \| null |
 | `payment_mode` | string \| null |
-| `sale_amount` | number \| null | XML line total for Tally (no GST estimation) |
-| `sale_amount_excluding_gst` | number \| null | XML taxable amount when present |
+| `sale_amount` | number \| null | Inclusive GST line total when tax fields are present; otherwise XML line amount |
+| `sale_amount_excluding_gst` | number \| null | Taxable / excl. GST amount when Tally GST breakdown is present |
 | `tally_company_name` | string \| null |
 | `tally_voucher_number` | string \| null |
 | `printed_invoice_number` | string \| null |

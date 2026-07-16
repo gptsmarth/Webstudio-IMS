@@ -25,6 +25,7 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
   Timer? _pollTimer;
   Timer? _syncSuccessTimer;
   bool _started = false;
+  bool _syncInProgress = false;
 
   SyncStateRepository get _syncState => _ref.read(syncStateRepositoryProvider);
   PendingOperationsStore get _pending => _ref.read(pendingOperationsStoreProvider);
@@ -45,7 +46,11 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
     _started = false;
   }
 
-  Future<void> syncNow() async {
+  /// [showBanner] — when true, show the full "Syncing…" banner (manual refresh).
+  /// Background polls stay silent unless there are pending offline operations.
+  Future<void> syncNow({bool showBanner = false}) async {
+    if (_syncInProgress) return;
+
     final online = _ref.read(networkStatusProvider);
     if (!online) {
       state = state.copyWith(isStale: true, clearError: true, syncSuccessVisible: false, clearSyncProgress: true);
@@ -54,21 +59,27 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
     }
 
     final pendingAtStart = _pending.count;
-    state = state.copyWith(
-      syncing: true,
-      clearError: true,
-      syncSuccessVisible: false,
-      syncTotal: pendingAtStart,
-      syncCompleted: 0,
-    );
+    final showProgress = showBanner || pendingAtStart > 0;
+    _syncInProgress = true;
+    if (showProgress) {
+      state = state.copyWith(
+        syncing: true,
+        clearError: true,
+        syncSuccessVisible: false,
+        syncTotal: pendingAtStart,
+        syncCompleted: 0,
+      );
+    }
+
     try {
       final previous = _syncState.readLocal();
       final remote = await _syncState.fetchRemote();
-      final entityChanged = remote.hasEntityChanges(previous);
+      final entityChanged = remote.hasInventoryEntityChanges(previous);
 
       var syncedCount = 0;
       final retryResult = await _retryQueue.processAll(
         onProgress: (completed, total) {
+          if (!showProgress) return;
           syncedCount = completed;
           state = state.copyWith(syncCompleted: completed, syncTotal: total > 0 ? total : pendingAtStart);
         },
@@ -107,6 +118,8 @@ class BackgroundSyncCoordinator extends StateNotifier<SyncWorkspaceState> {
         conflictCount: _pending.conflictCount,
         syncSuccessVisible: false,
       );
+    } finally {
+      _syncInProgress = false;
     }
   }
 

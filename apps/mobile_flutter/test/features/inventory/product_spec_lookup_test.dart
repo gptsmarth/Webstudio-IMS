@@ -35,4 +35,12 @@ void main() {
     expect(findModelByNumber(models, 'x515ea', brandId: 2)?.id, '2');
     expect(findModelByNumber(models, 'missing', brandId: 1), isNull);
   });
+
+  test('defaultUnitColorFromOptions respects 64-char API limit', () {
+    expect(defaultUnitColorFromOptions(null), 'Not specified');
+    expect(defaultUnitColorFromOptions('Black, Silver'), 'Black');
+    expect(defaultUnitColorFromOptions('Quiet Blue / Silver'), 'Quiet Blue');
+    final long = 'A' * 80;
+    expect(defaultUnitColorFromOptions(long).length, kInventoryColorMaxLength);
+  });
 }

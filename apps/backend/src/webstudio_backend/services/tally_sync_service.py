@@ -58,6 +58,7 @@ from webstudio_backend.integrations.tally.constants import (
     MONITORED_VOUCHER_TYPES,
     VOUCHER_TYPE_STORE_MAP,
 )
+from webstudio_backend.integrations.tally.gst import resolve_line_sale_amounts
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
     STALE_SYNC_IN_PROGRESS_SECONDS,
@@ -1025,8 +1026,9 @@ class TallySyncService:
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         idempotency_key = f"{voucher.guid}:{inventory_item.id}"
         snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
-        line_amount = resolve_inventory_line_sale_amount(line, voucher)
-        taxable = float(line.taxable_amount) if line.taxable_amount else None
+        sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(line)
+        if sale_amount_inclusive is None:
+            sale_amount_inclusive = resolve_inventory_line_sale_amount(line, voucher)
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -1042,8 +1044,8 @@ class TallySyncService:
             notes=voucher.narration,
             idempotency_key=idempotency_key,
             snapshot=snapshot,
-            sale_amount=line_amount,
-            sale_amount_excluding_gst=taxable,
+            sale_amount=sale_amount_inclusive,
+            sale_amount_excluding_gst=sale_amount_excluding_gst,
             review_required=review_required,
             review_reason=review_reason,
             invoice_model_name=line.stock_item_name,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../ai/data/ai_enrichment_repository.dart';
 import '../../../auth/presentation/auth_controller.dart';
@@ -359,7 +360,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
           ? (_identifierType == AccessoryIdentifierType.modelNumber ? entered : (catalogPartNumber ?? entered))
           : _resolvedModelNumber.text.trim();
 
-      await ref.read(widget.workspaceProvider.notifier).addLaptopWizard(
+      final ok = await ref.read(widget.workspaceProvider.notifier).addLaptopWizard(
             AddLaptopWizardRequest(
               brandId: widget.brandId,
               mode: _mode,
@@ -384,6 +385,13 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
             ),
           );
       if (!mounted) return;
+      if (!ok) {
+        setState(() {
+          _submitting = false;
+          _error = ref.read(widget.workspaceProvider).error ?? 'Could not save accessory.';
+        });
+        return;
+      }
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Added ${units.length} accessory unit(s) to ${widget.brandName}.')),
@@ -392,7 +400,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
       if (mounted) {
         setState(() {
           _submitting = false;
-          _error = error.toString();
+          _error = formatApiError(error);
         });
       }
     }
