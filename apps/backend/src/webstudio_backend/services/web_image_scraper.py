@@ -126,6 +126,9 @@ _SPEC_LOOKUP_MAX_QUERIES = 6
 _BACKGROUND_MAX_QUERIES = 18
 
 # Path fragments that are always rejected, even on manufacturer CDNs.
+# Keep book/ebook tokens here (not soft-only) so manufacturer hosts cannot
+# accept unrelated cover art. Do not add bare "book" — it matches "notebook".
+# "banner" stays soft-only so product hero banners on OEM CDNs remain allowed.
 _HARD_BLOCKED_PATH_FRAGMENTS = (
     "icon",
     "logo",
@@ -133,6 +136,16 @@ _HARD_BLOCKED_PATH_FRAGMENTS = (
     "sprite",
     "1x1",
     "pixel",
+    "kindle",
+    "paperback",
+    "hardcover",
+    "textbook",
+    "audiobook",
+    "/books/",
+    "/book/",
+    "books/",
+    "/ebook",
+    "ebooks/",
 )
 
 
