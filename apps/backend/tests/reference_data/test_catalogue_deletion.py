@@ -262,6 +262,7 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     )
     assert resp.status_code == 204
 
+    db_session.expire_all()
     persisted_sale = await db_session.get(Sale, sale_id)
     assert persisted_sale is not None
     assert persisted_sale.inventory_item_id is None
