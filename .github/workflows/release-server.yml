@@ -1,0 +1,153 @@
+# WEBSTUDIO IMS — Server-only release (backend quality + server installer)
+# Manual run: quality gate (backend) → backend tar.gz + WEBSTUDIO Server Setup.exe
+# Skips desktop/mobile packaging. Does NOT auto-deploy.
+
+name: Server Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Optional existing tag to attach assets to (e.g. v1.7.6). Leave empty for artifacts only."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: server-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Backend Quality Gate
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: webstudio_app
+          POSTGRES_PASSWORD: webstudio_app
+          POSTGRES_DB: webstudio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U webstudio_app -d webstudio_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync VERSION from tag input
+        if: inputs.tag_name != ''
+        run: bash scripts/release/sync-version-from-tag.sh "${{ inputs.tag_name }}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "apps/backend[dev]"
+
+      - name: Verify alembic and database migrations
+        run: |
+          python -c "import alembic; print('alembic', alembic.__version__)"
+          bash tools/scripts/alembic.sh current
+
+      - name: Backend lint (Ruff)
+        run: ruff check apps/backend/src apps/backend/tests database/migrations
+
+      - name: Backend format (Black)
+        run: black --check apps/backend/src apps/backend/tests database/migrations
+
+      - name: Backend tests
+        run: pytest apps/backend/tests -q
+
+  backend-package:
+    name: Build Backend Package
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync VERSION from tag input
+        if: inputs.tag_name != ''
+        run: bash scripts/release/sync-version-from-tag.sh "${{ inputs.tag_name }}"
+      - run: bash scripts/release/package-backend.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-package
+          path: release/backend/webstudio-backend-*.tar.gz
+          if-no-files-found: error
+
+  server-windows:
+    name: Build Server Windows Setup
+    needs: quality-gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync VERSION from tag input
+        if: inputs.tag_name != ''
+        shell: bash
+        run: bash scripts/release/sync-version-from-tag.sh "${{ inputs.tag_name }}"
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Validate branding icons
+        shell: bash
+        run: scripts/release/validate-branding-icons.sh
+      - run: powershell -ExecutionPolicy Bypass -File scripts/release/build-server-setup.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-windows-setup
+          path: release/server/WEBSTUDIO Server Setup.exe
+          if-no-files-found: error
+
+  publish-github-release:
+    name: Attach to GitHub Release (optional)
+    needs:
+      - backend-package
+      - server-windows
+    if: inputs.tag_name != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync VERSION from tag input
+        run: bash scripts/release/sync-version-from-tag.sh "${{ inputs.tag_name }}"
+
+      - id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect server assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p release-assets
+          cp artifacts/backend-package/webstudio-backend-*.tar.gz release-assets/
+          cp "artifacts/server-windows-setup/WEBSTUDIO Server Setup.exe" release-assets/
+          ls -la release-assets/
+
+      - name: Upload to existing GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: WEBSTUDIO IMS ${{ steps.version.outputs.version }}
+          files: release-assets/*
+          draft: false
+          append_body: true
+          body: |
+            ## Server-only build
+            Backend package and Windows Server Setup attached from **Server Release** workflow.
+            Desktop/mobile artifacts are unchanged if already present on this release.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

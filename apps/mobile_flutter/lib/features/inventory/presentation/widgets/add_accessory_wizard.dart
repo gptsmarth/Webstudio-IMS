@@ -117,6 +117,8 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
       row.serial.addListener(_onFormChanged);
+      row.purchasePrice.removeListener(_onFormChanged);
+      row.purchasePrice.addListener(_onFormChanged);
     }
   }
 
@@ -128,6 +130,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     _resolvedPartNumber.removeListener(_onFormChanged);
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
+      row.purchasePrice.removeListener(_onFormChanged);
       row.dispose();
     }
     _identifier.dispose();
@@ -145,6 +148,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     final defaultLocation = widget.locations.isNotEmpty ? widget.locations.first.id : 0;
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
+      row.purchasePrice.removeListener(_onFormChanged);
       row.dispose();
     }
     _units
@@ -286,6 +290,7 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     while (_units.length > clamped) {
       final removed = _units.removeLast();
       removed.serial.removeListener(_onFormChanged);
+      removed.purchasePrice.removeListener(_onFormChanged);
       removed.dispose();
     }
     while (_units.length < clamped) {
@@ -306,13 +311,37 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
     return _units
         .where((row) => row.serial.text.trim().isNotEmpty && row.locationId > 0)
         .map(
-          (row) => SerialUnitEntry(
-            serialNumber: row.serial.text.trim(),
-            color: color,
-            currentLocationId: row.locationId,
-          ),
+          (row) {
+            final priceRaw = row.purchasePrice.text.trim();
+            return SerialUnitEntry(
+              serialNumber: row.serial.text.trim(),
+              color: color,
+              currentLocationId: row.locationId,
+              purchasePrice: priceRaw.isEmpty ? null : double.tryParse(priceRaw),
+            );
+          },
         )
         .toList();
+  }
+
+  void _applyFirstLocationToAll() {
+    if (_units.isEmpty) return;
+    final first = _units.first.locationId;
+    setState(() {
+      for (final row in _units) {
+        row.locationId = first;
+      }
+    });
+  }
+
+  void _applyFirstPurchasePriceToAll() {
+    if (_units.isEmpty) return;
+    final first = _units.first.purchasePrice.text;
+    setState(() {
+      for (final row in _units) {
+        row.purchasePrice.text = first;
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -775,6 +804,25 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
         ],
       ),
       const SizedBox(height: AppSpacing.md),
+      if (_units.length > 1) ...[
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            OutlinedButton(
+              onPressed: _applyFirstLocationToAll,
+              child: const Text('Apply first location to all'),
+            ),
+            OutlinedButton(
+              onPressed: _units.first.purchasePrice.text.trim().isEmpty
+                  ? null
+                  : _applyFirstPurchasePriceToAll,
+              child: const Text('Apply first purchase price to all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       for (var i = 0; i < _units.length; i++) ...[
         Text('Unit ${i + 1}', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: AppSpacing.xs),
@@ -809,6 +857,16 @@ class _AddAccessoryWizardState extends ConsumerState<_AddAccessoryWizard> {
             if (value == null) return;
             setState(() => _units[i].locationId = value);
           },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _units[i].purchasePrice,
+          decoration: const InputDecoration(
+            labelText: 'Purchase price',
+            hintText: 'Optional',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
@@ -864,12 +922,15 @@ class _UnitRow {
   _UnitRow({
     required this.serial,
     required this.locationId,
-  });
+    TextEditingController? purchasePrice,
+  }) : purchasePrice = purchasePrice ?? TextEditingController();
 
   final TextEditingController serial;
+  final TextEditingController purchasePrice;
   int locationId;
 
   void dispose() {
     serial.dispose();
+    purchasePrice.dispose();
   }
 }

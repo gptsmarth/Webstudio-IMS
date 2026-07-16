@@ -699,6 +699,44 @@ export function AddAccessoryWizard({
                   <span>Location</span>
                   <span>Purchase price</span>
                 </div>
+                {units.length > 1 && (
+                  <div className="add-laptop-wizard__apply-all">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={!units[0]?.current_location_id}
+                      onClick={() =>
+                        setUnits((current) => {
+                          const first = current[0];
+                          if (!first) return current;
+                          return current.map((row) => ({
+                            ...row,
+                            current_location_id: first.current_location_id,
+                          }));
+                        })
+                      }
+                    >
+                      Apply first location to all
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={!units[0]?.purchase_price.trim()}
+                      onClick={() =>
+                        setUnits((current) => {
+                          const first = current[0];
+                          if (!first) return current;
+                          return current.map((row) => ({
+                            ...row,
+                            purchase_price: first.purchase_price,
+                          }));
+                        })
+                      }
+                    >
+                      Apply first purchase price to all
+                    </button>
+                  </div>
+                )}
                 {units.map((unit, index) => (
                   <div
                     key={index}

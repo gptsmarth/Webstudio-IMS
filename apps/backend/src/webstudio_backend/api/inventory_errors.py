@@ -12,6 +12,7 @@ from webstudio_backend.infrastructure.repositories.exceptions import (
     InactiveProductModelError,
     InventoryAlreadySoldError,
     InventoryItemArchiveNotAllowedError,
+    InventoryItemDeleteNotAllowedError,
     InventoryItemNotFoundError,
     InventoryNotAvailableForSaleError,
     LocationNotFoundError,
@@ -57,6 +58,12 @@ def raise_inventory_error(exc: Exception) -> NoReturn:
     if isinstance(exc, InventoryItemArchiveNotAllowedError):
         raise AppError(
             "INVALID_STATUS_TRANSITION",
+            str(exc),
+            status_code=409,
+        ) from exc
+    if isinstance(exc, InventoryItemDeleteNotAllowedError):
+        raise AppError(
+            "INVENTORY_ITEM_HAS_HISTORY",
             str(exc),
             status_code=409,
         ) from exc

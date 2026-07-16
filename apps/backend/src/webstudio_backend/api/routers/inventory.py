@@ -293,6 +293,22 @@ async def restore_inventory(
     return _envelope(request, _item_payload(detail, current=current))
 
 
+@router.delete("/{inventory_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_inventory(
+    inventory_id: uuid.UUID,
+    current: InventoryArchiveDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> None:
+    """Remove an unsold serial from live stock. Sales history is never deleted."""
+    try:
+        await InventoryService(db_session).delete_item(
+            inventory_id,
+            actor=_actor(current),
+        )
+    except Exception as exc:
+        raise_inventory_error(exc)
+
+
 @router.patch("/{inventory_id}/location")
 async def transfer_inventory_location(
     request: Request,

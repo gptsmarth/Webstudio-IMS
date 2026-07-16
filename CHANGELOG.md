@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-07-16
+
+### Added
+
+- **Delete serial:** remove a single unsold inventory unit from live stock (desktop + mobile); available count updates immediately; sales history unchanged
+- **Add inventory:** “Apply first location to all” and “Apply first purchase price to all” on desktop and mobile add wizards
+- **Mobile add:** per-unit purchase price field
+- **CI:** Server Release workflow — backend quality + server installer only (no desktop/mobile rebuild)
+
+### Changed
+
+- **Delete product model:** cascades deletion of inventory serials for that model while preserving sale snapshots forever
+- Migration `0050`: notifications and Tally line inventory FKs use `ON DELETE SET NULL`
+
+### Fixed
+
+- Product image scraper hard-blocks `/books/` paths on manufacturer CDNs (CI quality gate)
+
 ## [1.7.5] - 2026-07-16
 
 ### Fixed

@@ -1,13 +1,15 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin } from 'lucide-react';
+import { MapPin, Trash2 } from 'lucide-react';
 import type { InventoryItemDetail } from '../../services/api/InventoryService';
 import { rowMenuPosition, useRowActionsMenuDismiss } from '../../hooks/useRowActionsMenuDismiss';
 
 interface StockSerialRowActionsMenuProps {
   item: InventoryItemDetail;
   canTransfer: boolean;
+  canDelete: boolean;
   onChangeLocation: (item: InventoryItemDetail) => void;
+  onDelete: (item: InventoryItemDetail) => void;
   onClose: () => void;
   anchorRect: DOMRect;
 }
@@ -15,7 +17,9 @@ interface StockSerialRowActionsMenuProps {
 export function StockSerialRowActionsMenu({
   item,
   canTransfer,
+  canDelete,
   onChangeLocation,
+  onDelete,
   onClose,
   anchorRect,
 }: StockSerialRowActionsMenuProps): JSX.Element {
@@ -23,7 +27,7 @@ export function StockSerialRowActionsMenu({
 
   useRowActionsMenuDismiss(menuRef, onClose);
 
-  const { top, left } = rowMenuPosition(anchorRect, 160);
+  const { top, left } = rowMenuPosition(anchorRect, 180);
 
   return createPortal(
     <div
@@ -45,6 +49,20 @@ export function StockSerialRowActionsMenu({
         >
           <MapPin size={14} aria-hidden />
           Change location
+        </button>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          className="inv-row-menu__item inv-row-menu__item--danger"
+          role="menuitem"
+          onClick={() => {
+            onDelete(item);
+            onClose();
+          }}
+        >
+          <Trash2 size={14} aria-hidden />
+          Delete serial
         </button>
       )}
     </div>,

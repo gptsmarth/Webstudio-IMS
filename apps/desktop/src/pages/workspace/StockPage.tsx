@@ -85,6 +85,23 @@ export function StockPage(): JSX.Element {
     [hierarchy],
   );
 
+  const handleDeleteSerial = useCallback(
+    async (itemId: string) => {
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await InventoryService.deleteItem(itemId);
+        await hierarchy.refresh();
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setActionError(message.message ?? 'Could not delete serial.');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [hierarchy],
+  );
+
   const handleUpdateModelSellingPrice = useCallback(
     async (sellingPrice: number | null) => {
       if (!priceModelId) return;
@@ -246,6 +263,7 @@ export function StockPage(): JSX.Element {
           permissions={session.permissions}
           loading={hierarchy.loading}
           onTransfer={handleTransfer}
+          onDeleteSerial={handleDeleteSerial}
           actionLoading={actionLoading}
           onEditModel={canEditFromStock ? () => setEditModelId(selectedModel.id) : undefined}
           editModelLabel="Edit model & price"

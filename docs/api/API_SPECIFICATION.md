@@ -1021,17 +1021,19 @@ All user management endpoints require **Main Admin** (FR-USER-01). Only Main Adm
 
 ---
 
-### 6.7 Delete Product Model (Conditional)
+### 6.7 Delete Product Model
 
 | | |
 |---|---|
-| **Endpoint** | `DELETE /api/v1/product_models/{product_model_id}` |
+| **Endpoint** | `DELETE /api/v1/product-models/{model_id}` |
 | **Method** | `DELETE` |
-| **Purpose** | Permanent delete only when no history (PM-06, PM-07) |
+| **Purpose** | Permanently delete a product model and cascade-delete its inventory units; sales history is preserved via snapshots (PM-06) |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin` |
+| **Required Role** | `product_models:delete` (typically Main Admin) |
 
-**Validation Rules:** Reject with `409` `PRODUCT_MODEL_HAS_HISTORY` if any inventory, sale, or audit reference ever existed
+**Behaviour:** Inventory serials for the model are removed. Linked sales keep denormalized `snapshot_*` fields; live `inventory_item_id` is cleared. Audit and notification inventory FKs are cleared the same way.
+
+**Preview:** `GET /api/v1/product-models/{model_id}/delete-preview` returns `{ inventory_count, can_delete: true }`.
 
 **Success Codes:** `204`
 
@@ -1584,21 +1586,21 @@ The Inventory API module at `/api/v1/inventory` is **production-ready** as of Sp
 
 ---
 
-### 8.9 Delete Inventory Item (Conditional)
+### 8.9 Delete Inventory Item
 
 | | |
 |---|---|
-| **Endpoint** | `DELETE /api/v1/inventory_items/{inventory_item_id}` |
+| **Endpoint** | `DELETE /api/v1/inventory/{inventory_id}` |
 | **Method** | `DELETE` |
-| **Purpose** | Permanent delete only when no history (FR-INV-07) |
+| **Purpose** | Remove an unsold serial from live stock; available counts drop immediately. Sales history is never deleted. |
 | **Authentication Required** | Yes |
-| **Required Role** | `main_admin`, `admin` |
+| **Required permission** | `inventory:archive` |
 
-**Validation Rules:** Reject with `409` `INVENTORY_ITEM_HAS_HISTORY` if status is `sold` or any sale or audit reference exists
+**Validation Rules:** Reject with `409` `INVENTORY_ITEM_HAS_HISTORY` if status is `sold` or a sale row still references the item.
 
 **Success Codes:** `204`
 
-**Audit Behaviour:** `inventory.delete`
+**Audit Behaviour:** permanent-delete audit entry (serial retained in audit payload; live inventory row removed)
 
 ---
 

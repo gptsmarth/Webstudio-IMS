@@ -426,6 +426,28 @@ class AuditRecorder:
             description=f"Inventory item restored (serial: {item.serial_number})",
         )
 
+    async def record_inventory_delete(
+        self,
+        item: InventoryItem,
+        *,
+        actor: AuditActor,
+    ) -> None:
+        await self.record(
+            entity_type="inventory_item",
+            entity_id=str(item.id),
+            action=AuditAction.ARCHIVE,
+            actor=actor,
+            inventory_item_id=None,
+            field_name="status",
+            old_value={
+                "serial_number": item.serial_number,
+                "status": item.status.value,
+                "is_archived": item.is_archived,
+            },
+            new_value={"deleted": True},
+            description=f"Inventory item permanently deleted (serial: {item.serial_number})",
+        )
+
     async def record_sale_create(
         self,
         sale: Sale,

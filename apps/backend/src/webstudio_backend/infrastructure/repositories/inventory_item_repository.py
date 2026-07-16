@@ -448,8 +448,48 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
-    async def force_delete(self, inventory_item: InventoryItem) -> None:
-        await super().delete(inventory_item)
+    async def delete_unsold_item(
+        self,
+        inventory_item: InventoryItem,
+        *,
+        actor: AuditActor | None = None,
+    ) -> None:
+        """Permanently remove an unsold inventory unit from live stock.
+
+        Sales history is never deleted — items with sale rows are blocked.
+        Audit/notification FKs are cleared so create/update audit does not block.
+        """
+        if inventory_item.status is InventoryStatus.SOLD:
+            raise InventoryItemDeleteNotAllowedError(str(inventory_item.id), "item is sold")
+        if await self._has_sale_references(inventory_item.id):
+            raise InventoryItemDeleteNotAllowedError(
+                str(inventory_item.id), "sale references exist"
+            )
+
+        item_id = inventory_item.id
+        await AuditRecorder(self._session).record_inventory_delete(
+            inventory_item,
+            actor=actor or AuditActor.system(),
+        )
+
+        params = {"inventory_item_id": item_id}
+        for table in (
+            "sales",
+            "audit_logs",
+            "notifications",
+            "tally_processed_invoice_line",
+            "tally_line_decision_log",
+        ):
+            await self._session.execute(
+                text(f"""
+                    UPDATE {SCHEMA}.{table}
+                    SET inventory_item_id = NULL
+                    WHERE inventory_item_id = :inventory_item_id
+                    """),
+                params,
+            )
+
+        await self.force_delete(inventory_item)
 
     async def search(
         self,

@@ -84,6 +84,14 @@ class TallyProcessedInvoiceLine(Base, PrimaryKeyMixin, TimestampMixin):
         ),
         nullable=True,
     )
-    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    inventory_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            f"{DATABASE_SCHEMA}.inventory_items.id",
+            name="fk_tally_processed_invoice_line_inventory",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -147,6 +147,10 @@ export function canTransferStockLocation(permissions: string[]): boolean {
   return canTransferStockLocationPermission(permissions);
 }
 
+export function canDeleteInventorySerial(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.inventory.archive);
+}
+
 export function canViewPurchasePrice(permissions: string[]): boolean {
   return canViewPurchasePricePermission(permissions);
 }

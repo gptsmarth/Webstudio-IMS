@@ -786,8 +786,8 @@ Product Models have a lifecycle distinct from inventory unit lifecycle.
 | PM-03 | Archived Product Models remain linked to existing inventory, sales, and audit history |
 | PM-04 | Archived Product Models are **hidden from inventory creation** model selectors |
 | PM-05 | Archived Product Models are **hidden from Salesperson views by default** (Admin/Main Admin may include via filter) |
-| PM-06 | **Permanent deletion** is permitted only when **all** of the following are true: no Inventory Items were ever created; no Sale records exist; no Audit Log references exist |
-| PM-07 | If any historical reference exists, only **Archive** is permitted — not delete |
+| PM-06 | **Permanent deletion** removes the Product Model and cascades deletion of its Inventory Items. Sale records, reports, and audit history remain via denormalized sale snapshots |
+| PM-07 | Deleting a Product Model must not delete Sale rows; historical identity is retained in `snapshot_*` fields even after inventory units are removed |
 
 ### 12.3 Operational Domain
 
@@ -990,7 +990,7 @@ Requirements use the prefix **FR-** for traceability. **Mandatory** requirements
 | FR-PM-03 | Main Admin shall Archive and Restore Product Models | Mandatory | |
 | FR-PM-04 | System shall prevent selection of Archived Product Models during inventory creation | Mandatory | PM-04 |
 | FR-PM-05 | System shall hide Archived Product Models from Salesperson default inventory views | Mandatory | PM-05; Admin filter **TBD** |
-| FR-PM-06 | System shall allow permanent deletion of a Product Model only when no Inventory Items, Sales, or Audit references exist | Mandatory | PM-06, PM-07 |
+| FR-PM-06 | System shall permanently delete a Product Model and cascade-delete its Inventory Items while preserving Sale snapshots and audit history | Mandatory | PM-06, PM-07 |
 | FR-PM-07 | Archived Product Models shall remain visible for historical inventory, sales, and audit context | Mandatory | |
 
 ### 15.5 Location Management

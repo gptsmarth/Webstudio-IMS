@@ -166,8 +166,23 @@ git push origin v0.2.0
 
 1. **iOS codesign** — Archive builds with `CODE_SIGNING_ALLOWED=NO` in CI; App Store export requires operator certificates.  
 2. **Windows/macOS signing** — Optional signing secrets not configured (M12C documented).  
-3. **workflow_dispatch** — Manual runs build artifacts but skip GitHub Release publish (tag required).  
+3. **workflow_dispatch** — Manual **Enterprise Release** runs build all artifacts but skip GitHub Release publish (tag required).  
 4. **Integration tests** — Flutter integration tests excluded from quality-gate (unit/widget only on ubuntu).  
+
+---
+
+## Server-only pipeline
+
+**Workflow:** `.github/workflows/release-server.yml` (`Server Release`)
+
+Use this when only the Windows server / backend needs upgrading (no desktop/mobile rebuild).
+
+| Trigger | Behaviour |
+|---------|-----------|
+| Actions → **Server Release** → Run workflow | Backend quality gate → `webstudio-backend-*.tar.gz` + `WEBSTUDIO Server Setup.exe` artifacts |
+| Optional `tag_name` (e.g. `v1.7.6`) | Same builds, then attach those two assets to that GitHub Release |
+
+Does **not** build Desktop EXE/DMG, Android APK, or iOS archive.
 
 ---
 

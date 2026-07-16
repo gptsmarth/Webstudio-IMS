@@ -111,11 +111,13 @@ class SerialUnitEntry {
     required this.serialNumber,
     required this.currentLocationId,
     required this.color,
+    this.purchasePrice,
   });
 
   final String serialNumber;
   final int currentLocationId;
   final String color;
+  final double? purchasePrice;
 }
 
 class AddLaptopWizardRequest {

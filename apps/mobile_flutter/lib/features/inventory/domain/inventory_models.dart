@@ -183,12 +183,14 @@ class CreateInventoryItemRequest {
     required this.productModelId,
     required this.color,
     required this.currentLocationId,
+    this.purchasePrice,
   });
 
   final String serialNumber;
   final String productModelId;
   final String color;
   final int currentLocationId;
+  final double? purchasePrice;
 
   Map<String, dynamic> toJson() => {
         'serial_number': serialNumber,
@@ -196,6 +198,7 @@ class CreateInventoryItemRequest {
         'color': color,
         'current_location_id': currentLocationId,
         'status': 'available',
+        if (purchasePrice != null) 'purchase_price': purchasePrice,
       };
 }
 

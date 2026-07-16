@@ -292,7 +292,7 @@ const PERMISSION_REGISTRY: PermissionMetadata[] = [
   {
     permission: 'product_models:delete',
     label: 'Delete models',
-    description: 'Permanently delete product models without inventory',
+    description: 'Permanently delete product models (inventory units cascade; sales history kept)',
     module: 'catalogue',
     i18nKey: 'permission.product_models.delete',
   },

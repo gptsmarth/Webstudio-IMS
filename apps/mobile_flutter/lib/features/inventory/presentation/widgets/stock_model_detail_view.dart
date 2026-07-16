@@ -45,6 +45,7 @@ class StockModelDetailView extends ConsumerWidget {
     final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
     final canTransfer = inv_perms.canTransferStockLocation(permissions);
     final canMarkSold = inv_perms.canMarkSold(permissions);
+    final canDeleteSerial = inv_perms.canArchiveInventory(permissions);
     final canEditFromStock = canEditStockProductModel(permissions);
     final canDeleteModel = inv_perms.canDeleteProductModels(permissions) &&
         ref.watch(workspaceProvider).inventoryAdminMode;
@@ -251,10 +252,14 @@ class StockModelDetailView extends ConsumerWidget {
                     inventoryAdminMode: inventoryAdminMode,
                     canTransfer: canTransfer && displayUnits[i].status != InventoryStatus.sold,
                     canMarkSold: canMarkSold && displayUnits[i].status == InventoryStatus.available,
+                    canDelete: canDeleteSerial &&
+                        displayUnits[i].status != InventoryStatus.sold &&
+                        !displayUnits[i].isArchived,
                     actionInProgress: actionInProgress,
                     onTap: () => onSelectUnit(displayUnits[i]),
                     onTransfer: () => _transferUnit(context, ref, displayUnits[i]),
                     onMarkSold: () => _markSoldUnit(context, ref, displayUnits[i]),
+                    onDelete: () => _deleteUnit(context, ref, displayUnits[i]),
                   ),
                 ],
               ],
@@ -318,6 +323,33 @@ class StockModelDetailView extends ConsumerWidget {
       messenger.showSnackBar(SnackBar(content: Text(error)));
     } else {
       messenger.showSnackBar(SnackBar(content: Text('${item.serialNumber} marked as sold.')));
+    }
+  }
+
+  Future<void> _deleteUnit(BuildContext context, WidgetRef ref, InventoryItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete serial?'),
+        content: Text(
+          'Remove ${item.serialNumber} from live stock?\n\n'
+          'Available count will drop by one. Sales history is not changed — sold units cannot be deleted.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref.read(workspaceProvider.notifier).deleteInventoryItem(item.id);
+    if (!context.mounted) return;
+    final error = ref.read(workspaceProvider).error;
+    final messenger = ScaffoldMessenger.of(context);
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+    } else {
+      messenger.showSnackBar(SnackBar(content: Text('${item.serialNumber} removed from stock.')));
     }
   }
 }
@@ -428,20 +460,24 @@ class _SerialRow extends StatelessWidget {
     required this.inventoryAdminMode,
     required this.canTransfer,
     required this.canMarkSold,
+    required this.canDelete,
     required this.actionInProgress,
     required this.onTap,
     required this.onTransfer,
     required this.onMarkSold,
+    required this.onDelete,
   });
 
   final InventoryItem item;
   final bool inventoryAdminMode;
   final bool canTransfer;
   final bool canMarkSold;
+  final bool canDelete;
   final bool actionInProgress;
   final VoidCallback onTap;
   final VoidCallback onTransfer;
   final VoidCallback onMarkSold;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -505,6 +541,12 @@ class _SerialRow extends StatelessWidget {
                         onPressed: actionInProgress ? null : onTransfer,
                         icon: const Icon(Icons.swap_horiz, size: 20),
                       ),
+                    if (canDelete)
+                      IconButton(
+                        tooltip: 'Delete serial',
+                        onPressed: actionInProgress ? null : onDelete,
+                        icon: Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.error),
+                      ),
                   ],
                 ),
               ),
@@ -548,6 +590,12 @@ class _SerialRow extends StatelessWidget {
                 tooltip: 'Transfer location',
                 onPressed: actionInProgress ? null : onTransfer,
                 icon: const Icon(Icons.swap_horiz),
+              ),
+            if (canDelete)
+              IconButton(
+                tooltip: 'Delete serial',
+                onPressed: actionInProgress ? null : onDelete,
+                icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
               ),
           ],
         ),

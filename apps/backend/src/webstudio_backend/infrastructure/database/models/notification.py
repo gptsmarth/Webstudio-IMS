@@ -85,6 +85,7 @@ class Notification(Base, PrimaryKeyMixin):
         ForeignKey(
             f"{DATABASE_SCHEMA}.inventory_items.id",
             name="fk_notifications_inventory_item",
+            ondelete="SET NULL",
         ),
         nullable=True,
     )

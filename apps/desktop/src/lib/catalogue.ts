@@ -83,7 +83,7 @@ export function confirmCatalogueRemoval(
   }
   if (kind === 'model') {
     return window.confirm(
-      `Delete ${label}?\n\nThis permanently removes the product model. Deletion is blocked while inventory items still reference it.\n\nPast sales, reports, audit history, and backups are preserved.`,
+      `Delete ${label}?\n\nThis permanently removes the product model and all inventory serials for it.\n\nPast sales, reports, audit history, and backups are preserved.\n\nThis action cannot be undone.`,
     );
   }
   return window.confirm(

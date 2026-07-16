@@ -116,6 +116,10 @@ class InventoryService:
         assert detail is not None
         return detail
 
+    async def delete_item(self, item_id: uuid.UUID, *, actor: AuditActor) -> None:
+        item = await self._repo.require_by_id(item_id)
+        await self._repo.delete_unsold_item(item, actor=actor)
+
     async def transfer_location(
         self,
         item_id: uuid.UUID,

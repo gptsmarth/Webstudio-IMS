@@ -527,6 +527,7 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
                   ? unit.color.trim()
                   : unit.color.trim().substring(0, kInventoryColorMaxLength).trimRight()),
           currentLocationId: unit.currentLocationId,
+          purchasePrice: unit.purchasePrice,
         );
         if (!_isOnline) {
           final pending =
@@ -590,6 +591,17 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
       state = state.copyWith(clearSelection: true, actionInProgress: false);
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
+  Future<void> deleteInventoryItem(String itemId) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      await _inventory.deleteItem(itemId);
+      await _refreshItems(refreshModels: true);
+      state = state.copyWith(clearSelection: true, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: formatApiError(error));
     }
   }
 

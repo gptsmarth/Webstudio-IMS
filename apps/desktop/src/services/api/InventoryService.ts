@@ -195,6 +195,11 @@ export class InventoryService {
     return client.post<InventoryItemDetail>(`/api/v1/inventory/${id}/restore`);
   }
 
+  static async deleteItem(id: string): Promise<void> {
+    const client = await ApiClientProvider.getClient();
+    await client.delete(`/api/v1/inventory/${id}`);
+  }
+
   static async transferLocation(id: string, locationId: number): Promise<InventoryItemDetail> {
     const client = await ApiClientProvider.getClient();
     return client.patch<InventoryItemDetail>(`/api/v1/inventory/${id}/location`, {

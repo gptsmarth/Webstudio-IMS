@@ -74,19 +74,19 @@ async def test_brand_delete_succeeds_when_empty(
 
 
 @pytest.mark.asyncio
-async def test_product_model_delete_blocked_with_inventory(
+async def test_product_model_delete_cascades_inventory_and_preserves_sales(
     api_client: AsyncClient,
     admin_headers: dict[str, str],
     db_session: AsyncSession,
 ) -> None:
-    brand = await BrandRepository(db_session).create("Model Block Brand")
+    brand = await BrandRepository(db_session).create("Model Cascade Brand")
     location = await LocationRepository(db_session).create(
-        "Model Block Loc", location_type=LocationType.WAREHOUSE
+        "Model Cascade Loc", location_type=LocationType.WAREHOUSE
     )
     product_model = await ProductModelRepository(db_session).create(
         brand_id=brand.id,
-        model_number="MB-01",
-        model_name="Model Block",
+        model_number="MC-01",
+        model_name="Model Cascade",
         cpu="Intel i5",
         ram_gb=16,
         storage_value=Decimal("512"),
@@ -94,7 +94,7 @@ async def test_product_model_delete_blocked_with_inventory(
         storage_type=StorageType.SSD,
     )
     await InventoryItemRepository(db_session).create(
-        serial_number="SN-MODEL-BLOCK-001",
+        serial_number="SN-MODEL-CASCADE-001",
         product_model_id=product_model.id,
         color="Black",
         current_location_id=location.id,
@@ -108,13 +108,13 @@ async def test_product_model_delete_blocked_with_inventory(
     )
     assert preview.status_code == 200
     assert preview.json()["data"]["inventory_count"] == 1
-    assert preview.json()["data"]["can_delete"] is False
+    assert preview.json()["data"]["can_delete"] is True
 
     resp = await api_client.delete(
         f"/api/v1/product-models/{product_model.id}", headers=admin_headers
     )
-    assert resp.status_code == 409
-    assert resp.json()["error"]["code"] == "CATALOGUE_DELETE_BLOCKED"
+    assert resp.status_code == 204
+    assert await ProductModelRepository(db_session).get_by_id(product_model.id) is None
 
 
 @pytest.mark.asyncio
@@ -260,23 +260,15 @@ async def test_deleted_entities_preserve_sales_and_audit_history(
     resp = await api_client.delete(
         f"/api/v1/product-models/{product_model.id}", headers=admin_headers
     )
-    assert resp.status_code == 409
-
-    await InventoryItemRepository(db_session).force_delete(
-        await InventoryItemRepository(db_session).get_by_id(item_id),
-    )
-    await db_session.commit()
-
-    resp = await api_client.delete(
-        f"/api/v1/product-models/{product_model.id}", headers=admin_headers
-    )
     assert resp.status_code == 204
 
     persisted_sale = await db_session.get(Sale, sale_id)
     assert persisted_sale is not None
+    assert persisted_sale.inventory_item_id is None
     assert persisted_sale.snapshot_brand_name == "History Brand"
     assert persisted_sale.snapshot_model_number == "HIST-01"
     assert persisted_sale.snapshot_serial_number == "SN-HIST-001"
+    assert await InventoryItemRepository(db_session).get_by_id(item_id) is None
 
     audit_rows = (
         (

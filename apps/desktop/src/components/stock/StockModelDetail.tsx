@@ -5,7 +5,7 @@ import type { Location } from '../../services/api/LocationService';
 import type { ProductModel } from '../../services/api/ProductModelService';
 import { TransferLocationDialog } from '../inventory/TransferLocationDialog';
 import { ProductImagePanel } from '../inventory/ProductImagePanel';
-import { canTransferStockLocation } from '../../lib/inventory';
+import { canTransferStockLocation, canDeleteInventorySerial } from '../../lib/inventory';
 import { buildStockModelSpecLines } from '../../lib/stockModelCard';
 import { splitModelNotes } from '../../lib/modelNotes';
 import { StockSerialRowActionsMenu } from './StockSerialRowActionsMenu';
@@ -17,6 +17,7 @@ interface StockModelDetailProps {
   permissions: string[];
   loading?: boolean;
   onTransfer: (itemId: string, locationId: number) => Promise<void>;
+  onDeleteSerial?: (itemId: string) => Promise<void>;
   actionLoading?: boolean;
   onEditModel?: () => void;
   editModelLabel?: string;
@@ -29,11 +30,14 @@ export function StockModelDetail({
   permissions,
   loading = false,
   onTransfer,
+  onDeleteSerial,
   actionLoading,
   onEditModel,
   editModelLabel = 'Edit model & price',
 }: StockModelDetailProps): JSX.Element {
   const canTransfer = canTransferStockLocation(permissions);
+  const canDelete = canDeleteInventorySerial(permissions) && Boolean(onDeleteSerial);
+  const showActions = canTransfer || canDelete;
   const available = units.filter((item) => item.status !== 'sold' && !item.is_archived);
   const specLines = buildStockModelSpecLines(model);
   const [menu, setMenu] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
@@ -177,7 +181,7 @@ export function StockModelDetail({
                   <th scope="col">Serial number</th>
                   <th scope="col">Color</th>
                   <th scope="col">Location</th>
-                  {canTransfer && (
+                  {showActions && (
                     <th scope="col" className="stock-detail__actions-col" aria-label="Actions" />
                   )}
                 </tr>
@@ -193,7 +197,7 @@ export function StockModelDetail({
                         {item.current_location_name}
                       </span>
                     </td>
-                    {canTransfer && (
+                    {showActions && (
                       <td className="stock-detail__actions-col">
                         <button
                           type="button"
@@ -222,9 +226,20 @@ export function StockModelDetail({
         <StockSerialRowActionsMenu
           item={menu.item}
           canTransfer={canTransfer}
+          canDelete={canDelete}
           anchorRect={menu.rect}
           onClose={() => setMenu(null)}
           onChangeLocation={(item) => setTransferItem(item)}
+          onDelete={(item) => {
+            if (
+              !window.confirm(
+                `Delete serial ${item.serial_number} from live stock?\n\nThis removes the unit from available inventory. Past sales for this serial (if any) are not changed — sold units cannot be deleted.`,
+              )
+            ) {
+              return;
+            }
+            void onDeleteSerial?.(item.id);
+          }}
         />
       )}
 

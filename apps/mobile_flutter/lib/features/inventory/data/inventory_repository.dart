@@ -91,6 +91,10 @@ class InventoryRepository {
     await _api.post('${ApiPaths.inventory}/$id/archive', data: const {}, parser: (_) => null);
   }
 
+  Future<void> deleteItem(String id) async {
+    await _api.delete('${ApiPaths.inventory}/$id', parser: (_) => null);
+  }
+
   Future<InventoryItem> restoreItem(String id) async {
     return _api.post(
       '${ApiPaths.inventory}/$id/restore',
