@@ -1,7 +1,7 @@
 name: webstudio_ims
 description: Official WEBSTUDIO IMS mobile client — Android primary, iOS compatible.
 publish_to: none
-version: 1.9.0+1
+version: 1.9.1+2
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
