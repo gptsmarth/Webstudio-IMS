@@ -27,7 +27,7 @@ from webstudio_backend.services.product_image_service import (
     validate_image_url,
     validate_product_image_upload,
 )
-from webstudio_backend.services.web_image_scraper import find_public_assets_dir
+from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
 
 router = APIRouter(prefix="/api/v1/product-images", tags=["product-images"])
 
@@ -42,7 +42,7 @@ def _serve_managed_asset(url: str) -> Response:
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    assets_root = find_public_assets_dir()
+    assets_root = resolve_managed_assets_dir(create=False)
     if assets_root is None:
         raise AppError(
             "NOT_FOUND",
@@ -171,7 +171,7 @@ async def upload_product_image(
             status_code=status.HTTP_400_BAD_REQUEST,
         ) from exc
 
-    assets_root = find_public_assets_dir()
+    assets_root = resolve_managed_assets_dir()
     if assets_root is None:
         raise AppError(
             "SERVICE_UNAVAILABLE",

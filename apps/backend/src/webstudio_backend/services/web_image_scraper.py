@@ -564,6 +564,38 @@ def find_public_assets_dir() -> Path | None:
     return None
 
 
+def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
+    """Resolve the writable root directory for server-managed assets.
+
+    Managed uploads (product images, brand logos) are served to clients under
+    ``/assets/...`` via the authenticated image proxy. Their on-disk home
+    differs by environment:
+
+    * Production / office servers set ``WEBSTUDIO_DATA_ROOT`` (e.g.
+      ``D:\\WEBSTUDIO-IMS``). Assets live under ``<data_root>/assets`` so they
+      persist outside the read-only application bundle and survive upgrades.
+      The application source tree is not present there, so the repo-relative
+      :func:`find_public_assets_dir` cannot be used.
+    * Dev / test leave the data root empty, so we fall back to the repository's
+      ``apps/desktop/public/assets`` (served by the Vite dev server), preserving
+      the previous behaviour exactly.
+
+    Returns ``None`` only when no writable location can be determined.
+    """
+    from webstudio_backend.core.config import get_settings
+
+    data_root = get_settings().webstudio_data_root.strip()
+    if data_root:
+        base = Path(data_root) / "assets"
+        if create:
+            try:
+                base.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return None
+        return base
+    return find_public_assets_dir()
+
+
 def _extension_for_content_type(content_type: str) -> str:
     mapping = {
         "image/jpeg": "jpg",
@@ -586,7 +618,7 @@ async def persist_product_image_file(
     if not normalized:
         return None
 
-    assets_root = find_public_assets_dir()
+    assets_root = resolve_managed_assets_dir()
     if assets_root is None:
         return normalized
 

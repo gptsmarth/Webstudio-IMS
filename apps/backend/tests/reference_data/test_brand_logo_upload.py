@@ -37,7 +37,7 @@ async def test_upload_brand_logo_stores_managed_asset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Redirect managed-asset storage to a temp dir so the repo tree stays clean.
-    monkeypatch.setattr(brands_router, "find_public_assets_dir", lambda: tmp_path)
+    monkeypatch.setattr(brands_router, "resolve_managed_assets_dir", lambda **_: tmp_path)
 
     brand_id = await _create_brand(api_client, main_admin_headers, "LogoBrand")
 
@@ -60,7 +60,7 @@ async def test_upload_brand_logo_rejects_non_image(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(brands_router, "find_public_assets_dir", lambda: tmp_path)
+    monkeypatch.setattr(brands_router, "resolve_managed_assets_dir", lambda **_: tmp_path)
     brand_id = await _create_brand(api_client, main_admin_headers, "BadLogoBrand")
 
     resp = await api_client.post(
@@ -78,7 +78,7 @@ async def test_upload_brand_logo_requires_edit_permission(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(brands_router, "find_public_assets_dir", lambda: tmp_path)
+    monkeypatch.setattr(brands_router, "resolve_managed_assets_dir", lambda **_: tmp_path)
     brand_id = await _create_brand(api_client, main_admin_headers, "RbacLogoBrand")
 
     resp = await api_client.post(
@@ -95,7 +95,7 @@ async def test_upload_brand_logo_missing_brand_is_404(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(brands_router, "find_public_assets_dir", lambda: tmp_path)
+    monkeypatch.setattr(brands_router, "resolve_managed_assets_dir", lambda **_: tmp_path)
     resp = await api_client.post(
         "/api/v1/brands/999999/logo",
         headers=main_admin_headers,

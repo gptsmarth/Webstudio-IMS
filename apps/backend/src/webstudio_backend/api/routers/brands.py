@@ -32,7 +32,7 @@ from webstudio_backend.infrastructure.repositories.brand_repository import Brand
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 from webstudio_backend.services.brand_deletion_service import BrandDeletionService
 from webstudio_backend.services.product_image_service import validate_product_image_upload
-from webstudio_backend.services.web_image_scraper import find_public_assets_dir
+from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
 
@@ -234,7 +234,7 @@ async def upload_brand_logo(
             status_code=status.HTTP_400_BAD_REQUEST,
         ) from exc
 
-    assets_root = find_public_assets_dir()
+    assets_root = resolve_managed_assets_dir()
     if assets_root is None:
         raise AppError(
             "SERVICE_UNAVAILABLE",
