@@ -53,6 +53,7 @@ from webstudio_backend.integrations.tally.purchase_normalization import (
     ACCESSORY_AUTO_SELECT_SCORE,
     ACCESSORY_SUGGEST_SCORE,
     accessory_match_score,
+    models_partial_match,
     normalize_model_number,
 )
 from webstudio_backend.services.inventory_service import InventoryService
@@ -231,25 +232,45 @@ class PurchaseImportService:
             raw_model, brand_name=brand.name, brand_short_name=brand.short_name
         )
         models = await self._models.list_all_for_brand(brand_id)
-        matches: list[MatchedModel] = []
+        exact: list[MatchedModel] = []
+        partial: list[MatchedModel] = []
         for model in models:
             candidate = normalize_model_number(
                 model.model_number, brand_name=brand.name, brand_short_name=brand.short_name
             )
-            if candidate and candidate == normalized:
-                matches.append(
-                    MatchedModel(
-                        id=model.id,
-                        model_number=model.model_number,
-                        model_name=model.model_name,
-                        category=model.category.value,
-                        is_active=model.status == ProductModelStatus.ACTIVE,
-                    )
-                )
+            if not candidate:
+                continue
+            if candidate == normalized:
+                kind = "exact"
+            elif models_partial_match(
+                raw_model,
+                model.model_number,
+                brand_name=brand.name,
+                brand_short_name=brand.short_name,
+            ):
+                # e.g. Tally "S3407QA-KP027WS" vs IMS "S3407QA-KP027WS(S3407QA)".
+                kind = "partial"
+            else:
+                continue
+            entry = MatchedModel(
+                id=model.id,
+                model_number=model.model_number,
+                model_name=model.model_name,
+                category=model.category.value,
+                is_active=model.status == ProductModelStatus.ACTIVE,
+                match_kind=kind,
+            )
+            (exact if kind == "exact" else partial).append(entry)
+        # Exact matches first so the UI lists them above the looser suggestions.
+        matches = exact + partial
+        # Auto-select ONLY a single unambiguous exact active match. Partial
+        # matches are surfaced as suggestions but the operator must confirm
+        # (or create a new model), so a suffix mismatch never silently reuses
+        # the wrong catalogue entry.
         auto = None
-        active_matches = [m for m in matches if m.is_active]
-        if len(active_matches) == 1:
-            auto = active_matches[0].id
+        active_exact = [m for m in exact if m.is_active]
+        if len(active_exact) == 1:
+            auto = active_exact[0].id
         return MatchModelResponse(
             normalized_model_number=normalized,
             matches=matches,

@@ -91,6 +91,47 @@ def models_match(
     return bool(left) and left == right
 
 
+# Minimum compacted length for one model number to be considered a partial
+# ("somewhere in between") match of another. Guards against short fragments
+# (e.g. "15", "PRO") matching broadly. Real model numbers comfortably exceed it.
+PARTIAL_MODEL_MIN_COMPACT_LEN = 5
+
+
+def models_partial_match(
+    raw_model: str,
+    ims_model_number: str,
+    *,
+    brand_name: str | None = None,
+    brand_short_name: str | None = None,
+) -> bool:
+    """True when one normalized model number contains the other (compact form).
+
+    This is a *suggestion-only* signal for the laptop model lookup — it is never
+    used to auto-select and never touches the Sales sync path. It exists so a
+    catalogue entry that carries an extra base-model suffix still surfaces, e.g.
+    IMS ``"S3407QA-KP027WS(S3407QA)"`` vs the Tally bill ``"S3407QA-KP027WS"``.
+
+    Both sides are compacted (spaces/punctuation removed) so ``(S3407QA)`` and
+    ``-`` never block the containment test. Exact matches return ``False`` here
+    (the caller reports those separately) and a minimum length guard prevents
+    tiny fragments from matching everything.
+    """
+    left = _compact(
+        normalize_model_number(raw_model, brand_name=brand_name, brand_short_name=brand_short_name)
+    )
+    right = _compact(
+        normalize_model_number(
+            ims_model_number, brand_name=brand_name, brand_short_name=brand_short_name
+        )
+    )
+    if not left or not right or left == right:
+        return False
+    shorter, longer = (left, right) if len(left) <= len(right) else (right, left)
+    if len(shorter) < PARTIAL_MODEL_MIN_COMPACT_LEN:
+        return False
+    return shorter in longer
+
+
 # ---------------------------------------------------------------------------
 # Accessory fuzzy matching (Purchase Import ACCESSORY lookup ONLY).
 #

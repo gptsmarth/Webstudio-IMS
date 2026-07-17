@@ -228,6 +228,7 @@ class MatchedModel extends Equatable {
     required this.modelName,
     required this.category,
     required this.isActive,
+    this.matchKind = 'exact',
   });
 
   final String id;
@@ -236,12 +237,20 @@ class MatchedModel extends Equatable {
   final String category;
   final bool isActive;
 
+  /// 'exact' — normalized model number matches exactly (auto-selectable).
+  /// 'partial' — one model number contains the other (a suggestion the operator
+  /// must confirm, e.g. an IMS entry with an extra base-model suffix).
+  final String matchKind;
+
+  bool get isPartial => matchKind == 'partial';
+
   factory MatchedModel.fromJson(Map<String, dynamic> json) => MatchedModel(
         id: json['id'] as String,
         modelNumber: json['model_number'] as String? ?? '',
         modelName: json['model_name'] as String? ?? '',
         category: json['category'] as String? ?? 'laptop',
         isActive: json['is_active'] as bool? ?? true,
+        matchKind: json['match_kind'] as String? ?? 'exact',
       );
 
   @override

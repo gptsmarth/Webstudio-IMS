@@ -82,6 +82,52 @@ async def test_match_model_auto_selects_existing_within_brand(
     assert data["auto_selected_model_id"] == str(product_model.id)
 
 
+async def test_match_model_surfaces_partial_suffix_match(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+) -> None:
+    """IMS entry carries an extra base-model suffix; the Tally bill does not.
+
+    The catalogue model "S3407QA-KP027WS(S3407QA)" must surface as a *partial*
+    suggestion for the bill value "S3407QA-KP027WS" — listed but NOT
+    auto-selected, so the operator can confirm it or still create a new model.
+    """
+    from decimal import Decimal
+
+    from webstudio_backend.infrastructure.database.enums import StorageType, StorageUnit
+    from webstudio_backend.infrastructure.repositories.product_model_repository import (
+        ProductModelRepository,
+    )
+
+    model = await ProductModelRepository(db_session).create(
+        brand_id=brand.id,
+        model_number="S3407QA-KP027WS(S3407QA)",
+        model_name="Vivobook S14",
+        cpu="Intel Core i5",
+        ram_gb=16,
+        storage_value=Decimal("512"),
+        storage_unit=StorageUnit.GB,
+        storage_type=StorageType.SSD,
+    )
+    await db_session.commit()
+
+    response = await api_client.post(
+        "/api/v1/purchase/match-model",
+        headers=main_admin_headers,
+        json={"brand_id": brand.id, "model_number": "ASUS S3407QA-KP027WS"},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["normalized_model_number"] == "S3407QA-KP027WS"
+    ids = {m["id"]: m for m in data["matches"]}
+    assert str(model.id) in ids
+    assert ids[str(model.id)]["match_kind"] == "partial"
+    # Partial matches are suggestions only — never auto-selected.
+    assert data["auto_selected_model_id"] is None
+
+
 async def test_import_existing_appends_and_sets_inventory_source(
     db_session: AsyncSession,
     api_client: AsyncClient,

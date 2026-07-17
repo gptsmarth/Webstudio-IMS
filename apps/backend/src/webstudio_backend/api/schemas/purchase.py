@@ -85,6 +85,10 @@ class MatchedModel(BaseModel):
     model_name: str
     category: str
     is_active: bool
+    # "exact"  — normalized model number matches exactly (auto-selectable).
+    # "partial" — one model number contains the other (suggestion only, e.g. an
+    #   IMS entry with an extra base-model suffix). Never auto-selected.
+    match_kind: str = "exact"
 
 
 class MatchModelResponse(BaseModel):

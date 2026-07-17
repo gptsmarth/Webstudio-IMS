@@ -71,6 +71,10 @@ export interface MatchedModel {
   model_name: string;
   category: string;
   is_active: boolean;
+  // 'exact' — normalized model number matches exactly (auto-selectable).
+  // 'partial' — one model number contains the other (a suggestion the operator
+  //   must confirm, e.g. an IMS entry with an extra base-model suffix).
+  match_kind?: 'exact' | 'partial';
 }
 
 export interface MatchModelResponse {

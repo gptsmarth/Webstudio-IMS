@@ -9,6 +9,7 @@ from webstudio_backend.integrations.tally.purchase_normalization import (
     ACCESSORY_SUGGEST_SCORE,
     accessory_match_score,
     models_match,
+    models_partial_match,
     normalize_model_number,
 )
 
@@ -53,6 +54,53 @@ def test_models_match_is_exact_after_normalization() -> None:
 
 def test_models_match_empty_is_false() -> None:
     assert not models_match("", "F1504FA-BQ2113WS", brand_name="ASUS")
+
+
+# --- Partial ("somewhere in between") model matching --------------------------
+
+
+def test_partial_match_ims_has_base_model_suffix() -> None:
+    # The reported case: Tally bill "S3407QA-KP027WS" vs IMS catalogue entry
+    # "S3407QA-KP027WS(S3407QA)". The bill value is contained in the IMS value.
+    assert models_partial_match(
+        "S3407QA-KP027WS",
+        "S3407QA-KP027WS(S3407QA)",
+        brand_name="ASUS",
+    )
+
+
+def test_partial_match_is_symmetric() -> None:
+    assert models_partial_match(
+        "S3407QA-KP027WS(S3407QA)",
+        "S3407QA-KP027WS",
+        brand_name="ASUS",
+    )
+
+
+def test_partial_match_exact_is_not_partial() -> None:
+    # Exact matches are reported by models_match, never as a partial suggestion.
+    assert not models_partial_match(
+        "ASUS F1504FA-BQ2113WS",
+        "F1504FA-BQ2113WS",
+        brand_name="ASUS",
+    )
+
+
+def test_partial_match_unrelated_is_false() -> None:
+    assert not models_partial_match(
+        "F1504FA-BQ2113WS",
+        "82XQ00W4IN",
+        brand_name="ASUS",
+    )
+
+
+def test_partial_match_short_fragment_guarded() -> None:
+    # A tiny shared fragment must not trigger a partial match.
+    assert not models_partial_match("15", "15-FD0456TU", brand_name="HP")
+
+
+def test_partial_match_empty_is_false() -> None:
+    assert not models_partial_match("", "S3407QA-KP027WS", brand_name="ASUS")
 
 
 # --- Accessory fuzzy matching -------------------------------------------------

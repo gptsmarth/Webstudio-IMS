@@ -361,6 +361,7 @@ export function PurchaseImportDialog({
                     {match?.matches.map((m) => (
                       <option key={m.id} value={m.id} disabled={!m.is_active}>
                         {m.model_number} — {m.model_name}
+                        {m.match_kind === 'partial' ? ' (possible match)' : ''}
                         {m.is_active ? '' : ' (archived)'}
                       </option>
                     ))}
@@ -373,7 +374,9 @@ export function PurchaseImportDialog({
                         ? 'Existing model found — new serial numbers will be appended. You can change the selection.'
                         : match.matches.length === 0
                           ? 'No existing model matched — create a new model.'
-                          : 'Select the matching model or create a new one.'}
+                          : match.matches.some((m) => m.match_kind === 'partial')
+                            ? 'Possible match(es) found — select one to append serials, or create a new model if it is a different model.'
+                            : 'Select the matching model or create a new one.'}
                     </p>
                   )}
                 </>

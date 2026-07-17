@@ -645,7 +645,11 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
             (m) => DropdownMenuItem(
               value: m.id,
               enabled: m.isActive,
-              child: Text('${m.modelNumber} — ${m.modelName}${m.isActive ? '' : ' (archived)'}'),
+              child: Text(
+                '${m.modelNumber} — ${m.modelName}'
+                '${m.isPartial ? ' (possible match)' : ''}'
+                '${m.isActive ? '' : ' (archived)'}',
+              ),
             ),
           ),
           const DropdownMenuItem(value: '__new__', child: Text('+ Create new model')),
@@ -677,7 +681,7 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
         const SizedBox(height: AppSpacing.xs),
         Text(
           'Normalized: ${match.normalizedModelNumber}. '
-          '${match.autoSelectedModelId != null ? 'Existing model found — new serial numbers will be appended.' : match.matches.isEmpty ? 'No existing model matched — create a new model.' : 'Select a model or create a new one.'}',
+          '${match.autoSelectedModelId != null ? 'Existing model found — new serial numbers will be appended.' : match.matches.isEmpty ? 'No existing model matched — create a new model.' : match.matches.any((m) => m.isPartial) ? 'Possible match(es) found — select one, or create a new model if it is different.' : 'Select a model or create a new one.'}',
           style: theme.textTheme.bodySmall,
         ),
       ],
