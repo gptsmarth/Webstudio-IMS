@@ -45,6 +45,8 @@ class _VoucherBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
+    final canIgnore = canImportPurchase(permissions) && detail.status != 'imported';
     return WorkspaceBody(
       alignTop: true,
       child: ListView(
@@ -56,6 +58,22 @@ class _VoucherBody extends ConsumerWidget {
                 child: Text('Purchase ${detail.voucherNumber}', style: theme.textTheme.titleMedium),
               ),
               PurchaseStatusChip(status: detail.status),
+              if (canIgnore)
+                IconButton(
+                  icon: const Icon(Icons.block_outlined, size: 20),
+                  tooltip: 'Ignore this purchase invoice',
+                  onPressed: () => confirmIgnorePurchase(
+                    context,
+                    ref,
+                    voucherId: detail.id,
+                    label: detail.voucherNumber,
+                    onDone: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),

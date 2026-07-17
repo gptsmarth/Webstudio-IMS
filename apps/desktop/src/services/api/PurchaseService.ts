@@ -118,6 +118,18 @@ export interface PurchaseImportResponse {
   existing_model: boolean;
 }
 
+export interface PurchaseIgnoreResponse {
+  voucher_id: number;
+  status: string;
+}
+
+export interface PurchaseBackfillResponse {
+  fetched: number;
+  new: number;
+  from_date: string;
+  to_date: string | null;
+}
+
 export class PurchaseService {
   static async listQueue(status?: string): Promise<PurchaseQueueItem[]> {
     LoggingService.debug('API', 'Fetching purchase queue');
@@ -158,5 +170,23 @@ export class PurchaseService {
       '/api/v1/purchase/import',
       data as unknown as Record<string, unknown>,
     );
+  }
+
+  static async ignoreVoucher(voucherId: number): Promise<PurchaseIgnoreResponse> {
+    LoggingService.info('API', 'Ignoring purchase voucher', { voucher_id: voucherId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<PurchaseIgnoreResponse>(`/api/v1/purchase/queue/${voucherId}/ignore`, {});
+  }
+
+  static async backfill(fromDate: string, toDate?: string): Promise<PurchaseBackfillResponse> {
+    LoggingService.info('API', 'Backfilling purchases from Tally', {
+      from_date: fromDate,
+      to_date: toDate ?? null,
+    });
+    const client = await ApiClientProvider.getClient();
+    return client.post<PurchaseBackfillResponse>('/api/v1/purchase/backfill', {
+      from_date: fromDate,
+      to_date: toDate ?? null,
+    });
   }
 }

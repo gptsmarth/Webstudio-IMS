@@ -74,6 +74,7 @@ class TallyPurchaseStatus(StrEnum):
     PENDING = "pending"
     PARTIALLY_IMPORTED = "partially_imported"
     IMPORTED = "imported"
+    IGNORED = "ignored"
 
 
 class NotificationType(StrEnum):

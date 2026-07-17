@@ -27,7 +27,7 @@ interface DashboardPageState {
   data: DashboardPageData;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { background?: boolean }) => Promise<void>;
   markNotificationRead: (id: number) => Promise<void>;
   resolveNotification: (id: number) => Promise<void>;
   triggerTallySync: () => Promise<void>;
@@ -87,67 +87,85 @@ export function useDashboardPage(permissions: string[] = []): DashboardPageState
     };
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const plan = dashboardFetchPlan(permissions);
-      const [
-        snapshot,
-        distribution,
-        activity,
-        notificationResult,
-        tallyDashboard,
-        apiHealth,
-        databaseHealth,
-      ] = await Promise.all([
-        plan.needsSnapshot ? DashboardService.getOperationsSnapshot() : Promise.resolve(null),
-        plan.needsDistribution ? DashboardService.getDistribution() : Promise.resolve(null),
-        plan.needsActivity ? DashboardService.getRecentActivity(12) : Promise.resolve([]),
-        plan.needsNotifications
-          ? NotificationService.listNotifications({ is_resolved: false, page_size: 8 })
-          : Promise.resolve({ items: [], total_items: 0 }),
-        plan.needsTally ? TallyService.getDashboard() : Promise.resolve(null),
-        plan.needsSystemHealth ? HealthService.getLive().catch(() => null) : Promise.resolve(null),
-        plan.needsSystemHealth ? HealthService.getReady().catch(() => null) : Promise.resolve(null),
-      ]);
+  const refresh = useCallback(
+    async (opts?: { background?: boolean }) => {
+      // Background refreshes (the periodic poll, in-place actions) must NOT flip
+      // `loading` — that swaps every widget for a skeleton and flickers the screen.
+      const background = opts?.background ?? false;
+      if (!background) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const plan = dashboardFetchPlan(permissions);
+        const [
+          snapshot,
+          distribution,
+          activity,
+          notificationResult,
+          tallyDashboard,
+          apiHealth,
+          databaseHealth,
+        ] = await Promise.all([
+          plan.needsSnapshot ? DashboardService.getOperationsSnapshot() : Promise.resolve(null),
+          plan.needsDistribution ? DashboardService.getDistribution() : Promise.resolve(null),
+          plan.needsActivity ? DashboardService.getRecentActivity(12) : Promise.resolve([]),
+          plan.needsNotifications
+            ? NotificationService.listNotifications({ is_resolved: false, page_size: 8 })
+            : Promise.resolve({ items: [], total_items: 0 }),
+          plan.needsTally ? TallyService.getDashboard() : Promise.resolve(null),
+          plan.needsSystemHealth
+            ? HealthService.getLive().catch(() => null)
+            : Promise.resolve(null),
+          plan.needsSystemHealth
+            ? HealthService.getReady().catch(() => null)
+            : Promise.resolve(null),
+        ]);
 
-      if (!mountedRef.current) return;
+        if (!mountedRef.current) return;
 
-      const unreadCount = notificationResult.items.filter((item) => !item.is_read).length;
+        const unreadCount = notificationResult.items.filter((item) => !item.is_read).length;
 
-      setData({
-        snapshot,
-        distribution,
-        activity,
-        notifications: notificationResult.items,
-        unreadCount: notificationResult.total_items || unreadCount,
-        tally: TallyService.toSummary(tallyDashboard),
-        apiHealth,
-        databaseHealth,
-      });
-    } catch (err: unknown) {
-      if (!mountedRef.current) return;
-      const message = err as { response?: { data?: { detail?: string } }; message?: string };
-      setError(
-        message.response?.data?.detail ?? message.message ?? 'Unable to load dashboard data.',
-      );
-      setData(EMPTY_DATA);
-    } finally {
-      if (mountedRef.current) setLoading(false);
-    }
-  }, [permissions]);
+        setData({
+          snapshot,
+          distribution,
+          activity,
+          notifications: notificationResult.items,
+          unreadCount: notificationResult.total_items || unreadCount,
+          tally: TallyService.toSummary(tallyDashboard),
+          apiHealth,
+          databaseHealth,
+        });
+        // A successful background poll clears any stale error banner.
+        if (background) setError(null);
+      } catch (err: unknown) {
+        if (!mountedRef.current) return;
+        // Never blank the screen on a transient background-poll failure —
+        // keep the last good data and stay silent; only initial loads surface it.
+        if (!background) {
+          const message = err as { response?: { data?: { detail?: string } }; message?: string };
+          setError(
+            message.response?.data?.detail ?? message.message ?? 'Unable to load dashboard data.',
+          );
+          setData(EMPTY_DATA);
+        }
+      } finally {
+        if (!background && mountedRef.current) setLoading(false);
+      }
+    },
+    [permissions],
+  );
 
   useEffect(() => {
     void refresh();
-    const timer = window.setInterval(() => void refresh(), REFRESH_MS);
+    const timer = window.setInterval(() => void refresh({ background: true }), REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
 
   const markNotificationRead = useCallback(
     async (id: number) => {
       await NotificationService.markRead(id);
-      await refresh();
+      await refresh({ background: true });
     },
     [refresh],
   );
@@ -155,7 +173,7 @@ export function useDashboardPage(permissions: string[] = []): DashboardPageState
   const resolveNotification = useCallback(
     async (id: number) => {
       await NotificationService.resolve(id);
-      await refresh();
+      await refresh({ background: true });
     },
     [refresh],
   );
@@ -164,7 +182,7 @@ export function useDashboardPage(permissions: string[] = []): DashboardPageState
     setSyncingTally(true);
     try {
       await TallyService.triggerSync();
-      await refresh();
+      await refresh({ background: true });
     } finally {
       setSyncingTally(false);
     }

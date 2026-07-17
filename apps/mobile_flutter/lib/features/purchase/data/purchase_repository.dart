@@ -60,6 +60,28 @@ class PurchaseRepository {
       parser: (json) => PurchaseImportResult.fromJson(asJsonMap(json)),
     );
   }
+
+  Future<String> ignoreVoucher(int voucherId) async {
+    return _api.post(
+      ApiPaths.purchaseIgnore(voucherId),
+      data: const <String, dynamic>{},
+      parser: (json) => asJsonMap(json)['status'] as String? ?? 'ignored',
+    );
+  }
+
+  Future<PurchaseBackfillResult> backfill({
+    required String fromDate,
+    String? toDate,
+  }) async {
+    return _api.post(
+      ApiPaths.purchaseBackfill,
+      data: {
+        'from_date': fromDate,
+        if (toDate != null) 'to_date': toDate,
+      },
+      parser: (json) => PurchaseBackfillResult.fromJson(asJsonMap(json)),
+    );
+  }
 }
 
 final purchaseRepositoryProvider = Provider<PurchaseRepository>((ref) {

@@ -18,6 +18,7 @@ from webstudio_backend.api.schemas.purchase import (
     MatchAccessoryResponse,
     MatchedModel,
     MatchModelResponse,
+    PurchaseIgnoreResponse,
     PurchaseImportRequest,
     PurchaseImportResponse,
     PurchaseModelGroup,
@@ -317,6 +318,24 @@ class PurchaseImportService:
         )
 
     # ---- Import (transactional) -------------------------------------------
+
+    async def ignore_voucher(self, voucher_id: int) -> PurchaseIgnoreResponse:
+        """Dismiss a fetched purchase voucher from the review queue.
+
+        Tombstoned (status=ignored, row retained) so the same Tally voucher is
+        not re-fetched on the next sync. Fully imported vouchers cannot be
+        ignored (nothing left to dismiss)."""
+        voucher = await self._require_voucher(voucher_id)
+        if voucher.status == TallyPurchaseStatus.IGNORED:
+            return PurchaseIgnoreResponse(voucher_id=voucher.id, status=voucher.status.value)
+        if voucher.status == TallyPurchaseStatus.IMPORTED:
+            raise AppError(
+                "ALREADY_IMPORTED",
+                "This purchase is already fully imported and cannot be ignored.",
+                status_code=409,
+            )
+        await self._purchase.ignore_voucher(voucher)
+        return PurchaseIgnoreResponse(voucher_id=voucher.id, status=voucher.status.value)
 
     async def import_group(
         self, request: PurchaseImportRequest, *, actor: AuditActor

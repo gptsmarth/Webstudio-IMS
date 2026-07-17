@@ -8,6 +8,8 @@ export interface Brand {
   logo_filename: string | null;
   display_order: number;
   is_active: boolean;
+  /** EAN-as-serial mode: units of this brand may share a serial (the EAN). */
+  allow_duplicate_serials: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -18,6 +20,7 @@ export interface CreateBrandRequest {
   logo_filename?: string | null;
   display_order?: number;
   is_active?: boolean;
+  allow_duplicate_serials?: boolean;
 }
 
 export interface UpdateBrandRequest {
@@ -26,6 +29,7 @@ export interface UpdateBrandRequest {
   logo_filename?: string | null;
   display_order?: number;
   is_active?: boolean;
+  allow_duplicate_serials?: boolean;
 }
 
 export class BrandService {

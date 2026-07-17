@@ -31,6 +31,7 @@ export function BrandFormDialog({
   const [logoManuallySet, setLogoManuallySet] = useState(false);
   const [displayOrder, setDisplayOrder] = useState('0');
   const [isActive, setIsActive] = useState(true);
+  const [allowDuplicateSerials, setAllowDuplicateSerials] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function BrandFormDialog({
     setLogoManuallySet(Boolean(brand?.logo_filename));
     setDisplayOrder(String(brand?.display_order ?? 0));
     setIsActive(brand?.is_active ?? true);
+    setAllowDuplicateSerials(brand?.allow_duplicate_serials ?? false);
     setError(null);
   }, [open, brand]);
 
@@ -69,6 +71,7 @@ export function BrandFormDialog({
         logo_filename: resolvedLogo,
         display_order: Number(displayOrder) || 0,
         is_active: isActive,
+        allow_duplicate_serials: allowDuplicateSerials,
       });
       onClose();
     } catch (err: unknown) {
@@ -177,6 +180,21 @@ export function BrandFormDialog({
             />
             <span>Active</span>
           </label>
+          <div className="cat-field cat-field--full">
+            <label className="cat-field--checkbox">
+              <input
+                type="checkbox"
+                checked={allowDuplicateSerials}
+                onChange={(e) => setAllowDuplicateSerials(e.target.checked)}
+              />
+              <span>EAN-as-serial (allow duplicate serial numbers)</span>
+            </label>
+            <p className="cat-logo-picker__hint">
+              For accessory brands where every unit of a model shares the same EAN. Enter the EAN
+              once with a quantity when adding stock. Leave off for laptops and serial-tracked
+              products (the default).
+            </p>
+          </div>
           {error && <p className="cat-dialog__error cat-dialog__error--full">{error}</p>}
         </div>
         <footer className="cat-dialog__footer">

@@ -219,6 +219,9 @@ export function PurchaseImportDialog({
         open
         brandId={brandId}
         brandName={brandName}
+        allowDuplicateSerials={
+          brands.find((b) => b.id === brandId)?.allow_duplicate_serials ?? false
+        }
         locations={locations}
         productModels={brandModels}
         loading={submitting}

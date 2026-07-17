@@ -34,6 +34,11 @@ interface AddAccessoryWizardProps {
   onClose: () => void;
   onConfirm: (payload: AddLaptopWizardRequest) => Promise<void>;
   /**
+   * EAN-as-serial brand: enter the shared EAN once with a quantity instead of a
+   * serial per unit. All created units share the EAN. Default false (normal).
+   */
+  allowDuplicateSerials?: boolean;
+  /**
    * Optional prepopulation used by the Purchase Import flow (reuse, additive).
    * When omitted the wizard behaves exactly as before (manual Add accessory).
    */
@@ -73,6 +78,7 @@ export function AddAccessoryWizard({
   loading,
   onClose,
   onConfirm,
+  allowDuplicateSerials = false,
   initialIdentifier,
   initialIdentifierType,
   initialModelName,
@@ -105,6 +111,8 @@ export function AddAccessoryWizard({
     },
   ]);
   const [status, setStatus] = useState<InventoryStatus>('available');
+  // EAN-as-serial mode: the single EAN shared by every unit of this model.
+  const [sharedSerial, setSharedSerial] = useState('');
   const [colorOptions, setColorOptions] = useState('');
   const [description, setDescription] = useState('');
   const [specNotes, setSpecNotes] = useState('');
@@ -156,6 +164,7 @@ export function AddAccessoryWizard({
           ],
     );
     setStatus('available');
+    setSharedSerial(allowDuplicateSerials ? (seededSerials[0] ?? '') : '');
     setColorOptions('');
     setDescription('');
     setSpecNotes('');
@@ -366,14 +375,45 @@ export function AddAccessoryWizard({
   };
 
   const submit = async () => {
-    const validUnits = units
-      .filter((unit) => unit.serial_number.trim() && unit.current_location_id)
-      .map((unit) => ({
-        serial_number: unit.serial_number.trim(),
-        current_location_id: unit.current_location_id,
+    let validUnits: {
+      serial_number: string;
+      current_location_id: number;
+      color: string;
+      purchase_price: number | null;
+    }[];
+
+    if (allowDuplicateSerials) {
+      // EAN-as-serial: one shared EAN across `quantity` units, one location/price.
+      const ean = sharedSerial.trim();
+      const quantity = Math.max(1, Math.min(50, unitCount));
+      const locationId = units[0]?.current_location_id || locations[0]?.id || 0;
+      const price = units[0]?.purchase_price.trim()
+        ? parsePriceInput(units[0].purchase_price)
+        : null;
+      if (!ean) {
+        setError('Enter the EAN shared by every unit of this model.');
+        return;
+      }
+      if (!locationId) {
+        setError('Select a location.');
+        return;
+      }
+      validUnits = Array.from({ length: quantity }, () => ({
+        serial_number: ean,
+        current_location_id: locationId,
         color: defaultUnitColorFromOptions(colorOptions),
-        purchase_price: unit.purchase_price.trim() ? parsePriceInput(unit.purchase_price) : null,
+        purchase_price: price,
       }));
+    } else {
+      validUnits = units
+        .filter((unit) => unit.serial_number.trim() && unit.current_location_id)
+        .map((unit) => ({
+          serial_number: unit.serial_number.trim(),
+          current_location_id: unit.current_location_id,
+          color: defaultUnitColorFromOptions(colorOptions),
+          purchase_price: unit.purchase_price.trim() ? parsePriceInput(unit.purchase_price) : null,
+        }));
+    }
 
     if (validUnits.length === 0) {
       setError('Enter at least one serial number and location.');
@@ -727,115 +767,164 @@ export function AddAccessoryWizard({
                 <option value="available">Available</option>
                 <option value="received">Received</option>
               </select>
-              <div className="add-laptop-wizard__units">
-                <div className="add-laptop-wizard__unit-head" aria-hidden>
-                  <span>Serial number</span>
-                  <span>Location</span>
-                  <span>Purchase price</span>
-                  <span />
-                </div>
-                {units.length > 1 && (
-                  <div className="add-laptop-wizard__apply-all">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={!units[0]?.current_location_id}
-                      onClick={() =>
-                        setUnits((current) => {
-                          const first = current[0];
-                          if (!first) return current;
-                          return current.map((row) => ({
-                            ...row,
-                            current_location_id: first.current_location_id,
-                          }));
-                        })
-                      }
-                    >
-                      Apply first location to all
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={!units[0]?.purchase_price.trim()}
-                      onClick={() =>
-                        setUnits((current) => {
-                          const first = current[0];
-                          if (!first) return current;
-                          return current.map((row) => ({
-                            ...row,
-                            purchase_price: first.purchase_price,
-                          }));
-                        })
-                      }
-                    >
-                      Apply first purchase price to all
-                    </button>
-                  </div>
-                )}
-                {units.map((unit, index) => (
-                  <div
-                    key={index}
-                    className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices"
+              {allowDuplicateSerials ? (
+                <div className="add-laptop-wizard__units">
+                  <label className="form-label">EAN (shared by all units)</label>
+                  <input
+                    className="input col-mono"
+                    value={sharedSerial}
+                    onChange={(event) => setSharedSerial(event.target.value)}
+                    placeholder="e.g. 8901234567890"
+                  />
+                  <label className="form-label">Location</label>
+                  <select
+                    className="input"
+                    value={units[0]?.current_location_id ?? 0}
+                    onChange={(event) =>
+                      setUnits((current) =>
+                        current.map((row, index) =>
+                          index === 0
+                            ? { ...row, current_location_id: Number(event.target.value) }
+                            : row,
+                        ),
+                      )
+                    }
                   >
-                    <input
-                      className="input col-mono"
-                      value={unit.serial_number}
-                      onChange={(event) =>
-                        setUnits((current) =>
-                          current.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, serial_number: event.target.value }
-                              : row,
-                          ),
-                        )
-                      }
-                      placeholder="Serial"
-                    />
-                    <select
-                      className="input"
-                      value={unit.current_location_id}
-                      onChange={(event) =>
-                        setUnits((current) =>
-                          current.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, current_location_id: Number(event.target.value) }
-                              : row,
-                          ),
-                        )
-                      }
-                    >
-                      {locations.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="input"
-                      value={unit.purchase_price}
-                      onChange={(event) =>
-                        setUnits((current) =>
-                          current.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, purchase_price: event.target.value }
-                              : row,
-                          ),
-                        )
-                      }
-                      placeholder="Optional"
-                    />
-                    <button
-                      type="button"
-                      className="app-toolbar-icon-btn"
-                      aria-label="Remove unit"
-                      disabled={units.length <= 1}
-                      onClick={() => removeUnit(index)}
-                    >
-                      <Trash2 size={14} aria-hidden />
-                    </button>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="form-label">Purchase price</label>
+                  <input
+                    className="input"
+                    value={units[0]?.purchase_price ?? ''}
+                    onChange={(event) =>
+                      setUnits((current) =>
+                        current.map((row, index) =>
+                          index === 0 ? { ...row, purchase_price: event.target.value } : row,
+                        ),
+                      )
+                    }
+                    placeholder="Optional — applies to all units"
+                  />
+                  <p className="add-laptop-wizard__hint">
+                    All {Math.max(1, unitCount)} unit(s) will be created sharing this EAN as their
+                    serial. Tally deducts stock by matching this EAN and the model number.
+                  </p>
+                </div>
+              ) : (
+                <div className="add-laptop-wizard__units">
+                  <div className="add-laptop-wizard__unit-head" aria-hidden>
+                    <span>Serial number</span>
+                    <span>Location</span>
+                    <span>Purchase price</span>
+                    <span />
                   </div>
-                ))}
-              </div>
+                  {units.length > 1 && (
+                    <div className="add-laptop-wizard__apply-all">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!units[0]?.current_location_id}
+                        onClick={() =>
+                          setUnits((current) => {
+                            const first = current[0];
+                            if (!first) return current;
+                            return current.map((row) => ({
+                              ...row,
+                              current_location_id: first.current_location_id,
+                            }));
+                          })
+                        }
+                      >
+                        Apply first location to all
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!units[0]?.purchase_price.trim()}
+                        onClick={() =>
+                          setUnits((current) => {
+                            const first = current[0];
+                            if (!first) return current;
+                            return current.map((row) => ({
+                              ...row,
+                              purchase_price: first.purchase_price,
+                            }));
+                          })
+                        }
+                      >
+                        Apply first purchase price to all
+                      </button>
+                    </div>
+                  )}
+                  {units.map((unit, index) => (
+                    <div
+                      key={index}
+                      className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices"
+                    >
+                      <input
+                        className="input col-mono"
+                        value={unit.serial_number}
+                        onChange={(event) =>
+                          setUnits((current) =>
+                            current.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? { ...row, serial_number: event.target.value }
+                                : row,
+                            ),
+                          )
+                        }
+                        placeholder="Serial"
+                      />
+                      <select
+                        className="input"
+                        value={unit.current_location_id}
+                        onChange={(event) =>
+                          setUnits((current) =>
+                            current.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? { ...row, current_location_id: Number(event.target.value) }
+                                : row,
+                            ),
+                          )
+                        }
+                      >
+                        {locations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input"
+                        value={unit.purchase_price}
+                        onChange={(event) =>
+                          setUnits((current) =>
+                            current.map((row, rowIndex) =>
+                              rowIndex === index
+                                ? { ...row, purchase_price: event.target.value }
+                                : row,
+                            ),
+                          )
+                        }
+                        placeholder="Optional"
+                      />
+                      <button
+                        type="button"
+                        className="app-toolbar-icon-btn"
+                        aria-label="Remove unit"
+                        disabled={units.length <= 1}
+                        onClick={() => removeUnit(index)}
+                      >
+                        <Trash2 size={14} aria-hidden />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="add-laptop-wizard__nav">
                 <button
                   type="button"

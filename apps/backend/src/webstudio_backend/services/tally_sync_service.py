@@ -179,6 +179,49 @@ class TallySyncService:
         diagnostics = await TallyConnectivityService(self._session).test_connection()
         return diagnostics.reachable
 
+    async def backfill_purchases(
+        self, *, from_date: date, to_date: date | None = None
+    ) -> dict[str, int]:
+        """Read-only historical fetch of PURCHASE vouchers into the review queue.
+
+        Independent of the Sales pipeline: never advances the GUID watermark,
+        never processes sales, and never creates inventory. Idempotent by
+        voucher GUID (already-seen purchases are only touched). Raises
+        ``TallyConnectionError`` when the workstation is unreachable.
+        """
+        _, _, company_name, _ = await self.get_connection_config()
+        company_sync = await self._company_sync.get_or_create(company_name)
+
+        connectivity = TallyConnectivityService(self._session)
+        diagnostics = await connectivity.ensure_workstation_reachable(company_name=company_name)
+        if not diagnostics.reachable:
+            raise TallyConnectionError(
+                diagnostics.user_message,
+                user_message=diagnostics.user_message,
+            )
+        client = await connectivity.build_client_for_sync(diagnostics)
+
+        exports = await client.export_monitored_voucher_types(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        vouchers: list[TallyVoucher] = []
+        for xml_text in exports.values():
+            vouchers.extend(parse_vouchers_xml(xml_text))
+
+        purchase_vouchers = [
+            voucher for voucher in vouchers if voucher.voucher_type in PURCHASE_VOUCHER_TYPES
+        ]
+        guids = [voucher.guid for voucher in purchase_vouchers]
+        existing_before = await self._purchase.count_existing_guids(company_sync.id, guids)
+        await self._project_purchase_queue(vouchers, company_sync)
+        unique = len(set(guids))
+        return {
+            "fetched": len(purchase_vouchers),
+            "new": max(0, unique - existing_before),
+        }
+
     async def run_sync(
         self, *, correlation_id: str, triggered_by_user_id: int | None = None
     ) -> TallySyncResult:
@@ -859,6 +902,24 @@ class TallySyncService:
 
         matches = await self._inventory.find_all_by_serial_number(normalized)
 
+        # EAN-as-serial pool — matched unit(s) belong to a duplicate-serial (EAN)
+        # brand. Treat this line as a QUANTITY sale from the shared pool: deduct
+        # `quantity` available units FIFO. Non-shared (normal) brands never enter
+        # this branch, so the unique-serial path below is unchanged.
+        if any(match.serial_is_shared for match in matches):
+            return await self._process_shared_ean_sale(
+                voucher=voucher,
+                line=line,
+                line_row=line_row,
+                invoice_id=invoice_id,
+                company_name=company_name,
+                mapped_location_id=mapped_location_id,
+                extracted=extracted,
+                normalized=normalized,
+                stats=stats,
+                counters=counters,
+            )
+
         # CASE D — duplicate serials in IMS
         if len(matches) > 1:
             reason = (
@@ -1146,6 +1207,256 @@ class TallySyncService:
         stats["sales"] += 1
         counters.sales_created += 1
         return outcome
+
+    @staticmethod
+    def _parse_line_quantity(raw: str | None) -> int:
+        """Leading integer quantity from a Tally qty string (e.g. '5 Nos' -> 5)."""
+        if not raw:
+            return 1
+        digits = ""
+        for char in raw.strip():
+            if char.isdigit():
+                digits += char
+            elif char in {".", ","} and digits:
+                break  # stop at decimal — whole units only
+            elif digits:
+                break
+        if not digits:
+            return 1
+        try:
+            value = int(digits)
+        except ValueError:
+            return 1
+        return value if value > 0 else 1
+
+    async def _process_shared_ean_sale(
+        self,
+        *,
+        voucher: TallyVoucher,
+        line: TallyInventoryLine,
+        line_row,
+        invoice_id: int,
+        company_name: str,
+        mapped_location_id: int | None,
+        extracted: str | None,
+        normalized: str,
+        stats: dict[str, int],
+        counters: TallySyncCounters,
+    ) -> TallyLineOutcome:
+        """Deduct a quantity of shared-EAN units (FIFO) for one Tally sales line.
+
+        The invoice line carries the EAN (as the serial) and a billed quantity N.
+        We sell up to N AVAILABLE units of the shared pool, oldest first. A
+        shortfall (fewer available than billed) completes the sale for what exists
+        and flags review — it never blocks or double-sells (each unit uses a
+        per-unit idempotency key and the whole voucher runs in one savepoint).
+        """
+        quantity = self._parse_line_quantity(line.quantity)
+        units = await self._inventory.find_available_shared_units_fifo(
+            serial_number=normalized,
+            limit=quantity,
+        )
+
+        # No available units — everything for this EAN is already sold. Block the
+        # (probable duplicate) sale and flag for review, mirroring CASE E.
+        if not units:
+            reason = (
+                f"EAN {normalized} has no available units in IMS for the billed "
+                f"quantity {quantity} — review required (no inventory change)."
+            )
+            await self._processed_lines.complete_line(
+                line_row,
+                outcome=TallyLineOutcome.REVIEW_REQUIRED_ALREADY_SOLD,
+                match_result="ean_pool_exhausted",
+                decision="review_required",
+                decision_reason=reason,
+                review_required=True,
+            )
+            await self._decision_logs.record(
+                invoice_id=invoice_id,
+                line_id=line_row.id,
+                voucher_guid=voucher.guid,
+                line_index=line.line_index,
+                serial_source=line.serial_source,
+                extracted_serial=extracted,
+                normalized_serial=normalized,
+                inventory_item_id=None,
+                match_result="ean_pool_exhausted",
+                decision="review_required",
+                reason=reason,
+            )
+            await self._notifications.create_notification(
+                notification_type=NotificationType.DUPLICATE_SALE,
+                severity=NotificationSeverity.WARNING,
+                title="EAN pool exhausted",
+                message=reason,
+                category=NotificationCategory.TALLY_SYNC,
+                invoice_number=voucher.printed_invoice_number,
+                tally_company_name=company_name,
+                tally_voucher_number=voucher.voucher_number,
+                voucher_type=voucher.voucher_type,
+                customer_name=voucher.party_name,
+                serial_number=normalized,
+                product_model_number=line.stock_item_name,
+            )
+            stats["completed"] += 1
+            stats["review_required"] += 1
+            return TallyLineOutcome.REVIEW_REQUIRED_ALREADY_SOLD
+
+        shortfall = quantity - len(units)
+
+        # Verify the invoice model against the resolved pool model once (all units
+        # share a model). Mismatch still sells but flags review, like CASE B.
+        first_detail = await self._inventory.get_detail(units[0].id)
+        ims_label = ""
+        if first_detail:
+            ims_label = self._inventory_catalog_label(
+                first_detail.brand.name,
+                model_name=first_detail.product_model.model_name,
+                model_number=first_detail.product_model.model_number,
+                part_number=first_detail.product_model.part_number,
+            )
+        model_mismatch = bool(ims_label) and not catalog_model_matches_invoice(
+            ims_label, line.stock_item_name
+        )
+        review_required = model_mismatch or shortfall > 0
+
+        # Per-unit sale amounts = line total split across the BILLED quantity.
+        sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(line)
+        if sale_amount_inclusive is None:
+            sale_amount_inclusive = resolve_inventory_line_sale_amount(line, voucher)
+        divisor = quantity if quantity > 0 else 1
+        per_unit_incl = self._split_amount(sale_amount_inclusive, divisor)
+        per_unit_excl = self._split_amount(sale_amount_excluding_gst, divisor)
+
+        sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
+        actor = AuditActor.system(display_name="Tally Sync", role="system")
+        sold_ids: list[uuid.UUID] = []
+        last_sale_id: int | None = None
+
+        for unit in units:
+            detail = await self._inventory.get_detail(unit.id)
+            old_status = unit.status
+            unit.status = InventoryStatus.SOLD
+            if mapped_location_id is not None:
+                unit.current_location_id = mapped_location_id
+            await self._session.flush()
+
+            snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
+            sale = await self._sales.create_tally(
+                inventory_item_id=unit.id,
+                sold_at=sold_at,
+                printed_invoice_number=voucher.printed_invoice_number,
+                internal_voucher_number=voucher.voucher_number,
+                customer_name=voucher.party_name,
+                payment_mode=voucher.payment_mode,
+                tally_company_name=company_name,
+                tally_voucher_guid=voucher.guid,
+                tally_master_id=voucher.master_id,
+                tally_voucher_type=voucher.voucher_type,
+                mapped_location_id=mapped_location_id,
+                notes=voucher.narration,
+                idempotency_key=f"{voucher.guid}:{unit.id}",
+                snapshot=snapshot,
+                sale_amount=per_unit_incl,
+                sale_amount_excluding_gst=per_unit_excl,
+                review_required=review_required,
+                review_reason=None,
+                invoice_model_name=line.stock_item_name,
+                ims_model_name=ims_label or None,
+                serial_source=line.serial_source,
+            )
+            last_sale_id = sale.id
+            sold_ids.append(unit.id)
+            await self._recorder.record_inventory_status_change(
+                unit,
+                old_status=old_status,
+                new_status=InventoryStatus.SOLD,
+                actor=actor,
+                source=AuditSource.TALLY_SYNC,
+                extra_new_value={
+                    "printed_invoice_number": voucher.printed_invoice_number,
+                    "tally_voucher_number": voucher.voucher_number,
+                    "sale_id": sale.id,
+                    "ean_pool": True,
+                },
+            )
+            await self._recorder.record_system_action(
+                entity_type="inventory_item",
+                entity_id=str(unit.id),
+                description=(f"EAN unit sold via Tally sync ({voucher.printed_invoice_number})"),
+                inventory_item_id=unit.id,
+                source=AuditSource.TALLY_SYNC,
+            )
+
+        reason_parts = [f"EAN {normalized}: sold {len(units)} unit(s) FIFO."]
+        if shortfall > 0:
+            reason_parts.append(
+                f"Billed {quantity} but only {len(units)} available — "
+                f"{shortfall} unit(s) short; review required."
+            )
+        if model_mismatch:
+            reason_parts.append(
+                f"Invoice model '{line.stock_item_name}' differs from IMS model " f"'{ims_label}'."
+            )
+        decision_reason = " ".join(reason_parts)
+        outcome = (
+            TallyLineOutcome.SALE_APPLIED_WITH_REVIEW
+            if review_required
+            else TallyLineOutcome.SALE_APPLIED
+        )
+        await self._processed_lines.complete_line(
+            line_row,
+            outcome=outcome,
+            inventory_item_id=sold_ids[0],
+            match_result="ean_pool_match",
+            decision="sale_applied_with_review" if review_required else "sale_applied",
+            decision_reason=decision_reason,
+            ims_model_name=ims_label or None,
+            sale_id=last_sale_id,
+            review_required=review_required,
+        )
+        await self._decision_logs.record(
+            invoice_id=invoice_id,
+            line_id=line_row.id,
+            voucher_guid=voucher.guid,
+            line_index=line.line_index,
+            serial_source=line.serial_source,
+            extracted_serial=extracted,
+            normalized_serial=normalized,
+            inventory_item_id=sold_ids[0],
+            match_result="ean_pool_match",
+            decision="sale_applied_with_review" if review_required else "sale_applied",
+            reason=decision_reason,
+        )
+        if review_required:
+            await self._notifications.create_notification(
+                notification_type=NotificationType.PRODUCT_MODEL_MISMATCH,
+                severity=NotificationSeverity.INFO,
+                title="EAN sale completed with review required",
+                message=decision_reason,
+                category=NotificationCategory.TALLY_SYNC,
+                invoice_number=voucher.printed_invoice_number,
+                tally_company_name=company_name,
+                tally_voucher_number=voucher.voucher_number,
+                voucher_type=voucher.voucher_type,
+                customer_name=voucher.party_name,
+                serial_number=normalized,
+                product_model_number=line.stock_item_name,
+                inventory_item_id=sold_ids[0],
+            )
+            stats["review_required"] += 1
+
+        stats["completed"] += 1
+        stats["sales"] += len(units)
+        counters.sales_created += len(units)
+        return outcome
+
+    @staticmethod
+    def _split_amount(total: Decimal | float | None, divisor: int) -> Decimal | None:
+        if total is None or divisor <= 0:
+            return None if total is None else Decimal(str(total))
+        return (Decimal(str(total)) / Decimal(divisor)).quantize(Decimal("0.01"))
 
     async def _complete_additional_product(
         self,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Ban, CalendarClock, RefreshCw, X } from 'lucide-react';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { PurchaseImportDialog } from '../../components/purchase/PurchaseImportDialog';
 import { parseApiError } from '../../lib/apiError';
@@ -37,9 +37,16 @@ function StatusBadge({ status }: { status: string }): JSX.Element {
   return <span className={cls}>{STATUS_LABELS[status] ?? status}</span>;
 }
 
+function defaultBackfillFrom(): string {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  return start.toISOString().slice(0, 10);
+}
+
 export function PurchasePage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const canImport = session?.permissions?.includes(P.purchase.import) ?? false;
+  const canView = session?.permissions?.includes(P.purchase.view) ?? false;
   const [items, setItems] = useState<PurchaseQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +54,12 @@ export function PurchasePage(): JSX.Element {
   const [detail, setDetail] = useState<PurchaseVoucherDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [importGroup, setImportGroup] = useState<PurchaseModelGroup | null>(null);
+  const [ignoreTarget, setIgnoreTarget] = useState<{ id: number; label: string } | null>(null);
+  const [ignoring, setIgnoring] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
+  const [backfilling, setBackfilling] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -64,6 +77,42 @@ export function PurchasePage(): JSX.Element {
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  const confirmIgnore = useCallback(async () => {
+    if (!ignoreTarget) return;
+    setIgnoring(true);
+    setError(null);
+    try {
+      await PurchaseService.ignoreVoucher(ignoreTarget.id);
+      setNotice(`Purchase ${ignoreTarget.label} was removed from the queue.`);
+      setIgnoreTarget(null);
+      setDetail(null);
+      await loadQueue();
+    } catch (err) {
+      setError(parseApiError(err, 'Failed to ignore the purchase voucher.'));
+    } finally {
+      setIgnoring(false);
+    }
+  }, [ignoreTarget, loadQueue]);
+
+  const runBackfill = useCallback(async () => {
+    if (!backfillFrom) return;
+    setBackfilling(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await PurchaseService.backfill(backfillFrom);
+      setNotice(
+        `Fetched ${result.fetched} purchase invoice(s) since ${result.from_date} — ${result.new} new added to the queue.`,
+      );
+      setBackfillOpen(false);
+      await loadQueue();
+    } catch (err) {
+      setError(parseApiError(err, 'Failed to fetch older purchases from Tally.'));
+    } finally {
+      setBackfilling(false);
+    }
+  }, [backfillFrom, loadQueue]);
 
   const openDetail = useCallback(async (voucherId: number) => {
     setDetailLoading(true);
@@ -83,6 +132,65 @@ export function PurchasePage(): JSX.Element {
     await loadQueue();
   }, [detail, openDetail, loadQueue]);
 
+  const ignoreDialog = ignoreTarget ? (
+    <div
+      className="cat-dialog-overlay"
+      role="presentation"
+      onClick={() => !ignoring && setIgnoreTarget(null)}
+    >
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="cat-dialog__header">
+          <h2 className="cat-dialog__title">Ignore this purchase invoice?</h2>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={() => setIgnoreTarget(null)}
+            aria-label="Close"
+            disabled={ignoring}
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="cat-dialog__body">
+          <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+            <AlertCircle size={14} aria-hidden />
+            <span>
+              Purchase <strong>{ignoreTarget.label}</strong> will be removed from the queue and will{' '}
+              <strong>not</strong> be fetched again on future Tally syncs. Any inventory you already
+              imported from it is kept. This does not change anything in Tally.
+            </span>
+          </div>
+          <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+            You can bring it back later by fetching older purchases for its date.
+          </p>
+        </div>
+        <footer className="cat-dialog__footer">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIgnoreTarget(null)}
+            disabled={ignoring}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void confirmIgnore()}
+            disabled={ignoring}
+          >
+            {ignoring ? 'Removing…' : 'Ignore and remove'}
+          </button>
+        </footer>
+      </div>
+    </div>
+  ) : null;
+
   // ---- Voucher detail view ----
   if (detail) {
     return (
@@ -91,13 +199,23 @@ export function PurchasePage(): JSX.Element {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDetail(null)}>
             <ArrowLeft size={14} aria-hidden /> Back to queue
           </button>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={{ margin: 0 }}>Purchase {detail.voucher_number}</h1>
             <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
               Supplier {detail.supplier_name ?? '—'} · Invoice {detail.invoice_number ?? '—'} ·{' '}
               {detail.voucher_date ?? '—'} · <StatusBadge status={detail.status} />
             </p>
           </div>
+          {canImport && detail.status !== 'imported' && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--color-danger, #c0392b)' }}
+              onClick={() => setIgnoreTarget({ id: detail.id, label: detail.voucher_number })}
+            >
+              <Ban size={14} aria-hidden /> Ignore invoice
+            </button>
+          )}
         </header>
 
         <div className="card">
@@ -198,6 +316,7 @@ export function PurchasePage(): JSX.Element {
             }}
           />
         )}
+        {ignoreDialog}
       </div>
     );
   }
@@ -214,10 +333,66 @@ export function PurchasePage(): JSX.Element {
             nothing is added automatically.
           </p>
         </div>
+        {canView && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setBackfillOpen((open) => !open)}
+          >
+            <CalendarClock size={14} aria-hidden /> Fetch older purchases
+          </button>
+        )}
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadQueue()}>
           <RefreshCw size={14} aria-hidden /> Refresh
         </button>
       </header>
+
+      {backfillOpen && (
+        <div className="card" style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15 }}>Fetch older purchase invoices</h3>
+            <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              Read-only. Pulls Purchase invoices from Tally starting at the date you pick (up to
+              today) into this queue. Nothing is imported automatically and Tally is never modified.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>From date</span>
+              <input
+                type="date"
+                className="input"
+                value={backfillFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBackfillFrom(e.target.value)}
+                disabled={backfilling}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => void runBackfill()}
+              disabled={backfilling || !backfillFrom}
+            >
+              {backfilling ? 'Fetching…' : 'Fetch from Tally'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setBackfillOpen(false)}
+              disabled={backfilling}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {notice && (
+        <div className="alert alert-success">
+          <span>{notice}</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8 }}>
         {(['', 'pending', 'partially_imported', 'imported'] as StatusFilter[]).map((value) => (
@@ -252,19 +427,20 @@ export function PurchasePage(): JSX.Element {
               <th className="col-amount">Tax (C/S/I)</th>
               <th>Groups</th>
               <th>Status</th>
+              <th aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={10} style={{ textAlign: 'center', padding: 24 }}>
                   Loading purchase queue…
                 </td>
               </tr>
             )}
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={10} style={{ textAlign: 'center', padding: 24 }}>
                   No purchase vouchers in the queue yet. They appear automatically after a Tally
                   sync.
                 </td>
@@ -293,6 +469,22 @@ export function PurchasePage(): JSX.Element {
                   <td>
                     <StatusBadge status={item.status} />
                   </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {canImport && item.status !== 'imported' && (
+                      <button
+                        type="button"
+                        className="app-toolbar-icon-btn"
+                        aria-label={`Ignore purchase ${item.voucher_number}`}
+                        title="Ignore this purchase invoice"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIgnoreTarget({ id: item.id, label: item.voucher_number });
+                        }}
+                      >
+                        <Ban size={14} aria-hidden />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
           </tbody>
@@ -300,6 +492,7 @@ export function PurchasePage(): JSX.Element {
       </div>
 
       {detailLoading && <p style={{ color: 'var(--color-text-tertiary)' }}>Opening voucher…</p>}
+      {ignoreDialog}
     </div>
   );
 }

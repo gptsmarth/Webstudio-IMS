@@ -13,6 +13,8 @@ export interface BrandInventorySummary {
   totalUnits: number;
   availableUnits: number;
   soldUnits: number;
+  laptopUnits: number;
+  accessoryUnits: number;
   byLocation: Array<{ locationId: number; locationName: string; count: number }>;
 }
 
@@ -42,7 +44,17 @@ export function buildBrandSummaries(
         { locationId: number; locationName: string; count: number }
       >();
 
-      for (const item of brandItems.filter((entry) => entry.status !== 'sold')) {
+      // On-hand (non-sold) items drive the location + category breakdown,
+      // matching the "available" semantics the panel already shows.
+      const onHand = brandItems.filter((entry) => entry.status !== 'sold');
+      let laptopUnits = 0;
+      let accessoryUnits = 0;
+      for (const item of onHand) {
+        if ((item.category ?? 'laptop') === 'accessory') {
+          accessoryUnits += 1;
+        } else {
+          laptopUnits += 1;
+        }
         const existing = locationMap.get(item.current_location_id);
         if (existing) {
           existing.count += 1;
@@ -60,9 +72,10 @@ export function buildBrandSummaries(
         brandName: brand.name,
         logoFilename: brand.logo_filename,
         totalUnits: dist?.total ?? brandItems.length,
-        availableUnits:
-          dist?.available ?? brandItems.filter((entry) => entry.status !== 'sold').length,
+        availableUnits: dist?.available ?? onHand.length,
         soldUnits: dist?.sold ?? brandItems.filter((entry) => entry.status === 'sold').length,
+        laptopUnits,
+        accessoryUnits,
         byLocation: [...locationMap.values()].sort((a, b) =>
           a.locationName.localeCompare(b.locationName),
         ),

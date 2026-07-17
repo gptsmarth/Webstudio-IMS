@@ -23,7 +23,14 @@ from webstudio_backend.infrastructure.database.mixins import TimestampMixin, Uui
 class InventoryItem(Base, UuidPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "inventory_items"
 
-    serial_number: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    # Uniqueness is NOT declared here: it is a partial unique index in the DB
+    # (unique only WHERE serial_is_shared = false). See migration 0053.
+    serial_number: Mapped[str] = mapped_column(String(128), nullable=False)
+    # True for EAN-as-serial units (brand.allow_duplicate_serials) — these may
+    # share a serial value and are excluded from the unique index.
+    serial_is_shared: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     product_model_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(

@@ -57,6 +57,9 @@ class TallyPurchaseRepository:
         base = select(TallyPurchaseVoucher)
         if status is not None:
             base = base.where(TallyPurchaseVoucher.status == status)
+        else:
+            # Ignored vouchers are tombstoned — hidden from the default queue.
+            base = base.where(TallyPurchaseVoucher.status != TallyPurchaseStatus.IGNORED)
 
         count_stmt = select(func.count()).select_from(base.subquery())
         total = int((await self._session.execute(count_stmt)).scalar_one())
@@ -77,8 +80,28 @@ class TallyPurchaseRepository:
         voucher.last_seen_at = datetime.now(UTC)
         await self._session.flush()
 
+    async def ignore_voucher(self, voucher: TallyPurchaseVoucher) -> None:
+        """Tombstone a voucher so it disappears from the queue and is never
+        re-fetched (the sync upsert only touches ``last_seen`` for known GUIDs)."""
+        voucher.status = TallyPurchaseStatus.IGNORED
+        voucher.last_seen_at = datetime.now(UTC)
+        await self._session.flush()
+
+    async def count_existing_guids(self, company_sync_id: int, guids: list[str]) -> int:
+        """How many of the given voucher GUIDs already exist for this company."""
+        if not guids:
+            return 0
+        statement = select(func.count()).where(
+            TallyPurchaseVoucher.tally_company_sync_id == company_sync_id,
+            TallyPurchaseVoucher.tally_voucher_guid.in_(set(guids)),
+        )
+        return int((await self._session.execute(statement)).scalar_one())
+
     def recompute_status(self, voucher: TallyPurchaseVoucher) -> TallyPurchaseStatus:
         """Derive queue status from per-line import flags."""
+        # Ignored is a terminal, user-set state — never auto-override it.
+        if voucher.status == TallyPurchaseStatus.IGNORED:
+            return voucher.status
         if not voucher.lines:
             voucher.status = TallyPurchaseStatus.PENDING
             return voucher.status

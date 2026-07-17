@@ -24,7 +24,10 @@ paths:
       parameters:
         - in: query
           name: status
-          schema: { type: string, enum: [pending, partially_imported, imported] }
+          schema: { type: string, enum: [pending, partially_imported, imported, ignored] }
+          description: >
+            Omitted → all except ignored (ignored vouchers are tombstoned and
+            hidden from the default queue). Pass `ignored` to list dismissed ones.
         - in: query
           name: page
           schema: { type: integer, minimum: 1, default: 1 }
@@ -137,6 +140,57 @@ paths:
           description: Duplicate serial(s) in IMS or group already imported.
         "422":
           description: Validation failed (quantity != serial count, missing serials, etc.).
+  /api/v1/purchase/queue/{voucher_id}/ignore:
+    post:
+      tags: [purchase]
+      summary: Ignore (dismiss) a fetched purchase voucher from the queue
+      description: >
+        Tombstones the voucher (status → `ignored`): it disappears from the
+        default queue but the row is retained so the same Tally voucher is NOT
+        re-fetched on the next sync. Idempotent. Requires `purchase:import`.
+        Fully-imported vouchers cannot be ignored.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: voucher_id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Voucher tombstoned (voucher_id, status=ignored).
+        "404": { description: Voucher not found }
+        "409": { description: Voucher is already fully imported and cannot be ignored. }
+  /api/v1/purchase/backfill:
+    post:
+      tags: [purchase]
+      summary: Fetch historical purchase invoices from Tally into the queue
+      description: >
+        READ-ONLY historical fetch. Exports Tally Day Book from `from_date`
+        (default `to_date` = today), projects only PURCHASE vouchers into the
+        review queue (idempotent by voucher GUID), and never touches the Sales
+        pipeline / watermark or creates inventory. Requires `purchase:view`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_date]
+              properties:
+                from_date: { type: string, format: date, description: Inclusive start date. }
+                to_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Inclusive end date. Defaults to today when omitted.
+      responses:
+        "200":
+          description: >
+            Backfill projected (fetched = purchase vouchers seen in range,
+            new = previously-unseen vouchers added to the queue).
+        "409": { description: Tally integration is disabled. }
+        "502": { description: Tally workstation unreachable. }
 components:
   securitySchemes:
     bearerAuth:

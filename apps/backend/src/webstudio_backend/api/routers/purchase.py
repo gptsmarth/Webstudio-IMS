@@ -7,7 +7,7 @@ runs inside the request transaction (rollback-on-failure).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import (
@@ -19,12 +19,15 @@ from webstudio_backend.api.response_helpers import build_envelope
 from webstudio_backend.api.schemas.purchase import (
     MatchAccessoryRequest,
     MatchModelRequest,
+    PurchaseBackfillRequest,
     PurchaseImportRequest,
 )
 from webstudio_backend.api.schemas.responses import ResponseMeta
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.services.purchase_import_service import PurchaseImportService
+from webstudio_backend.services.tally_sync_service import TallySyncService
 
 router = APIRouter(prefix="/api/v1/purchase", tags=["purchase"])
 
@@ -104,3 +107,49 @@ async def import_purchase_group(
 ) -> dict:
     result = await PurchaseImportService(db_session).import_group(body, actor=_actor(current))
     return _envelope(request, result.model_dump(mode="json"))
+
+
+@router.post("/queue/{voucher_id}/ignore")
+async def ignore_purchase_voucher(
+    request: Request,
+    voucher_id: int,
+    current: PurchaseImportDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    _ = current
+    result = await PurchaseImportService(db_session).ignore_voucher(voucher_id)
+    return _envelope(request, result.model_dump(mode="json"))
+
+
+@router.post("/backfill")
+async def backfill_purchases(
+    request: Request,
+    body: PurchaseBackfillRequest,
+    current: PurchaseViewDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    _ = current
+    sync_service = TallySyncService(db_session)
+    if not await sync_service.is_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tally integration is disabled. Enable it in System Settings.",
+        )
+    try:
+        counts = await sync_service.backfill_purchases(
+            from_date=body.from_date, to_date=body.to_date
+        )
+    except TallyConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.user_message,
+        ) from exc
+    return _envelope(
+        request,
+        {
+            "fetched": counts["fetched"],
+            "new": counts["new"],
+            "from_date": body.from_date.isoformat(),
+            "to_date": body.to_date.isoformat() if body.to_date else None,
+        },
+    )

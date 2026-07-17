@@ -101,6 +101,7 @@ async def create_brand(
             logo_filename=body.logo_filename,
             display_order=body.display_order,
             is_active=body.is_active,
+            allow_duplicate_serials=body.allow_duplicate_serials,
             actor=_actor(current),
         )
         await db_session.commit()
@@ -174,6 +175,7 @@ async def update_brand(
             logo_filename=body.logo_filename,
             display_order=body.display_order,
             is_active=body.is_active,
+            allow_duplicate_serials=body.allow_duplicate_serials,
             actor=_actor(current),
         )
         await db_session.commit()

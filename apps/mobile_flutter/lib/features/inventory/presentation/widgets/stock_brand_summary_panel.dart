@@ -76,6 +76,26 @@ class StockBrandSummaryPanel extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Icon(Icons.category_outlined, size: 16, color: colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    'By category',
+                    style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _LocationChip(name: 'Laptops', count: summary.laptopUnits),
+                  _LocationChip(name: 'Accessories', count: summary.accessoryUnits),
+                ],
+              ),
               if (summary.byLocation.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 Row(

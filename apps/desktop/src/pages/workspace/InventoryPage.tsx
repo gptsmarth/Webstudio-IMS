@@ -310,6 +310,9 @@ export function InventoryPage(): JSX.Element {
           open={addAccessoryOpen}
           brandId={nav.brandId}
           brandName={nav.brandName ?? ''}
+          allowDuplicateSerials={
+            hierarchy.brands.find((b) => b.id === nav.brandId)?.allow_duplicate_serials ?? false
+          }
           locations={hierarchy.locations}
           productModels={hierarchy.models}
           loading={workspace.actionLoading}

@@ -12,24 +12,32 @@ export function useNotificationStore() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!canRead) {
-      setItems([]);
-      setUnreadCount(0);
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await NotificationService.listNotifications({ page_size: 100 });
-      setItems(result.items);
-      setUnreadCount(result.items.filter((item) => !item.is_read).length);
-    } catch {
-      setItems([]);
-      setUnreadCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [canRead]);
+  const refresh = useCallback(
+    async (opts?: { background?: boolean }) => {
+      if (!canRead) {
+        setItems([]);
+        setUnreadCount(0);
+        return;
+      }
+      // Background polls update the list/badge in place without a loading flip.
+      const background = opts?.background ?? false;
+      if (!background) setLoading(true);
+      try {
+        const result = await NotificationService.listNotifications({ page_size: 100 });
+        setItems(result.items);
+        setUnreadCount(result.items.filter((item) => !item.is_read).length);
+      } catch {
+        // Keep the last good list on a transient background failure.
+        if (!background) {
+          setItems([]);
+          setUnreadCount(0);
+        }
+      } finally {
+        if (!background) setLoading(false);
+      }
+    },
+    [canRead],
+  );
 
   useEffect(() => {
     if (!canRead) {
@@ -38,7 +46,7 @@ export function useNotificationStore() {
       return;
     }
     void refresh();
-    const timer = window.setInterval(() => void refresh(), POLL_MS);
+    const timer = window.setInterval(() => void refresh({ background: true }), POLL_MS);
     return () => window.clearInterval(timer);
   }, [canRead, refresh]);
 
@@ -53,7 +61,7 @@ export function useNotificationStore() {
   const archive = useCallback(
     async (id: number) => {
       await NotificationService.resolve(id);
-      await refresh();
+      await refresh({ background: true });
     },
     [refresh],
   );

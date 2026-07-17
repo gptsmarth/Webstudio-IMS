@@ -349,6 +349,7 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | `logo_filename` | No | Yes | Filename of brand logo asset (max 256 chars) |
 | `display_order` | Yes | Yes | Order in lists (default 0) |
 | `is_active` | Yes | Yes | Cannot deactivate if active inventory references exist (FR-BRD-03) |
+| `allow_duplicate_serials` | Yes | Yes | EAN-as-serial mode (default `false`). When `true`, inventory units of this brand may share a serial value (the EAN); the unique-serial guarantee is relaxed for these units only. Existing brands default `false` (normal unique serials). |
 | `created_by_user_id` | Yes | Immutable | FK → user; set by backend on create (FR-AUD-09) |
 | `updated_by_user_id` | Yes | Yes | FK → user; set by backend on every update |
 | `created_at` | Yes | Immutable | |
@@ -434,7 +435,8 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 | Attribute | Required | Mutable | Notes |
 |-----------|----------|---------|-------|
 | `id` | Yes | Immutable | UUID primary key |
-| `serial_number` | Yes | Yes* | Globally unique (BR-01); *mutable by authorized users; uniqueness always enforced |
+| `serial_number` | Yes | Yes* | Globally unique for normal units (BR-01); *mutable by authorized users. Uniqueness enforced by a **partial** unique index `WHERE serial_is_shared = false` (see §BR-01). For EAN-as-serial brands the value is the shared EAN. |
+| `serial_is_shared` | Yes | No | Default `false`. `true` when the unit belongs to an EAN-as-serial brand (`brand.allow_duplicate_serials`); such units are excluded from the unique index so many units can share one EAN. Derived from the brand at creation. |
 | `product_model_id` | Yes | Yes* | FK → product_model; must reference **active** model on create |
 | `color` | Yes | Yes | **Mandatory** per-unit color — e.g., Black, Silver, Blue; not on product_model |
 | `current_location_id` | Yes | Yes | FK → location; **only** location field on inventory — history in `audit_log` |
@@ -763,7 +765,7 @@ See [Section 9](#9-audit-model) for complete attribute list.
 
 | Rule | Business Constraint | Database Constraint |
 |------|---------------------|-------------------|
-| **BR-01** Serial globally unique | Service rejects duplicate | `UNIQUE (serial_number)` on `inventory_item` |
+| **BR-01** Serial globally unique (normal brands) | Service rejects duplicate | Partial unique index `uq_inventory_items_serial_number_not_shared` on `inventory_item (serial_number) WHERE serial_is_shared = false`. EAN-as-serial brands (`brand.allow_duplicate_serials`) are intentionally excluded so units may share the EAN. |
 | **BR-02** Model number repeats | Many items per product_model | Unique `(brand_id, model_number)` on product_model |
 | **BR-22** Color per unit | Mandatory on inventory_item | `NOT NULL color` |
 | **BR-24** Product Model lifecycle | Archive vs delete rules | `status` enum; service-layer delete guard |

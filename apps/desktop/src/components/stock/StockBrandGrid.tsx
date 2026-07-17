@@ -73,6 +73,14 @@ export function StockBrandGrid({
                 <dt>Total</dt>
                 <dd>{summary.totalUnits}</dd>
               </div>
+              <div>
+                <dt>Laptops</dt>
+                <dd>{summary.laptopUnits}</dd>
+              </div>
+              <div>
+                <dt>Accessories</dt>
+                <dd>{summary.accessoryUnits}</dd>
+              </div>
               {showSoldUnits && (
                 <div>
                   <dt>Sold</dt>

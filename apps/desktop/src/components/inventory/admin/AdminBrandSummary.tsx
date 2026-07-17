@@ -1,4 +1,4 @@
-import { MapPin, Package } from 'lucide-react';
+import { Laptop, MapPin, Package, Headphones } from 'lucide-react';
 import type { BrandInventorySummary } from '../../../lib/inventoryHierarchy';
 
 interface AdminBrandSummaryProps {
@@ -26,6 +26,27 @@ export function AdminBrandSummary({
           <p className="brand-availability-panel__count">{summary.availableUnits}</p>
           {brandName && <p className="brand-availability-panel__brand">{brandName}</p>}
         </div>
+      </div>
+
+      <div className="brand-availability-panel__locations">
+        <p className="brand-availability-panel__locations-title">
+          <Package size={13} aria-hidden />
+          By category
+        </p>
+        <ul className="brand-availability-panel__chips">
+          <li className="brand-availability-panel__chip">
+            <span className="brand-availability-panel__chip-name">
+              <Laptop size={12} aria-hidden /> Laptops
+            </span>
+            <span className="brand-availability-panel__chip-count">{summary.laptopUnits}</span>
+          </li>
+          <li className="brand-availability-panel__chip">
+            <span className="brand-availability-panel__chip-name">
+              <Headphones size={12} aria-hidden /> Accessories
+            </span>
+            <span className="brand-availability-panel__chip-count">{summary.accessoryUnits}</span>
+          </li>
+        </ul>
       </div>
 
       {summary.byLocation.length > 0 ? (

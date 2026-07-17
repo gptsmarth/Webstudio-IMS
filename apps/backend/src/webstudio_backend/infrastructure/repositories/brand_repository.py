@@ -35,6 +35,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         logo_filename: str | None = None,
         display_order: int = 0,
         is_active: bool = True,
+        allow_duplicate_serials: bool = False,
         actor: AuditActor | None = None,
     ) -> Brand:
         normalized = normalize_required_name(name)
@@ -47,6 +48,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
                 logo_filename=logo_filename.strip() if logo_filename else None,
                 display_order=display_order,
                 is_active=is_active,
+                allow_duplicate_serials=allow_duplicate_serials,
             )
         )
         await AuditRecorder(self._session).record_brand_create(
@@ -64,6 +66,7 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
         logo_filename: str | None = None,
         display_order: int | None = None,
         is_active: bool | None = None,
+        allow_duplicate_serials: bool | None = None,
         actor: AuditActor | None = None,
     ) -> Brand:
         audit_actor = actor or AuditActor.system()
@@ -120,6 +123,18 @@ class BrandRepository(SqlAlchemyRepository[Brand]):
                     field_name="display_order",
                     old_value={"display_order": old_val},
                     new_value={"display_order": display_order},
+                    actor=audit_actor,
+                )
+
+        if allow_duplicate_serials is not None:
+            old_val = brand.allow_duplicate_serials
+            if allow_duplicate_serials != old_val:
+                brand.allow_duplicate_serials = allow_duplicate_serials
+                await recorder.record_brand_update(
+                    brand,
+                    field_name="allow_duplicate_serials",
+                    old_value={"allow_duplicate_serials": old_val},
+                    new_value={"allow_duplicate_serials": allow_duplicate_serials},
                     actor=audit_actor,
                 )
 

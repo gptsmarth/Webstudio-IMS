@@ -13,6 +13,7 @@ class CreateBrandRequest(BaseModel):
     logo_filename: str | None = Field(default=None, min_length=1, max_length=256)
     display_order: int = Field(default=0, ge=0)
     is_active: bool = Field(default=True)
+    allow_duplicate_serials: bool = Field(default=False)
 
 
 class UpdateBrandRequest(BaseModel):
@@ -21,6 +22,7 @@ class UpdateBrandRequest(BaseModel):
     logo_filename: str | None = Field(default=None, min_length=1, max_length=256)
     display_order: int | None = Field(default=None, ge=0)
     is_active: bool | None = Field(default=None)
+    allow_duplicate_serials: bool | None = Field(default=None)
 
 
 class BrandResponse(BaseModel):
@@ -30,6 +32,7 @@ class BrandResponse(BaseModel):
     logo_filename: str | None
     display_order: int
     is_active: bool
+    allow_duplicate_serials: bool
     created_at: datetime
     updated_at: datetime
 
@@ -42,6 +45,7 @@ class BrandResponse(BaseModel):
             logo_filename=brand.logo_filename,
             display_order=brand.display_order,
             is_active=brand.is_active,
+            allow_duplicate_serials=brand.allow_duplicate_serials,
             created_at=brand.created_at,
             updated_at=brand.updated_at,
         )

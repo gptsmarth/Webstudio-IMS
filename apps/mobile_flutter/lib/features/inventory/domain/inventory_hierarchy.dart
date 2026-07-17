@@ -10,6 +10,8 @@ class BrandInventorySummary {
     required this.totalUnits,
     required this.availableUnits,
     required this.soldUnits,
+    required this.laptopUnits,
+    required this.accessoryUnits,
     required this.byLocation,
   });
 
@@ -19,6 +21,8 @@ class BrandInventorySummary {
   final int totalUnits;
   final int availableUnits;
   final int soldUnits;
+  final int laptopUnits;
+  final int accessoryUnits;
   final List<LocationCount> byLocation;
 }
 
@@ -64,8 +68,15 @@ List<BrandInventorySummary> buildBrandSummaries(
             brandItems.where((entry) => entry.status != InventoryStatus.sold).length;
         final soldFromItems = brandItems.where((entry) => entry.status == InventoryStatus.sold).length;
         final locationMap = <int, LocationCount>{};
+        var laptopUnits = 0;
+        var accessoryUnits = 0;
 
         for (final item in brandItems.where((entry) => entry.status != InventoryStatus.sold)) {
+          if (item.isAccessory) {
+            accessoryUnits += 1;
+          } else {
+            laptopUnits += 1;
+          }
           final existing = locationMap[item.currentLocationId];
           if (existing != null) {
             locationMap[item.currentLocationId] = LocationCount(
@@ -92,6 +103,8 @@ List<BrandInventorySummary> buildBrandSummaries(
           totalUnits: brandItems.isNotEmpty ? brandItems.length : (dist?.total ?? 0),
           availableUnits: brandItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0),
           soldUnits: brandItems.isNotEmpty ? soldFromItems : (dist?.sold ?? 0),
+          laptopUnits: laptopUnits,
+          accessoryUnits: accessoryUnits,
           byLocation: byLocation,
         );
       })

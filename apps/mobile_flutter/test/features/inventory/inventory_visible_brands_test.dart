@@ -14,6 +14,8 @@ void main() {
           totalUnits: 0,
           availableUnits: 0,
           soldUnits: 0,
+          laptopUnits: 0,
+          accessoryUnits: 0,
           byLocation: [],
         ),
         BrandInventorySummary(
@@ -22,6 +24,8 @@ void main() {
           totalUnits: 3,
           availableUnits: 2,
           soldUnits: 1,
+          laptopUnits: 2,
+          accessoryUnits: 0,
           byLocation: [],
         ),
       ],

@@ -138,3 +138,22 @@ class PurchaseImportResponse(BaseModel):
     voucher_status: str
     group_key: str
     existing_model: bool
+
+
+class PurchaseIgnoreResponse(BaseModel):
+    voucher_id: int
+    status: str
+
+
+class PurchaseBackfillRequest(BaseModel):
+    """Fetch historical PURCHASE vouchers from Tally into the review queue."""
+
+    from_date: date
+    to_date: date | None = None
+
+
+class PurchaseBackfillResponse(BaseModel):
+    fetched: int
+    new: int
+    from_date: date
+    to_date: date | None = None

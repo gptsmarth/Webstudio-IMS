@@ -152,15 +152,19 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         normalized_color = validate_color(color)
         validated_status = validate_status(status)
 
-        if await self.find_by_serial_number(normalized_serial) is not None:
-            raise DuplicateSerialNumberError(normalized_serial)
-
-        await self._ensure_active_product_model(product_model_id)
+        product_model = await self._ensure_active_product_model(product_model_id)
         await self._ensure_active_location(current_location_id)
+
+        # EAN-as-serial brands may share a serial across units; all other brands
+        # keep the globally-unique-serial guard exactly as before.
+        serial_is_shared = await self._brand_allows_shared_serials(product_model.brand_id)
+        if not serial_is_shared and await self.find_by_serial_number(normalized_serial) is not None:
+            raise DuplicateSerialNumberError(normalized_serial)
 
         item = await self.add(
             InventoryItem(
                 serial_number=normalized_serial,
+                serial_is_shared=serial_is_shared,
                 product_model_id=product_model_id,
                 color=normalized_color,
                 current_location_id=current_location_id,
@@ -697,6 +701,40 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
             column_map = {column.key: column for column in self._model.__table__.columns}
             statement = apply_sorting(statement, sort_params, column_map)
         return await paginate(self._session, statement, page_params)
+
+    async def _brand_allows_shared_serials(self, brand_id: int) -> bool:
+        statement = select(Brand.allow_duplicate_serials).where(Brand.id == brand_id)
+        result = await self._session.execute(statement)
+        return bool(result.scalar_one_or_none())
+
+    async def find_available_shared_units_fifo(
+        self,
+        *,
+        serial_number: str,
+        limit: int,
+    ) -> list[InventoryItem]:
+        """Available EAN-pool units for a shared serial, oldest first (FIFO).
+
+        Used by the Tally sales sync to deduct a quantity of shared-serial
+        (EAN-as-serial) units. Only rows flagged ``serial_is_shared`` are
+        returned, so the normal unique-serial path is never affected.
+        """
+        if limit <= 0:
+            return []
+        normalized = validate_serial_number(serial_number)
+        statement = (
+            select(InventoryItem)
+            .where(
+                func.lower(InventoryItem.serial_number) == normalized.lower(),
+                InventoryItem.serial_is_shared.is_(True),
+                InventoryItem.status == InventoryStatus.AVAILABLE,
+                InventoryItem.is_archived.is_(False),
+            )
+            .order_by(InventoryItem.created_at.asc(), InventoryItem.id.asc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
 
     async def _ensure_active_product_model(self, product_model_id: uuid.UUID) -> ProductModel:
         product_model = await self._session.get(ProductModel, product_model_id)

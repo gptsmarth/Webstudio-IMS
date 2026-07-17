@@ -424,3 +424,27 @@ class PurchaseImportResult extends Equatable {
   @override
   List<Object?> get props => [productModelId, importedCount, voucherStatus];
 }
+
+class PurchaseBackfillResult extends Equatable {
+  const PurchaseBackfillResult({
+    required this.fetched,
+    required this.newCount,
+    required this.fromDate,
+    this.toDate,
+  });
+
+  final int fetched;
+  final int newCount;
+  final String fromDate;
+  final String? toDate;
+
+  factory PurchaseBackfillResult.fromJson(Map<String, dynamic> json) => PurchaseBackfillResult(
+        fetched: (json['fetched'] as num?)?.toInt() ?? 0,
+        newCount: (json['new'] as num?)?.toInt() ?? 0,
+        fromDate: json['from_date'] as String? ?? '',
+        toDate: json['to_date'] as String?,
+      );
+
+  @override
+  List<Object?> get props => [fetched, newCount, fromDate, toDate];
+}
