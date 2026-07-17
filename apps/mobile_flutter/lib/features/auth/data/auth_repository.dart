@@ -118,9 +118,13 @@ class AuthRepository {
   }
 
   AuthUser? readCachedUser() {
-    final raw = HiveCache.profile.get('current_user');
+    final raw = HiveCache.readMap(HiveCache.profile, 'current_user');
     if (raw == null) return null;
-    return AuthUser.fromJson(Map<String, dynamic>.from(raw));
+    try {
+      return AuthUser.fromJson(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _persistTokens(AuthTokens tokens) async {

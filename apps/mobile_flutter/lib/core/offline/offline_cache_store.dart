@@ -37,7 +37,7 @@ class OfflineCacheStore {
   }
 
   CachedPayload<List<Map<String, dynamic>>>? readList(String key) {
-    final raw = HiveCache.entityCache.get(key);
+    final raw = HiveCache.readMap(HiveCache.entityCache, key);
     if (raw == null) return null;
     final data = raw['data'];
     final cachedAt = raw['cached_at'] as String?;
@@ -48,19 +48,19 @@ class OfflineCacheStore {
   }
 
   CachedPayload<Map<String, dynamic>>? readMap(String key) {
-    final raw = HiveCache.entityCache.get(key);
+    final raw = HiveCache.readMap(HiveCache.entityCache, key);
     if (raw == null) return null;
-    final data = raw['data'];
+    final data = asJsonMapOrNull(raw['data']);
     final cachedAt = raw['cached_at'] as String?;
-    if (data is! Map || cachedAt == null) return null;
+    if (data == null || cachedAt == null) return null;
     return CachedPayload(
-      data: Map<String, dynamic>.from(data),
+      data: data,
       cachedAt: DateTime.parse(cachedAt),
     );
   }
 
   DateTime? lastCachedAt(String key) {
-    final raw = HiveCache.entityCache.get(key);
+    final raw = HiveCache.readMap(HiveCache.entityCache, key);
     final cachedAt = raw?['cached_at'] as String?;
     return cachedAt == null ? null : DateTime.tryParse(cachedAt);
   }

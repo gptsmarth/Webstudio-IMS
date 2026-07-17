@@ -16,6 +16,7 @@ interface Props {
   appVersion: string;
   onLoginSuccess: (session: AuthSession) => void;
   onSetupRequired: () => void;
+  onChangeServer?: () => void;
 }
 
 export const LoginPage: React.FC<Props> = ({
@@ -24,6 +25,7 @@ export const LoginPage: React.FC<Props> = ({
   appVersion,
   onLoginSuccess,
   onSetupRequired,
+  onChangeServer,
 }) => {
   const { resolvedTheme, toggleTheme } = useThemeStore();
 
@@ -674,9 +676,18 @@ export const LoginPage: React.FC<Props> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: 8,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                overflow: 'hidden',
+                minWidth: 0,
+              }}
+            >
               <Server size={12} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
               <span
                 style={{
@@ -686,19 +697,36 @@ export const LoginPage: React.FC<Props> = ({
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  maxWidth: 180,
+                  maxWidth: 160,
                 }}
-                title={apiUrl}
+                title={apiUrl || 'Server not configured'}
               >
-                {apiUrl}
+                {apiUrl || 'Server not configured'}
               </span>
             </div>
-            <span
-              className="badge badge-success"
-              style={{ fontSize: 10, padding: '2px 6px', flexShrink: 0 }}
-            >
-              Connected
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {onChangeServer && (
+                <button
+                  type="button"
+                  onClick={onChangeServer}
+                  style={{
+                    color: 'var(--color-primary-600)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}
+                >
+                  Change server
+                </button>
+              )}
+              <span className="badge badge-success" style={{ fontSize: 10, padding: '2px 6px' }}>
+                Connected
+              </span>
+            </div>
           </div>
 
           {/* Footer Controls */}

@@ -1,6 +1,7 @@
 import '../../../core/constants/api_paths.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/host_validation.dart';
+import '../../../core/network/json_map.dart';
 import '../../features/connection/domain/server_models.dart';
 
 class ConnectionDiagnostics {
@@ -52,9 +53,9 @@ class ConnectionDiagnostics {
       final ready = await _api.getAt<Map<String, dynamic>>(
         normalized,
         '/health/ready',
-        parser: (json) => Map<String, dynamic>.from(json! as Map),
+        parser: (json) => asJsonMap(json),
       );
-      final checks = ready['checks'] as Map<String, dynamic>?;
+      final checks = asJsonMapOrNull(ready['checks']);
       if (checks?['database'] == 'failed') {
         throw Exception('Database is not ready.');
       }
@@ -69,7 +70,7 @@ class ConnectionDiagnostics {
       final versionData = await _api.getAt<Map<String, dynamic>>(
         normalized,
         ApiPaths.version,
-        parser: (json) => Map<String, dynamic>.from(json! as Map),
+        parser: (json) => asJsonMap(json),
       );
       backendVersion = versionData['backend_version'] as String?;
       if (versionData['api_version'] == null) {
@@ -86,7 +87,7 @@ class ConnectionDiagnostics {
       final setup = await _api.getAt<SetupStatus>(
         normalized,
         ApiPaths.setupStatus,
-        parser: (json) => SetupStatus.fromJson(json! as Map<String, dynamic>),
+        parser: (json) => SetupStatus.fromJson(asJsonMap(json)),
       );
       companyName = setup.companyName;
     });

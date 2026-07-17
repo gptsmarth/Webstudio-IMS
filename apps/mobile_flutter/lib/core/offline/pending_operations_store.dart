@@ -27,9 +27,9 @@ class PendingOperationsStore {
     final ids = _readIndex();
     final operations = <PendingOperation>[];
     for (final id in ids) {
-      final raw = HiveCache.pendingOps.get(id);
+      final raw = HiveCache.readMap(HiveCache.pendingOps, id);
       if (raw == null) continue;
-      operations.add(PendingOperation.fromJson(Map<String, dynamic>.from(raw)));
+      operations.add(PendingOperation.fromJson(raw));
     }
     operations.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return operations;
@@ -40,7 +40,7 @@ class PendingOperationsStore {
   int get conflictCount => listAll().where((op) => op.hasConflict).length;
 
   List<String> _readIndex() {
-    final raw = HiveCache.pendingOps.get(_indexKey);
+    final raw = HiveCache.readMap(HiveCache.pendingOps, _indexKey);
     final ids = raw?['ids'];
     if (ids is! List) return <String>[];
     return ids.map((id) => id.toString()).toList();

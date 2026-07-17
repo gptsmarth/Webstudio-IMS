@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-from webstudio_backend.infrastructure.database.enums import InventoryStatus, ProductModelStatus
+from webstudio_backend.infrastructure.database.enums import (
+    InventorySource,
+    InventoryStatus,
+    ProductModelStatus,
+)
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.location import Location
@@ -141,6 +145,7 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
         status: InventoryStatus,
         purchase_date: date | None = None,
         purchase_price: Decimal | None = None,
+        inventory_source: InventorySource = InventorySource.MANUAL,
         actor: AuditActor | None = None,
     ) -> InventoryItem:
         normalized_serial = validate_serial_number(serial_number)
@@ -162,6 +167,7 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 status=validated_status,
                 purchase_date=purchase_date,
                 purchase_price=purchase_price,
+                inventory_source=inventory_source,
             ),
         )
         await AuditRecorder(self._session).record_inventory_create(

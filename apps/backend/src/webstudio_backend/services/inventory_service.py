@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
-from webstudio_backend.infrastructure.database.enums import InventoryStatus
+from webstudio_backend.infrastructure.database.enums import InventorySource, InventoryStatus
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams, PageResult
 from webstudio_backend.infrastructure.database.repositories.sorting import SortParam
 from webstudio_backend.infrastructure.repositories.inventory_item_filters import (
@@ -51,6 +51,7 @@ class InventoryService:
         status: InventoryStatus,
         purchase_date: date | None = None,
         purchase_price: Decimal | None = None,
+        inventory_source: InventorySource = InventorySource.MANUAL,
         actor: AuditActor,
     ) -> InventoryItemDetailRow:
         item = await self._repo.create(
@@ -61,6 +62,7 @@ class InventoryService:
             status=status,
             purchase_date=purchase_date,
             purchase_price=purchase_price,
+            inventory_source=inventory_source,
             actor=actor,
         )
         detail = await self._repo.get_detail(item.id)

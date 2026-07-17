@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from webstudio_backend.infrastructure.database.enums import (
     AccessoryKind,
+    InventorySource,
     InventoryStatus,
     ProductCategory,
     StorageType,
@@ -106,6 +107,7 @@ class InventoryItemDetail(BaseModel):
     current_location_name: str
     status: InventoryStatus
     is_archived: bool
+    inventory_source: InventorySource = InventorySource.MANUAL
     purchase_date: date | None
     purchase_price: float | None = None
     created_at: datetime
@@ -142,6 +144,7 @@ class InventoryItemDetail(BaseModel):
             current_location_name=row.location.name,
             status=item.status,
             is_archived=item.is_archived,
+            inventory_source=item.inventory_source,
             purchase_date=item.purchase_date,
             purchase_price=(
                 float(item.purchase_price)

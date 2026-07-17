@@ -100,7 +100,10 @@ If PowerShell execution policy blocks scripts:
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| API works on server browser (`localhost`) but not from desktop | Firewall or API bound to `127.0.0.1` only | Run `configure-firewall.ps1`; set `WEBSTUDIO_API_HOST=0.0.0.0` |
+| API works on server browser (`localhost`) but not from desktop | Firewall or API bound to `127.0.0.1` only | Run `configure-firewall.ps1`; set `WEBSTUDIO_API_HOST=0.0.0.0` / `API_HOST=0.0.0.0` |
+| Desktop works on server PC but fails on Wi‑Fi laptops after restart | Client still using `http://127.0.0.1:8000` (localhost is the laptop itself) | Open **Connection** setup and save `http://<server-lan-ip>:8000` (e.g. `http://192.168.29.100:8000`). Restart desktop — URL must persist. Startup also auto-discovers via mDNS + LAN probes. |
+| Mobile / desktop should find server without typing IP | Discovery only ran on Connection screen before | Startup bootstrap + reconnect now auto-fetch via mDNS, saved servers, and shop LAN candidates (`192.168.29.100`, etc.) |
+| Mobile shows `Startup failed: type '_Map<dynamic, dynamic>'…` | Hive cache typed-map cast bug on session restore | Install mobile build that opens Hive boxes as untyped and uses safe JSON map coercion |
 | mDNS discovery fails | UDP 5353 blocked or AP isolation enabled | Firewall rule + disable client isolation on APs |
 | PostgreSQL exposed on LAN | Misconfigured PostgreSQL `listen_addresses` | Keep `localhost`; validation should flag non-local bind |
 | Wrong subnet in rule | Store uses `10.0.0.0/24` but rule says `192.168.1.0/24` | Re-run script with correct `-Subnet` |

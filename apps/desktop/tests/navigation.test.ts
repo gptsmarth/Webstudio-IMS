@@ -17,6 +17,8 @@ const MAIN_ADMIN_PERMS = [
   'inventory:archive',
   'inventory:restore',
   'inventory:export',
+  'purchase:view',
+  'purchase:import',
   'sales:view',
   'sales:create',
   'dashboard:view',

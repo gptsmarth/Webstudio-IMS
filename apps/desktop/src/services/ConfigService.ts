@@ -22,12 +22,22 @@ export class ConfigService {
         const env = await window.config.getEnv();
         mode = env.mode;
         apiBaseUrl = env.apiBaseUrl;
+        // Belt-and-suspenders: if getEnv still returns localhost, prefer persisted URL.
+        if (typeof window.config.get === 'function') {
+          const saved = await window.config.get('apiBaseUrl');
+          if (typeof saved === 'string' && saved.trim()) {
+            apiBaseUrl = saved.trim();
+          }
+        }
       } else {
         const rawMode = import.meta.env.MODE;
         if (rawMode === 'production' || rawMode === 'test') {
           mode = rawMode;
         }
-        apiBaseUrl = import.meta.env.VITE_API_BASE_URL || apiBaseUrl;
+        apiBaseUrl =
+          localStorage.getItem('webstudio_api_url') ||
+          import.meta.env.VITE_API_BASE_URL ||
+          apiBaseUrl;
       }
     } catch {
       // Fallback to default dev settings

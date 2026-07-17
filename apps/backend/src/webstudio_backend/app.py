@@ -35,6 +35,7 @@ from webstudio_backend.api.routers import (
     platform,
     product_images,
     product_models,
+    purchase,
     releases,
     reports,
     sales,
@@ -319,6 +320,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        # Packaged Electron loads the UI from app:// — allow that origin for LAN API calls.
+        allow_origin_regex=r"app://.*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -353,6 +356,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(product_models.router)
     app.include_router(product_images.router)
     app.include_router(inventory.router)
+    app.include_router(purchase.router)
     app.include_router(sales.router)
     app.include_router(dashboard.router)
     app.include_router(notifications.router)

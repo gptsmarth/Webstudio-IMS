@@ -189,10 +189,63 @@ async def test_export_inventory_xlsx(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     workbook = load_workbook(BytesIO(response.content), read_only=True)
-    sheet = workbook.active
+    # Two sheets: a per-model summary and a per-serial detail sheet.
+    assert workbook.sheetnames == ["By Model", "Detail"]
+
+    summary = list(workbook["By Model"].iter_rows(values_only=True))
+    assert summary[0] == (
+        "Brand",
+        "Model Number",
+        "Model Name",
+        "Configuration",
+        "Quantity",
+        "Serial Numbers",
+    )
+    model_row = next(row for row in summary[1:] if row[1] == "X1502ZA")
+    assert model_row[0] == "ASUS"
+    assert "Intel i5" in model_row[3]
+    assert "16GB" in model_row[3]
+    # Stock report includes all statuses; both seeded units belong to this model.
+    assert model_row[4] == 2
+    assert "SN-RPT-001" in model_row[5]
+
+    detail = list(workbook["Detail"].iter_rows(values_only=True))
+    header = detail[0]
+    assert header[0] == "Serial Number"
+    assert "Configuration" in header
+    assert any(row[0] == "SN-RPT-001" for row in detail[1:])
+
+
+@pytest.mark.asyncio
+async def test_export_sales_xlsx_enriched_columns(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    main_admin_headers: dict[str, str],
+) -> None:
+    await _seed_report_data(db_session)
+    response = await api_client.get(
+        "/api/v1/reports/export",
+        params={"report_type": "sales", "format": "xlsx"},
+        headers=main_admin_headers,
+    )
+    assert response.status_code == 200
+    workbook = load_workbook(BytesIO(response.content), read_only=True)
+    sheet = workbook["Sales"]
     rows = list(sheet.iter_rows(values_only=True))
-    assert rows[0][0] == "Serial Number"
-    assert any(row[0] == "SN-RPT-001" for row in rows[1:])
+    header = rows[0]
+    for expected in (
+        "Amount",
+        "Model Number",
+        "Serial Number",
+        "Configuration",
+        "Salesperson",
+        "Additional Products",
+        "Customer",
+    ):
+        assert expected in header
+    sold_row = next(row for row in rows[1:] if "SN-RPT-002" in row)
+    customer_idx = header.index("Customer")
+    assert sold_row[customer_idx] == "Acme Corp"
 
 
 @pytest.mark.asyncio

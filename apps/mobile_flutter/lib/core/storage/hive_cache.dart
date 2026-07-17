@@ -1,6 +1,13 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../network/json_map.dart';
+
 /// Offline cache boxes — sync state, profile, and generic key-value cache.
+///
+/// Boxes are opened as `Box<dynamic>` (not `Box<Map<String, dynamic>>`) because
+/// Hive deserializes maps as `Map<dynamic, dynamic>`. Typed boxes cast on
+/// [Box.get] and crash startup with:
+/// `type '_Map<dynamic, dynamic>' is not a subtype of type 'Map<String, dynamic>?'`.
 class HiveCache {
   HiveCache._();
 
@@ -14,21 +21,26 @@ class HiveCache {
   static Future<void> init() async {
     await Hive.initFlutter();
     await Future.wait([
-      Hive.openBox<Map<String, dynamic>>(syncStateBox),
-      Hive.openBox<Map<String, dynamic>>(profileBox),
+      Hive.openBox<dynamic>(syncStateBox),
+      Hive.openBox<dynamic>(profileBox),
       Hive.openBox<dynamic>(settingsBox),
-      Hive.openBox<Map<String, dynamic>>(entityCacheBox),
-      Hive.openBox<Map<String, dynamic>>(pendingOpsBox),
-      Hive.openBox<Map<String, dynamic>>(apiCacheBox),
+      Hive.openBox<dynamic>(entityCacheBox),
+      Hive.openBox<dynamic>(pendingOpsBox),
+      Hive.openBox<dynamic>(apiCacheBox),
     ]);
   }
 
-  static Box<Map<String, dynamic>> get syncState => Hive.box<Map<String, dynamic>>(syncStateBox);
-  static Box<Map<String, dynamic>> get profile => Hive.box<Map<String, dynamic>>(profileBox);
+  static Box<dynamic> get syncState => Hive.box<dynamic>(syncStateBox);
+  static Box<dynamic> get profile => Hive.box<dynamic>(profileBox);
   static Box<dynamic> get settings => Hive.box<dynamic>(settingsBox);
-  static Box<Map<String, dynamic>> get entityCache => Hive.box<Map<String, dynamic>>(entityCacheBox);
-  static Box<Map<String, dynamic>> get pendingOps => Hive.box<Map<String, dynamic>>(pendingOpsBox);
-  static Box<Map<String, dynamic>> get apiCache => Hive.box<Map<String, dynamic>>(apiCacheBox);
+  static Box<dynamic> get entityCache => Hive.box<dynamic>(entityCacheBox);
+  static Box<dynamic> get pendingOps => Hive.box<dynamic>(pendingOpsBox);
+  static Box<dynamic> get apiCache => Hive.box<dynamic>(apiCacheBox);
+
+  /// Safe map read — coerces Hive's `Map<dynamic, dynamic>` without type casts.
+  static Map<String, dynamic>? readMap(Box<dynamic> box, Object key) {
+    return asJsonMapOrNull(box.get(key));
+  }
 
   static Future<void> clearSensitive() async {
     await profile.clear();

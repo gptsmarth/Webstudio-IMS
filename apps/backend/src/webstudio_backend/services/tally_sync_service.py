@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
@@ -21,9 +23,14 @@ from webstudio_backend.infrastructure.database.enums import (
     NotificationType,
     TallyLineOutcome,
     TallyProcessingStatus,
+    TallyPurchaseStatus,
     TallySyncRunStatus,
 )
 from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
+from webstudio_backend.infrastructure.database.models.tally_purchase_line import TallyPurchaseLine
+from webstudio_backend.infrastructure.database.models.tally_purchase_voucher import (
+    TallyPurchaseVoucher,
+)
 from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
     InventoryItemRepository,
 )
@@ -47,6 +54,9 @@ from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
     TallyProcessedInvoiceRepository,
 )
+from webstudio_backend.infrastructure.repositories.tally_purchase_repository import (
+    TallyPurchaseRepository,
+)
 from webstudio_backend.infrastructure.repositories.tally_sync_history_repository import (
     TallySyncHistoryRepository,
 )
@@ -56,6 +66,7 @@ from webstudio_backend.infrastructure.repositories.tally_sync_log_repository imp
 from webstudio_backend.integrations.tally.constants import (
     DEFAULT_SYNC_INTERVAL_SECONDS,
     MONITORED_VOUCHER_TYPES,
+    PURCHASE_VOUCHER_TYPES,
     VOUCHER_TYPE_STORE_MAP,
 )
 from webstudio_backend.integrations.tally.gst import resolve_line_sale_amounts
@@ -67,6 +78,7 @@ from webstudio_backend.integrations.tally.incremental_sync import (
     resolve_incremental_from_date,
     tally_sync_had_meaningful_progress,
 )
+from webstudio_backend.integrations.tally.purchase_normalization import _collapse
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.integrations.tally.xml_parser import (
@@ -121,6 +133,7 @@ class TallySyncService:
         self._company_sync = TallyCompanySyncRepository(session)
         self._processed_invoices = TallyProcessedInvoiceRepository(session)
         self._processed_lines = TallyProcessedInvoiceLineRepository(session)
+        self._purchase = TallyPurchaseRepository(session)
         self._decision_logs = TallyLineDecisionLogRepository(session)
         self._sync_logs = TallySyncLogRepository(session)
         self._sync_history = TallySyncHistoryRepository(session)
@@ -519,6 +532,11 @@ class TallySyncService:
                     "status": run_status.value,
                 },
             )
+
+        # Additive Purchase Import Queue projection. Runs AFTER sales processing and
+        # is fully isolated: any failure here NEVER affects the sales sync outcome,
+        # the GUID watermark, or company-sync state.
+        await self._project_purchase_queue(all_vouchers, company_sync)
 
         now = datetime.now(UTC)
         duration_ms = int((now - started_at).total_seconds() * 1000)
@@ -1211,6 +1229,113 @@ class TallySyncService:
             label = f"{label} {part_number}"
         return label
 
+    @staticmethod
+    def _purchase_decimal(value: str | Decimal | None) -> Decimal | None:
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (ValueError, ArithmeticError):
+            return None
+
+    async def _project_purchase_queue(
+        self,
+        vouchers: list[TallyVoucher],
+        company_sync: TallyCompanySync,
+    ) -> None:
+        """Project Purchase vouchers into the Purchase Import Queue (idempotent by GUID).
+
+        This creates NO inventory and NEVER raises into the sales pipeline. Each
+        voucher is upserted inside its own SAVEPOINT so a single bad voucher cannot
+        poison the rest of the sync transaction.
+        """
+        purchase_vouchers = [
+            voucher for voucher in vouchers if voucher.voucher_type in PURCHASE_VOUCHER_TYPES
+        ]
+        if not purchase_vouchers:
+            return
+        for voucher in purchase_vouchers:
+            try:
+                async with self._session.begin_nested():
+                    await self._upsert_purchase_voucher(voucher, company_sync)
+            except Exception as exc:  # noqa: BLE001 — never break sales sync
+                logger.warning(
+                    "Purchase queue projection skipped voucher {}: {}", voucher.guid, exc
+                )
+
+    async def _upsert_purchase_voucher(
+        self,
+        voucher: TallyVoucher,
+        company_sync: TallyCompanySync,
+    ) -> None:
+        now = datetime.now(UTC)
+        existing = await self._purchase.get_voucher_by_guid(company_sync.id, voucher.guid)
+        if existing is not None:
+            existing.last_seen_at = now
+            if existing.raw_xml_gzip is None and voucher.raw_xml:
+                existing.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
+            await self._session.flush()
+            return
+
+        totals = voucher.totals
+        reference_number = None
+        if voucher.printed_invoice_number and (
+            voucher.printed_invoice_number != voucher.voucher_number
+        ):
+            reference_number = voucher.printed_invoice_number
+
+        header = TallyPurchaseVoucher(
+            tally_company_sync_id=company_sync.id,
+            tally_voucher_guid=voucher.guid,
+            tally_master_id=voucher.master_id,
+            tally_voucher_number=voucher.voucher_number,
+            printed_invoice_number=voucher.printed_invoice_number,
+            reference_number=reference_number,
+            voucher_type=voucher.voucher_type,
+            voucher_date=voucher.voucher_date,
+            supplier_name=voucher.party_name,
+            subtotal=totals.subtotal,
+            discount_amount=totals.discount_amount,
+            round_off=totals.round_off,
+            cgst_amount=totals.cgst_amount,
+            sgst_amount=totals.sgst_amount,
+            igst_amount=totals.igst_amount,
+            cess_amount=totals.cess_amount,
+            grand_total=totals.grand_total or (self._purchase_decimal(voucher.amount)),
+            narration=voucher.narration,
+            raw_xml_gzip=(
+                gzip.compress(voucher.raw_xml.encode("utf-8")) if voucher.raw_xml else None
+            ),
+            status=TallyPurchaseStatus.PENDING,
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        for idx, line in enumerate(voucher.inventory_lines):
+            serials = list(line.batch_allocations)
+            if not serials and line.serial_number:
+                serials = [line.serial_number]
+            header.lines.append(
+                TallyPurchaseLine(
+                    line_index=idx,
+                    stock_item_name=line.stock_item_name or "",
+                    group_key=_collapse(line.stock_item_name or ""),
+                    quantity=line.quantity,
+                    serials_json=json.dumps(serials),
+                    serial_source=line.serial_source,
+                    rate=self._purchase_decimal(line.rate),
+                    amount=self._purchase_decimal(line.amount),
+                    taxable_amount=self._purchase_decimal(line.taxable_amount),
+                    cgst_amount=self._purchase_decimal(line.cgst_amount),
+                    sgst_amount=self._purchase_decimal(line.sgst_amount),
+                    igst_amount=self._purchase_decimal(line.igst_amount),
+                    cess_amount=self._purchase_decimal(line.cess_amount),
+                    line_total=self._purchase_decimal(line.line_total or line.amount),
+                )
+            )
+        await self._purchase.add_voucher(header)
+
     async def _resolve_store_location(self, voucher_type: str):
         store_name = VOUCHER_TYPE_STORE_MAP.get(voucher_type)
         if not store_name:
@@ -1325,6 +1450,8 @@ class TallySyncService:
                 or voucher.voucher_date >= last_imported_voucher_date
             ):
                 last_imported_voucher_date = voucher.voucher_date
+
+        await self._project_purchase_queue(vouchers, company_sync)
 
         now = datetime.now(UTC)
         duration_ms = int((now - started_at).total_seconds() * 1000)

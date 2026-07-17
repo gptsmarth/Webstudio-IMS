@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
+  ShoppingCart,
   Layers,
   Users,
   ScrollText,
@@ -19,6 +20,7 @@ export type WorkspaceRoute =
   | 'dashboard'
   | 'stock'
   | 'inventory'
+  | 'purchase'
   | 'sales'
   | 'catalogue'
   | 'notifications'
@@ -61,6 +63,14 @@ export const NAV_ITEMS: NavItemConfig[] = [
     group: 'operations',
     permission: ROUTE_PERMISSIONS.inventory,
     description: 'Receive, transfer, and manage serial-tracked inventory by brand and model.',
+  },
+  {
+    id: 'purchase',
+    label: 'Purchase',
+    icon: ShoppingCart,
+    group: 'operations',
+    permission: ROUTE_PERMISSIONS.purchase,
+    description: 'Review Tally purchase vouchers and import stock into inventory after approval.',
   },
   {
     id: 'sales',

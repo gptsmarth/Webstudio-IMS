@@ -21,13 +21,33 @@ from webstudio_backend.infrastructure.repositories.report_repository import (
     ReportRepository,
     ReportSummary,
     SaleDetailRow,
+    SalesExportRow,
     SalesReportRow,
+)
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_repository import (
+    TallyProcessedInvoiceLineRepository,
 )
 from webstudio_backend.services.report_export_service import ReportExportService, map_row_batches
 
 
+def _format_additional_products(lines: Sequence[object]) -> str:
+    segments: list[str] = []
+    for line in lines:
+        name = (getattr(line, "stock_item_name", None) or "Item").strip()
+        quantity = getattr(line, "quantity", None)
+        amount = getattr(line, "line_total", None)
+        segment = name
+        if quantity:
+            segment = f"{segment} x{quantity}"
+        if amount is not None:
+            segment = f"{segment} = {amount}"
+        segments.append(segment)
+    return "; ".join(segments)
+
+
 class ReportService:
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self._repo = ReportRepository(session)
         self._exporter = ReportExportService()
 
@@ -84,18 +104,26 @@ class ReportService:
         title = f"WEBSTUDIO IMS {report_type.value.replace('_', ' ').title()} Report"
 
         if report_type is ReportType.INVENTORY:
-            batches = map_row_batches(
-                self._repo.stream_inventory(filters),
-                self._exporter.inventory_row_values,
+            inventory_rows: list[InventoryReportRow] = []
+            async for batch in self._repo.stream_inventory(filters):
+                inventory_rows.extend(batch)
+            del generated_at
+            return await self._exporter.build_inventory_export(
+                export_format=export_format,
+                rows=inventory_rows,
             )
-            headers = self._exporter.inventory_headers()
-        elif report_type is ReportType.SALES:
-            batches = map_row_batches(
-                self._repo.stream_sales(filters),
-                self._exporter.sales_row_values,
+        if report_type is ReportType.SALES:
+            sales_rows: list[SalesExportRow] = []
+            async for batch in self._repo.stream_sales_export(filters):
+                sales_rows.extend(batch)
+            additional_by_guid = await self._additional_products_by_guid(sales_rows)
+            del generated_at
+            return await self._exporter.build_sales_export(
+                export_format=export_format,
+                rows=sales_rows,
+                additional_by_guid=additional_by_guid,
             )
-            headers = self._exporter.sales_headers()
-        elif report_type is ReportType.AUDIT:
+        if report_type is ReportType.AUDIT:
             batches = map_row_batches(
                 self._repo.stream_audit(filters),
                 self._exporter.audit_row_values,
@@ -130,6 +158,19 @@ class ReportService:
             headers=headers,
             row_batches=batches,
         )
+
+    async def _additional_products_by_guid(self, rows: Sequence[SalesExportRow]) -> dict[str, str]:
+        """Map each Tally voucher GUID to a readable 'additional products' summary."""
+        guids = {row.tally_voucher_guid for row in rows if row.tally_voucher_guid}
+        if not guids:
+            return {}
+        line_repo = TallyProcessedInvoiceLineRepository(self._session)
+        result: dict[str, str] = {}
+        for guid in guids:
+            lines = await line_repo.list_additional_products_for_guid(guid)
+            if lines:
+                result[guid] = _format_additional_products(lines)
+        return result
 
     @staticmethod
     def _static_batches(

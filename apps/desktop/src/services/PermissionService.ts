@@ -20,6 +20,10 @@ export const P = {
     cancel: 'sales:cancel',
     export: 'sales:export',
   },
+  purchase: {
+    view: 'purchase:view',
+    import: 'purchase:import',
+  },
   reports: {
     view: 'reports:view',
     export: 'reports:export',
@@ -147,6 +151,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   dashboard: P.dashboard.view,
   stock: P.inventory.view,
   inventory: P.inventory.create,
+  purchase: P.purchase.view,
   sales: P.sales.view,
   catalogue: P.brands.view,
   notifications: P.notifications.view,

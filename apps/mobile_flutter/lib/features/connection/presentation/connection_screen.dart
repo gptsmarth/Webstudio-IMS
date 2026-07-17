@@ -85,7 +85,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
           Text('Connect to Server', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'WEBSTUDIO IMS needs the API server before sign-in can begin.',
+            'WEBSTUDIO searches your Wi‑Fi automatically. You can also type the server address manually anytime.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           if (currentUrl.isNotEmpty) ...[

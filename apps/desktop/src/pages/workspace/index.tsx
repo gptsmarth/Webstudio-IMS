@@ -1,6 +1,7 @@
 export { DashboardPage } from './DashboardPage';
 export { StockPage } from './StockPage';
 export { InventoryPage } from './InventoryPage';
+export { PurchasePage } from './PurchasePage';
 export { SalesPage } from './SalesPage';
 export { CataloguePage } from './CataloguePage';
 export { ReportsPage } from './ReportsPage';

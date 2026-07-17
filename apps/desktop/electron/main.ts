@@ -333,10 +333,17 @@ if (!gotTheLock) {
     writeJson(getConfigPath(), config);
   });
 
-  ipcMain.handle('config:getEnv', () => ({
-    mode: APP_MODE,
-    apiBaseUrl: API_BASE_URL,
-  }));
+  ipcMain.handle('config:getEnv', () => {
+    const config = readJson(getConfigPath());
+    const saved =
+      typeof config.apiBaseUrl === 'string' ? config.apiBaseUrl.trim().replace(/\/$/, '') : '';
+    return {
+      mode: APP_MODE,
+      // Prefer the URL saved from Connection setup so LAN clients keep
+      // http://<server-ip>:8000 across restarts (default 127.0.0.1 only works on the server PC).
+      apiBaseUrl: saved || API_BASE_URL,
+    };
+  });
 
   ipcMain.handle('window:getZoomFactor', () => readZoomFactor());
   ipcMain.handle('window:setZoomFactor', (_event, factor: unknown) => {

@@ -13,6 +13,7 @@ import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/webstudio_logo.dart';
+import '../../connection/presentation/connection_controller.dart';
 import 'auth_controller.dart';
 
 class BootstrapScreen extends ConsumerStatefulWidget {
@@ -48,7 +49,7 @@ class _BootstrapScreenState extends ConsumerState<BootstrapScreen> {
     if (!mounted) return;
 
     if (!online) {
-      final cachedUser = HiveCache.profile.get('current_user');
+      final cachedUser = HiveCache.readMap(HiveCache.profile, 'current_user');
       final hasToken = await ref.read(authRepositoryProvider).restoreSession();
       if (!mounted) return;
       if (cachedUser != null || hasToken) {
@@ -66,28 +67,47 @@ class _BootstrapScreenState extends ConsumerState<BootstrapScreen> {
     setState(() => _status = 'Checking server connection…');
     final config = ref.read(appConfigProvider);
     final client = ref.read(apiClientProvider);
+    final needsDiscovery = AppConfig.shouldOpenConnectionSetupFirst(config.apiBaseUrl);
 
-    if (AppConfig.shouldOpenConnectionSetupFirst(config.apiBaseUrl)) {
+    var healthy = false;
+    if (!needsDiscovery) {
+      healthy = await client
+          .checkHealthLive()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!mounted) return;
-      context.go(AppRoutes.connection);
-      return;
     }
 
-    final healthy = await client
-        .checkHealthLive()
-        .timeout(const Duration(seconds: 5), onTimeout: () => false);
-    if (!mounted) return;
-
     if (!healthy) {
-      setState(() => _status = 'Server unreachable. Opening connection setup…');
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      setState(() => _status = 'Searching for WEBSTUDIO Server on your network…');
+      final discovered = await _autoDiscoverServer(
+        preferredUrl: needsDiscovery ? null : config.apiBaseUrl,
+      );
       if (!mounted) return;
-      context.go(AppRoutes.connection);
-      return;
+      if (!discovered) {
+        setState(() => _status = 'Server not found. Opening connection setup…');
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (!mounted) return;
+        context.go(AppRoutes.connection);
+        return;
+      }
     }
 
     setState(() => _status = 'Restoring your session…');
     await _finishAuthBootstrap();
+  }
+
+  /// mDNS + saved/static candidates — saves URL and updates the API client on success.
+  Future<bool> _autoDiscoverServer({String? preferredUrl}) async {
+    final repo = ref.read(serverRepositoryProvider);
+    final result = await repo
+        .discoverBestServer(preferredUrl: preferredUrl)
+        .timeout(const Duration(seconds: 20), onTimeout: () => null);
+    if (result == null || !result.success) return false;
+
+    await ref.read(appConfigProvider.notifier).setApiBaseUrl(result.url);
+    ref.read(apiClientProvider).updateConfig(ref.read(appConfigProvider));
+    await repo.rememberSuccessfulConnection(result);
+    return true;
   }
 
   Future<void> _finishAuthBootstrap() async {

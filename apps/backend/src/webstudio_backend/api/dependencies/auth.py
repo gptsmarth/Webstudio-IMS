@@ -150,6 +150,10 @@ SalesViewDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:vi
 SalesCreateDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:create"))]
 SalesCancelDep = Annotated[AuthenticatedUser, Depends(require_permission("sales:cancel"))]
 
+# Purchase import
+PurchaseViewDep = Annotated[AuthenticatedUser, Depends(require_permission("purchase:view"))]
+PurchaseImportDep = Annotated[AuthenticatedUser, Depends(require_permission("purchase:import"))]
+
 # Reports
 ReportsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("reports:view"))]
 ReportsExportDep = Annotated[AuthenticatedUser, Depends(require_permission("reports:export"))]

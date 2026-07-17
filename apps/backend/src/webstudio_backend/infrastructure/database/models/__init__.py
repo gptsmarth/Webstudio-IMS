@@ -46,6 +46,10 @@ from webstudio_backend.infrastructure.database.models.tally_processed_invoice im
 from webstudio_backend.infrastructure.database.models.tally_processed_invoice_line import (
     TallyProcessedInvoiceLine,
 )
+from webstudio_backend.infrastructure.database.models.tally_purchase_line import TallyPurchaseLine
+from webstudio_backend.infrastructure.database.models.tally_purchase_voucher import (
+    TallyPurchaseVoucher,
+)
 from webstudio_backend.infrastructure.database.models.tally_sync_history import TallySyncHistory
 from webstudio_backend.infrastructure.database.models.tally_sync_log import TallySyncLog
 from webstudio_backend.infrastructure.database.models.user import User
@@ -77,6 +81,8 @@ __all__ = [
     "TallyLineDecisionLog",
     "TallyProcessedInvoice",
     "TallyProcessedInvoiceLine",
+    "TallyPurchaseLine",
+    "TallyPurchaseVoucher",
     "TallySyncHistory",
     "TallySyncLog",
     "User",

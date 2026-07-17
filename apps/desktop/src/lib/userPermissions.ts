@@ -8,6 +8,7 @@ export type PermissionModuleId =
   | 'stock'
   | 'inventory'
   | 'sales'
+  | 'purchase'
   | 'reports'
   | 'catalogue'
   | 'administration'
@@ -47,6 +48,7 @@ export const PERMISSION_MODULE_ORDER: { id: PermissionModuleId; label: string }[
   { id: 'stock', label: 'Stock' },
   { id: 'inventory', label: 'Inventory (admin)' },
   { id: 'sales', label: 'Sales' },
+  { id: 'purchase', label: 'Purchase' },
   { id: 'reports', label: 'Reports' },
   { id: 'catalogue', label: 'Catalogue' },
   { id: 'administration', label: 'Administration' },
@@ -225,6 +227,20 @@ const PERMISSION_REGISTRY: PermissionMetadata[] = [
     description: 'Export sales data',
     module: 'sales',
     i18nKey: 'permission.sales.export',
+  },
+  {
+    permission: 'purchase:view',
+    label: 'View purchase queue',
+    description: 'Open the Purchase tab and review Tally purchase vouchers',
+    module: 'purchase',
+    i18nKey: 'permission.purchase.view',
+  },
+  {
+    permission: 'purchase:import',
+    label: 'Import to inventory',
+    description: 'Import verified purchase voucher stock into inventory',
+    module: 'purchase',
+    i18nKey: 'permission.purchase.import',
   },
   {
     permission: 'reports:view',

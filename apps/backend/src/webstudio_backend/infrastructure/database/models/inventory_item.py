@@ -12,7 +12,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from webstudio_backend.infrastructure.database.base import Base
 from webstudio_backend.infrastructure.database.constants import DATABASE_SCHEMA
 from webstudio_backend.infrastructure.database.enums import (
+    INVENTORY_SOURCE_ENUM_NAME,
     INVENTORY_STATUS_ENUM_NAME,
+    InventorySource,
     InventoryStatus,
 )
 from webstudio_backend.infrastructure.database.mixins import TimestampMixin, UuidPrimaryKeyMixin
@@ -51,6 +53,18 @@ class InventoryItem(Base, UuidPrimaryKeyMixin, TimestampMixin):
     )
     is_archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
+    )
+    inventory_source: Mapped[InventorySource] = mapped_column(
+        Enum(
+            InventorySource,
+            name=INVENTORY_SOURCE_ENUM_NAME,
+            schema=DATABASE_SCHEMA,
+            native_enum=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=InventorySource.MANUAL,
+        server_default=InventorySource.MANUAL.value,
     )
     purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

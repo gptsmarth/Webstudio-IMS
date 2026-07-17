@@ -70,6 +70,10 @@ def _coalesce_cpu():
     return func.coalesce(ProductModel.cpu, Sale.snapshot_cpu)
 
 
+def _coalesce_gpu():
+    return func.coalesce(ProductModel.gpu, Sale.snapshot_gpu)
+
+
 def _coalesce_ram_gb():
     return func.coalesce(ProductModel.ram_gb, Sale.snapshot_ram_gb)
 
@@ -115,6 +119,44 @@ class InventoryReportRow:
     is_archived: bool
     purchase_date: date | None
     created_at: datetime
+    product_model_id: uuid.UUID | None = None
+    part_number: str | None = None
+    cpu: str | None = None
+    gpu: str | None = None
+    ram_gb: int | None = None
+    storage_value: str | None = None
+    storage_unit: str | None = None
+    storage_type: str | None = None
+    display: str | None = None
+    purchase_price: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SalesExportRow:
+    """Enriched, flat row used only by the Excel/PDF sales export."""
+
+    serial_number: str
+    brand_name: str
+    model_number: str
+    model_name: str
+    location_name: str
+    invoice_number: str
+    customer_name: str | None
+    payment_mode: str | None
+    sale_amount: float | None
+    sale_amount_excluding_gst: float | None
+    purchase_price: float | None
+    sale_source: str
+    sold_at: datetime
+    recorded_by_display_name: str | None
+    cpu: str | None
+    gpu: str | None
+    ram_gb: int | None
+    storage_value: str | None
+    storage_unit: str | None
+    storage_type: str | None
+    color: str | None
+    tally_voucher_guid: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +298,16 @@ class ReportRepository:
         async for batch in self._stream_rows(statement, batch_size):
             yield [self._map_sales_row(row) for row in batch]
 
+    async def stream_sales_export(
+        self,
+        filters: ReportFilters,
+        *,
+        batch_size: int = STREAM_BATCH_SIZE,
+    ) -> AsyncIterator[list[SalesExportRow]]:
+        statement = self._sales_export_select(filters).order_by(Sale.sold_at.desc())
+        async for batch in self._stream_rows(statement, batch_size):
+            yield [self._map_sales_export_row(row) for row in batch]
+
     async def stream_audit(
         self,
         filters: ReportFilters,
@@ -380,6 +432,16 @@ class ReportRepository:
                 InventoryItem.is_archived,
                 InventoryItem.purchase_date,
                 InventoryItem.created_at,
+                ProductModel.id,
+                ProductModel.part_number,
+                ProductModel.cpu,
+                ProductModel.gpu,
+                ProductModel.ram_gb,
+                ProductModel.storage_value,
+                func.cast(ProductModel.storage_unit, String),
+                func.cast(ProductModel.storage_type, String),
+                ProductModel.display,
+                InventoryItem.purchase_price,
             )
             .select_from(
                 InventoryItem.__table__.join(
@@ -528,6 +590,38 @@ class ReportRepository:
             Sale.serial_source,
         ).select_from(
             _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
+        )
+
+    def _sales_export_select(self, filters: ReportFilters):
+        return (
+            select(
+                _coalesce_serial(),
+                _coalesce_brand_name(),
+                _coalesce_model_number(),
+                _coalesce_model_name(),
+                _coalesce_location_name(),
+                Sale.invoice_number,
+                Sale.customer_name,
+                Sale.payment_mode,
+                Sale.sale_amount,
+                Sale.sale_amount_excluding_gst,
+                Sale.snapshot_purchase_price,
+                Sale.sale_source,
+                Sale.sold_at,
+                User.display_name,
+                _coalesce_cpu(),
+                _coalesce_gpu(),
+                _coalesce_ram_gb(),
+                _coalesce_storage_value(),
+                _coalesce_storage_unit(),
+                _coalesce_storage_type(),
+                _coalesce_color(),
+                Sale.tally_voucher_guid,
+            )
+            .select_from(
+                _sales_from_clause().outerjoin(User, Sale.recorded_by_user_id == User.id),
+            )
+            .where(*self._sales_where_clauses(filters))
         )
 
     def _sales_where_clauses(self, filters: ReportFilters) -> list:
@@ -926,6 +1020,16 @@ class ReportRepository:
             is_archived,
             purchase_date,
             created_at,
+            product_model_id,
+            part_number,
+            cpu,
+            gpu,
+            ram_gb,
+            storage_value,
+            storage_unit,
+            storage_type,
+            display,
+            purchase_price,
         ) = row
         return InventoryReportRow(
             serial_number=serial,
@@ -938,6 +1042,16 @@ class ReportRepository:
             is_archived=is_archived,
             purchase_date=purchase_date,
             created_at=created_at,
+            product_model_id=product_model_id,
+            part_number=part_number,
+            cpu=cpu,
+            gpu=gpu,
+            ram_gb=ram_gb,
+            storage_value=str(storage_value) if storage_value is not None else None,
+            storage_unit=storage_unit,
+            storage_type=storage_type,
+            display=display,
+            purchase_price=float(purchase_price) if purchase_price is not None else None,
         )
 
     @staticmethod
@@ -987,6 +1101,59 @@ class ReportRepository:
             sold_at=sold_at,
             recorded_by_user_id=recorded_by_user_id,
             recorded_by_display_name=recorded_by_display_name,
+        )
+
+    @staticmethod
+    def _map_sales_export_row(row) -> SalesExportRow:
+        (
+            serial,
+            brand_name,
+            model_number,
+            model_name,
+            location_name,
+            invoice_number,
+            customer_name,
+            payment_mode,
+            sale_amount,
+            sale_amount_excluding_gst,
+            purchase_price,
+            sale_source,
+            sold_at,
+            recorded_by_display_name,
+            cpu,
+            gpu,
+            ram_gb,
+            storage_value,
+            storage_unit,
+            storage_type,
+            color,
+            tally_voucher_guid,
+        ) = row
+        return SalesExportRow(
+            serial_number=serial,
+            brand_name=brand_name,
+            model_number=model_number,
+            model_name=model_name,
+            location_name=location_name,
+            invoice_number=invoice_number,
+            customer_name=customer_name,
+            payment_mode=payment_mode,
+            sale_amount=float(sale_amount) if sale_amount is not None else None,
+            sale_amount_excluding_gst=(
+                float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
+            ),
+            purchase_price=float(purchase_price) if purchase_price is not None else None,
+            sale_source=sale_source.value if hasattr(sale_source, "value") else str(sale_source),
+            sold_at=sold_at,
+            recorded_by_display_name=recorded_by_display_name,
+            cpu=cpu,
+            gpu=gpu,
+            ram_gb=ram_gb,
+            storage_value=str(storage_value) if storage_value is not None else None,
+            storage_unit=storage_unit,
+            storage_type=storage_type,
+            color=color,
+            tally_voucher_guid=tally_voucher_guid,
         )
 
     @staticmethod

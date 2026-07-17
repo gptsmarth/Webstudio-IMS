@@ -44,6 +44,7 @@ String _branchTitle(String location) {
 const _nestedTitles = <String, String>{
   AppRoutes.reports: 'Reports',
   AppRoutes.notifications: 'Notifications',
+  AppRoutes.purchase: 'Purchase',
   AppRoutes.backup: 'Backup',
   AppRoutes.tally: 'Tally',
   AppRoutes.audit: 'Audit',

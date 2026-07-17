@@ -124,6 +124,21 @@ const List<PermissionGroup> kAssignablePermissionGroups = [
     ],
   ),
   PermissionGroup(
+    label: 'Purchase',
+    permissions: [
+      PermissionOption(
+        id: 'purchase:view',
+        label: 'View purchase queue',
+        description: 'Review Tally purchase vouchers awaiting import',
+      ),
+      PermissionOption(
+        id: 'purchase:import',
+        label: 'Import to inventory',
+        description: 'Import verified purchase stock into inventory',
+      ),
+    ],
+  ),
+  PermissionGroup(
     label: 'Reports',
     permissions: [
       PermissionOption(id: 'reports:view', label: 'View reports', description: 'Open Report Center'),

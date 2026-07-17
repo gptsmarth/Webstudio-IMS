@@ -1,0 +1,145 @@
+# WEBSTUDIO IMS — Purchase Import Module API (additive feature)
+# Projects Tally Day Book "Purchase" vouchers into a review queue. Inventory is
+# NEVER auto-created; import requires explicit per-model-group user approval and
+# runs inside a database transaction (rollback on failure).
+openapi: 3.1.0
+info:
+  title: WEBSTUDIO IMS — Purchase Import API
+  version: 1.0.0
+  description: >
+    Purchase Import Queue endpoints. Reuses existing brand, product-model, and
+    inventory infrastructure. Requires `purchase:view` to read the queue and
+    match models, and `purchase:import` to import inventory. Both permissions
+    are always granted to the main admin and are toggleable for custom access
+    roles (RBAC catalogue `purchase:view` / `purchase:import`).
+tags:
+  - name: purchase
+    description: Purchase Import Queue (Tally Day Book Purchase vouchers)
+paths:
+  /api/v1/purchase/queue:
+    get:
+      tags: [purchase]
+      summary: List Purchase Import Queue vouchers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, partially_imported, imported] }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Queue items (Supplier, Purchase Date, Voucher/Invoice/Reference
+            numbers, Voucher GUID, Invoice Total, Tax Breakdown, Status).
+  /api/v1/purchase/queue/{voucher_id}:
+    get:
+      tags: [purchase]
+      summary: Purchase voucher detail with products grouped by model
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: voucher_id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Voucher header + model groups (quantity, serials with
+            per-serial duplicate flags, import state).
+        "404": { description: Voucher not found }
+  /api/v1/purchase/match-model:
+    post:
+      tags: [purchase]
+      summary: Deterministically normalize an incoming model and match within a brand
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand_id, model_number]
+              properties:
+                brand_id: { type: integer, minimum: 1 }
+                model_number: { type: string, minLength: 1, maxLength: 512 }
+      responses:
+        "200":
+          description: Normalized model number, exact matches inside the brand, and
+            an auto_selected_model_id when exactly one active model matches.
+  /api/v1/purchase/match-accessory:
+    post:
+      tags: [purchase]
+      summary: Fuzzy-search brand accessories by part number / model number / name
+      description: >
+        Accessory lookup tolerates the loose free-text stock item names Tally
+        emits. Brand prefixes are stripped and candidates are scored 0..1 by
+        part number, model number, and model name (whole-token, compact, and
+        character-level fuzzy signals), so "ASUS MD102 SILENT" matches a
+        catalogue accessory stored as "MD102". Laptops still use the strict
+        /match-model exact path.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand_id, query]
+              properties:
+                brand_id: { type: integer, minimum: 1 }
+                query:
+                  type: string
+                  minLength: 1
+                  maxLength: 512
+                  description: Tally stock item name and/or operator-typed part/model number.
+      responses:
+        "200":
+          description: >
+            normalized_query, ranked accessory matches (each with a 0..1 score),
+            and an auto_selected_model_id when the best active candidate is
+            confident and unambiguous.
+  /api/v1/purchase/import:
+    post:
+      tags: [purchase]
+      summary: Import one model group into inventory (transactional, user-approved)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [voucher_id, group_key, brand_id, mode, color, current_location_id]
+              properties:
+                voucher_id: { type: integer }
+                group_key: { type: string, maxLength: 512 }
+                brand_id: { type: integer, minimum: 1 }
+                mode: { type: string, enum: [existing, new] }
+                product_model_id: { type: string, format: uuid, nullable: true }
+                new_product_model:
+                  type: object
+                  nullable: true
+                  description: CreateProductModelRequest payload (Add Model wizard reuse).
+                serial_numbers:
+                  type: array
+                  items: { type: string }
+                color: { type: string, minLength: 1, maxLength: 64 }
+                current_location_id: { type: integer, minimum: 1 }
+                status: { type: string, enum: [received, available, reserved, sold], default: available }
+                purchase_price: { type: number, nullable: true, minimum: 0 }
+      responses:
+        "200":
+          description: Import committed (product_model_id, imported_count, voucher_status).
+        "409":
+          description: Duplicate serial(s) in IMS or group already imported.
+        "422":
+          description: Validation failed (quantity != serial count, missing serials, etc.).
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../tally/domain/tally_models.dart';
+import '../../../core/network/json_map.dart';
 
 class AIProviderHealth extends Equatable {
   const AIProviderHealth({
@@ -136,11 +137,11 @@ class SettingsWorkspaceSummary extends Equatable {
   final String companyName;
 
   factory SettingsWorkspaceSummary.fromJson(Map<String, dynamic> json) => SettingsWorkspaceSummary(
-        backup: BackupSettingsSummary.fromJson(json['backup'] as Map<String, dynamic>? ?? {}),
-        tally: TallySettingsSummary.fromJson(json['tally'] as Map<String, dynamic>? ?? {}),
-        integrations: IntegrationsSummary.fromJson(json['integrations'] as Map<String, dynamic>? ?? {}),
-        systemVersion: (json['system'] as Map<String, dynamic>?)?['app_version'] as String? ?? '—',
-        companyName: (json['general'] as Map<String, dynamic>?)?['company_name'] as String? ?? '—',
+        backup: BackupSettingsSummary.fromJson(asJsonMapOrNull(json['backup']) ?? {}),
+        tally: TallySettingsSummary.fromJson(asJsonMapOrNull(json['tally']) ?? {}),
+        integrations: IntegrationsSummary.fromJson(asJsonMapOrNull(json['integrations']) ?? {}),
+        systemVersion: asJsonMapOrNull(json['system'])?['app_version'] as String? ?? '—',
+        companyName: asJsonMapOrNull(json['general'])?['company_name'] as String? ?? '—',
       );
 
   @override

@@ -234,11 +234,11 @@ Future<void> initIntegrationHarness() async {
   final dir = await Directory.systemTemp.createTemp('webstudio_integration');
   Hive.init(dir.path);
   await Future.wait([
-    Hive.openBox<Map<String, dynamic>>(HiveCache.syncStateBox),
-    Hive.openBox<Map<String, dynamic>>(HiveCache.profileBox),
+    Hive.openBox<dynamic>(HiveCache.syncStateBox),
+    Hive.openBox<dynamic>(HiveCache.profileBox),
     Hive.openBox<dynamic>(HiveCache.settingsBox),
-    Hive.openBox<Map<String, dynamic>>(HiveCache.entityCacheBox),
-    Hive.openBox<Map<String, dynamic>>(HiveCache.pendingOpsBox),
-    Hive.openBox<Map<String, dynamic>>(HiveCache.apiCacheBox),
+    Hive.openBox<dynamic>(HiveCache.entityCacheBox),
+    Hive.openBox<dynamic>(HiveCache.pendingOpsBox),
+    Hive.openBox<dynamic>(HiveCache.apiCacheBox),
   ]);
 }

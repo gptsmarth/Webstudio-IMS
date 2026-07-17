@@ -1,3 +1,5 @@
+import '../network/json_map.dart';
+
 enum PendingOperationType { transferLocation, markSold, createInventory }
 
 enum SyncConflictKind { entityUpdatedOnServer, duplicateSerial }
@@ -123,8 +125,8 @@ class PendingOperation {
         createdAt: DateTime.parse(json['created_at'] as String),
         attemptCount: json['attempt_count'] as int? ?? 0,
         lastError: json['last_error'] as String?,
-        conflict: json['conflict'] is Map<String, dynamic>
-            ? SyncConflict.fromJson(json['conflict'] as Map<String, dynamic>)
+        conflict: asJsonMapOrNull(json['conflict']) != null
+            ? SyncConflict.fromJson(asJsonMap(json['conflict']))
             : null,
         entityId: json['entity_id'] as String?,
         entityUpdatedAt: json['entity_updated_at'] as String?,

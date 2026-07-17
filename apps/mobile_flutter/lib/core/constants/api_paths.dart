@@ -24,6 +24,12 @@ abstract final class ApiPaths {
   static const brands = '/api/v1/brands';
   static const locations = '/api/v1/locations';
   static const productModels = '/api/v1/product-models';
+
+  static const purchaseQueue = '/api/v1/purchase/queue';
+  static String purchaseVoucher(int id) => '/api/v1/purchase/queue/$id';
+  static const purchaseMatchModel = '/api/v1/purchase/match-model';
+  static const purchaseMatchAccessory = '/api/v1/purchase/match-accessory';
+  static const purchaseImport = '/api/v1/purchase/import';
   static const sales = '/api/v1/sales';
   static const auditLogs = '/api/v1/audit_logs';
   static String auditLogsByInventory(String id) => '$auditLogs/by-inventory-item/$id';

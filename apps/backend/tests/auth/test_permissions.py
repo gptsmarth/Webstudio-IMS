@@ -47,6 +47,35 @@ def test_admin_has_inventory_write_not_users() -> None:
     assert not role_has_permission(role, "settings:view")
 
 
+def test_purchase_permissions_by_role() -> None:
+    from webstudio_backend.core.permissions import (
+        ASSIGNABLE_PERMISSIONS,
+        normalize_permission_set,
+    )
+
+    # Main admin always has the full purchase surface.
+    main_admin = set(permissions_for_role(UserRole.MAIN_ADMIN))
+    assert {"purchase:view", "purchase:import"}.issubset(main_admin)
+
+    # Admin can import; salesperson cannot see or import purchases.
+    assert role_has_permission(UserRole.ADMIN, "purchase:view")
+    assert role_has_permission(UserRole.ADMIN, "purchase:import")
+    assert not role_has_permission(UserRole.SALESPERSON, "purchase:view")
+    assert not role_has_permission(UserRole.SALESPERSON, "purchase:import")
+
+    # Purchase permissions are assignable to custom roles.
+    assert "purchase:view" in ASSIGNABLE_PERMISSIONS
+    assert "purchase:import" in ASSIGNABLE_PERMISSIONS
+
+    # Granting import implies view plus the catalogue reads the import flow needs.
+    normalized = normalize_permission_set({"purchase:import"})
+    assert "purchase:view" in normalized
+    assert "brands:view" in normalized
+    assert "product_models:view" in normalized
+    assert "locations:view" in normalized
+    assert "product_models:create" in normalized
+
+
 def test_role_has_any_permission() -> None:
     assert role_has_any_permission(UserRole.ADMIN, "users:view", "inventory:edit")
     assert not role_has_any_permission(UserRole.SALESPERSON, "users:view", "inventory:create")

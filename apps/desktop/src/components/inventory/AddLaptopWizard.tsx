@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { STORAGE_TYPES, STORAGE_UNITS } from '../../lib/catalogue';
 import { composeModelNotes } from '../../lib/modelNotes';
 import { parseApiError } from '../../lib/apiError';
@@ -54,6 +54,17 @@ interface AddLaptopWizardProps {
   loading: boolean;
   onClose: () => void;
   onConfirm: (payload: AddLaptopWizardRequest) => Promise<void>;
+  /**
+   * Optional prepopulation used by the Purchase Import flow (reuse, additive).
+   * When omitted the wizard behaves exactly as before (manual Add).
+   */
+  initialModelNumber?: string;
+  initialModelName?: string;
+  initialSerials?: string[];
+  /** Default per-unit purchase price (e.g. Tally line total ÷ quantity). Editable. */
+  initialPurchasePrice?: string;
+  titleOverride?: string;
+  submitLabelOverride?: string;
 }
 
 type WizardStep = 'model' | 'specs' | 'units' | 'review';
@@ -78,6 +89,12 @@ export function AddLaptopWizard({
   loading,
   onClose,
   onConfirm,
+  initialModelNumber,
+  initialModelName,
+  initialSerials,
+  initialPurchasePrice,
+  titleOverride,
+  submitLabelOverride,
 }: AddLaptopWizardProps): JSX.Element | null {
   const [step, setStep] = useState<WizardStep>('model');
   const [modelNumber, setModelNumber] = useState('');
@@ -130,23 +147,33 @@ export function AddLaptopWizard({
     }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
+    const seededSerials = (initialSerials ?? []).filter((serial) => serial.trim());
     setStep('model');
-    setModelNumber('');
-    setModelName('');
+    setModelNumber(initialModelNumber ?? '');
+    setModelName(initialModelName ?? '');
     setMode('new');
     setProductModelId('');
     setExistingLookup(null);
     setFetchMessage(null);
     setChecking(false);
     setFetching(false);
-    setUnitCount(1);
-    setUnits([
-      {
-        serial_number: '',
-        current_location_id: locations[0]?.id ?? 0,
-        purchase_price: '',
-      },
-    ]);
+    setUnitCount(Math.max(1, seededSerials.length));
+    const seededPrice = initialPurchasePrice ?? '';
+    setUnits(
+      seededSerials.length > 0
+        ? seededSerials.map((serial) => ({
+            serial_number: serial,
+            current_location_id: locations[0]?.id ?? 0,
+            purchase_price: seededPrice,
+          }))
+        : [
+            {
+              serial_number: '',
+              current_location_id: locations[0]?.id ?? 0,
+              purchase_price: seededPrice,
+            },
+          ],
+    );
     setStatus('available');
     setCpu('');
     setGpu('');
@@ -193,6 +220,11 @@ export function AddLaptopWizard({
       return next.slice(0, count);
     });
   }, [unitCount, locations]);
+
+  const removeUnit = useCallback((index: number) => {
+    setUnits((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+    setUnitCount((count) => Math.max(1, count - 1));
+  }, []);
 
   const applyModel = useCallback((model: ProductModel) => {
     setMode('existing');
@@ -464,7 +496,7 @@ export function AddLaptopWizard({
       <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
         <header className="inv-dialog__header">
           <div>
-            <h2 className="inv-dialog__title">Add laptop — {brandName}</h2>
+            <h2 className="inv-dialog__title">{titleOverride ?? `Add laptop — ${brandName}`}</h2>
             <p className="inv-dialog__lead">
               Brand is fixed to {brandName}. Step {stepLabel(step, mode)}.
               {mode === 'existing' && step === 'units'
@@ -737,6 +769,7 @@ export function AddLaptopWizard({
                   <span>Serial</span>
                   <span>Location</span>
                   <span>Purchase price</span>
+                  <span />
                 </div>
                 {units.length > 1 && (
                   <div className="add-laptop-wizard__apply-all">
@@ -825,6 +858,15 @@ export function AddLaptopWizard({
                         )
                       }
                     />
+                    <button
+                      type="button"
+                      className="app-toolbar-icon-btn"
+                      aria-label="Remove unit"
+                      disabled={units.length <= 1}
+                      onClick={() => removeUnit(index)}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -844,7 +886,7 @@ export function AddLaptopWizard({
                     disabled={loading}
                     onClick={() => void submit()}
                   >
-                    {loading ? 'Adding…' : 'Add to inventory'}
+                    {loading ? 'Adding…' : (submitLabelOverride ?? 'Add to inventory')}
                   </button>
                 ) : (
                   <button
@@ -891,7 +933,7 @@ export function AddLaptopWizard({
                   disabled={loading}
                   onClick={() => void submit()}
                 >
-                  {loading ? 'Adding…' : 'Add to inventory'}
+                  {loading ? 'Adding…' : (submitLabelOverride ?? 'Add to inventory')}
                 </button>
               </div>
             </div>

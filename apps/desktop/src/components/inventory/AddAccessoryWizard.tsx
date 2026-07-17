@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { composeModelNotes } from '../../lib/modelNotes';
 import { parseApiError } from '../../lib/apiError';
 import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload';
@@ -33,6 +33,18 @@ interface AddAccessoryWizardProps {
   loading: boolean;
   onClose: () => void;
   onConfirm: (payload: AddLaptopWizardRequest) => Promise<void>;
+  /**
+   * Optional prepopulation used by the Purchase Import flow (reuse, additive).
+   * When omitted the wizard behaves exactly as before (manual Add accessory).
+   */
+  initialIdentifier?: string;
+  initialIdentifierType?: AccessoryIdentifierType;
+  initialModelName?: string;
+  initialSerials?: string[];
+  /** Default per-unit purchase price (e.g. Tally line total ÷ quantity). Editable. */
+  initialPurchasePrice?: string;
+  titleOverride?: string;
+  submitLabelOverride?: string;
 }
 
 type WizardStep = 'model' | 'specs' | 'units' | 'review';
@@ -61,6 +73,13 @@ export function AddAccessoryWizard({
   loading,
   onClose,
   onConfirm,
+  initialIdentifier,
+  initialIdentifierType,
+  initialModelName,
+  initialSerials,
+  initialPurchasePrice,
+  titleOverride,
+  submitLabelOverride,
 }: AddAccessoryWizardProps): JSX.Element | null {
   const [step, setStep] = useState<WizardStep>('model');
   const [identifierType, setIdentifierType] = useState<AccessoryIdentifierType>('part_number');
@@ -105,11 +124,12 @@ export function AddAccessoryWizard({
     }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
+    const seededSerials = (initialSerials ?? []).filter((serial) => serial.trim());
     setStep('model');
-    setIdentifierType('part_number');
-    setIdentifier('');
+    setIdentifierType(initialIdentifierType ?? 'part_number');
+    setIdentifier(initialIdentifier ?? '');
     setAccessoryKind(null);
-    setModelName('');
+    setModelName(initialModelName ?? '');
     setResolvedModelNumber('');
     setResolvedPartNumber('');
     setMode('new');
@@ -118,14 +138,23 @@ export function AddAccessoryWizard({
     setFetchMessage(null);
     setChecking(false);
     setFetching(false);
-    setUnitCount(1);
-    setUnits([
-      {
-        serial_number: '',
-        current_location_id: locations[0]?.id ?? 0,
-        purchase_price: '',
-      },
-    ]);
+    setUnitCount(Math.max(1, seededSerials.length));
+    const seededPrice = initialPurchasePrice ?? '';
+    setUnits(
+      seededSerials.length > 0
+        ? seededSerials.map((serial) => ({
+            serial_number: serial,
+            current_location_id: locations[0]?.id ?? 0,
+            purchase_price: seededPrice,
+          }))
+        : [
+            {
+              serial_number: '',
+              current_location_id: locations[0]?.id ?? 0,
+              purchase_price: seededPrice,
+            },
+          ],
+    );
     setStatus('available');
     setColorOptions('');
     setDescription('');
@@ -164,6 +193,11 @@ export function AddAccessoryWizard({
       return next.slice(0, count);
     });
   }, [unitCount, locations]);
+
+  const removeUnit = useCallback((index: number) => {
+    setUnits((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+    setUnitCount((count) => Math.max(1, count - 1));
+  }, []);
 
   const applyAccessorySpec = useCallback((spec: ReturnType<typeof accessoryToDisplaySpec>) => {
     setModelName(spec.model_name);
@@ -408,7 +442,7 @@ export function AddAccessoryWizard({
       <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
         <header className="inv-dialog__header">
           <div>
-            <h2 className="inv-dialog__title">Add accessory — {brandName}</h2>
+            <h2 className="inv-dialog__title">{titleOverride ?? `Add accessory — ${brandName}`}</h2>
             <p className="inv-dialog__lead">
               Brand is fixed to {brandName}. Step {stepLabel(step, mode)}.
               {mode === 'existing' && step === 'units'
@@ -698,6 +732,7 @@ export function AddAccessoryWizard({
                   <span>Serial number</span>
                   <span>Location</span>
                   <span>Purchase price</span>
+                  <span />
                 </div>
                 {units.length > 1 && (
                   <div className="add-laptop-wizard__apply-all">
@@ -789,6 +824,15 @@ export function AddAccessoryWizard({
                       }
                       placeholder="Optional"
                     />
+                    <button
+                      type="button"
+                      className="app-toolbar-icon-btn"
+                      aria-label="Remove unit"
+                      disabled={units.length <= 1}
+                      onClick={() => removeUnit(index)}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -845,7 +889,7 @@ export function AddAccessoryWizard({
                   disabled={loading}
                   onClick={() => void submit()}
                 >
-                  {loading ? 'Saving…' : 'Save accessory'}
+                  {loading ? 'Saving…' : (submitLabelOverride ?? 'Save accessory')}
                 </button>
               </div>
             </div>

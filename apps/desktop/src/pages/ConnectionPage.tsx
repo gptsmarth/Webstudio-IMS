@@ -9,7 +9,7 @@ import { normalizeServerUrl } from '@webstudio/shared-kernel';
 import { StartupBrandPanel, StartupShellLayout } from '../components/startup';
 import { ConfigService } from '../services/ConfigService';
 import { ConnectionDiagnosticsService } from '../services/ConnectionDiagnosticsService';
-import { NetworkDiscoveryService } from '../services/NetworkDiscoveryService';
+import { discoverBestServer } from '../services/ConnectionReconnectService';
 import { SavedServerStore } from '../services/SavedServerStore';
 
 interface ConnectionPageProps {
@@ -23,14 +23,6 @@ const DISCOVERY_MESSAGES = [
   'Looking for WEBSTUDIO Server',
   'Verifying API endpoint',
   'Almost ready',
-];
-
-const CANDIDATE_URLS = [
-  'http://127.0.0.1:8000',
-  'http://localhost:8000',
-  'http://192.168.29.100:8000',
-  'http://192.168.1.100:8000',
-  'http://192.168.1.1:8000',
 ];
 
 function formatLastSeen(iso?: string): string {
@@ -60,7 +52,7 @@ function DiagnosticsStages({ stages }: { stages: ConnectionStageResult[] }): JSX
 export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Element {
   const [state, setState] = useState<DiscoveryState>('searching');
   const [messageIndex, setMessageIndex] = useState(0);
-  const [manualUrl, setManualUrl] = useState('http://127.0.0.1:8000');
+  const [manualUrl, setManualUrl] = useState('http://192.168.29.100:8000');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [diagnosticStages, setDiagnosticStages] = useState<ConnectionStageResult[]>([]);
   const [discoveredServers, setDiscoveredServers] = useState<DiscoveredServer[]>([]);
@@ -73,7 +65,15 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
     setSavedServers(servers);
   };
 
+  const skipToManualEntry = () => {
+    cancelled.current = true;
+    setState('manual');
+    setErrorMessage(null);
+    window.setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
   const connectToUrl = async (rawUrl: string) => {
+    cancelled.current = true;
     setState('testing');
     setErrorMessage(null);
     setDiagnosticStages([]);
@@ -117,54 +117,46 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
       setMessageIndex((index) => (index + 1) % DISCOVERY_MESSAGES.length);
     }, 1800);
 
-    const mdnsPromise = NetworkDiscoveryService.discoverServers();
-    const savedUrls = await SavedServerStore.resolveSavedUrls();
-
-    const mdnsServers = await mdnsPromise;
-    if (cancelled.current) {
-      window.clearInterval(interval);
-      return;
-    }
-
-    if (mdnsServers.length > 0) {
-      window.clearInterval(interval);
-      setDiscoveredServers(mdnsServers);
-      setState('manual');
-      window.setTimeout(() => inputRef.current?.focus(), 50);
-      return;
-    }
-
-    const probeUrls = [...new Set([...savedUrls, ...CANDIDATE_URLS])];
-    for (const url of probeUrls) {
-      if (cancelled.current) break;
-      const result = await ConnectionDiagnosticsService.testConnection(url);
-      if (result.success) {
+    try {
+      const env = await ConfigService.getEnvironment();
+      const best = await discoverBestServer({ preferredUrl: env.apiBaseUrl });
+      if (cancelled.current) {
         window.clearInterval(interval);
+        return;
+      }
+
+      window.clearInterval(interval);
+
+      if (best?.success) {
         setDiscoveredServers([
           {
-            id: `probe-${url}`,
-            serverName: result.companyName ?? 'WEBSTUDIO Server',
-            companyName: result.companyName ?? 'WEBSTUDIO',
-            backendVersion: result.backendVersion ?? 'unknown',
+            id: `auto-${best.url}`,
+            serverName: best.companyName ?? 'WEBSTUDIO Server',
+            companyName: best.companyName ?? 'WEBSTUDIO',
+            backendVersion: best.backendVersion ?? 'unknown',
             apiVersion: '1.0',
             buildVersion: '',
             environment: 'local',
-            port: Number(new URL(result.url).port || 8000),
-            host: new URL(result.url).hostname,
-            url: result.url,
+            port: Number(new URL(best.url).port || 8000),
+            host: new URL(best.url).hostname,
+            url: best.url,
             lastSeen: new Date().toISOString(),
             status: 'online',
           },
         ]);
-        setState('manual');
+        setManualUrl(best.url);
+        await connectToUrl(best.url);
         return;
       }
-    }
 
-    window.clearInterval(interval);
-    if (!cancelled.current) {
       setState('manual');
       window.setTimeout(() => inputRef.current?.focus(), 50);
+    } catch {
+      window.clearInterval(interval);
+      if (!cancelled.current) {
+        setState('manual');
+        window.setTimeout(() => inputRef.current?.focus(), 50);
+      }
     }
   };
 
@@ -194,6 +186,8 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
         ? 'Scanning network'
         : 'Manual configuration';
 
+  const showManualForm = state === 'searching' || state === 'manual' || state === 'testing';
+
   return (
     <StartupShellLayout
       brand={
@@ -208,7 +202,8 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
         <header className="connection-card__header">
           <h1 className="connection-card__title">Connect to Server</h1>
           <p className="connection-card__subtitle">
-            WEBSTUDIO IMS needs the local API server before setup or sign-in can begin.
+            WEBSTUDIO looks for your shop server automatically. You can also enter the address
+            manually anytime.
           </p>
         </header>
 
@@ -220,7 +215,7 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
                 <span className="connection-card__spinner-ring" />
               </div>
               <div className="connection-card__status-copy">
-                <p className="connection-card__status-title">Connecting to server</p>
+                <p className="connection-card__status-title">Searching automatically</p>
                 <p className="connection-card__status-detail">
                   {DISCOVERY_MESSAGES[messageIndex]}…
                 </p>
@@ -263,23 +258,31 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
             </div>
           )}
 
-          {(state === 'manual' || state === 'testing') && (
+          {showManualForm && (
             <form
               className="connection-card__form"
               onSubmit={(event) => void handleManualSubmit(event)}
             >
-              {discoveredServers.length === 0 && (
+              {state === 'manual' && discoveredServers.length === 0 && (
                 <div className="connection-card__status connection-card__status--manual">
                   <div className="connection-card__manual-icon" aria-hidden>
                     <Server size={20} />
                   </div>
                   <div className="connection-card__status-copy">
-                    <p className="connection-card__status-title">Server not found</p>
+                    <p className="connection-card__status-title">Manual connection</p>
                     <p className="connection-card__status-detail">
-                      Enter your WEBSTUDIO Server address manually or retry automatic discovery.
+                      Enter your WEBSTUDIO Server address (for example http://192.168.29.100:8000)
+                      or retry automatic discovery.
                     </p>
                   </div>
                 </div>
+              )}
+
+              {state === 'searching' && (
+                <p className="connection-card__hint" style={{ marginBottom: 12 }}>
+                  Searching your Wi‑Fi automatically. You can connect manually anytime using the
+                  address below.
+                </p>
               )}
 
               {errorMessage && (
@@ -329,15 +332,27 @@ export function ConnectionPage({ onConnected }: ConnectionPageProps): JSX.Elemen
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => void startAutomatedDiscovery()}
-                  disabled={state === 'testing'}
-                >
-                  <RefreshCw size={12} aria-hidden />
-                  Retry automatic discovery
-                </button>
+                {state === 'searching' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={skipToManualEntry}
+                  >
+                    Stop searching — use manual address only
+                  </button>
+                )}
+
+                {state !== 'searching' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => void startAutomatedDiscovery()}
+                    disabled={state === 'testing'}
+                  >
+                    <RefreshCw size={12} aria-hidden />
+                    Retry automatic discovery
+                  </button>
+                )}
               </div>
             </form>
           )}

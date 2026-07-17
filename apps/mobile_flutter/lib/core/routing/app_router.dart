@@ -15,6 +15,8 @@ import '../../features/connection/presentation/connection_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/purchase/presentation/purchase_screen.dart';
+import '../../features/purchase/presentation/purchase_voucher_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/sales/presentation/sales_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
@@ -140,6 +142,18 @@ StatefulShellBranch _moreBranch() {
         routes: [
           GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: 'notifications', builder: (_, __) => const NotificationsScreen()),
+          GoRoute(
+            path: 'purchase',
+            builder: (_, __) => const PurchaseScreen(),
+            routes: [
+              GoRoute(
+                path: ':voucherId',
+                builder: (_, state) => PurchaseVoucherScreen(
+                  voucherId: int.tryParse(state.pathParameters['voucherId'] ?? '') ?? 0,
+                ),
+              ),
+            ],
+          ),
           GoRoute(path: 'backup', builder: (_, __) => const BackupScreen()),
           GoRoute(path: 'tally', builder: (_, __) => const TallyScreen(), routes: [
             GoRoute(path: 'history', builder: (_, __) => const TallyHistoryScreen()),

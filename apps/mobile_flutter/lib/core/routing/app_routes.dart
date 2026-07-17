@@ -18,6 +18,7 @@ abstract final class AppRoutes {
 
   static const reports = '/more/reports';
   static const notifications = '/more/notifications';
+  static const purchase = '/more/purchase';
   /// Users live under Settings only (not More hub).
   static const users = settingsUsers;
   static const backup = '/more/backup';

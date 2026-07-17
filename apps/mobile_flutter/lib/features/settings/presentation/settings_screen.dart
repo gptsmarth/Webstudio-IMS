@@ -93,7 +93,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const Divider(),
           ListTile(
             title: const Text('API server'),
-            subtitle: Text(config.apiBaseUrl),
+            subtitle: Text(
+              config.apiBaseUrl.isEmpty
+                  ? 'Automatic discovery or enter address manually'
+                  : config.apiBaseUrl,
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(AppRoutes.connection),
           ),

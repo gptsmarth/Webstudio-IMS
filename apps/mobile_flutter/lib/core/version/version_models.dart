@@ -1,3 +1,5 @@
+import '../network/json_map.dart';
+
 enum VersionUpdateKind { upToDate, optionalUpdate, mandatoryUpdate }
 
 class ClientUpdateArtifact {
@@ -75,7 +77,7 @@ class MobileVersionInfo {
   });
 
   factory MobileVersionInfo.fromClientUpdateCheck(Map<String, dynamic> payload) {
-    final artifactJson = payload['artifact'] as Map<String, dynamic>?;
+    final artifactJson = asJsonMapOrNull(payload['artifact']);
     final artifact = artifactJson == null ? null : ClientUpdateArtifact.fromJson(artifactJson);
     final downloadUrl = artifact?.downloadUrl ?? payload['apk_download_url'] as String?;
     return MobileVersionInfo(
@@ -95,7 +97,7 @@ class MobileVersionInfo {
   }
 
   factory MobileVersionInfo.fromPayload(Map<String, dynamic> payload) {
-    final mobile = payload['mobile'] as Map<String, dynamic>?;
+    final mobile = asJsonMapOrNull(payload['mobile']);
     final latest = mobile?['latest_version'] as String? ?? payload['backend_version'] as String? ?? '0.0.0';
     final minSupported =
         mobile?['min_supported_version'] as String? ?? payload['min_mobile_version'] as String? ?? latest;

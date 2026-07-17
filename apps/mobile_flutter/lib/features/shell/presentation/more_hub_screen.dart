@@ -34,6 +34,14 @@ class MoreHubScreen extends ConsumerWidget {
         Icons.notifications_outlined,
       ));
     }
+    if (permissions.contains('purchase:view')) {
+      items.add(_HubItem(
+        AppRoutes.purchase,
+        'Purchase',
+        'Import Tally purchase vouchers into inventory',
+        Icons.shopping_cart_outlined,
+      ));
+    }
     if (permissions.contains('audit:view')) {
       items.add(_HubItem(
         AppRoutes.audit,

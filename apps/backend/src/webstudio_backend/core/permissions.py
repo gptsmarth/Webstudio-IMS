@@ -28,6 +28,9 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     "sales:create",
     "sales:cancel",
     "sales:export",
+    # Purchase import (Tally purchase voucher → inventory, after approval)
+    "purchase:view",
+    "purchase:import",
     # Reports
     "reports:view",
     "reports:export",
@@ -127,6 +130,8 @@ _ADMIN: frozenset[str] = frozenset(
         "sales:create",
         "sales:cancel",
         "sales:export",
+        "purchase:view",
+        "purchase:import",
         "reports:view",
         "reports:export",
         "dashboard:view",
@@ -232,6 +237,7 @@ PERMISSION_REQUIRES: dict[str, str] = {
     "sales:create": "sales:view",
     "sales:cancel": "sales:view",
     "sales:export": "sales:view",
+    "purchase:import": "purchase:view",
     "reports:export": "reports:view",
     "brands:create": "brands:view",
     "brands:edit": "brands:view",
@@ -260,6 +266,17 @@ PERMISSION_IMPLIES: dict[str, tuple[str, ...]] = {
     "inventory:create": ("product_models:create",),
     "sales:view": ("brands:view", "product_models:view", "locations:view"),
     "reports:view": ("brands:view", "product_models:view", "locations:view"),
+    # Purchase import needs the brand catalogue, model catalogue, and locations to
+    # match/create models and place stock during approval. Import also needs to
+    # create new models on the fly, so it pulls in the catalogue reads directly
+    # (normalize_permission_set expands a single pass, so we list them here too).
+    "purchase:view": ("brands:view", "product_models:view", "locations:view"),
+    "purchase:import": (
+        "brands:view",
+        "product_models:view",
+        "product_models:create",
+        "locations:view",
+    ),
 }
 
 # Dashboard widgets call APIs that require separate module permissions.

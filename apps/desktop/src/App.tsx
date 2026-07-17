@@ -43,6 +43,7 @@ export function App(): JSX.Element {
   const [companyName, setCompanyName] = useState<string>('WEBSTUDIO IMS');
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+  const [apiUrl, setApiUrl] = useState<string>('');
 
   const [meta, setMeta] = useState<AppVersionMeta>({
     appVersion: '0.1.0',
@@ -55,54 +56,71 @@ export function App(): JSX.Element {
     nodeVersion: '...',
   });
 
-  const evaluateServerState = useCallback(async () => {
-    try {
-      const status = await SetupService.getStatus();
-      if (status.company_name) {
-        setCompanyName(status.company_name);
-      }
-      setConnectionStatus('online');
-
-      if (detectDatabaseReset(status)) {
-        LoggingService.warn(
-          'Renderer',
-          'Database appears reset — local setup flag was set but server reports uninitialized',
-        );
-        await AuthTokenStore.clear();
-        clearSession();
-      }
-
-      if (isSetupRequired(status)) {
-        markLocalInitializedFlag(false);
-        await AuthTokenStore.clear();
-        clearSession();
-        setActiveView('setup');
-        return;
-      }
-
-      markLocalInitializedFlag(true);
-      const restored = await AuthenticationService.restoreSession();
-      if (restored) {
-        setSession(sessionFromUser(restored));
-        const permissions = restored.permissions ?? [];
-        const { currentRoute, setRoute } = useNavigationStore.getState();
-        if (!isRouteAllowedForPermissions(currentRoute, permissions)) {
-          setRoute(defaultRouteForPermissions(permissions));
+  const evaluateServerState = useCallback(
+    async (options?: { allowAutoDiscover?: boolean }) => {
+      try {
+        const status = await SetupService.getStatus();
+        if (status.company_name) {
+          setCompanyName(status.company_name);
         }
-        setActiveView('workspace');
-        return;
-      }
-      setActiveView((current) => {
-        if (current === 'connection' || current === 'setup') {
-          return 'login';
+        setConnectionStatus('online');
+
+        if (detectDatabaseReset(status)) {
+          LoggingService.warn(
+            'Renderer',
+            'Database appears reset — local setup flag was set but server reports uninitialized',
+          );
+          await AuthTokenStore.clear();
+          clearSession();
         }
-        return current;
-      });
-    } catch {
-      setConnectionStatus('offline');
-      setActiveView('connection');
-    }
-  }, [clearSession, setSession]);
+
+        if (isSetupRequired(status)) {
+          markLocalInitializedFlag(false);
+          await AuthTokenStore.clear();
+          clearSession();
+          setActiveView('setup');
+          return;
+        }
+
+        markLocalInitializedFlag(true);
+        const restored = await AuthenticationService.restoreSession();
+        if (restored) {
+          setSession(sessionFromUser(restored));
+          const permissions = restored.permissions ?? [];
+          const { currentRoute, setRoute } = useNavigationStore.getState();
+          if (!isRouteAllowedForPermissions(currentRoute, permissions)) {
+            setRoute(defaultRouteForPermissions(permissions));
+          }
+          setActiveView('workspace');
+          return;
+        }
+        setActiveView((current) => {
+          if (current === 'connection' || current === 'setup') {
+            return 'login';
+          }
+          return current;
+        });
+      } catch {
+        if (options?.allowAutoDiscover !== false) {
+          try {
+            const { attemptAutomaticReconnect } =
+              await import('./services/ConnectionReconnectService');
+            const restored = await attemptAutomaticReconnect();
+            if (restored) {
+              setConnectionStatus('online');
+              await evaluateServerState({ allowAutoDiscover: false });
+              return;
+            }
+          } catch {
+            // Fall through to connection UI.
+          }
+        }
+        setConnectionStatus('offline');
+        setActiveView('connection');
+      }
+    },
+    [clearSession, setSession],
+  );
 
   useEffect(() => {
     const onSetupRequired = () => {
@@ -210,6 +228,7 @@ export function App(): JSX.Element {
       try {
         const vInfo = await VersionService.getVersionInfo();
         const envInfo = await ConfigService.getEnvironment();
+        setApiUrl(envInfo.apiBaseUrl);
         setMeta({
           appVersion: vInfo.appVersion,
           buildVersion: vInfo.buildVersion,
@@ -292,6 +311,7 @@ export function App(): JSX.Element {
             setActiveView('setup');
           } else {
             setIsDemoMode(false);
+            void ConfigService.getEnvironment().then((env) => setApiUrl(env.apiBaseUrl));
             void evaluateServerState();
           }
         }}
@@ -313,10 +333,11 @@ export function App(): JSX.Element {
     return (
       <LoginPage
         companyName={companyName}
-        apiUrl=""
+        apiUrl={apiUrl}
         appVersion={meta.appVersion}
         onLoginSuccess={handleLoginSuccess}
         onSetupRequired={() => setActiveView('setup')}
+        onChangeServer={() => setActiveView('connection')}
       />
     );
   }

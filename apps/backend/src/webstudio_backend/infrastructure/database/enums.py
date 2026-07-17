@@ -56,6 +56,26 @@ class SaleSource(StrEnum):
     MANUAL = "manual"
 
 
+class InventorySource(StrEnum):
+    """Provenance of an inventory item (Purchase Import feature)."""
+
+    MANUAL = "manual"
+    TALLY_PURCHASE = "tally_purchase"
+
+
+class TallyPurchaseStatus(StrEnum):
+    """Purchase Import Queue voucher status.
+
+    pending             → no model group imported yet
+    partially_imported  → at least one, but not all, model groups imported
+    imported            → every model group imported into IMS
+    """
+
+    PENDING = "pending"
+    PARTIALLY_IMPORTED = "partially_imported"
+    IMPORTED = "imported"
+
+
 class NotificationType(StrEnum):
     DUPLICATE_SALE = "duplicate_sale"
     SERIAL_NUMBER_MISSING = "serial_number_missing"
@@ -228,7 +248,9 @@ ACCESSORY_KIND_ENUM_NAME = "accessory_kind"
 STORAGE_UNIT_ENUM_NAME = "storage_unit"
 STORAGE_TYPE_ENUM_NAME = "storage_type"
 INVENTORY_STATUS_ENUM_NAME = "inventory_status"
+INVENTORY_SOURCE_ENUM_NAME = "inventory_source"
 SALE_SOURCE_ENUM_NAME = "sale_source"
+TALLY_PURCHASE_STATUS_ENUM_NAME = "tally_purchase_status"
 NOTIFICATION_TYPE_ENUM_NAME = "notification_type"
 NOTIFICATION_CATEGORY_ENUM_NAME = "notification_category"
 NOTIFICATION_SEVERITY_ENUM_NAME = "notification_severity"
@@ -264,6 +286,10 @@ __all__ = [
     "USER_ROLE_ENUM_NAME",
     "USER_STATUS_ENUM_NAME",
     "SALE_SOURCE_ENUM_NAME",
+    "INVENTORY_SOURCE_ENUM_NAME",
+    "TALLY_PURCHASE_STATUS_ENUM_NAME",
+    "InventorySource",
+    "TallyPurchaseStatus",
     "InventoryStatus",
     "NotificationCategory",
     "NotificationCreator",

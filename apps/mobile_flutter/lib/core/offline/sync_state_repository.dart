@@ -24,8 +24,8 @@ class SyncStateRepository {
   SyncStateSnapshot? readLocal() {
     final cached = _cache.readMap(OfflineCacheKeys.syncState);
     if (cached != null) return SyncStateSnapshot.fromJson(cached.data);
-    final legacy = HiveCache.syncState.get('latest');
+    final legacy = HiveCache.readMap(HiveCache.syncState, 'latest');
     if (legacy == null) return null;
-    return SyncStateSnapshot.fromJson(Map<String, dynamic>.from(legacy));
+    return SyncStateSnapshot.fromJson(legacy);
   }
 }

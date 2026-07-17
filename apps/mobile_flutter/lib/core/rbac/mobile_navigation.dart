@@ -72,13 +72,20 @@ bool canEditStockProductModel(List<String> permissions) =>
     canEditSellingPrice(permissions) ||
     canEditStockLaptop(permissions);
 
+bool canViewPurchaseModule(List<String> permissions) =>
+    permissions.contains('purchase:view');
+
+bool canImportPurchase(List<String> permissions) =>
+    permissions.contains('purchase:import');
+
 bool _hasMoreAccess(List<String> permissions) {
   return permissions.contains('reports:view') ||
       permissions.contains('notifications:view') ||
       permissions.contains('users:view') ||
       permissions.contains('settings:view') ||
       permissions.contains('tally:view_status') ||
-      permissions.contains('audit:view');
+      permissions.contains('audit:view') ||
+      permissions.contains('purchase:view');
 }
 
 List<MobileNavItem> mobileNavItemsFor(List<String> permissions) {
@@ -174,6 +181,7 @@ bool isShellPathAllowed(String path, List<String> permissions) {
   if (path.startsWith('/catalogue')) return canViewCatalogueModule(permissions);
   if (path.startsWith('/more/reports')) return permissions.contains('reports:view');
   if (path.startsWith('/more/notifications')) return permissions.contains('notifications:view');
+  if (path.startsWith('/more/purchase')) return permissions.contains('purchase:view');
   if (path.startsWith('/more/backup')) return canAccessBackupModule(permissions);
   if (path.startsWith('/more/tally')) return permissions.contains('tally:view_status');
   if (path.startsWith('/more/audit')) return permissions.contains('audit:view');

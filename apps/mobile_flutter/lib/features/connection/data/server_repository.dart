@@ -78,6 +78,35 @@ class ServerRepository {
     return null;
   }
 
+  /// Silent LAN discovery for bootstrap / reconnect.
+  ///
+  /// Order: mDNS → saved servers → static shop candidates.
+  /// Returns the first fully validated server URL, or null if nothing responds.
+  Future<ConnectionTestResult?> discoverBestServer({
+    String? preferredUrl,
+    bool includeMdns = true,
+  }) async {
+    if (includeMdns) {
+      try {
+        final mdnsServers = await discoverMdnsServers();
+        for (final server in mdnsServers) {
+          final result = await discoverServer([server.url]);
+          if (result != null) return result;
+        }
+      } catch (_) {
+        // Fall through to HTTP candidate probes.
+      }
+    }
+
+    final savedUrls = await resolveSavedServerUrls();
+    final candidates = <String>{
+      if (preferredUrl != null && preferredUrl.trim().isNotEmpty) preferredUrl.trim(),
+      ...savedUrls,
+      ...staticDiscoveryCandidates(),
+    }.toList();
+    return discoverServer(candidates);
+  }
+
   Future<void> rememberSuccessfulConnection(ConnectionTestResult result) async {
     if (!result.success) return;
     final hostname = extractHostnameFromUrl(result.url);

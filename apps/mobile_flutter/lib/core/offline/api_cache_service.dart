@@ -1,3 +1,4 @@
+import '../network/json_map.dart';
 import '../storage/hive_cache.dart';
 
 class ApiCacheService {
@@ -9,14 +10,12 @@ class ApiCacheService {
   }
 
   Map<String, dynamic>? get(String key) {
-    final raw = HiveCache.apiCache.get(key);
-    final body = raw?['body'];
-    if (body is! Map) return null;
-    return Map<String, dynamic>.from(body);
+    final raw = HiveCache.readMap(HiveCache.apiCache, key);
+    return asJsonMapOrNull(raw?['body']);
   }
 
   DateTime? cachedAt(String key) {
-    final raw = HiveCache.apiCache.get(key);
+    final raw = HiveCache.readMap(HiveCache.apiCache, key);
     final value = raw?['cached_at'] as String?;
     return value == null ? null : DateTime.tryParse(value);
   }

@@ -141,51 +141,31 @@ class ConnectionController extends StateNotifier<ServerConnectionState> {
 
   Future<void> _runDiscoveryPass(String suggestedUrl) async {
     final repo = _ref.read(serverRepositoryProvider);
-
-    final mdnsFuture = repo.discoverMdnsServers();
-    final savedUrlsFuture = repo.resolveSavedServerUrls();
-    final mdnsServers = await mdnsFuture;
-    final savedUrls = await savedUrlsFuture;
-
+    final best = await repo.discoverBestServer(
+      preferredUrl: _ref.read(appConfigProvider).apiBaseUrl,
+    );
     if (_cancelled) return;
 
-    if (mdnsServers.isNotEmpty) {
-      state = state.copyWith(
-        phase: ConnectionPhase.manual,
-        discoveredServers: mdnsServers,
-        manualUrl: state.manualUrl.isNotEmpty ? state.manualUrl : mdnsServers.first.url,
-      );
-      return;
-    }
-
-    final candidates = <String>{
-      ...savedUrls,
-      ...repo.staticDiscoveryCandidates(),
-    }.toList();
-    final probeResult = await repo.discoverServer(candidates);
-    if (_cancelled) return;
-
-    if (probeResult != null) {
+    if (best != null && best.success) {
       final discovered = DiscoveredServer(
-        id: 'probe-${probeResult.url}',
-        serverName: probeResult.companyName ?? 'WEBSTUDIO Server',
-        companyName: probeResult.companyName ?? 'WEBSTUDIO',
-        backendVersion: probeResult.backendVersion ?? 'unknown',
+        id: 'auto-${best.url}',
+        serverName: best.companyName ?? 'WEBSTUDIO Server',
+        companyName: best.companyName ?? 'WEBSTUDIO',
+        backendVersion: best.backendVersion ?? 'unknown',
         apiVersion: '1.0',
         buildVersion: '',
         environment: 'local',
-        port: Uri.parse(probeResult.url).port,
-        host: Uri.parse(probeResult.url).host,
-        url: probeResult.url,
+        port: Uri.parse(best.url).port,
+        host: Uri.parse(best.url).host,
+        url: best.url,
         lastSeen: DateTime.now(),
         status: 'online',
       );
       state = state.copyWith(
-        phase: ConnectionPhase.manual,
         discoveredServers: [discovered],
-        manualUrl: probeResult.url,
+        manualUrl: best.url,
       );
-      await connectToUrl(probeResult.url);
+      await connectToUrl(best.url);
       return;
     }
 
