@@ -665,6 +665,12 @@
 }
 
 /* ─── Animations ──────────────────────────────────────────────── */
+/* NOTE: entry animations end at `transform: none` (not translate/scale(0)).
+   With `animation-fill-mode: both`, a retained non-`none` transform turns the
+   page wrapper into the containing block for `position: fixed` descendants,
+   which clips full-screen modal overlays to the page content area instead of
+   the viewport. `none` is visually identical to translateY(0)/scale(1) but
+   leaves fixed overlays anchored to the viewport. */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -672,7 +678,7 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -683,7 +689,7 @@
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: none;
   }
 }
 
@@ -694,7 +700,7 @@
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: none;
   }
 }
 
