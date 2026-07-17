@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, File, Query, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,8 +31,13 @@ from webstudio_backend.infrastructure.database.repositories.pagination import Pa
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.exceptions import DuplicateNameError
 from webstudio_backend.services.brand_deletion_service import BrandDeletionService
+from webstudio_backend.services.product_image_service import validate_product_image_upload
+from webstudio_backend.services.web_image_scraper import find_public_assets_dir
 
 router = APIRouter(prefix="/api/v1/brands", tags=["brands"])
+
+# Brand logos are small; keep the same ceiling as product image uploads.
+_MAX_LOGO_BYTES = 5 * 1024 * 1024
 
 
 def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) -> dict:
@@ -182,6 +187,70 @@ async def update_brand(
         return _envelope(request, BrandResponse.from_model(updated).model_dump())
     except DuplicateNameError as err:
         raise AppError("VALIDATION_ERROR", str(err), status_code=status.HTTP_409_CONFLICT) from err
+
+
+@router.post("/{brand_id}/logo")
+async def upload_brand_logo(
+    request: Request,
+    brand_id: int,
+    current: BrandsEditDep,
+    db_session: AsyncSession = DbSessionDep,
+    file: UploadFile = File(...),
+) -> dict:
+    """Upload a custom brand logo (PNG/JPG/WebP).
+
+    Reuses the exact same safe image validation as product image uploads
+    (extension + MIME + magic-byte + decodability checks) and stores the file
+    as a server-managed asset. ``logo_filename`` is set to the ``/assets/...``
+    path, which clients render through the existing authenticated image proxy.
+    """
+    repo = BrandRepository(db_session)
+    brand = await repo.get_by_id(brand_id)
+    if not brand:
+        raise AppError(
+            "NOT_FOUND",
+            f"Brand with ID {brand_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    payload = await file.read()
+    if len(payload) > _MAX_LOGO_BYTES:
+        raise AppError(
+            "VALIDATION_ERROR",
+            "Logo must be 5 MB or smaller.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        image_format = validate_product_image_upload(
+            filename=file.filename,
+            content_type=file.content_type,
+            payload=payload,
+        )
+    except ValueError as exc:
+        raise AppError(
+            "VALIDATION_ERROR",
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        ) from exc
+
+    assets_root = find_public_assets_dir()
+    if assets_root is None:
+        raise AppError(
+            "SERVICE_UNAVAILABLE",
+            "Managed asset storage is not available on this server.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    folder = assets_root / "brand-logos"
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f"brand-{brand_id}.{image_format}"
+    (folder / filename).write_bytes(payload)
+    logo_url = f"/assets/brand-logos/{filename}"
+
+    updated = await repo.update(brand, logo_filename=logo_url, actor=_actor(current))
+    await db_session.commit()
+    return _envelope(request, BrandResponse.from_model(updated).model_dump())
 
 
 @router.delete("/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)

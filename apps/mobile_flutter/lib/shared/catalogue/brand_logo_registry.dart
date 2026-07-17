@@ -77,4 +77,12 @@ abstract final class BrandLogoRegistry {
   }
 
   static bool isSvgAsset(String path) => path.toLowerCase().endsWith('.svg');
+
+  /// True when logo_filename points at a server-managed, user-uploaded logo
+  /// (`/assets/brand-logos/brand-{id}.{ext}`) rather than a bundled asset.
+  /// Uploaded logos are fetched through the authenticated image proxy.
+  static bool isUploadedLogo(String? logoFilename) {
+    final trimmed = logoFilename?.trim();
+    return trimmed != null && trimmed.startsWith('/assets/brand-logos/brand-');
+  }
 }

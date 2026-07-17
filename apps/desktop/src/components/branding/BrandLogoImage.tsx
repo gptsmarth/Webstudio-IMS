@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 import { brandLogoSrc } from '../../lib/catalogue';
 import { BrandLogoRegistry } from '../../registries/BrandLogoRegistry';
 import { OFFICIAL_SHOWCASE_BRANDS } from '../../registries/AssetManifest';
 import { assetUrlsEquivalent } from '../../utils/resolvePublicAsset';
+import { BrandLogoService } from '../../services/images/BrandLogoService';
 
 interface BrandLogoImageProps {
   brand: string;
@@ -21,7 +22,33 @@ export function BrandLogoImage({
   style,
   loading = 'lazy',
 }: BrandLogoImageProps): JSX.Element {
-  const primarySrc = brandLogoSrc(brand, logoFilename);
+  const isUploaded = BrandLogoRegistry.isUploadedLogo(logoFilename);
+  const [uploadedSrc, setUploadedSrc] = useState<string | null>(() =>
+    isUploaded && logoFilename ? BrandLogoService.getCached(logoFilename) : null,
+  );
+
+  useEffect(() => {
+    if (!isUploaded || !logoFilename) {
+      setUploadedSrc(null);
+      return;
+    }
+    const cached = BrandLogoService.getCached(logoFilename);
+    if (cached) {
+      setUploadedSrc(cached);
+      return;
+    }
+    let active = true;
+    void BrandLogoService.resolve(logoFilename).then((src) => {
+      if (active) setUploadedSrc(src);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isUploaded, logoFilename]);
+
+  // Uploaded logo resolved via the proxy — render it; otherwise fall back to
+  // the bundled/name-matched logo below while it loads or if it fails.
+  const primarySrc = isUploaded && uploadedSrc ? uploadedSrc : brandLogoSrc(brand, logoFilename);
 
   return (
     <img

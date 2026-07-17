@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { Upload, X } from 'lucide-react';
 import { BrandLogoImage } from '../branding/BrandLogoImage';
 import { BrandLogoRegistry } from '../../registries/BrandLogoRegistry';
 import type {
@@ -13,8 +13,14 @@ interface BrandFormDialogProps {
   brand: Brand | null;
   loading: boolean;
   onClose: () => void;
-  onConfirm: (payload: CreateBrandRequest | UpdateBrandRequest) => Promise<void>;
+  onConfirm: (
+    payload: CreateBrandRequest | UpdateBrandRequest,
+    logoFile?: File | null,
+  ) => Promise<void>;
 }
+
+const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp';
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
 const BUNDLED_LOGO_KEYS = BrandLogoRegistry.listBundledBrandKeys();
 
@@ -32,7 +38,10 @@ export function BrandFormDialog({
   const [displayOrder, setDisplayOrder] = useState('0');
   const [isActive, setIsActive] = useState(true);
   const [allowDuplicateSerials, setAllowDuplicateSerials] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -43,6 +52,8 @@ export function BrandFormDialog({
     setDisplayOrder(String(brand?.display_order ?? 0));
     setIsActive(brand?.is_active ?? true);
     setAllowDuplicateSerials(brand?.allow_duplicate_serials ?? false);
+    setLogoFile(null);
+    setLogoPreview(null);
     setError(null);
   }, [open, brand]);
 
@@ -62,17 +73,24 @@ export function BrandFormDialog({
       return;
     }
     setError(null);
-    const resolvedLogo =
-      logoFilename.trim() || BrandLogoRegistry.logoFilenameForBrand(name.trim()) || null;
+    // When a custom logo file is chosen, the backend sets logo_filename from
+    // the uploaded asset after save. Keep any existing uploaded path so it is
+    // not clobbered by a name-derived bundled guess.
+    const resolvedLogo = logoFile
+      ? logoFilename.trim() || null
+      : logoFilename.trim() || BrandLogoRegistry.logoFilenameForBrand(name.trim()) || null;
     try {
-      await onConfirm({
-        name: name.trim(),
-        short_name: shortName.trim() || null,
-        logo_filename: resolvedLogo,
-        display_order: Number(displayOrder) || 0,
-        is_active: isActive,
-        allow_duplicate_serials: allowDuplicateSerials,
-      });
+      await onConfirm(
+        {
+          name: name.trim(),
+          short_name: shortName.trim() || null,
+          logo_filename: resolvedLogo,
+          display_order: Number(displayOrder) || 0,
+          is_active: isActive,
+          allow_duplicate_serials: allowDuplicateSerials,
+        },
+        logoFile,
+      );
       onClose();
     } catch (err: unknown) {
       const message = err as { message?: string };
@@ -83,6 +101,28 @@ export function BrandFormDialog({
   const selectLogo = (filename: string) => {
     setLogoManuallySet(true);
     setLogoFilename(filename);
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
+  const onLogoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = '';
+    if (!file) return;
+    if (!LOGO_ACCEPT.split(',').includes(file.type)) {
+      setError('Logo must be a PNG, JPG, or WebP image.');
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError('Logo must be 5 MB or smaller.');
+      return;
+    }
+    setError(null);
+    setLogoFile(file);
+    setLogoManuallySet(true);
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreview(String(reader.result));
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -125,8 +165,57 @@ export function BrandFormDialog({
           <div className="cat-field cat-field--full">
             <span>Logo</span>
             <p className="cat-logo-picker__hint">
-              Pick a bundled logo below, or leave Default to match by brand name.
+              Upload a custom logo (PNG, JPG, or WebP), pick a bundled logo below, or leave Default
+              to match by brand name.
             </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 8,
+              }}
+            >
+              {logoPreview ? (
+                <img
+                  src={logoPreview}
+                  alt="Selected logo preview"
+                  style={{
+                    height: 44,
+                    width: 44,
+                    objectFit: 'contain',
+                    borderRadius: 6,
+                    background: 'var(--surface-2, #f3f4f6)',
+                  }}
+                />
+              ) : (
+                <BrandLogoImage
+                  brand={name || 'default'}
+                  logoFilename={logoFilename || null}
+                  className="cat-logo-picker__img"
+                  alt="Current logo"
+                />
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={LOGO_ACCEPT}
+                style={{ display: 'none' }}
+                onChange={onLogoFileChange}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload size={12} aria-hidden /> Upload custom logo
+              </button>
+              {logoFile && (
+                <span className="cat-logo-picker__label" style={{ maxWidth: 180 }}>
+                  {logoFile.name}
+                </span>
+              )}
+            </div>
             <div className="cat-logo-picker" role="listbox" aria-label="Brand logo">
               <button
                 type="button"

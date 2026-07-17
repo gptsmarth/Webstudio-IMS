@@ -17,6 +17,42 @@ export function canExportCatalogue(permissions: string[]): boolean {
   return canExportCataloguePermission(permissions);
 }
 
+/**
+ * Remove a single leading brand (name or short name) token from a raw model
+ * string, mirroring the backend's deterministic normalizer. Used to seed the
+ * Add Model / Add Accessory wizards from a Tally stock item name so the brand
+ * (e.g. "ASUS") is not carried into the model number/name or the spec lookup.
+ * The remainder keeps its original casing; the prefix is only stripped at a real
+ * word boundary (space or hyphen) so "HP" never strips inside "HPX123".
+ */
+export function stripBrandPrefix(
+  value: string | null | undefined,
+  brandName?: string | null,
+  brandShortName?: string | null,
+): string {
+  const collapse = (s: string): string => s.trim().replace(/\s+/g, ' ');
+  const out = collapse(value ?? '');
+  if (!out) return '';
+  const prefixes = [brandName, brandShortName]
+    .map((p) => collapse(p ?? ''))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const upperOut = out.toUpperCase();
+  for (const prefix of prefixes) {
+    const upperPrefix = prefix.toUpperCase();
+    if (upperOut === upperPrefix) return out; // whole value is the brand — keep it
+    for (const sep of [' ', '-']) {
+      if (upperOut.startsWith(upperPrefix + sep)) {
+        return out
+          .slice(prefix.length)
+          .replace(/^[\s-]+/, '')
+          .trim();
+      }
+    }
+  }
+  return out;
+}
+
 export function brandLogoSrc(name: string, logoFilename?: string | null): string {
   const file = BrandLogoRegistry.resolveLogoFilename(name, logoFilename);
   if (file) {

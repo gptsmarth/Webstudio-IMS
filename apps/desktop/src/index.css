@@ -8068,8 +8068,13 @@
     inset: 0;
     background: rgba(15, 23, 42, 0.45);
     display: flex;
-    align-items: center;
+    /* flex-start + margin:auto on the dialog centers it when it fits but keeps
+       the top reachable (and the overlay scrollable) when the dialog is taller
+       than the viewport, e.g. at high UI zoom. `align-items: center` would clip
+       the top off-screen with no way to scroll to it. */
+    align-items: flex-start;
     justify-content: center;
+    overflow-y: auto;
     z-index: 80;
     padding: 20px;
   }
@@ -8077,6 +8082,7 @@
   .inv-dialog {
     width: min(480px, 100%);
     max-height: calc(100vh - 40px);
+    margin: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;

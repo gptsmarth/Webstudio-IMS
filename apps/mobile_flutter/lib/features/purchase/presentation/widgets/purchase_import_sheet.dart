@@ -13,6 +13,25 @@ import '../../../media/presentation/product_image_sheet.dart';
 import '../../data/purchase_repository.dart';
 import '../../domain/purchase_models.dart';
 
+/// Remove a single leading brand token from a raw Tally stock item name so the
+/// brand (e.g. "ASUS") is not carried into the seeded model number/name or the
+/// internet spec lookup. Mirrors the backend deterministic normalizer: the
+/// prefix is stripped only at a real word boundary (space or hyphen).
+String stripBrandPrefixForSeed(String value, String? brandName) {
+  final out = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  final brand = (brandName ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (out.isEmpty || brand.isEmpty) return out;
+  final upperOut = out.toUpperCase();
+  final upperBrand = brand.toUpperCase();
+  if (upperOut == upperBrand) return out; // whole value is the brand — keep it
+  for (final sep in const [' ', '-']) {
+    if (upperOut.startsWith('$upperBrand$sep')) {
+      return out.substring(brand.length).replaceAll(RegExp(r'^[\s-]+'), '').trim();
+    }
+  }
+  return out;
+}
+
 /// Opens the Purchase Import flow for a single model group.
 /// Reuses the shared `/purchase/import` backend contract (existing-append and
 /// new-model creation both happen server-side in one transaction).
@@ -183,6 +202,8 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
       setState(() => _error = formatApiError(error));
     }
   }
+
+  String? get _brandName => _brands.where((b) => b.id == _brandId).map((b) => b.name).firstOrNull;
 
   Future<void> _chooseItemType(String next) async {
     setState(() {
@@ -662,10 +683,11 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
               _mode = 'new';
               _selectedModelId = null;
               if (_modelNumber.text.trim().isEmpty) {
-                _modelNumber.text = match?.normalizedModelNumber ?? widget.group.stockItemName;
+                _modelNumber.text = match?.normalizedModelNumber ??
+                    stripBrandPrefixForSeed(widget.group.stockItemName, _brandName);
               }
               if (_modelName.text.trim().isEmpty) {
-                _modelName.text = widget.group.stockItemName;
+                _modelName.text = stripBrandPrefixForSeed(widget.group.stockItemName, _brandName);
               }
             } else {
               _mode = 'existing';
@@ -720,10 +742,11 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
               _mode = 'new';
               _selectedModelId = null;
               if (_modelNumber.text.trim().isEmpty) {
-                _modelNumber.text = match?.normalizedQuery ?? widget.group.stockItemName;
+                _modelNumber.text = match?.normalizedQuery ??
+                    stripBrandPrefixForSeed(widget.group.stockItemName, _brandName);
               }
               if (_modelName.text.trim().isEmpty) {
-                _modelName.text = widget.group.stockItemName;
+                _modelName.text = stripBrandPrefixForSeed(widget.group.stockItemName, _brandName);
               }
             } else {
               _mode = 'existing';

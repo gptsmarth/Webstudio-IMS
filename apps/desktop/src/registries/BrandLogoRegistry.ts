@@ -39,6 +39,17 @@ export class BrandLogoRegistry {
     return null;
   }
 
+  /**
+   * True when logo_filename points at a server-managed, user-uploaded logo
+   * (written by the backend as `/assets/brand-logos/brand-{id}.{ext}`) rather
+   * than a bundled asset. Uploaded logos are fetched through the authenticated
+   * image proxy; bundled ones resolve to local assets.
+   */
+  static isUploadedLogo(logoFilename?: string | null): boolean {
+    const trimmed = logoFilename?.trim();
+    return Boolean(trimmed && trimmed.startsWith('/assets/brand-logos/brand-'));
+  }
+
   /** Prefer explicit logo_filename; otherwise match bundled assets by brand name. */
   static resolveLogoFilename(brandName: string, logoFilename?: string | null): string | null {
     const trimmed = logoFilename?.trim();

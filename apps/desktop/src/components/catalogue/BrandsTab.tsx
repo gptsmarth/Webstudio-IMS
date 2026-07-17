@@ -121,11 +121,18 @@ export function BrandsTab({
     );
   };
 
-  const handleSave = async (payload: CreateBrandRequest | UpdateBrandRequest) => {
+  const handleSave = async (
+    payload: CreateBrandRequest | UpdateBrandRequest,
+    logoFile?: File | null,
+  ) => {
     setActionLoading(true);
     try {
-      if (editing) await BrandService.updateBrand(editing.id, payload as UpdateBrandRequest);
-      else await BrandService.createBrand(payload as CreateBrandRequest);
+      const saved = editing
+        ? await BrandService.updateBrand(editing.id, payload as UpdateBrandRequest)
+        : await BrandService.createBrand(payload as CreateBrandRequest);
+      if (logoFile) {
+        await BrandService.uploadLogo(saved.id, logoFile);
+      }
       await refresh();
       onDataChange();
     } finally {

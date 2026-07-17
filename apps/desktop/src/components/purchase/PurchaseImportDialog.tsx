@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { parseApiError } from '../../lib/apiError';
+import { stripBrandPrefix } from '../../lib/catalogue';
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
 import { parsePriceInput } from '../../lib/inventoryPrice';
 import { BrandService, type Brand } from '../../services/api/BrandService';
@@ -164,7 +165,15 @@ export function PurchaseImportDialog({
 
   const resolvedColor = defaultUnitColorFromOptions(selectedModel?.color_options);
   const locationName = locations.find((l) => l.id === locationId)?.name ?? '—';
-  const brandName = brands.find((b) => b.id === brandId)?.name ?? '';
+  const selectedBrand = brands.find((b) => b.id === brandId);
+  const brandName = selectedBrand?.name ?? '';
+  // Brand-free seed for the Add Model / Add Accessory wizards so "ASUS" is not
+  // carried into the model number/name or the internet spec lookup.
+  const strippedStockName = stripBrandPrefix(
+    group.stock_item_name,
+    brandName,
+    selectedBrand?.short_name,
+  );
 
   const runExistingImport = async () => {
     if (!selectedModel) return;
@@ -227,9 +236,9 @@ export function PurchaseImportDialog({
         loading={submitting}
         onClose={() => setShowWizard(false)}
         onConfirm={handleWizardConfirm}
-        initialIdentifier={accMatch?.normalized_query ?? group.stock_item_name}
+        initialIdentifier={accMatch?.normalized_query ?? strippedStockName}
         initialIdentifierType="model_number"
-        initialModelName={group.stock_item_name}
+        initialModelName={strippedStockName}
         initialSerials={group.serials.map((cell) => cell.serial_number)}
         initialPurchasePrice={defaultUnitPrice}
         titleOverride={`Add accessory — ${brandName} (Purchase ${voucher.voucher_number})`}
@@ -250,8 +259,8 @@ export function PurchaseImportDialog({
         loading={submitting}
         onClose={() => setShowWizard(false)}
         onConfirm={handleWizardConfirm}
-        initialModelNumber={match?.normalized_model_number ?? group.stock_item_name}
-        initialModelName={group.stock_item_name}
+        initialModelNumber={match?.normalized_model_number ?? strippedStockName}
+        initialModelName={strippedStockName}
         initialSerials={group.serials.map((cell) => cell.serial_number)}
         initialPurchasePrice={defaultUnitPrice}
         titleOverride={`Add model — ${brandName} (Purchase ${voucher.voucher_number})`}

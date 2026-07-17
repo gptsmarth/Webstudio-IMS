@@ -54,6 +54,14 @@ export class BrandService {
     return client.patch<Brand>(`/api/v1/brands/${id}`, data);
   }
 
+  static async uploadLogo(id: number, file: File): Promise<Brand> {
+    LoggingService.info('API', 'Uploading brand logo', { brand_id: id });
+    const client = await ApiClientProvider.getClient();
+    const formData = new FormData();
+    formData.append('file', file);
+    return client.postForm<Brand>(`/api/v1/brands/${id}/logo`, formData);
+  }
+
   static async deleteBrand(id: number): Promise<void> {
     const client = await ApiClientProvider.getClient();
     await client.delete(`/api/v1/brands/${id}`);
