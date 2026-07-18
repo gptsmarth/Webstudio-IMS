@@ -34,7 +34,9 @@ SCHEMA = "webstudio"
 def upgrade() -> None:
     # Identify the purge set once, then clear FK references and delete.
     # Sold units / sale-referenced units are excluded so sales history is safe.
-    op.execute(f"""
+    # SQL is assigned to locals first so Black 24.x and 26.x agree on formatting
+    # (they disagree on `op.execute(f"""...""")` vs parenthesized multiline strings).
+    select_archived = f"""
         CREATE TEMP TABLE _purge_archived_serials ON COMMIT DROP AS
         SELECT ii.id
         FROM {SCHEMA}.inventory_items AS ii
@@ -45,7 +47,8 @@ def upgrade() -> None:
               FROM {SCHEMA}.sales AS s
               WHERE s.inventory_item_id = ii.id
           )
-        """)
+        """
+    op.execute(select_archived)
 
     for table in (
         "sales",
@@ -54,16 +57,18 @@ def upgrade() -> None:
         "tally_processed_invoice_line",
         "tally_line_decision_log",
     ):
-        op.execute(f"""
+        clear_fk = f"""
             UPDATE {SCHEMA}.{table} AS t
             SET inventory_item_id = NULL
             WHERE t.inventory_item_id IN (SELECT id FROM _purge_archived_serials)
-            """)
+            """
+        op.execute(clear_fk)
 
-    op.execute(f"""
+    delete_archived = f"""
         DELETE FROM {SCHEMA}.inventory_items AS ii
         WHERE ii.id IN (SELECT id FROM _purge_archived_serials)
-        """)
+        """
+    op.execute(delete_archived)
 
 
 def downgrade() -> None:
