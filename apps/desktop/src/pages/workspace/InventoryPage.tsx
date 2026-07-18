@@ -267,7 +267,7 @@ export function InventoryPage(): JSX.Element {
 
       {nav.level === 'serials' && nav.modelId && (
         <div
-          className={`inv-page__body ${workspace.selectedId ? 'inv-page__body--drawer-open' : ''}`}
+          className={`inv-page__body ${workspace.selectedItem ? 'inv-page__body--drawer-open' : ''}`}
         >
           <AdminSerialTable
             units={serialUnits}
@@ -285,8 +285,24 @@ export function InventoryPage(): JSX.Element {
               permissions={session.permissions}
               onTransfer={() => {}}
               onMarkSold={() => handleMarkSold(workspace.selectedItem!.id)}
-              onArchive={() => void workspace.archiveItem()}
-              onRestore={() => void workspace.restoreItem()}
+              onArchive={() =>
+                void workspace
+                  .archiveItem()
+                  .then(() => hierarchy.refresh())
+                  .catch(() => {})
+              }
+              onRestore={() =>
+                void workspace
+                  .restoreItem()
+                  .then(() => hierarchy.refresh())
+                  .catch(() => {})
+              }
+              onDelete={() =>
+                void workspace
+                  .deleteItem()
+                  .then(() => hierarchy.refresh())
+                  .catch(() => {})
+              }
             />
           )}
         </div>

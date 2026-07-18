@@ -123,6 +123,14 @@ export function matchesCategoryFilter(model: ProductModel, filter: ProductCatego
   return (model.category ?? 'laptop') === filter;
 }
 
+function normalizedModelSearchValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[‐‑‒–—−]/g, '-')
+    .replace(/\s+/g, '');
+}
+
 export function matchesModelSearch(
   model: ProductModel,
   sampleItem: InventoryItemDetail | null,
@@ -151,5 +159,14 @@ export function matchesModelSearch(
     serial: [sampleItem?.serial_number ?? ''],
   };
 
-  return fieldMap[field].some((value) => value.toLowerCase().includes(term));
+  const normalizedTerm = normalizedModelSearchValue(term);
+  return fieldMap[field].some((value, index) => {
+    if (value.toLowerCase().includes(term)) return true;
+    const isModelNumberValue = field === 'model_number' || (field === 'all' && index < 3);
+    return (
+      isModelNumberValue &&
+      normalizedTerm.length > 0 &&
+      normalizedModelSearchValue(value).includes(normalizedTerm)
+    );
+  });
 }

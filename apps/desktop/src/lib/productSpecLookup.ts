@@ -26,17 +26,58 @@ export interface FetchedProductSpec {
   source: 'database' | 'gemini' | 'manual';
 }
 
+export type ModelNumberMatchKind = 'exact' | 'segment';
+
+export interface ModelNumberMatch {
+  model: ProductModel;
+  kind: ModelNumberMatchKind;
+}
+
+function normalizeModelNumberForMatch(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[‐‑‒–—−]/g, '-')
+    .replace(/\s+/g, '');
+}
+
+function modelNumberParts(value: string): string[] {
+  return normalizeModelNumberForMatch(value)
+    .split(/[/\\|]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 5);
+}
+
+export function findModelNumberMatches(
+  models: ProductModel[],
+  modelNumber: string,
+  brandId?: number | null,
+): ModelNumberMatch[] {
+  const normalized = normalizeModelNumberForMatch(modelNumber);
+  if (!normalized) return [];
+
+  const pool = brandId ? models.filter((model) => model.brand_id === brandId) : models;
+  const exact = pool.find(
+    (model) => normalizeModelNumberForMatch(model.model_number) === normalized,
+  );
+  if (exact) return [{ model: exact, kind: 'exact' }];
+
+  const enteredParts = new Set(modelNumberParts(modelNumber));
+  if (enteredParts.size === 0) return [];
+  return pool
+    .filter((model) => modelNumberParts(model.model_number).some((part) => enteredParts.has(part)))
+    .map((model) => ({ model, kind: 'segment' as const }));
+}
+
 export function findModelByNumber(
   models: ProductModel[],
   modelNumber: string,
   brandId?: number | null,
 ): ProductModel | null {
-  const normalized = modelNumber.trim().toLowerCase();
-  if (!normalized) return null;
-
-  const pool = brandId ? models.filter((model) => model.brand_id === brandId) : models;
-
-  return pool.find((model) => model.model_number.trim().toLowerCase() === normalized) ?? null;
+  return (
+    findModelNumberMatches(models, modelNumber, brandId).find((match) => match.kind === 'exact')
+      ?.model ?? null
+  );
 }
 
 export async function lookupExistingModelInventory(

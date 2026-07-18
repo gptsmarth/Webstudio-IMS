@@ -10,6 +10,7 @@ import '../../../shared/widgets/workspace_lookup_sheet.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../reports/data/report_repository.dart';
 import '../../reports/domain/report_models.dart';
+import '../data/sales_repository.dart';
 import '../domain/sales_models.dart';
 import '../domain/sales_permissions.dart';
 import 'sales_controller.dart';
@@ -25,12 +26,52 @@ class SalesScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesScreenState extends ConsumerState<SalesScreen> {
+  bool _backfilling = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(salesWorkspaceProvider.notifier).load();
     });
+  }
+
+  Future<void> _syncOlderSales() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year, now.month - 3, 1),
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      helpText: 'Sync sales from Tally starting',
+    );
+    if (picked == null || !mounted) return;
+    final fromDate = '${picked.year.toString().padLeft(4, '0')}-'
+        '${picked.month.toString().padLeft(2, '0')}-'
+        '${picked.day.toString().padLeft(2, '0')}';
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _backfilling = true);
+    try {
+      final result =
+          await ref.read(salesRepositoryProvider).backfillSales(fromDate: fromDate);
+      if (!mounted) return;
+      await ref.read(salesWorkspaceProvider.notifier).refresh();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Checked ${result.checked} sales invoice(s) since ${result.fromDate} — '
+            '${result.salesCreated} unit(s) marked sold, ${result.skipped} already synced'
+            '${result.failures > 0 ? ', ${result.failures} failed' : ''}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to sync older sales: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _backfilling = false);
+    }
   }
 
   void _openDetail(int saleId) {
@@ -161,6 +202,12 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 if (filters != null) controller.setFilters(filters);
               }),
               IconButton(icon: const Icon(Icons.manage_search), tooltip: 'Lookup', onPressed: _openLookup),
+              if (permissions.contains('tally:run_sync'))
+                IconButton(
+                  icon: const Icon(Icons.history),
+                  tooltip: 'Sync older sales from Tally',
+                  onPressed: _backfilling ? null : _syncOlderSales,
+                ),
               PopupMenuButton<String>(
                 tooltip: 'Export',
                 icon: const Icon(Icons.download_outlined),

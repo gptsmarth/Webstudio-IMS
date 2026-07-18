@@ -399,16 +399,34 @@ class PurchaseImportService:
                 status_code=422,
             )
 
-        # Duplicate-in-IMS guard (never overwrite / duplicate).
-        existing_serials: list[str] = []
-        for serial in serials:
-            if await self._inventory_repo.find_all_by_serial_number(serial):
-                existing_serials.append(serial)
-        if existing_serials:
+        # Duplicate-in-IMS guard (never overwrite / duplicate). EAN-as-serial
+        # brands intentionally share serials across units, so the whole-IMS
+        # duplicate scan only applies to unique-serial brands.
+        skipped_serials: list[str] = []
+        if not brand.allow_duplicate_serials:
+            existing_serials: list[str] = []
+            for serial in serials:
+                if await self._inventory_repo.find_all_by_serial_number(serial):
+                    existing_serials.append(serial)
+            if existing_serials:
+                if not request.skip_existing_serials:
+                    raise AppError(
+                        "SERIAL_NUMBER_DUPLICATE",
+                        f"Serial(s) already exist in IMS: {', '.join(existing_serials)}",
+                        status_code=409,
+                    )
+                # Partial import: units already in IMS are reported back as
+                # skipped ("already added") and only the new ones are created.
+                skipped_serials = existing_serials
+                existing_keys = {serial.lower() for serial in existing_serials}
+                serials = [serial for serial in serials if serial.lower() not in existing_keys]
+
+        if not serials and request.mode == "new":
             raise AppError(
-                "SERIAL_NUMBER_DUPLICATE",
-                f"Serial(s) already exist in IMS: {', '.join(existing_serials)}",
-                status_code=409,
+                "VALIDATION_ERROR",
+                "All serial numbers already exist in IMS — select the existing "
+                "model instead of creating a new one.",
+                status_code=422,
             )
 
         existing_model = request.mode == "existing"
@@ -505,4 +523,6 @@ class PurchaseImportService:
             voucher_status=voucher.status.value,
             group_key=request.group_key,
             existing_model=existing_model,
+            skipped_count=len(skipped_serials),
+            skipped_serials=skipped_serials,
         )

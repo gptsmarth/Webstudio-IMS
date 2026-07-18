@@ -112,6 +112,12 @@ export interface PurchaseImportRequest {
   current_location_id: number;
   status?: InventoryStatus;
   purchase_price?: number | null;
+  /**
+   * When true, serials that already exist anywhere in IMS are skipped (reported
+   * back as skipped_serials) instead of failing the whole import — so the
+   * remaining new units still import.
+   */
+  skip_existing_serials?: boolean;
 }
 
 export interface PurchaseImportResponse {
@@ -120,6 +126,8 @@ export interface PurchaseImportResponse {
   voucher_status: string;
   group_key: string;
   existing_model: boolean;
+  skipped_count: number;
+  skipped_serials: string[];
 }
 
 export interface PurchaseIgnoreResponse {

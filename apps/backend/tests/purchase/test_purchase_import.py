@@ -259,6 +259,162 @@ async def test_duplicate_serial_is_rejected_with_no_partial_creation(
     assert len(await repo.find_all_by_serial_number("SNPUR001")) == 1
 
 
+async def test_skip_existing_serials_imports_only_new_units(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    product_model: ProductModel,
+    admin_actor: AuditActor,
+    purchase_voucher: TallyPurchaseVoucher,
+) -> None:
+    """One of two serials already exists in IMS: with skip_existing_serials the
+    new unit is imported, the existing one is reported back as skipped, and the
+    group is marked imported."""
+    await InventoryService(db_session).create_item(
+        serial_number="SNPUR001",
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+        actor=admin_actor,
+    )
+    await db_session.commit()
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS F1504FA-BQ2113WS",
+            "brand_id": brand.id,
+            "mode": "existing",
+            "product_model_id": str(product_model.id),
+            "serial_numbers": ["SNPUR001", "SNPUR002"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "skip_existing_serials": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert body["imported_count"] == 1
+    assert body["skipped_count"] == 1
+    assert body["skipped_serials"] == ["SNPUR001"]
+
+    repo = InventoryItemRepository(db_session)
+    # The existing serial was NOT duplicated; the new one was created.
+    assert len(await repo.find_all_by_serial_number("SNPUR001")) == 1
+    assert len(await repo.find_all_by_serial_number("SNPUR002")) == 1
+
+    detail = await api_client.get(
+        f"/api/v1/purchase/queue/{purchase_voucher.id}", headers=main_admin_headers
+    )
+    groups = {g["stock_item_name"]: g for g in detail.json()["data"]["groups"]}
+    assert groups["ASUS F1504FA-BQ2113WS"]["imported"] is True
+
+
+async def test_skip_existing_serials_all_existing_marks_group_imported(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    product_model: ProductModel,
+    admin_actor: AuditActor,
+    purchase_voucher: TallyPurchaseVoucher,
+) -> None:
+    """Every serial already exists: nothing is created but the group can still
+    be resolved as imported (already added)."""
+    service = InventoryService(db_session)
+    for serial in ("SNPUR001", "SNPUR002"):
+        await service.create_item(
+            serial_number=serial,
+            product_model_id=product_model.id,
+            color="Black",
+            current_location_id=location.id,
+            status=InventoryStatus.AVAILABLE,
+            actor=admin_actor,
+        )
+    await db_session.commit()
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS F1504FA-BQ2113WS",
+            "brand_id": brand.id,
+            "mode": "existing",
+            "product_model_id": str(product_model.id),
+            "serial_numbers": ["SNPUR001", "SNPUR002"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "skip_existing_serials": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert body["imported_count"] == 0
+    assert body["skipped_count"] == 2
+
+    repo = InventoryItemRepository(db_session)
+    for serial in ("SNPUR001", "SNPUR002"):
+        assert len(await repo.find_all_by_serial_number(serial)) == 1
+
+
+async def test_skip_existing_serials_new_model_requires_a_new_unit(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    product_model: ProductModel,
+    admin_actor: AuditActor,
+    purchase_voucher: TallyPurchaseVoucher,
+) -> None:
+    """Creating a NEW model makes no sense when every unit already exists —
+    the import is rejected and no model/inventory is created."""
+    service = InventoryService(db_session)
+    for serial in ("SNPUR001", "SNPUR002"):
+        await service.create_item(
+            serial_number=serial,
+            product_model_id=product_model.id,
+            color="Black",
+            current_location_id=location.id,
+            status=InventoryStatus.AVAILABLE,
+            actor=admin_actor,
+        )
+    await db_session.commit()
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS F1504FA-BQ2113WS",
+            "brand_id": brand.id,
+            "mode": "new",
+            "new_product_model": {
+                "brand_id": brand.id,
+                "model_number": "NEW-MODEL-01",
+                "model_name": "New Model",
+                "cpu": "Intel Core i5",
+                "ram_gb": 16,
+                "storage_value": 512,
+                "storage_unit": "GB",
+                "storage_type": "SSD",
+            },
+            "serial_numbers": ["SNPUR001", "SNPUR002"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "skip_existing_serials": True,
+        },
+    )
+    assert response.status_code == 422
+
+
 async def test_missing_serials_rejected(
     api_client: AsyncClient,
     main_admin_headers: dict[str, str],

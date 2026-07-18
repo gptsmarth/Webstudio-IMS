@@ -45,6 +45,20 @@ class SalesRepository {
       parser: (json) => CancelSaleResult.fromJson(json! as Map<String, dynamic>),
     );
   }
+
+  Future<SalesBackfillResult> backfillSales({
+    required String fromDate,
+    String? toDate,
+  }) async {
+    return _api.post(
+      ApiPaths.tallySalesBackfill,
+      data: {
+        'from_date': fromDate,
+        if (toDate != null) 'to_date': toDate,
+      },
+      parser: (json) => SalesBackfillResult.fromJson(json! as Map<String, dynamic>),
+    );
+  }
 }
 
 final salesRepositoryProvider = Provider<SalesRepository>((ref) {

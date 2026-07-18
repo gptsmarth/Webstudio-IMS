@@ -7,7 +7,8 @@ export interface PurchaseImportSummary {
   existingModel: boolean;
   quantity: number;
   serialCount: number;
-  duplicateCount: number;
+  /** Serials already present in IMS — skipped at import, never re-created. */
+  alreadyAddedCount: number;
   destination: string;
   location: string;
   purchasePrice: string;
@@ -72,11 +73,11 @@ export function ConfirmPurchaseImportDialog({
           <Row label="Brand" value={summary.brand} />
           <Row label="Model" value={summary.model} />
           <Row label="Existing model" value={summary.existingModel ? 'YES' : 'NO'} />
-          <Row label="Quantity" value={String(summary.quantity)} />
+          <Row label="New units to import" value={String(summary.quantity)} />
           <Row label="Serial count" value={String(summary.serialCount)} />
           <Row
-            label="Duplicate count"
-            value={summary.duplicateCount > 0 ? `${summary.duplicateCount} (blocked)` : '0'}
+            label="Already added"
+            value={summary.alreadyAddedCount > 0 ? `${summary.alreadyAddedCount} (skipped)` : '0'}
           />
           <Row label="Inventory destination" value={summary.destination} />
           <Row label="Location" value={summary.location} />
@@ -91,7 +92,7 @@ export function ConfirmPurchaseImportDialog({
             type="button"
             className="btn btn-primary"
             onClick={onConfirm}
-            disabled={loading || summary.duplicateCount > 0 || summary.serialCount === 0}
+            disabled={loading || summary.serialCount === 0}
           >
             {loading ? 'Importing…' : 'Confirm import'}
           </button>

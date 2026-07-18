@@ -18,12 +18,16 @@ from webstudio_backend.api.schemas.responses import Envelope, utc_now_iso
 from webstudio_backend.core.dependencies import DbSessionDep
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
 from webstudio_backend.integrations.tally.connectivity import TallyHostValidationError
+from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
 from webstudio_backend.services.tally_dashboard_service import TallyDashboardService
 from webstudio_backend.services.tally_production_validation_service import (
     TallyProductionValidationService,
 )
-from webstudio_backend.services.tally_sync_service import TallySyncService
+from webstudio_backend.services.tally_sync_service import (
+    TallyBackfillBusyError,
+    TallySyncService,
+)
 
 router = APIRouter(prefix="/api/v1/integrations/tally", tags=["tally"])
 
@@ -42,6 +46,11 @@ def _envelope(request: Request, data: object) -> dict:
 
 class TallySyncTriggerRequest(BaseModel):
     company_name: str | None = None
+
+
+class TallySalesBackfillRequest(BaseModel):
+    from_date: date
+    to_date: date | None = None
 
 
 @router.get("/dashboard")
@@ -217,6 +226,57 @@ async def tally_sync_trigger(
             "status": "queued",
             "message": "Tally synchronization started in the background.",
             "correlation_id": correlation_id,
+        },
+    )
+
+
+@router.post("/sales/backfill")
+async def tally_sales_backfill(
+    request: Request,
+    body: TallySalesBackfillRequest,
+    current: TallyRunSyncDep,
+    db_session=DbSessionDep,
+) -> dict:
+    """Historical sales sync: process invoices from a past date range.
+
+    Idempotent — invoices already imported are skipped, matching serials are
+    marked sold exactly once, and the incremental sync watermark is untouched.
+    """
+    _ = current
+    sync_service = TallySyncService(db_session)
+    if not await sync_service.is_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tally integration is disabled. Enable it in System Settings.",
+        )
+    if body.to_date is not None and body.to_date < body.from_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="to_date cannot be before from_date.",
+        )
+    correlation_id = get_correlation_id(request) or str(uuid.uuid4())
+    try:
+        counts = await sync_service.backfill_sales(
+            from_date=body.from_date,
+            to_date=body.to_date,
+            correlation_id=correlation_id,
+        )
+    except TallyBackfillBusyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except TallyConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.user_message,
+        ) from exc
+    return _envelope(
+        request,
+        {
+            "from_date": body.from_date.isoformat(),
+            "to_date": (body.to_date or date.today()).isoformat(),
+            **counts,
         },
     )
 

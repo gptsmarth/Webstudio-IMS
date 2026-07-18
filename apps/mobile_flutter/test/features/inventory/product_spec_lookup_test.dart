@@ -36,6 +36,30 @@ void main() {
     expect(findModelByNumber(models, 'missing', brandId: 1), isNull);
   });
 
+  test('composite model number produces a non-confident segment match', () {
+    const models = [
+      ProductModel(
+        id: 'combined',
+        brandId: 1,
+        modelNumber: 'FA506NCG-HN200WS/FA506NCS',
+        modelName: 'TUF Gaming',
+        cpu: 'Ryzen 7',
+        ramGb: 16,
+        storageValue: '512',
+        storageUnit: 'GB',
+        storageType: 'SSD',
+        status: 'active',
+      ),
+    ];
+
+    final matches =
+        findModelNumberMatches(models, 'fa506ncg-hn200ws', brandId: 1);
+    expect(matches, hasLength(1));
+    expect(matches.single.kind, ModelNumberMatchKind.segment);
+    expect(findModelByNumber(models, 'fa506ncg-hn200ws', brandId: 1), isNull);
+    expect(findModelNumberMatches(models, 'FA506', brandId: 1), isEmpty);
+  });
+
   test('defaultUnitColorFromOptions respects 64-char API limit', () {
     expect(defaultUnitColorFromOptions(null), 'Not specified');
     expect(defaultUnitColorFromOptions('Black, Silver'), 'Black');

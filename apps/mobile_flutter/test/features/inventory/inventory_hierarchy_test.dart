@@ -8,7 +8,8 @@ void main() {
   test('buildBrandSummaries aggregates location counts', () {
     final brands = [const Brand(id: 1, name: 'ASUS', isActive: true)];
     final distribution = [
-      const DistributionGroup(id: '1', name: 'ASUS', available: 2, sold: 1, total: 3),
+      const DistributionGroup(
+          id: '1', name: 'ASUS', available: 2, sold: 1, total: 3),
     ];
     final items = [
       const InventoryItem(
@@ -40,7 +41,9 @@ void main() {
     expect(summaries.first.byLocation.first.locationName, 'Store A');
   });
 
-  test('buildModelRows counts available units from items when distribution is missing', () {
+  test(
+      'buildModelRows counts available units from items when distribution is missing',
+      () {
     const models = [
       ProductModel(
         id: 'm1',
@@ -144,14 +147,16 @@ void main() {
       ),
     ];
     const distribution = [
-      DistributionGroup(id: '2', name: 'Lenovo', available: 1, sold: 0, total: 1),
+      DistributionGroup(
+          id: '2', name: 'Lenovo', available: 1, sold: 0, total: 1),
     ];
 
     final brands = deriveBrandsFromInventoryData(items, distribution);
     expect(brands.map((b) => b.name), containsAll(['ASUS', 'Lenovo']));
   });
 
-  test('deriveBrandsFromProductModels includes zero-stock catalogue brands', () {
+  test('deriveBrandsFromProductModels includes zero-stock catalogue brands',
+      () {
     const models = [
       ProductModel(
         id: 'm1',
@@ -196,5 +201,29 @@ void main() {
     expect(merged, hasLength(2));
     expect(merged.firstWhere((b) => b.id == 1).logoFilename, 'asus.svg');
     expect(merged.map((b) => b.name), contains('Acer'));
+  });
+
+  test('model search finds a normalized part of a composite model number', () {
+    const model = ProductModel(
+      id: 'composite',
+      brandId: 1,
+      modelNumber: 'FA506NCG-HN200WS / FA506NCS',
+      modelName: 'TUF Gaming',
+      cpu: 'Ryzen 7',
+      ramGb: 16,
+      storageValue: '512',
+      storageUnit: 'GB',
+      storageType: 'SSD',
+      status: 'active',
+    );
+
+    expect(
+      matchesModelSearch(
+        model,
+        'fa506ncg-hn200ws',
+        HierarchySearchField.modelNumber,
+      ),
+      isTrue,
+    );
   });
 }

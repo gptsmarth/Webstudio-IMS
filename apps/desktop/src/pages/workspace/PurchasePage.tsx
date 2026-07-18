@@ -258,7 +258,7 @@ export function PurchasePage(): JSX.Element {
                   <h3 style={{ margin: 0 }}>{group.stock_item_name}</h3>
                   <p style={{ margin: '4px 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
                     Quantity {group.quantity} · {group.serials.length} serial(s)
-                    {group.duplicate_count > 0 ? ` · ${group.duplicate_count} duplicate(s)` : ''}
+                    {group.duplicate_count > 0 ? ` · ${group.duplicate_count} already added` : ''}
                   </p>
                 </div>
                 {group.imported ? (
@@ -285,7 +285,7 @@ export function PurchasePage(): JSX.Element {
                       className={cell.is_duplicate ? 'badge badge-warning' : 'badge'}
                       title={
                         cell.is_duplicate
-                          ? `Already in IMS (${cell.existing_status ?? 'exists'})`
+                          ? `Already added in IMS (${cell.existing_status ?? 'exists'}) — will be skipped on import`
                           : undefined
                       }
                       style={{ fontFamily: 'var(--font-mono)' }}

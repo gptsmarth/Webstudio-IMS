@@ -106,8 +106,8 @@ Replace `{COMPANY}`, `{VOUCHER_TYPE}`, `{FROM_YYYYMMDD}`, `{TO_YYYYMMDD}`:
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         <SVCURRENTCOMPANY>{COMPANY}</SVCURRENTCOMPANY>
         <VOUCHERTYPENAME>{VOUCHER_TYPE}</VOUCHERTYPENAME>
-        <SVFROMDATE>{FROM_YYYYMMDD}</SVFROMDATE>
-        <SVTODATE>{TO_YYYYMMDD}</SVTODATE>
+        <SVFROMDATE TYPE="Date">{FROM_YYYYMMDD}</SVFROMDATE>
+        <SVTODATE TYPE="Date">{TO_YYYYMMDD}</SVTODATE>
       </STATICVARIABLES>
     </DESC>
     <DATA>
@@ -131,6 +131,10 @@ Replace `{COMPANY}`, `{VOUCHER_TYPE}`, `{FROM_YYYYMMDD}`, `{TO_YYYYMMDD}`:
 Monitored voucher types: `Sales`, `NEW SALE` (see `integrations/tally/constants.py`).
 
 **Tally Prime:** use **Day Book** export (`<ID>Day Book</ID>`) — the legacy `Vouchers` collection returns empty/error on Tally Prime. WEBSTUDIO filters Sales / NEW SALE server-side after parse.
+
+**Date variables must carry `TYPE="Date"`** (`<SVFROMDATE TYPE="Date">20260601</SVFROMDATE>`) — without the attribute several Tally builds silently ignore the period and export only the current date, which breaks historical backfills while appearing to work for same-day syncs.
+
+**Historical backfill fallback:** when a ranged Day Book export returns no `<VOUCHER>` elements — or when Day Book itself returns `<LINEERROR>` / `<STATUS>0</STATUS>` — the client retries with the period-based **Voucher Register** report (`<TALLYREQUEST>Export Data</TALLYREQUEST>` + `<REPORTNAME>Voucher Register</REPORTNAME>`), which returns all voucher types (Sales and Purchase) and reliably honours `SVFROMDATE`/`SVTODATE` on both ERP 9 and Prime. Only if the register also fails does the client fall back to per-type collection exports for `Sales`, `NEW SALE`, `Purchase`, and `NEW PURCHASE`. All three paths are read-only exports.
 
 ---
 

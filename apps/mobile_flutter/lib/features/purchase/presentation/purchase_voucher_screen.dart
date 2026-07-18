@@ -158,7 +158,7 @@ class _GroupCard extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Text(
                       'Quantity ${group.quantity} · ${group.serials.length} serial(s)'
-                      '${group.duplicateCount > 0 ? ' · ${group.duplicateCount} duplicate(s)' : ''}',
+                      '${group.duplicateCount > 0 ? ' · ${group.duplicateCount} already added' : ''}',
                       style: theme.textTheme.bodySmall,
                     ),
                   ],

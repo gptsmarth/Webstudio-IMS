@@ -99,6 +99,10 @@ def is_tally_sync_active() -> bool:
     return _sync_lock.locked()
 
 
+class TallyBackfillBusyError(Exception):
+    """Raised when a backfill is requested while a sync is already running."""
+
+
 @dataclass(slots=True)
 class TallySyncCounters:
     vouchers_processed: int = 0
@@ -221,6 +225,219 @@ class TallySyncService:
             "fetched": len(purchase_vouchers),
             "new": max(0, unique - existing_before),
         }
+
+    async def backfill_sales(
+        self,
+        *,
+        from_date: date,
+        to_date: date | None = None,
+        correlation_id: str,
+    ) -> dict[str, int]:
+        """Historical SALES sync: fetch vouchers for a past window and process
+        any that were never imported (mark matching serials sold, create sales).
+
+        Reuses the exact per-voucher pipeline of the regular sync, with two
+        deliberate differences:
+          * The GUID watermark is NOT used for skipping and is NEVER advanced —
+            the incremental sync continues exactly where it was.
+          * Already-processed invoices (GUID / fingerprint) are skipped, so the
+            backfill is idempotent and can never double-sell a serial.
+        """
+        if _sync_lock.locked():
+            raise TallyBackfillBusyError("Synchronization already in progress. Try again shortly.")
+
+        async with _sync_lock:
+            _, _, company_name, _ = await self.get_connection_config()
+            company_sync = await self._company_sync.get_or_create(company_name)
+
+            connectivity = TallyConnectivityService(self._session)
+            diagnostics = await connectivity.ensure_workstation_reachable(company_name=company_name)
+            if not diagnostics.reachable:
+                raise TallyConnectionError(
+                    diagnostics.user_message,
+                    user_message=diagnostics.user_message,
+                )
+            client = await connectivity.build_client_for_sync(diagnostics)
+
+            exports = await client.export_monitored_voucher_types(
+                company_name=company_name,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            all_vouchers: list[TallyVoucher] = []
+            for xml_text in exports.values():
+                all_vouchers.extend(parse_vouchers_xml(xml_text))
+            all_vouchers.sort(key=lambda voucher: (voucher.voucher_date, voucher.guid))
+
+            sales_vouchers = [
+                voucher
+                for voucher in all_vouchers
+                if voucher.voucher_type in MONITORED_VOUCHER_TYPES
+            ]
+
+            sync_run_id = uuid.uuid4()
+            counters = TallySyncCounters()
+            history = await self._sync_history.create_started(
+                company_sync_id=company_sync.id,
+                sync_run_id=sync_run_id,
+                correlation_id=correlation_id,
+            )
+
+            error_messages: list[str] = []
+            for voucher in sales_vouchers:
+                counters.invoices_checked += 1
+                if await self._should_skip_voucher(company_sync.id, voucher):
+                    counters.invoices_skipped += 1
+                    continue
+
+                invoice, created = await self._processed_invoices.get_or_create_pending(
+                    company_sync_id=company_sync.id,
+                    guid=voucher.guid,
+                    master_id=voucher.master_id,
+                    voucher_number=voucher.voucher_number,
+                    printed_invoice_number=voucher.printed_invoice_number,
+                    voucher_type=voucher.voucher_type,
+                    voucher_date=voucher.voucher_date,
+                    party_name=voucher.party_name,
+                    amount=voucher.amount,
+                )
+                if not created and invoice.processing_status in {
+                    TallyProcessingStatus.SUCCESS,
+                    TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                    TallyProcessingStatus.SKIPPED,
+                }:
+                    counters.invoices_skipped += 1
+                    continue
+
+                counters.vouchers_processed += 1
+                if created:
+                    counters.invoices_imported += 1
+
+                try:
+                    line_stats = await self._process_voucher(
+                        voucher=voucher,
+                        company_sync=company_sync,
+                        invoice_id=invoice.id,
+                        company_name=company_name,
+                        sync_run_id=sync_run_id,
+                        correlation_id=correlation_id,
+                        counters=counters,
+                    )
+                    status = self._derive_voucher_status(line_stats)
+                    await self._processed_invoices.update_status(invoice, status)
+                    run_status = (
+                        TallySyncRunStatus.SUCCESS
+                        if status
+                        in {
+                            TallyProcessingStatus.SUCCESS,
+                            TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                        }
+                        else (
+                            TallySyncRunStatus.PARTIAL_SUCCESS
+                            if status is TallyProcessingStatus.PARTIAL_SUCCESS
+                            else TallySyncRunStatus.FAILED
+                        )
+                    )
+                    if status is TallyProcessingStatus.FAILED:
+                        counters.failures += 1
+                        error_messages.append(
+                            f"{voucher.printed_invoice_number}: processing failed"
+                        )
+                except Exception as exc:  # noqa: BLE001 — isolate voucher failures
+                    counters.failures += 1
+                    error_messages.append(f"{voucher.printed_invoice_number}: {exc}")
+                    company_sync = await self._company_sync.get_or_create(company_name)
+                    invoice, _ = await self._processed_invoices.get_or_create_pending(
+                        company_sync_id=company_sync.id,
+                        guid=voucher.guid,
+                        master_id=voucher.master_id,
+                        voucher_number=voucher.voucher_number,
+                        printed_invoice_number=voucher.printed_invoice_number,
+                        voucher_type=voucher.voucher_type,
+                        voucher_date=voucher.voucher_date,
+                        party_name=voucher.party_name,
+                        amount=voucher.amount,
+                    )
+                    await self._processed_invoices.update_status(
+                        invoice, TallyProcessingStatus.FAILED
+                    )
+                    run_status = TallySyncRunStatus.FAILED
+                    line_stats = {
+                        "total": 0,
+                        "completed": 0,
+                        "failed": 1,
+                        "sales": 0,
+                        "duplicates": 0,
+                        "missing_serial": 0,
+                        "missing_model": 0,
+                        "model_mismatches": 0,
+                        "ignored": 0,
+                    }
+
+                log = await self._sync_logs.create_run_log(
+                    sync_run_id=sync_run_id,
+                    company_sync_id=company_sync.id,
+                    correlation_id=correlation_id,
+                    voucher_guid=voucher.guid,
+                    voucher_number=voucher.voucher_number,
+                    printed_invoice_number=voucher.printed_invoice_number,
+                    voucher_type=voucher.voucher_type,
+                    customer_name=voucher.party_name,
+                    processed_invoice_id=invoice.id,
+                    status=run_status,
+                )
+                await self._sync_logs.finalize_log(
+                    log,
+                    status=run_status,
+                    inventory_item_count=line_stats["total"],
+                    successfully_updated=line_stats["sales"],
+                    already_sold=line_stats["duplicates"],
+                    missing_serial=line_stats["missing_serial"],
+                    missing_model=line_stats["missing_model"],
+                    model_mismatches=line_stats["model_mismatches"],
+                    ignored_items=line_stats["ignored"],
+                )
+
+            # Purchases seen in the window are also projected into the review
+            # queue (idempotent) — same as the regular sync cycle.
+            await self._project_purchase_queue(all_vouchers, company_sync)
+
+            await self._sync_history.finalize(
+                history,
+                status="success" if counters.failures == 0 else "partial",
+                invoices_checked=counters.invoices_checked,
+                invoices_imported=counters.invoices_imported,
+                invoices_skipped=counters.invoices_skipped,
+                errors_count=counters.failures,
+                error_summary=("; ".join(error_messages[:5]) if error_messages else None),
+            )
+            await self._recorder.record_system_action(
+                entity_type="tally_sync",
+                entity_id=str(sync_run_id),
+                description=f"Historical sales backfill from {from_date.isoformat()}",
+                source=AuditSource.TALLY_SYNC,
+                new_value={
+                    "from_date": from_date.isoformat(),
+                    "to_date": (to_date or datetime.now(UTC).date()).isoformat(),
+                    "fetched": len(sales_vouchers),
+                    "invoices_checked": counters.invoices_checked,
+                    "invoices_imported": counters.invoices_imported,
+                    "invoices_skipped": counters.invoices_skipped,
+                    "sales_created": counters.sales_created,
+                    "failures": counters.failures,
+                },
+            )
+
+            return {
+                "fetched": len(sales_vouchers),
+                "checked": counters.invoices_checked,
+                "imported": counters.invoices_imported,
+                "skipped": counters.invoices_skipped,
+                "sales_created": counters.sales_created,
+                "duplicates": counters.duplicates,
+                "missing_serials": counters.missing_serials,
+                "failures": counters.failures,
+            }
 
     async def run_sync(
         self, *, correlation_id: str, triggered_by_user_id: int | None = None

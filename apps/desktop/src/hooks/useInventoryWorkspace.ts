@@ -76,6 +76,7 @@ export interface InventoryWorkspaceState {
   markSold: (payload: MarkSoldRequest) => Promise<void>;
   archiveItem: (id?: string) => Promise<void>;
   restoreItem: (id?: string) => Promise<void>;
+  deleteItem: (id?: string) => Promise<void>;
   updateItem: (patch: { serial_number?: string; color?: string }) => Promise<void>;
   addInventoryBatch: (payload: AddInventoryBatchRequest) => Promise<void>;
   addLaptopWizard: (payload: AddLaptopWizardRequest) => Promise<void>;
@@ -161,6 +162,11 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
   const [sortField, setSortField] = useState<InventorySortField>('updated_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Freshly fetched detail for the selected unit. The paginated `items` list
+  // may not contain the selection (picked from the hierarchy serial table, on
+  // another page, or just archived while default filters hide archived units);
+  // without this fallback the drawer renders blank.
+  const [selectedDetail, setSelectedDetail] = useState<InventoryItemDetail | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null);
   const [productModel, setProductModel] = useState<ProductModel | null>(null);
@@ -178,8 +184,10 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
   const sort = `${sortField}:${sortDirection}`;
 
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId],
+    () =>
+      items.find((item) => item.id === selectedId) ??
+      (selectedDetail && selectedDetail.id === selectedId ? selectedDetail : null),
+    [items, selectedDetail, selectedId],
   );
 
   const setFilters = useCallback((patch: Partial<InventoryFilters>) => {
@@ -273,11 +281,13 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
             : Promise.resolve(null),
         ]);
         setItems((current) => current.map((row) => (row.id === itemId ? item : row)));
+        setSelectedDetail(item);
         setAuditLogs(logs);
         setSaleDetail(extractSaleFromAudit(logs));
         setProductModel(model);
         setSiblingUnits(siblingsResult.items);
       } catch {
+        setSelectedDetail(null);
         setAuditLogs([]);
         setSaleDetail(null);
         setProductModel(null);
@@ -294,6 +304,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
       setSelectedId(id);
       if (id) void loadDrawerData(id);
       else {
+        setSelectedDetail(null);
         setAuditLogs([]);
         setSaleDetail(null);
         setProductModel(null);
@@ -385,6 +396,29 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
       });
     },
     [runAction, selectedId],
+  );
+
+  const deleteItem = useCallback(
+    async (id?: string) => {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await InventoryService.deleteItem(targetId);
+        // The unit no longer exists — close the drawer before refreshing.
+        setSelectedId(null);
+        setSelectedDetail(null);
+        await refresh();
+      } catch (err: unknown) {
+        const message = parseApiError(err);
+        setActionError(message);
+        throw new Error(message);
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [refresh, selectedId],
   );
 
   const updateItem = useCallback(
@@ -532,6 +566,7 @@ export function useInventoryWorkspace(permissions: string[] = []): InventoryWork
     markSold,
     archiveItem,
     restoreItem,
+    deleteItem,
     updateItem,
     addInventoryBatch,
     addLaptopWizard,

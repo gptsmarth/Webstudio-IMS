@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildBrandSummaries,
-  buildModelRows,
-  matchesModelSearch,
-} from '../src/lib/inventoryHierarchy';
-import { findModelByNumber } from '../src/lib/productSpecLookup';
-import type { Brand } from '../src/services/api/BrandService';
+import { buildModelRows, matchesModelSearch } from '../src/lib/inventoryHierarchy';
+import { findModelByNumber, findModelNumberMatches } from '../src/lib/productSpecLookup';
 import type { ProductModel } from '../src/services/api/ProductModelService';
 
-const brands: Brand[] = [
-  { id: 1, name: 'ASUS', short_name: null, logo_filename: null, display_order: 0, is_active: true },
-];
 const models: ProductModel[] = [
   {
     id: 'm1',
@@ -44,6 +36,34 @@ describe('inventory hierarchy', () => {
   it('finds model by number within brand', () => {
     expect(findModelByNumber(models, 'x151va-ab5321ws', 1)?.id).toBe('m1');
     expect(findModelByNumber(models, 'x151va-ab5321ws', 2)).toBeNull();
+  });
+
+  it('flags a complete slash-separated model part as a possible match', () => {
+    const combined = {
+      ...models[0],
+      id: 'm-combined',
+      model_number: 'FA506NCG-HN200WS/FA506NCS',
+    };
+    const matches = findModelNumberMatches([combined], 'fa506ncg-hn200ws', 1);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({ kind: 'segment', model: { id: 'm-combined' } });
+    expect(findModelByNumber([combined], 'fa506ncg-hn200ws', 1)).toBeNull();
+  });
+
+  it('does not treat arbitrary substrings as an existing-model match', () => {
+    const combined = {
+      ...models[0],
+      model_number: 'FA506NCG-HN200WS/FA506NCS',
+    };
+    expect(findModelNumberMatches([combined], 'FA506', 1)).toEqual([]);
+  });
+
+  it('searches a normalized part of a composite model number', () => {
+    const combined = {
+      ...models[0],
+      model_number: 'FA506NCG-HN200WS / FA506NCS',
+    };
+    expect(matchesModelSearch(combined, null, 'fa506ncg-hn200ws', 'model_number')).toBe(true);
   });
 
   it('splits zero stock models', () => {

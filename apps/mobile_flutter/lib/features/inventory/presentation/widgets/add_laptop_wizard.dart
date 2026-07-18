@@ -39,7 +39,9 @@ Future<void> showAddLaptopWizard(
       child: _AddLaptopWizard(
         brandId: brandId,
         brandName: brandName,
-        models: workspace.models.where((model) => model.brandId == brandId).toList(),
+        models: workspace.models
+            .where((model) => model.brandId == brandId)
+            .toList(),
         locations: workspace.locations,
         workspaceProvider: workspaceProvider,
       ),
@@ -155,7 +157,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   void _resetUnits() {
-    final defaultLocation = widget.locations.isNotEmpty ? widget.locations.first.id : 0;
+    final defaultLocation =
+        widget.locations.isNotEmpty ? widget.locations.first.id : 0;
     for (final row in _units) {
       row.serial.removeListener(_onFormChanged);
       row.purchasePrice.removeListener(_onFormChanged);
@@ -163,7 +166,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     }
     _units
       ..clear()
-      ..add(_UnitRow(serial: TextEditingController(), locationId: defaultLocation));
+      ..add(_UnitRow(
+          serial: TextEditingController(), locationId: defaultLocation));
     _attachUnitListeners();
   }
 
@@ -201,8 +205,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     _modelNumber.text = model.modelNumber;
     _modelName.text = model.modelName;
     _applySpec(FetchedProductSpec.fromProductModel(model));
-    _existingAvailableUnits =
-        ref.read(widget.workspaceProvider.notifier).availableUnitsForModel(model.id);
+    _existingAvailableUnits = ref
+        .read(widget.workspaceProvider.notifier)
+        .availableUnitsForModel(model.id);
   }
 
   Future<void> _continueFromModel() async {
@@ -215,12 +220,16 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       _message = null;
     });
 
-    final existing = findModelByNumber(
+    final matches = findModelNumberMatches(
       widget.models.where((model) => model.isLaptop).toList(),
       trimmed,
       brandId: widget.brandId,
     );
-    if (existing != null) {
+    final exact = matches
+        .where((match) => match.kind == ModelNumberMatchKind.exact)
+        .firstOrNull;
+    if (exact != null) {
+      final existing = exact.model;
       _applyExistingModel(existing);
       setState(() {
         _checking = false;
@@ -230,6 +239,59 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
             : 'Model found — add serial numbers to restore stock for this model.';
       });
       return;
+    }
+
+    final possible = matches
+        .where((match) => match.kind == ModelNumberMatchKind.segment)
+        .toList();
+    if (possible.isNotEmpty) {
+      setState(() => _checking = false);
+      final selected = await showDialog<ProductModel?>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Possible model already added'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A complete part of “$trimmed” matches an existing model. '
+                  'Choose it to append serial numbers, or create a separate model.',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final match in possible)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(match.model.modelNumber),
+                    subtitle: Text(match.model.modelName),
+                    trailing: const Text('Use existing'),
+                    onTap: () => Navigator.pop(dialogContext, match.model),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Add as new model'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (selected != null) {
+        _applyExistingModel(selected);
+        setState(() {
+          _step = _WizardStep.units;
+          _message = _existingAvailableUnits > 0
+              ? 'Model found — $_existingAvailableUnits unit(s) already in stock. Add more serial numbers below.'
+              : 'Model found — add serial numbers to restore stock for this model.';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -254,14 +316,16 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       final raw = await ref.read(aiEnrichmentRepositoryProvider).lookupSpecs(
             brandName: widget.brandName,
             modelNumber: trimmed,
-            modelName: _modelName.text.trim().isEmpty ? null : _modelName.text.trim(),
+            modelName:
+                _modelName.text.trim().isEmpty ? null : _modelName.text.trim(),
             forceRefresh: forceRefresh,
           );
       final spec = FetchedProductSpec.fromApi(raw);
       if (spec.cpu.trim().isEmpty) {
         setState(() {
           _fetching = false;
-          _message = 'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.';
+          _message =
+              'Auto-fetch found no match — enter details manually or tap Auto fetch to retry.';
         });
         return;
       }
@@ -275,14 +339,16 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     } catch (error) {
       setState(() {
         _fetching = false;
-        _message = 'Auto-fetch failed — enter details manually or tap Auto fetch to retry.';
+        _message =
+            'Auto-fetch failed — enter details manually or tap Auto fetch to retry.';
       });
     }
   }
 
   void _syncUnitRows(int count) {
     final clamped = count.clamp(1, 50);
-    final defaultLocation = widget.locations.isNotEmpty ? widget.locations.first.id : 0;
+    final defaultLocation =
+        widget.locations.isNotEmpty ? widget.locations.first.id : 0;
     while (_units.length > clamped) {
       final removed = _units.removeLast();
       removed.serial.removeListener(_onFormChanged);
@@ -303,7 +369,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   String _defaultUnitColor() {
     final source = _mode == 'existing'
         ? _existingModel?.colorOptions
-        : (_colorOptions.text.trim().isEmpty ? null : _colorOptions.text.trim());
+        : (_colorOptions.text.trim().isEmpty
+            ? null
+            : _colorOptions.text.trim());
     return defaultUnitColorFromOptions(source);
   }
 
@@ -312,17 +380,16 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     return _units
         .where((row) => row.serial.text.trim().isNotEmpty && row.locationId > 0)
         .map(
-          (row) {
-            final priceRaw = row.purchasePrice.text.trim();
-            return SerialUnitEntry(
-              serialNumber: row.serial.text.trim(),
-              color: color,
-              currentLocationId: row.locationId,
-              purchasePrice: priceRaw.isEmpty ? null : double.tryParse(priceRaw),
-            );
-          },
-        )
-        .toList();
+      (row) {
+        final priceRaw = row.purchasePrice.text.trim();
+        return SerialUnitEntry(
+          serialNumber: row.serial.text.trim(),
+          color: color,
+          currentLocationId: row.locationId,
+          purchasePrice: priceRaw.isEmpty ? null : double.tryParse(priceRaw),
+        );
+      },
+    ).toList();
   }
 
   void _applyFirstLocationToAll() {
@@ -352,20 +419,25 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       return;
     }
 
-    if (_mode == 'existing' && (_productModelId == null || _productModelId!.isEmpty)) {
+    if (_mode == 'existing' &&
+        (_productModelId == null || _productModelId!.isEmpty)) {
       setState(() => _error = 'Select or resolve a product model.');
       return;
     }
 
     if (_mode == 'new') {
-      if (_modelNumber.text.trim().isEmpty || _modelName.text.trim().isEmpty || _cpu.text.trim().isEmpty) {
+      if (_modelNumber.text.trim().isEmpty ||
+          _modelName.text.trim().isEmpty ||
+          _cpu.text.trim().isEmpty) {
         setState(() => _error = 'Model number, name, and CPU are required.');
         return;
       }
     }
 
     for (final unit in units) {
-      final duplicate = await ref.read(widget.workspaceProvider.notifier).checkSerialDuplicate(unit.serialNumber);
+      final duplicate = await ref
+          .read(widget.workspaceProvider.notifier)
+          .checkSerialDuplicate(unit.serialNumber);
       if (duplicate) {
         setState(() => _error = 'Serial already exists: ${unit.serialNumber}');
         return;
@@ -378,7 +450,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
     });
 
     try {
-      final ok = await ref.read(widget.workspaceProvider.notifier).addLaptopWizard(
+      final ok = await ref
+          .read(widget.workspaceProvider.notifier)
+          .addLaptopWizard(
             AddLaptopWizardRequest(
               brandId: widget.brandId,
               mode: _mode,
@@ -394,12 +468,20 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
                       'storage_value': _storageValue.text.trim(),
                       'storage_unit': _storageUnit,
                       'storage_type': _storageType,
-                      'display': _display.text.trim().isEmpty ? null : _display.text.trim(),
-                      'color_options': _colorOptions.text.trim().isEmpty ? null : _colorOptions.text.trim(),
+                      'display': _display.text.trim().isEmpty
+                          ? null
+                          : _display.text.trim(),
+                      'color_options': _colorOptions.text.trim().isEmpty
+                          ? null
+                          : _colorOptions.text.trim(),
                       'product_image_url': _productImageUrl,
                       'notes': composeModelNotes(
-                        _description.text.trim().isEmpty ? null : _description.text.trim(),
-                        _specNotes.text.trim().isEmpty ? null : _specNotes.text.trim(),
+                        _description.text.trim().isEmpty
+                            ? null
+                            : _description.text.trim(),
+                        _specNotes.text.trim().isEmpty
+                            ? null
+                            : _specNotes.text.trim(),
                       ),
                     }
                   : null,
@@ -410,13 +492,16 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       if (!ok) {
         setState(() {
           _submitting = false;
-          _error = ref.read(widget.workspaceProvider).error ?? 'Could not save laptop.';
+          _error = ref.read(widget.workspaceProvider).error ??
+              'Could not save laptop.';
         });
         return;
       }
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${units.length} unit(s) to ${widget.brandName}.')),
+        SnackBar(
+            content:
+                Text('Added ${units.length} unit(s) to ${widget.brandName}.')),
       );
     } catch (error) {
       if (mounted) {
@@ -458,7 +543,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
 
   @override
   Widget build(BuildContext context) {
-    final permissions = ref.watch(authControllerProvider).user?.permissions ?? const [];
+    final permissions =
+        ref.watch(authControllerProvider).user?.permissions ?? const [];
     if (!inv_perms.canCreateInventory(permissions)) {
       return const Padding(
         padding: EdgeInsets.all(24),
@@ -480,8 +566,10 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
             Expanded(
               child: ListView(
                 key: ValueKey(_step),
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
                   Center(
                     child: Container(
@@ -500,7 +588,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Add laptop — ${widget.brandName}', style: Theme.of(context).textTheme.titleLarge),
+                            Text('Add laptop — ${widget.brandName}',
+                                style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 4),
                             Text(
                               'Brand is fixed to ${widget.brandName}. Step ${_stepLabel()}.',
@@ -509,7 +598,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
                           ],
                         ),
                       ),
-                      IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                      IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close)),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -523,7 +614,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
               child: SafeArea(
                 top: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                      AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
                   child: _stepActions(context),
                 ),
               ),
@@ -536,7 +628,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
 
   int _resolvedLocationId(int locationId) {
     if (widget.locations.isEmpty) return locationId;
-    if (widget.locations.any((location) => location.id == locationId)) return locationId;
+    if (widget.locations.any((location) => location.id == locationId)) {
+      return locationId;
+    }
     return widget.locations.first.id;
   }
 
@@ -598,7 +692,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       ),
       if (_error != null) ...[
         const SizedBox(height: AppSpacing.sm),
-        Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        Text(_error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ],
       if (_message != null) ...[
         const SizedBox(height: AppSpacing.sm),
@@ -653,11 +748,17 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
         Text(_message!, style: Theme.of(context).textTheme.bodySmall),
       ],
       const SizedBox(height: AppSpacing.md),
-      TextField(controller: _modelName, decoration: const InputDecoration(labelText: 'Model name')),
+      TextField(
+          controller: _modelName,
+          decoration: const InputDecoration(labelText: 'Model name')),
       const SizedBox(height: AppSpacing.sm),
-      TextField(controller: _cpu, decoration: const InputDecoration(labelText: 'CPU')),
+      TextField(
+          controller: _cpu,
+          decoration: const InputDecoration(labelText: 'CPU')),
       const SizedBox(height: AppSpacing.sm),
-      TextField(controller: _gpu, decoration: const InputDecoration(labelText: 'GPU')),
+      TextField(
+          controller: _gpu,
+          decoration: const InputDecoration(labelText: 'GPU')),
       const SizedBox(height: AppSpacing.sm),
       TextField(
         controller: _ramGb,
@@ -665,7 +766,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
         keyboardType: TextInputType.number,
       ),
       const SizedBox(height: AppSpacing.sm),
-      TextField(controller: _storageValue, decoration: const InputDecoration(labelText: 'Storage')),
+      TextField(
+          controller: _storageValue,
+          decoration: const InputDecoration(labelText: 'Storage')),
       const SizedBox(height: AppSpacing.sm),
       DropdownButtonFormField<String>(
         // ignore: deprecated_member_use
@@ -689,9 +792,13 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
         onChanged: (value) => setState(() => _storageType = value ?? 'SSD'),
       ),
       const SizedBox(height: AppSpacing.sm),
-      TextField(controller: _display, decoration: const InputDecoration(labelText: 'Display')),
+      TextField(
+          controller: _display,
+          decoration: const InputDecoration(labelText: 'Display')),
       const SizedBox(height: AppSpacing.sm),
-      TextField(controller: _colorOptions, decoration: const InputDecoration(labelText: 'Color options')),
+      TextField(
+          controller: _colorOptions,
+          decoration: const InputDecoration(labelText: 'Color options')),
       const SizedBox(height: AppSpacing.sm),
       TextField(
         controller: _specNotes,
@@ -720,7 +827,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
   }
 
   Widget _specsStepActions(BuildContext context) {
-    final canAdvance = _modelName.text.trim().isNotEmpty && _cpu.text.trim().isNotEmpty;
+    final canAdvance =
+        _modelName.text.trim().isNotEmpty && _cpu.text.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -737,7 +845,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
           ),
         _footerNavRow(
           onBack: () => setState(() => _step = _WizardStep.model),
-          onPrimary: canAdvance ? () => setState(() => _step = _WizardStep.units) : null,
+          onPrimary: canAdvance
+              ? () => setState(() => _step = _WizardStep.units)
+              : null,
           primaryLabel: 'Next',
         ),
       ],
@@ -764,7 +874,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
       ],
       Row(
         children: [
-          Text('Number of units', style: Theme.of(context).textTheme.labelLarge),
+          Text('Number of units',
+              style: Theme.of(context).textTheme.labelLarge),
           const Spacer(),
           IconButton(
             onPressed: _unitCount > 1
@@ -835,7 +946,8 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
           value: _resolvedLocationId(_units[i].locationId),
           decoration: const InputDecoration(labelText: 'Location'),
           items: widget.locations
-              .map((location) => DropdownMenuItem(value: location.id, child: Text(location.name)))
+              .map((location) => DropdownMenuItem(
+                  value: location.id, child: Text(location.name)))
               .toList(),
           onChanged: (value) {
             if (value == null) return;
@@ -854,14 +966,17 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
         ),
         const SizedBox(height: AppSpacing.md),
       ],
-      if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      if (_error != null)
+        Text(_error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error)),
     ];
   }
 
   Widget _unitsStepActions(BuildContext context) {
     return _footerNavRow(
       onBack: () => setState(
-        () => _step = _mode == 'existing' ? _WizardStep.model : _WizardStep.specs,
+        () =>
+            _step = _mode == 'existing' ? _WizardStep.model : _WizardStep.specs,
       ),
       onPrimary: _mode == 'existing'
           ? (_submitting ? null : _submit)
@@ -889,7 +1004,9 @@ class _AddLaptopWizardState extends ConsumerState<_AddLaptopWizard> {
             '${unit.color} · ${widget.locations.where((l) => l.id == unit.currentLocationId).map((l) => l.name).firstOrNull ?? '—'}',
           ),
         ),
-      if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      if (_error != null)
+        Text(_error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error)),
     ];
   }
 

@@ -7,7 +7,7 @@ import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload
 import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import {
   fetchProductSpecFromInternet,
-  findModelByNumber,
+  findModelNumberMatches,
   lookupExistingModelInventory,
   modelToFetchedSpec,
   type FetchedProductSpec,
@@ -101,6 +101,7 @@ export function AddLaptopWizard({
   const [modelName, setModelName] = useState('');
   const [mode, setMode] = useState<'existing' | 'new'>('new');
   const [productModelId, setProductModelId] = useState('');
+  const [possibleModels, setPossibleModels] = useState<ProductModel[]>([]);
   const [existingLookup, setExistingLookup] = useState<Awaited<
     ReturnType<typeof lookupExistingModelInventory>
   > | null>(null);
@@ -153,6 +154,7 @@ export function AddLaptopWizard({
     setModelName(initialModelName ?? '');
     setMode('new');
     setProductModelId('');
+    setPossibleModels([]);
     setExistingLookup(null);
     setFetchMessage(null);
     setChecking(false);
@@ -362,6 +364,34 @@ export function AddLaptopWizard({
     };
   }, [productImageUrl]);
 
+  const continueWithExistingModel = async (existing: ProductModel) => {
+    setChecking(true);
+    setError(null);
+    try {
+      const lookup = await lookupExistingModelInventory(existing);
+      setExistingLookup(lookup);
+      setPossibleModels([]);
+      applyModel(existing);
+      setFetchMessage(
+        lookup.availableSerials.length > 0
+          ? `Model found — ${lookup.availableSerials.length} unit(s) already in stock. Add more serial numbers below.`
+          : 'Model found — add serial numbers to restore stock for this model.',
+      );
+      setStep('units');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const continueAsNewModel = () => {
+    setMode('new');
+    setProductModelId('');
+    setPossibleModels([]);
+    setExistingLookup(null);
+    autoFetchTriggered.current = false;
+    setStep('specs');
+  };
+
   const continueFromModel = async () => {
     const trimmed = modelNumber.trim();
     if (!trimmed) return;
@@ -371,25 +401,23 @@ export function AddLaptopWizard({
     setFetchMessage(null);
 
     try {
-      const existing = findModelByNumber(productModels, trimmed, brandId);
-      if (existing) {
-        const lookup = await lookupExistingModelInventory(existing);
-        setExistingLookup(lookup);
-        applyModel(existing);
-        setFetchMessage(
-          lookup.availableSerials.length > 0
-            ? `Model found — ${lookup.availableSerials.length} unit(s) already in stock. Add more serial numbers below.`
-            : 'Model found — add serial numbers to restore stock for this model.',
-        );
-        setStep('units');
+      const matches = findModelNumberMatches(productModels, trimmed, brandId);
+      const exact = matches.find((match) => match.kind === 'exact');
+      if (exact) {
+        await continueWithExistingModel(exact.model);
         return;
       }
-
-      setMode('new');
-      setProductModelId('');
-      setExistingLookup(null);
-      autoFetchTriggered.current = false;
-      setStep('specs');
+      const segmentMatches = matches
+        .filter((match) => match.kind === 'segment')
+        .map((match) => match.model);
+      if (segmentMatches.length > 0) {
+        setPossibleModels(segmentMatches);
+        setFetchMessage(
+          'A complete part of this model number matches an existing model. Confirm whether to add units there or create a separate model.',
+        );
+        return;
+      }
+      continueAsNewModel();
     } finally {
       setChecking(false);
     }
@@ -521,7 +549,11 @@ export function AddLaptopWizard({
               <input
                 className="input"
                 value={modelNumber}
-                onChange={(e) => setModelNumber(e.target.value)}
+                onChange={(e) => {
+                  setModelNumber(e.target.value);
+                  setPossibleModels([]);
+                  setFetchMessage(null);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && modelNumber.trim() && !checking) {
                     void continueFromModel();
@@ -535,10 +567,47 @@ export function AddLaptopWizard({
                 add serial numbers.
               </p>
               {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
+              {possibleModels.length > 0 && (
+                <div className="card" style={{ display: 'grid', gap: 10 }}>
+                  <strong>Possible model already in the catalogue</strong>
+                  {possibleModels.map((model) => (
+                    <div
+                      key={model.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <div>
+                        <div className="col-mono">{model.model_number}</div>
+                        <small>{model.model_name}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={checking}
+                        onClick={() => void continueWithExistingModel(model)}
+                      >
+                        Use existing model
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={checking}
+                    onClick={continueAsNewModel}
+                  >
+                    Add as a new model instead
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={!modelNumber.trim() || checking}
+                disabled={!modelNumber.trim() || checking || possibleModels.length > 0}
                 onClick={() => void continueFromModel()}
               >
                 {checking ? 'Checking database…' : 'Continue'}

@@ -1,20 +1,63 @@
 import '../domain/inventory_models.dart';
 
+enum ModelNumberMatchKind { exact, segment }
+
+class ModelNumberMatch {
+  const ModelNumberMatch({required this.model, required this.kind});
+
+  final ProductModel model;
+  final ModelNumberMatchKind kind;
+}
+
+String _normalizeModelNumber(String value) {
+  return value
+      .trim()
+      .toUpperCase()
+      .replaceAll(RegExp(r'[‐‑‒–—−]'), '-')
+      .replaceAll(RegExp(r'\s+'), '');
+}
+
+Set<String> _modelNumberParts(String value) {
+  return _normalizeModelNumber(value)
+      .split(RegExp(r'[/\\|]+'))
+      .where((part) => part.length >= 5)
+      .toSet();
+}
+
+List<ModelNumberMatch> findModelNumberMatches(
+  List<ProductModel> models,
+  String modelNumber, {
+  int? brandId,
+}) {
+  final normalized = _normalizeModelNumber(modelNumber);
+  if (normalized.isEmpty) return const [];
+  final pool = brandId == null
+      ? models
+      : models.where((model) => model.brandId == brandId);
+  for (final model in pool) {
+    if (_normalizeModelNumber(model.modelNumber) == normalized) {
+      return [ModelNumberMatch(model: model, kind: ModelNumberMatchKind.exact)];
+    }
+  }
+  final enteredParts = _modelNumberParts(modelNumber);
+  if (enteredParts.isEmpty) return const [];
+  return pool
+      .where((model) =>
+          _modelNumberParts(model.modelNumber).any(enteredParts.contains))
+      .map((model) =>
+          ModelNumberMatch(model: model, kind: ModelNumberMatchKind.segment))
+      .toList();
+}
+
 ProductModel? findModelByNumber(
   List<ProductModel> models,
   String modelNumber, {
   int? brandId,
 }) {
-  final normalized = modelNumber.trim().toLowerCase();
-  if (normalized.isEmpty) return null;
-
-  final pool = brandId == null ? models : models.where((model) => model.brandId == brandId);
-  for (final model in pool) {
-    if (model.modelNumber.trim().toLowerCase() == normalized) {
-      return model;
-    }
-  }
-  return null;
+  return findModelNumberMatches(models, modelNumber, brandId: brandId)
+      .where((match) => match.kind == ModelNumberMatchKind.exact)
+      .firstOrNull
+      ?.model;
 }
 
 String composeModelNotes(String? description, String? specNotes) {

@@ -363,3 +363,41 @@ class CancelSaleResult extends Equatable {
   @override
   List<Object?> get props => [saleId, invoiceNumber];
 }
+
+class SalesBackfillResult extends Equatable {
+  const SalesBackfillResult({
+    required this.fromDate,
+    required this.toDate,
+    required this.fetched,
+    required this.checked,
+    required this.imported,
+    required this.skipped,
+    required this.salesCreated,
+    required this.failures,
+  });
+
+  final String fromDate;
+  final String toDate;
+  final int fetched;
+  final int checked;
+  final int imported;
+  final int skipped;
+  final int salesCreated;
+  final int failures;
+
+  factory SalesBackfillResult.fromJson(Map<String, dynamic> json) {
+    return SalesBackfillResult(
+      fromDate: json['from_date'] as String? ?? '',
+      toDate: json['to_date'] as String? ?? '',
+      fetched: (json['fetched'] as num?)?.toInt() ?? 0,
+      checked: (json['checked'] as num?)?.toInt() ?? 0,
+      imported: (json['imported'] as num?)?.toInt() ?? 0,
+      skipped: (json['skipped'] as num?)?.toInt() ?? 0,
+      salesCreated: (json['sales_created'] as num?)?.toInt() ?? 0,
+      failures: (json['failures'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  List<Object?> get props => [fromDate, toDate, checked, salesCreated];
+}

@@ -344,8 +344,13 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
   List<String> get _trimmedSerials =>
       _serials.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
 
-  int get _duplicateCount =>
+  /// Serials the backend already found in IMS ("already added") — skipped at
+  /// import time instead of blocking the remaining new units.
+  int get _alreadyAddedCount =>
       _trimmedSerials.where((s) => _knownDuplicates.contains(s.toUpperCase())).length;
+
+  /// Units that are NOT already in IMS — the ones this import will create.
+  int get _newUnitCount => _trimmedSerials.length - _alreadyAddedCount;
 
   bool get _hasEmptySerial => _serials.any((c) => c.text.trim().isEmpty);
 
@@ -367,7 +372,7 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
   bool get _canImport {
     if (_mode == null) return false;
     if (_trimmedSerials.isEmpty) return false;
-    if (_hasEmptySerial || _duplicateCount > 0 || _hasInternalDuplicates) return false;
+    if (_hasEmptySerial || _newUnitCount <= 0 || _hasInternalDuplicates) return false;
     if (_locationId <= 0) return false;
     if (_mode == 'new') {
       if (_modelNumber.text.trim().isEmpty || _modelName.text.trim().isEmpty) {
@@ -438,9 +443,9 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
               _ConfirmRow('Brand', brandName),
               _ConfirmRow('Model', modelLabel),
               _ConfirmRow('Existing model', _mode == 'existing' ? 'YES' : 'NO'),
-              _ConfirmRow('Quantity', '$serialCount'),
+              _ConfirmRow('New units to import', '$_newUnitCount'),
               _ConfirmRow('Serial count', '$serialCount'),
-              _ConfirmRow('Duplicate count', '$_duplicateCount'),
+              _ConfirmRow('Already added (skipped)', '$_alreadyAddedCount'),
               const _ConfirmRow('Destination', 'Inventory (Tally Purchase)'),
               _ConfirmRow('Location', locationName),
               _ConfirmRow(
@@ -479,13 +484,21 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
         currentLocationId: _locationId,
         status: _status,
         purchasePrice: price.isEmpty ? null : double.tryParse(price),
+        skipExistingSerials: true,
       );
-      await ref.read(purchaseRepositoryProvider).importGroup(request);
+      final result = await ref.read(purchaseRepositoryProvider).importGroup(request);
       if (!mounted) return;
       Navigator.pop(context);
       widget.onImported();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Imported ${request.serialNumbers.length} unit(s).')),
+        SnackBar(
+          content: Text(
+            result.skippedCount > 0
+                ? 'Imported ${result.importedCount} unit(s) · '
+                    '${result.skippedCount} already added (skipped).'
+                : 'Imported ${result.importedCount} unit(s).',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
@@ -785,8 +798,8 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
                 controller: _serials[i],
                 decoration: InputDecoration(
                   labelText: 'Serial ${i + 1}',
-                  errorText: _knownDuplicates.contains(_serials[i].text.trim().toUpperCase())
-                      ? 'Already in IMS'
+                  helperText: _knownDuplicates.contains(_serials[i].text.trim().toUpperCase())
+                      ? 'Already added — will be skipped'
                       : null,
                 ),
                 textCapitalization: TextCapitalization.characters,
@@ -813,8 +826,14 @@ class _PurchaseImportSheetState extends ConsumerState<_PurchaseImportSheet> {
           label: const Text('Add serial'),
         ),
       ),
-      if (_duplicateCount > 0)
-        Text('$_duplicateCount serial(s) already exist in IMS — import blocked.',
+      if (_alreadyAddedCount > 0 && _newUnitCount > 0)
+        Text(
+          '$_alreadyAddedCount serial(s) already added in IMS — they will be '
+          'skipped and only the $_newUnitCount new unit(s) will be imported.',
+          style: theme.textTheme.bodySmall,
+        ),
+      if (_alreadyAddedCount > 0 && _newUnitCount <= 0)
+        Text('Every serial in this group is already in IMS — nothing left to import.',
             style: TextStyle(color: theme.colorScheme.error)),
       if (_hasInternalDuplicates)
         Text('The serial list contains repeated values.',

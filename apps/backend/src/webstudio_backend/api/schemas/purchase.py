@@ -134,6 +134,11 @@ class PurchaseImportRequest(BaseModel):
     current_location_id: int = Field(gt=0)
     status: InventoryStatus = InventoryStatus.AVAILABLE
     purchase_price: Decimal | None = Field(default=None, ge=0)
+    # When true, serials that already exist anywhere in IMS are skipped (reported
+    # back as skipped_serials) instead of rejecting the whole import — so the
+    # remaining new units can still be imported. Default false keeps the strict
+    # legacy behavior (409 on any duplicate).
+    skip_existing_serials: bool = False
 
 
 class PurchaseImportResponse(BaseModel):
@@ -142,6 +147,9 @@ class PurchaseImportResponse(BaseModel):
     voucher_status: str
     group_key: str
     existing_model: bool
+    # Serials that were already present in IMS and therefore not re-created.
+    skipped_count: int = 0
+    skipped_serials: list[str] = Field(default_factory=list)
 
 
 class PurchaseIgnoreResponse(BaseModel):

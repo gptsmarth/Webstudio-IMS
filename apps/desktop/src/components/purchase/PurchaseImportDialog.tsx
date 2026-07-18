@@ -56,7 +56,9 @@ export function PurchaseImportDialog({
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Known duplicate serials from the queue (IMS state at fetch time).
+  // Serials the backend already found in IMS (checked against the whole
+  // database when the voucher detail is loaded). These are "already added":
+  // they are skipped at import time instead of blocking the remaining units.
   const knownDuplicates = useMemo(() => {
     const set = new Set<string>();
     for (const cell of group.serials) {
@@ -150,17 +152,21 @@ export function PurchaseImportDialog({
     }
   };
 
-  const duplicateCount = serials.filter((serial) =>
+  const alreadyAddedCount = serials.filter((serial) =>
     knownDuplicates.has(serial.trim().toUpperCase()),
   ).length;
   const emptyCount = serials.filter((serial) => !serial.trim()).length;
   const uniqueCount = new Set(serials.map((s) => s.trim().toUpperCase()).filter(Boolean)).size;
   const hasInternalDuplicates = uniqueCount !== serials.filter((s) => s.trim()).length;
+  // Units that are NOT already in IMS — the ones this import will create.
+  const newUnitCount = serials.filter(
+    (serial) => serial.trim() && !knownDuplicates.has(serial.trim().toUpperCase()),
+  ).length;
   const canImportExisting =
     !!selectedModel &&
     serials.length > 0 &&
     emptyCount === 0 &&
-    duplicateCount === 0 &&
+    newUnitCount > 0 &&
     !hasInternalDuplicates;
 
   const resolvedColor = defaultUnitColorFromOptions(selectedModel?.color_options);
@@ -191,6 +197,9 @@ export function PurchaseImportDialog({
         current_location_id: locationId,
         status,
         purchase_price: purchasePrice.trim() ? parsePriceInput(purchasePrice) : null,
+        // Backend re-checks the whole database and skips serials that already
+        // exist ("already added") so the remaining new units still import.
+        skip_existing_serials: true,
       });
       setShowConfirm(false);
       onImported();
@@ -215,6 +224,7 @@ export function PurchaseImportDialog({
       current_location_id: first?.current_location_id ?? locationId,
       status: payload.status ?? 'available',
       purchase_price: first?.purchase_price ?? null,
+      skip_existing_serials: true,
     });
     onImported();
   };
@@ -451,19 +461,12 @@ export function PurchaseImportDialog({
                 </div>
                 <div style={{ display: 'grid', gap: 6 }}>
                   {serials.map((serial, index) => {
-                    const isDup = knownDuplicates.has(serial.trim().toUpperCase());
+                    const isAlreadyAdded = knownDuplicates.has(serial.trim().toUpperCase());
                     return (
                       <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <input
                           className="input col-mono"
-                          style={
-                            isDup
-                              ? {
-                                  borderColor: 'var(--color-danger, #d33)',
-                                  color: 'var(--color-danger, #d33)',
-                                }
-                              : undefined
-                          }
+                          style={isAlreadyAdded ? { opacity: 0.6 } : undefined}
                           value={serial}
                           placeholder={`Serial ${index + 1}`}
                           onChange={(e) =>
@@ -472,9 +475,12 @@ export function PurchaseImportDialog({
                             )
                           }
                         />
-                        {isDup && (
-                          <span className="badge badge-warning" title="Already exists in IMS">
-                            Duplicate
+                        {isAlreadyAdded && (
+                          <span
+                            className="badge badge-warning"
+                            title="This serial already exists in IMS — it will be skipped, not re-imported."
+                          >
+                            Already added
                           </span>
                         )}
                         <button
@@ -489,10 +495,15 @@ export function PurchaseImportDialog({
                     );
                   })}
                 </div>
-                {duplicateCount > 0 && (
+                {alreadyAddedCount > 0 && (
+                  <p className="add-laptop-wizard__hint">
+                    {alreadyAddedCount} serial(s) already exist in IMS — they will be skipped and
+                    only the {newUnitCount} new unit(s) will be imported.
+                  </p>
+                )}
+                {alreadyAddedCount > 0 && newUnitCount === 0 && (
                   <p className="inv-dialog__error">
-                    {duplicateCount} serial(s) already exist in IMS. Remove or correct them before
-                    import.
+                    Every serial in this group is already in IMS — nothing left to import.
                   </p>
                 )}
                 {hasInternalDuplicates && (
@@ -575,9 +586,9 @@ export function PurchaseImportDialog({
           brand: brandName,
           model: selectedModel ? `${selectedModel.model_number} — ${selectedModel.model_name}` : '',
           existingModel: true,
-          quantity: serials.filter((s) => s.trim()).length,
-          serialCount: serials.filter((s) => s.trim()).length,
-          duplicateCount,
+          quantity: newUnitCount,
+          serialCount: newUnitCount,
+          alreadyAddedCount,
           destination: 'Inventory (Tally Purchase)',
           location: locationName,
           purchasePrice: purchasePrice.trim() ? purchasePrice.trim() : '—',

@@ -43,6 +43,7 @@ abstract final class ApiPaths {
 
   static const tallyConnectionTest = '/api/v1/integrations/tally/connection/test';
   static const tallySyncTrigger = '/api/v1/integrations/tally/sync/trigger';
+  static const tallySalesBackfill = '/api/v1/integrations/tally/sales/backfill';
   static const tallySyncRetry = '/api/v1/integrations/tally/sync/retry';
   static const tallySyncLog = '/api/v1/integrations/tally/sync-log';
   static const tallySyncHistory = '/api/v1/integrations/tally/sync/history';

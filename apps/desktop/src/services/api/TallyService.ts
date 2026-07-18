@@ -101,6 +101,19 @@ export interface TallySyncHistoryFilters {
   offset?: number;
 }
 
+export interface TallySalesBackfillResult {
+  from_date: string;
+  to_date: string;
+  fetched: number;
+  checked: number;
+  imported: number;
+  skipped: number;
+  sales_created: number;
+  duplicates: number;
+  missing_serials: number;
+  failures: number;
+}
+
 export type { TallyOperationalSummary, TallySyncHistoryEntry };
 
 export class TallyService {
@@ -177,6 +190,18 @@ export class TallyService {
   static async retrySync(): Promise<void> {
     const client = await ApiClientProvider.getClient();
     await client.post('/api/v1/integrations/tally/sync/retry', {});
+  }
+
+  static async backfillSales(fromDate: string, toDate?: string): Promise<TallySalesBackfillResult> {
+    LoggingService.info('API', 'Backfilling sales from Tally', {
+      from_date: fromDate,
+      to_date: toDate ?? null,
+    });
+    const client = await ApiClientProvider.getClient();
+    return client.post<TallySalesBackfillResult>('/api/v1/integrations/tally/sales/backfill', {
+      from_date: fromDate,
+      ...(toDate ? { to_date: toDate } : {}),
+    });
   }
 
   static toSummary(data: TallyDashboardData | null): TallyStatusSummary {

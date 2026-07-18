@@ -501,6 +501,11 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
 
         await self.force_delete(inventory_item)
 
+    async def force_delete(self, inventory_item: InventoryItem) -> None:
+        """Hard-delete bypassing the guarded ``delete`` override (caller has
+        already validated sold/sale-reference rules and cleared FKs)."""
+        await super().delete(inventory_item)
+
     async def search(
         self,
         filters: InventorySearchFilters,

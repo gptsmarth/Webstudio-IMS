@@ -354,6 +354,7 @@ class PurchaseImportRequest {
     required this.currentLocationId,
     this.status = 'available',
     this.purchasePrice,
+    this.skipExistingSerials = false,
   });
 
   final int voucherId;
@@ -368,6 +369,10 @@ class PurchaseImportRequest {
   final String status;
   final double? purchasePrice;
 
+  /// When true, serials already present anywhere in IMS are skipped (reported
+  /// back as skipped) instead of failing the whole import.
+  final bool skipExistingSerials;
+
   Map<String, dynamic> toJson() => {
         'voucher_id': voucherId,
         'group_key': groupKey,
@@ -380,6 +385,7 @@ class PurchaseImportRequest {
         'current_location_id': currentLocationId,
         'status': status,
         if (purchasePrice != null) 'purchase_price': purchasePrice,
+        'skip_existing_serials': skipExistingSerials,
       };
 
   /// Builds the import request for the "new model" path from the shared wizard
@@ -403,6 +409,7 @@ class PurchaseImportRequest {
       currentLocationId: first?.currentLocationId ?? 0,
       status: status,
       purchasePrice: first?.purchasePrice,
+      skipExistingSerials: true,
     );
   }
 }
@@ -414,6 +421,8 @@ class PurchaseImportResult extends Equatable {
     required this.voucherStatus,
     required this.groupKey,
     required this.existingModel,
+    this.skippedCount = 0,
+    this.skippedSerials = const [],
   });
 
   final String productModelId;
@@ -422,16 +431,24 @@ class PurchaseImportResult extends Equatable {
   final String groupKey;
   final bool existingModel;
 
+  /// Serials that already existed in IMS and were skipped (already added).
+  final int skippedCount;
+  final List<String> skippedSerials;
+
   factory PurchaseImportResult.fromJson(Map<String, dynamic> json) => PurchaseImportResult(
         productModelId: json['product_model_id'] as String? ?? '',
         importedCount: (json['imported_count'] as num?)?.toInt() ?? 0,
         voucherStatus: json['voucher_status'] as String? ?? 'pending',
         groupKey: json['group_key'] as String? ?? '',
         existingModel: json['existing_model'] as bool? ?? false,
+        skippedCount: (json['skipped_count'] as num?)?.toInt() ?? 0,
+        skippedSerials: ((json['skipped_serials'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
       );
 
   @override
-  List<Object?> get props => [productModelId, importedCount, voucherStatus];
+  List<Object?> get props => [productModelId, importedCount, voucherStatus, skippedCount];
 }
 
 class PurchaseBackfillResult extends Equatable {

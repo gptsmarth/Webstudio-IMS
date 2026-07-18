@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, ArchiveRestore, MapPin, Pencil, QrCode, ShoppingBag, Tag, X } from 'lucide-react';
 import {
+  Archive,
+  ArchiveRestore,
+  MapPin,
+  Pencil,
+  QrCode,
+  ShoppingBag,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  canDeleteInventorySerial,
   canMarkSold,
   canViewPurchasePrice,
   canWriteInventory,
@@ -50,6 +61,7 @@ interface InventoryDetailDrawerProps {
   onMarkSold: () => void;
   onArchive: () => void;
   onRestore: () => void;
+  onDelete?: () => void;
 }
 
 function AuditRow({ log }: { log: AuditLogEntry }): JSX.Element {
@@ -74,6 +86,7 @@ export function InventoryDetailDrawer({
   onMarkSold,
   onArchive,
   onRestore,
+  onDelete,
 }: InventoryDetailDrawerProps): JSX.Element | null {
   const item = workspace.selectedItem;
   const [editing, setEditing] = useState(false);
@@ -98,6 +111,8 @@ export function InventoryDetailDrawer({
 
   const writable = canWriteInventory(permissions);
   const markSoldAllowed = canMarkSold(permissions) && item.status !== 'sold' && !item.is_archived;
+  const deleteAllowed =
+    canDeleteInventorySerial(permissions) && item.status !== 'sold' && Boolean(onDelete);
   const tallyLogs = workspace.auditLogs.filter((log) => log.source === 'TALLY_SYNC');
   const modelLabel = modelDisplayName(item);
 
@@ -176,6 +191,27 @@ export function InventoryDetailDrawer({
           >
             <ArchiveRestore size={14} aria-hidden />
             Restore
+          </button>
+        )}
+        {deleteAllowed && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--color-danger, #dc2626)' }}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Delete serial ${item.serial_number} permanently?\n\nThis removes the unit from stock and inventory completely. Past sales are never deleted — sold units cannot be removed.`,
+                )
+              ) {
+                return;
+              }
+              onDelete?.();
+            }}
+            disabled={workspace.actionLoading}
+          >
+            <Trash2 size={14} aria-hidden />
+            Delete serial
           </button>
         )}
         {writable && (

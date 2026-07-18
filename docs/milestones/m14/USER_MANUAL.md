@@ -105,6 +105,8 @@ Use the search field on the Inventory screen, or scan a barcode (see § 9) to po
 
 - Serial numbers are case-insensitive.
 - Partial model names work (e.g. `MacBook Pro 14`).
+- A complete part of a combined barcode model number is searchable. For example,
+  `FA506NCG-HN200WS` finds catalogue model `FA506NCG-HN200WS/FA506NCS`.
 - If nothing is found, the item may not be **received** into inventory yet.
 
 ---
@@ -132,10 +134,14 @@ Always verify the **physical serial** on the laptop matches the screen.
 ### 4.3 Add / receive inventory (if permitted)
 
 1. **Inventory** → **Add laptop**.
-2. Enter or scan **serial number**.
-3. Select **brand**, **model**, **colour**, **location**.
-4. Enter specs manually, or use **Fetch specs** if AI enrichment is enabled.
-5. **Save**.
+2. Enter or scan the **model number** and serial number.
+3. If the model number exactly matches an existing catalogue model, IMS reuses it.
+   If one complete `/`-separated part matches (for example typed
+   `FA506NCG-HN200WS` versus stored `FA506NCG-HN200WS/FA506NCS`), IMS asks
+   whether to append units to the existing model or continue as a new model.
+4. Select **colour** and **location**.
+5. For a new model, enter specs manually or use **Fetch specs** if AI enrichment is enabled.
+6. **Save**.
 
 ### 4.4 Transfer stock
 

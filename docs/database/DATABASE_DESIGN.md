@@ -455,7 +455,7 @@ Future multi-role per user would introduce `user_role` junction table via ADR.
 - Product model: must be `active` on create; location must be `is_active = true`
 - Status transitions: only allowed paths per §12.1
 - Movement: only when `status = available` or `reserved` (LC-04 for sold)
-- **Conditional delete:** permitted only when `status != sold` and no `sale` or `audit_log` references exist; no cascade delete
+- **Conditional delete:** permitted when `status != sold` and no `sale` row references the unit. Audit/notification/Tally FK references are nullified, then the row is hard-deleted (no cascade). Soft-archive (`is_archived`) remains available for temporary hide/restore; migration `0054_purge_archived_serials` permanently removes previously archived, unsold units that have no sale history.
 
 **Excluded Version 1 fields (not columns):** `purchase_date`, `purchase_cost`, `remarks`, `configuration`, `row_version`, `sold_by_user_id`, `reserved_by_user_id`, `approved_by_user_id` — see §12.8.
 

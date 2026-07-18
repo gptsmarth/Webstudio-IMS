@@ -2389,6 +2389,31 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 
 ---
 
+### 15.2.1 Historical Sales Backfill
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/v1/integrations/tally/sales/backfill` |
+| **Method** | `POST` |
+| **Purpose** | Read-only historical sales sync from a past date range — invoices never imported are processed (matching serials marked sold); already-synced invoices are skipped. The incremental GUID watermark is never advanced. |
+| **Authentication Required** | Yes |
+| **Required Permission** | `tally:run_sync` |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from_date` | date | Yes | Inclusive start date |
+| `to_date` | date | No | Inclusive end date — defaults to today |
+
+**Response Body (`200`):** `{ "from_date", "to_date", "fetched", "checked", "imported", "skipped", "sales_created", "duplicates", "missing_serials", "failures" }`
+
+**Errors:** `409` when Tally integration is disabled or a sync is already running; `502` when the Tally workstation is unreachable.
+
+**Audit Behaviour:** system audit entry `Historical sales backfill from <date>` with the summary counters.
+
+---
+
 ### 15.3 Integration Status
 
 | | |

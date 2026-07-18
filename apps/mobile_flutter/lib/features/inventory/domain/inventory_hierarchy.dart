@@ -27,7 +27,10 @@ class BrandInventorySummary {
 }
 
 class LocationCount {
-  const LocationCount({required this.locationId, required this.locationName, required this.count});
+  const LocationCount(
+      {required this.locationId,
+      required this.locationName,
+      required this.count});
 
   final int locationId;
   final String locationName;
@@ -59,77 +62,94 @@ List<BrandInventorySummary> buildBrandSummaries(
 ) {
   final distMap = {for (final row in distributionByBrand) row.id: row};
 
-  return brands
-      .where((brand) => brand.isActive)
-      .map((brand) {
-        final dist = distMap[brand.id.toString()];
-        final brandItems = items.where((item) => item.brandId == brand.id && !item.isArchived).toList();
-        final availableFromItems =
-            brandItems.where((entry) => entry.status != InventoryStatus.sold).length;
-        final soldFromItems = brandItems.where((entry) => entry.status == InventoryStatus.sold).length;
-        final locationMap = <int, LocationCount>{};
-        var laptopUnits = 0;
-        var accessoryUnits = 0;
+  return brands.where((brand) => brand.isActive).map((brand) {
+    final dist = distMap[brand.id.toString()];
+    final brandItems = items
+        .where((item) => item.brandId == brand.id && !item.isArchived)
+        .toList();
+    final availableFromItems = brandItems
+        .where((entry) => entry.status != InventoryStatus.sold)
+        .length;
+    final soldFromItems = brandItems
+        .where((entry) => entry.status == InventoryStatus.sold)
+        .length;
+    final locationMap = <int, LocationCount>{};
+    var laptopUnits = 0;
+    var accessoryUnits = 0;
 
-        for (final item in brandItems.where((entry) => entry.status != InventoryStatus.sold)) {
-          if (item.isAccessory) {
-            accessoryUnits += 1;
-          } else {
-            laptopUnits += 1;
-          }
-          final existing = locationMap[item.currentLocationId];
-          if (existing != null) {
-            locationMap[item.currentLocationId] = LocationCount(
-              locationId: existing.locationId,
-              locationName: existing.locationName,
-              count: existing.count + 1,
-            );
-          } else {
-            locationMap[item.currentLocationId] = LocationCount(
-              locationId: item.currentLocationId,
-              locationName: item.currentLocationName,
-              count: 1,
-            );
-          }
-        }
-
-        final byLocation = locationMap.values.toList()
-          ..sort((a, b) => a.locationName.compareTo(b.locationName));
-
-        return BrandInventorySummary(
-          brandId: brand.id,
-          brandName: brand.name,
-          logoFilename: brand.logoFilename,
-          totalUnits: brandItems.isNotEmpty ? brandItems.length : (dist?.total ?? 0),
-          availableUnits: brandItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0),
-          soldUnits: brandItems.isNotEmpty ? soldFromItems : (dist?.sold ?? 0),
-          laptopUnits: laptopUnits,
-          accessoryUnits: accessoryUnits,
-          byLocation: byLocation,
+    for (final item
+        in brandItems.where((entry) => entry.status != InventoryStatus.sold)) {
+      if (item.isAccessory) {
+        accessoryUnits += 1;
+      } else {
+        laptopUnits += 1;
+      }
+      final existing = locationMap[item.currentLocationId];
+      if (existing != null) {
+        locationMap[item.currentLocationId] = LocationCount(
+          locationId: existing.locationId,
+          locationName: existing.locationName,
+          count: existing.count + 1,
         );
-      })
-      .toList()
+      } else {
+        locationMap[item.currentLocationId] = LocationCount(
+          locationId: item.currentLocationId,
+          locationName: item.currentLocationName,
+          count: 1,
+        );
+      }
+    }
+
+    final byLocation = locationMap.values.toList()
+      ..sort((a, b) => a.locationName.compareTo(b.locationName));
+
+    return BrandInventorySummary(
+      brandId: brand.id,
+      brandName: brand.name,
+      logoFilename: brand.logoFilename,
+      totalUnits:
+          brandItems.isNotEmpty ? brandItems.length : (dist?.total ?? 0),
+      availableUnits:
+          brandItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0),
+      soldUnits: brandItems.isNotEmpty ? soldFromItems : (dist?.sold ?? 0),
+      laptopUnits: laptopUnits,
+      accessoryUnits: accessoryUnits,
+      byLocation: byLocation,
+    );
+  }).toList()
     ..sort((a, b) => a.brandName.compareTo(b.brandName));
 }
 
-({List<ModelInventoryRow> all, List<ModelInventoryRow> inStock, List<ModelInventoryRow> zeroStock}) buildModelRows(
+({
+  List<ModelInventoryRow> all,
+  List<ModelInventoryRow> inStock,
+  List<ModelInventoryRow> zeroStock
+}) buildModelRows(
   List<ProductModel> models,
   List<DistributionGroup> distributionByModel,
   int brandId,
   List<InventoryItem> items,
 ) {
   final distMap = {for (final row in distributionByModel) row.id: row};
-  final brandModels = models.where((model) => model.brandId == brandId && model.status != 'archived');
+  final brandModels = models
+      .where((model) => model.brandId == brandId && model.status != 'archived');
 
   final rows = brandModels.map((model) {
     final dist = distMap[model.id];
-    final modelItems = items.where((item) => item.productModelId == model.id && !item.isArchived);
-    final availableFromItems =
-        modelItems.where((entry) => entry.status != InventoryStatus.sold).length;
-    final soldFromItems = modelItems.where((entry) => entry.status == InventoryStatus.sold).length;
-    final availableUnits = modelItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0);
+    final modelItems = items
+        .where((item) => item.productModelId == model.id && !item.isArchived);
+    final availableFromItems = modelItems
+        .where((entry) => entry.status != InventoryStatus.sold)
+        .length;
+    final soldFromItems = modelItems
+        .where((entry) => entry.status == InventoryStatus.sold)
+        .length;
+    final availableUnits =
+        modelItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0);
     final soldUnits = modelItems.isNotEmpty ? soldFromItems : (dist?.sold ?? 0);
-    final totalUnits = modelItems.isNotEmpty ? modelItems.length : (dist?.total ?? (availableUnits + soldUnits));
+    final totalUnits = modelItems.isNotEmpty
+        ? modelItems.length
+        : (dist?.total ?? (availableUnits + soldUnits));
     return ModelInventoryRow(
       model: model,
       availableUnits: availableUnits,
@@ -158,7 +178,8 @@ List<ModelInventoryRow> buildInventoryModelRows(
   final built = buildModelRows(models, distributionByModel, brandId, items);
   final rowsById = {for (final row in built.all) row.model.id: row};
 
-  final brandItems = items.where((item) => item.brandId == brandId && !item.isArchived);
+  final brandItems =
+      items.where((item) => item.brandId == brandId && !item.isArchived);
   final grouped = <String, List<InventoryItem>>{};
   for (final item in brandItems) {
     grouped.putIfAbsent(item.productModelId, () => []).add(item);
@@ -166,8 +187,10 @@ List<ModelInventoryRow> buildInventoryModelRows(
 
   for (final entry in grouped.entries) {
     if (rowsById.containsKey(entry.key)) continue;
-    final catalogueModel = models.where((model) => model.id == entry.key).firstOrNull;
-    rowsById[entry.key] = _modelRowFromItems(entry.value, catalogueModel, distributionByModel);
+    final catalogueModel =
+        models.where((model) => model.id == entry.key).firstOrNull;
+    rowsById[entry.key] =
+        _modelRowFromItems(entry.value, catalogueModel, distributionByModel);
   }
 
   final rows = rowsById.values.toList()
@@ -186,10 +209,14 @@ ModelInventoryRow _modelRowFromItems(
   final dist = distMap[model.id];
   final availableFromItems =
       modelItems.where((entry) => entry.status != InventoryStatus.sold).length;
-  final soldFromItems = modelItems.where((entry) => entry.status == InventoryStatus.sold).length;
-  final availableUnits = modelItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0);
+  final soldFromItems =
+      modelItems.where((entry) => entry.status == InventoryStatus.sold).length;
+  final availableUnits =
+      modelItems.isNotEmpty ? availableFromItems : (dist?.available ?? 0);
   final soldUnits = modelItems.isNotEmpty ? soldFromItems : (dist?.sold ?? 0);
-  final totalUnits = modelItems.isNotEmpty ? modelItems.length : (dist?.total ?? (availableUnits + soldUnits));
+  final totalUnits = modelItems.isNotEmpty
+      ? modelItems.length
+      : (dist?.total ?? (availableUnits + soldUnits));
   return ModelInventoryRow(
     model: model,
     availableUnits: availableUnits,
@@ -281,16 +308,21 @@ List<Location> deriveLocationsFromInventoryItems(List<InventoryItem> items) {
   for (final item in items) {
     byId.putIfAbsent(
       item.currentLocationId,
-      () => Location(id: item.currentLocationId, name: item.currentLocationName, isActive: true),
+      () => Location(
+          id: item.currentLocationId,
+          name: item.currentLocationName,
+          isActive: true),
     );
   }
   return byId.values.toList()..sort((a, b) => a.name.compareTo(b.name));
 }
 
-List<ProductModel> deriveProductModelsFromInventoryItems(List<InventoryItem> items) {
+List<ProductModel> deriveProductModelsFromInventoryItems(
+    List<InventoryItem> items) {
   final byId = <String, ProductModel>{};
   for (final item in items) {
-    byId.putIfAbsent(item.productModelId, () => productModelFromInventoryItem(item));
+    byId.putIfAbsent(
+        item.productModelId, () => productModelFromInventoryItem(item));
   }
   return byId.values.toList()
     ..sort((a, b) => a.modelNumber.compareTo(b.modelNumber));
@@ -306,11 +338,14 @@ List<ModelInventoryRow> filterInventoryModels({
   required bool showZeroStock,
   ProductCategoryFilter productCategoryFilter = ProductCategoryFilter.all,
 }) {
-  var rows = buildInventoryModelRows(models, distributionByModel, brandId, items);
+  var rows =
+      buildInventoryModelRows(models, distributionByModel, brandId, items);
   if (!showZeroStock) {
     rows = rows.where((row) => row.availableUnits > 0).toList();
   }
-  rows = rows.where((row) => matchesCategoryFilter(row.model, productCategoryFilter)).toList();
+  rows = rows
+      .where((row) => matchesCategoryFilter(row.model, productCategoryFilter))
+      .toList();
   if (search.trim().isEmpty) return rows;
   return rows
       .where(
@@ -330,7 +365,16 @@ bool matchesCategoryFilter(ProductModel model, ProductCategoryFilter filter) {
   return model.isLaptop;
 }
 
-enum HierarchySearchField { all, modelNumber, modelName, partNumber, gpu, cpu, serial, display }
+enum HierarchySearchField {
+  all,
+  modelNumber,
+  modelName,
+  partNumber,
+  gpu,
+  cpu,
+  serial,
+  display
+}
 
 bool matchesModelSearch(
   ProductModel model,
@@ -347,30 +391,42 @@ bool matchesModelSearch(
       .firstOrNull;
 
   bool contains(String? value) => value?.toLowerCase().contains(term) ?? false;
+  String normalizedModelValue(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[‐‑‒–—−]'), '-')
+      .replaceAll(RegExp(r'\s+'), '');
+  final normalizedTerm = normalizedModelValue(term);
+  bool containsModelNumber(String? value) =>
+      contains(value) ||
+      (value != null &&
+          normalizedTerm.isNotEmpty &&
+          normalizedModelValue(value).contains(normalizedTerm));
 
   return switch (field) {
-    HierarchySearchField.modelNumber => contains(model.modelNumber),
+    HierarchySearchField.modelNumber => containsModelNumber(model.modelNumber),
     HierarchySearchField.modelName => contains(model.modelName),
     HierarchySearchField.partNumber => contains(model.partNumber),
     HierarchySearchField.gpu => contains(model.gpu),
     HierarchySearchField.cpu => contains(model.cpu),
     HierarchySearchField.display => contains(model.display),
     HierarchySearchField.serial => contains(sampleSerial),
-    HierarchySearchField.all =>
-      contains(model.modelNumber) ||
-          contains(model.modelName) ||
-          contains(model.partNumber) ||
-          contains(model.gpu) ||
-          contains(model.cpu) ||
-          contains(model.display) ||
-          contains(sampleSerial),
+    HierarchySearchField.all => containsModelNumber(model.modelNumber) ||
+        contains(model.modelName) ||
+        contains(model.partNumber) ||
+        contains(model.gpu) ||
+        contains(model.cpu) ||
+        contains(model.display) ||
+        contains(sampleSerial),
   };
 }
 
-bool matchesSerialSearch(InventoryItem item, String query, HierarchySearchField field) {
+bool matchesSerialSearch(
+    InventoryItem item, String query, HierarchySearchField field) {
   final term = query.trim().toLowerCase();
   if (term.isEmpty) return true;
-  if (field == HierarchySearchField.serial || field == HierarchySearchField.all) {
+  if (field == HierarchySearchField.serial ||
+      field == HierarchySearchField.all) {
     return item.serialNumber.toLowerCase().contains(term);
   }
   return true;
