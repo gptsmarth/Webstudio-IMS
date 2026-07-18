@@ -66,6 +66,16 @@ describe('inventory hierarchy', () => {
     expect(matchesModelSearch(combined, null, 'fa506ncg-hn200ws', 'model_number')).toBe(true);
   });
 
+  it('matches partial serials across every unit of the model', () => {
+    const unit = (id: string, serial: string) =>
+      ({ id, serial_number: serial, product_model_id: 'm1' }) as never;
+    const units = [unit('u1', 'AA111'), unit('u2', 'WS899323WS')];
+    // Partial fragment of a non-first unit's serial must match.
+    expect(matchesModelSearch(models[0], units, '323ws')).toBe(true);
+    expect(matchesModelSearch(models[0], units, '323ws', 'serial')).toBe(true);
+    expect(matchesModelSearch(models[0], units, 'zz999', 'serial')).toBe(false);
+  });
+
   it('splits zero stock models', () => {
     const rows = buildModelRows(
       models,

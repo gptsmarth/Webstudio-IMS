@@ -34,8 +34,7 @@ SCHEMA = "webstudio"
 def upgrade() -> None:
     # Identify the purge set once, then clear FK references and delete.
     # Sold units / sale-referenced units are excluded so sales history is safe.
-    op.execute(
-        f"""
+    op.execute(f"""
         CREATE TEMP TABLE _purge_archived_serials ON COMMIT DROP AS
         SELECT ii.id
         FROM {SCHEMA}.inventory_items AS ii
@@ -46,8 +45,7 @@ def upgrade() -> None:
               FROM {SCHEMA}.sales AS s
               WHERE s.inventory_item_id = ii.id
           )
-        """
-    )
+        """)
 
     for table in (
         "sales",
@@ -56,20 +54,16 @@ def upgrade() -> None:
         "tally_processed_invoice_line",
         "tally_line_decision_log",
     ):
-        op.execute(
-            f"""
+        op.execute(f"""
             UPDATE {SCHEMA}.{table} AS t
             SET inventory_item_id = NULL
             WHERE t.inventory_item_id IN (SELECT id FROM _purge_archived_serials)
-            """
-        )
+            """)
 
-    op.execute(
-        f"""
+    op.execute(f"""
         DELETE FROM {SCHEMA}.inventory_items AS ii
         WHERE ii.id IN (SELECT id FROM _purge_archived_serials)
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

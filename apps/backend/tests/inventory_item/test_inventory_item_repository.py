@@ -173,6 +173,11 @@ async def test_search_and_filters(
         InventorySearchFilters(search="SN-FILTER"),
         PageParams(),
     )
+    # Serial search must match fragments anywhere in the serial, not just prefixes.
+    by_partial_serial = await repository.search(
+        InventorySearchFilters(search="filter-002"),
+        PageParams(),
+    )
 
     assert by_brand.total_items == 2
     assert by_model.total_items == 2
@@ -180,6 +185,8 @@ async def test_search_and_filters(
     assert by_location.total_items == 1
     assert by_status.total_items == 2
     assert by_search.total_items == 2
+    assert by_partial_serial.total_items == 1
+    assert by_partial_serial.items[0].item.serial_number == "SN-FILTER-002"
 
 
 @pytest.mark.asyncio

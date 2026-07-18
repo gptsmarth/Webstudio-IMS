@@ -674,7 +674,9 @@ class InventoryItemRepository(SqlAlchemyRepository[InventoryItem]):
                 )
                 statement = statement.where(
                     or_(
-                        InventoryItem.serial_number.ilike(f"{prefix}%"),
+                        # Substring match so a fragment like "323ws" finds
+                        # serial "WS899323WS" (not just prefix matches).
+                        InventoryItem.serial_number.ilike(like_term),
                         ProductModel.model_number.ilike(like_term),
                         ProductModel.model_name.ilike(like_term),
                         Brand.name.ilike(like_term),

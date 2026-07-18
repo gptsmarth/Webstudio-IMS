@@ -104,6 +104,8 @@ Use the search field on the Inventory screen, or scan a barcode (see § 9) to po
 ### 3.4 Tips
 
 - Serial numbers are case-insensitive.
+- Partial serial fragments work anywhere in the serial — searching `323WS` finds
+  serial `WS899323WS`, even if that unit is not the first one of its model.
 - Partial model names work (e.g. `MacBook Pro 14`).
 - A complete part of a combined barcode model number is searchable. For example,
   `FA506NCG-HN200WS` finds catalogue model `FA506NCG-HN200WS/FA506NCS`.

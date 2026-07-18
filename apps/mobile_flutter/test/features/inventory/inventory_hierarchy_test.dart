@@ -226,4 +226,58 @@ void main() {
       isTrue,
     );
   });
+
+  test('model search matches partial serials across every unit', () {
+    const model = ProductModel(
+      id: 'm1',
+      brandId: 1,
+      modelNumber: 'X515',
+      modelName: 'Vivobook 15',
+      cpu: 'i5',
+      ramGb: 16,
+      storageValue: '512',
+      storageUnit: 'GB',
+      storageType: 'SSD',
+      status: 'active',
+    );
+    InventoryItem unit(String id, String serial) => InventoryItem(
+          id: id,
+          serialNumber: serial,
+          productModelId: 'm1',
+          brandId: 1,
+          brandName: 'ASUS',
+          modelNumber: 'X515',
+          modelName: 'Vivobook 15',
+          cpu: 'i5',
+          ramGb: 16,
+          storageValue: '512',
+          storageUnit: 'GB',
+          storageType: 'SSD',
+          color: 'Black',
+          currentLocationId: 10,
+          currentLocationName: 'Store A',
+          status: InventoryStatus.available,
+          isArchived: false,
+          createdAt: '2026-01-01',
+          updatedAt: '2026-01-02',
+        );
+    final items = [unit('1', 'AA111'), unit('2', 'WS899323WS')];
+
+    // Partial fragment of a non-first unit's serial must match.
+    expect(
+      matchesModelSearch(model, '323ws', HierarchySearchField.all,
+          items: items),
+      isTrue,
+    );
+    expect(
+      matchesModelSearch(model, '323ws', HierarchySearchField.serial,
+          items: items),
+      isTrue,
+    );
+    expect(
+      matchesModelSearch(model, 'zz999', HierarchySearchField.serial,
+          items: items),
+      isFalse,
+    );
+  });
 }

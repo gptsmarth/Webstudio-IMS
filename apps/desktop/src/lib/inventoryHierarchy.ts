@@ -133,12 +133,18 @@ function normalizedModelSearchValue(value: string): string {
 
 export function matchesModelSearch(
   model: ProductModel,
-  sampleItem: InventoryItemDetail | null,
+  modelItems: InventoryItemDetail[] | InventoryItemDetail | null,
   query: string,
   field: HierarchySearchField = 'all',
 ): boolean {
   const term = query.trim().toLowerCase();
   if (!term) return true;
+
+  // Every unit's serial participates in the search (partial, case-insensitive)
+  // — e.g. "323ws" finds the model owning serial "WS899323WS" even when that
+  // unit is not the first one of the model.
+  const units = modelItems == null ? [] : Array.isArray(modelItems) ? modelItems : [modelItems];
+  const serialMatches = units.some((unit) => unit.serial_number.toLowerCase().includes(term));
 
   const fieldMap: Record<HierarchySearchField, string[]> = {
     all: [
@@ -149,15 +155,16 @@ export function matchesModelSearch(
       model.gpu ?? '',
       model.display ?? '',
       model.search_aliases ?? '',
-      sampleItem?.serial_number ?? '',
     ],
     model_number: [model.model_number, model.part_number ?? ''],
     model_name: [model.model_name],
     gpu: [model.gpu ?? ''],
     cpu: [model.cpu ?? ''],
     display: [model.display ?? ''],
-    serial: [sampleItem?.serial_number ?? ''],
+    serial: [],
   };
+
+  if ((field === 'all' || field === 'serial') && serialMatches) return true;
 
   const normalizedTerm = normalizedModelSearchValue(term);
   return fieldMap[field].some((value, index) => {

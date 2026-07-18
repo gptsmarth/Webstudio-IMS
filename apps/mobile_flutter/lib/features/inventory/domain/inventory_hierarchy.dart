@@ -385,10 +385,12 @@ bool matchesModelSearch(
   final term = query.trim().toLowerCase();
   if (term.isEmpty) return true;
 
-  final sampleSerial = items
+  // Every unit's serial participates in the search (partial, case-insensitive)
+  // — e.g. "323ws" finds the model owning serial "WS899323WS" even when that
+  // unit is not the first one of the model.
+  final serialMatches = items
       .where((item) => item.productModelId == model.id)
-      .map((item) => item.serialNumber)
-      .firstOrNull;
+      .any((item) => item.serialNumber.toLowerCase().contains(term));
 
   bool contains(String? value) => value?.toLowerCase().contains(term) ?? false;
   String normalizedModelValue(String value) => value
@@ -410,14 +412,14 @@ bool matchesModelSearch(
     HierarchySearchField.gpu => contains(model.gpu),
     HierarchySearchField.cpu => contains(model.cpu),
     HierarchySearchField.display => contains(model.display),
-    HierarchySearchField.serial => contains(sampleSerial),
+    HierarchySearchField.serial => serialMatches,
     HierarchySearchField.all => containsModelNumber(model.modelNumber) ||
         contains(model.modelName) ||
         contains(model.partNumber) ||
         contains(model.gpu) ||
         contains(model.cpu) ||
         contains(model.display) ||
-        contains(sampleSerial),
+        serialMatches,
   };
 }
 

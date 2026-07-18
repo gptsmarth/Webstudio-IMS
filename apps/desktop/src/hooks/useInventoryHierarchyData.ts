@@ -142,8 +142,8 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
       const pool = includeZeroStock ? [...inStock, ...zeroStock] : inStock;
       if (!search.trim()) return pool;
       return pool.filter((row) => {
-        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-        return matchesModelSearch(row.model, sample, search, searchField);
+        const units = itemsByModel.get(row.model.id) ?? [];
+        return matchesModelSearch(row.model, units, search, searchField);
       });
     },
     [itemsByModel, modelsForBrand],
@@ -154,8 +154,8 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
       const { all } = modelsForBrand(brandId);
       if (!search.trim()) return all;
       return all.filter((row) => {
-        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-        return matchesModelSearch(row.model, sample, search, searchField);
+        const units = itemsByModel.get(row.model.id) ?? [];
+        return matchesModelSearch(row.model, units, search, searchField);
       });
     },
     [itemsByModel, modelsForBrand],
@@ -166,8 +166,8 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
       const { inStock } = modelsForBrand(brandId);
       if (!search.trim()) return inStock;
       return inStock.filter((row) => {
-        const sample = itemsByModel.get(row.model.id)?.[0] ?? null;
-        return matchesModelSearch(row.model, sample, search, searchField);
+        const units = itemsByModel.get(row.model.id) ?? [];
+        return matchesModelSearch(row.model, units, search, searchField);
       });
     },
     [itemsByModel, modelsForBrand],
