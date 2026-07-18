@@ -156,10 +156,12 @@ async def test_backfill_sales_marks_historical_invoice_sold(
     assert summary["sales_created"] == 1
     assert summary["failures"] == 0
 
-    # Client was asked for the requested window.
+    # Client was asked for the requested window via the historical export path
+    # (Voucher Register first) — not the incremental Day Book path.
     call_kwargs = fake_client.export_monitored_voucher_types.await_args.kwargs
     assert call_kwargs["from_date"] == date(2026, 6, 1)
     assert call_kwargs["to_date"] == date(2026, 6, 30)
+    assert call_kwargs["historical"] is True
 
     await db_session.refresh(item)
     assert item.status is InventoryStatus.SOLD

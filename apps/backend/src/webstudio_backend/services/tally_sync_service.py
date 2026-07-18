@@ -99,6 +99,26 @@ def is_tally_sync_active() -> bool:
     return _sync_lock.locked()
 
 
+def _filter_vouchers_in_date_window(
+    vouchers: list[TallyVoucher],
+    *,
+    from_date: date,
+    to_date: date,
+) -> list[TallyVoucher]:
+    """Keep vouchers whose DATE falls inside the requested window.
+
+    Safety net for Tally builds that ignore SVFROMDATE/SVTODATE and return
+    today's Day Book even for a historical request. Vouchers without a parsed
+    date are kept (better to attempt processing than silently drop).
+    """
+    kept: list[TallyVoucher] = []
+    for voucher in vouchers:
+        voucher_date = voucher.voucher_date
+        if voucher_date is None or from_date <= voucher_date <= to_date:
+            kept.append(voucher)
+    return kept
+
+
 class TallyBackfillBusyError(Exception):
     """Raised when a backfill is requested while a sync is already running."""
 
@@ -205,14 +225,19 @@ class TallySyncService:
             )
         client = await connectivity.build_client_for_sync(diagnostics)
 
+        resolved_to = to_date or datetime.now(UTC).date()
         exports = await client.export_monitored_voucher_types(
             company_name=company_name,
             from_date=from_date,
-            to_date=to_date,
+            to_date=resolved_to,
+            historical=True,
         )
         vouchers: list[TallyVoucher] = []
         for xml_text in exports.values():
             vouchers.extend(parse_vouchers_xml(xml_text))
+        vouchers = _filter_vouchers_in_date_window(
+            vouchers, from_date=from_date, to_date=resolved_to
+        )
 
         purchase_vouchers = [
             voucher for voucher in vouchers if voucher.voucher_type in PURCHASE_VOUCHER_TYPES
@@ -224,6 +249,7 @@ class TallySyncService:
         return {
             "fetched": len(purchase_vouchers),
             "new": max(0, unique - existing_before),
+            "export_source": next(iter(exports.keys()), "none"),
         }
 
     async def backfill_sales(
@@ -259,14 +285,19 @@ class TallySyncService:
                 )
             client = await connectivity.build_client_for_sync(diagnostics)
 
+            resolved_to = to_date or datetime.now(UTC).date()
             exports = await client.export_monitored_voucher_types(
                 company_name=company_name,
                 from_date=from_date,
-                to_date=to_date,
+                to_date=resolved_to,
+                historical=True,
             )
             all_vouchers: list[TallyVoucher] = []
             for xml_text in exports.values():
                 all_vouchers.extend(parse_vouchers_xml(xml_text))
+            all_vouchers = _filter_vouchers_in_date_window(
+                all_vouchers, from_date=from_date, to_date=resolved_to
+            )
             all_vouchers.sort(key=lambda voucher: (voucher.voucher_date, voucher.guid))
 
             sales_vouchers = [
@@ -437,6 +468,7 @@ class TallySyncService:
                 "duplicates": counters.duplicates,
                 "missing_serials": counters.missing_serials,
                 "failures": counters.failures,
+                "export_source": next(iter(exports.keys()), "none"),
             }
 
     async def run_sync(

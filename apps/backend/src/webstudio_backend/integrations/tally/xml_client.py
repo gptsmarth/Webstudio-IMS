@@ -109,12 +109,13 @@ class TallyXmlClient:
         from_date: date,
         to_date: date,
     ) -> str:
-        """Legacy report export for a date range.
+        """Period-based report export for a date range.
 
-        ``Voucher Register`` is the period-based report Tally documents for
-        ranged exports; unlike Day Book it reliably honours SVFROMDATE/SVTODATE
-        on ERP 9 and Prime, so it is used as the fallback for historical
-        backfills. Read-only (TALLYREQUEST=Export Data)."""
+        ``Voucher Register`` is the report Tally documents for ranged exports.
+        Day Book frequently ignores SVFROMDATE/SVTODATE and returns only the
+        current Tally date — so historical backfills must prefer this report.
+        Read-only (TALLYREQUEST=Export Data).
+        """
         from_str = from_date.strftime("%Y%m%d")
         to_str = to_date.strftime("%Y%m%d")
         return f"""<ENVELOPE>
@@ -130,9 +131,89 @@ class TallyXmlClient:
           <SVCURRENTCOMPANY>{company_name}</SVCURRENTCOMPANY>
           <SVFROMDATE TYPE="Date">{from_str}</SVFROMDATE>
           <SVTODATE TYPE="Date">{to_str}</SVTODATE>
+          <EXPLODEFLAG>Yes</EXPLODEFLAG>
         </STATICVARIABLES>
       </REQUESTDESC>
     </EXPORTDATA>
+  </BODY>
+</ENVELOPE>"""
+
+    def _day_book_ranged_export_request(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> str:
+        """Day Book via the Export Data envelope (same shape as Voucher Register).
+
+        Some Tally builds honour date variables on this envelope even when the
+        VERSION/TYPE/ID Day Book form silently returns only today.
+        """
+        from_str = from_date.strftime("%Y%m%d")
+        to_str = to_date.strftime("%Y%m%d")
+        return f"""<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Export Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Day Book</REPORTNAME>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVCURRENTCOMPANY>{company_name}</SVCURRENTCOMPANY>
+          <SVFROMDATE TYPE="Date">{from_str}</SVFROMDATE>
+          <SVTODATE TYPE="Date">{to_str}</SVTODATE>
+          <EXPLODEFLAG>Yes</EXPLODEFLAG>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
+  </BODY>
+</ENVELOPE>"""
+
+    def _voucher_collection_export_request(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> str:
+        """Collection export with an in-Tally date filter (last-resort historical).
+
+        Uses a read-only TDL Collection + Formulae filter so the date window is
+        applied by Tally itself rather than relying on report variables.
+        """
+        from_str = from_date.strftime("%Y%m%d")
+        to_str = to_date.strftime("%Y%m%d")
+        return f"""<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>WebstudioVoucherRange</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVCURRENTCOMPANY>{company_name}</SVCURRENTCOMPANY>
+        <SVFROMDATE TYPE="Date">{from_str}</SVFROMDATE>
+        <SVTODATE TYPE="Date">{to_str}</SVTODATE>
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="WebstudioVoucherRange" ISMODIFY="No">
+            <TYPE>Voucher</TYPE>
+            <FETCH>Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Amount, GUID, MasterID, Reference, AllInventoryEntries.*, LedgerEntries.*</FETCH>
+            <FILTER>WebstudioDateFilter</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="WebstudioDateFilter" ISMODIFY="No">
+            $$IsBetween:$Date:##SVFROMDATE:##SVTODATE
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
   </BODY>
 </ENVELOPE>"""
 
@@ -226,79 +307,140 @@ class TallyXmlClient:
         company_name: str,
         from_date: date,
         to_date: date | None = None,
+        historical: bool = False,
     ) -> dict[str, str]:
         """Export vouchers for sync.
 
         Tally Prime rejects the legacy ``Vouchers`` collection export (469-byte LINEERROR).
         Day Book returns full voucher XML and is filtered server-side by voucher type.
 
-        Historical windows additionally fall back to the period-based
-        ``Voucher Register`` report: some Tally builds silently export only the
-        current date for Day Book, so a ranged request that comes back without
-        any voucher XML is retried through the register before giving up.
+        ``historical=True`` (purchase/sales backfill) intentionally prefers
+        ``Voucher Register`` over Day Book. Many Tally builds ignore Day Book's
+        SVFROMDATE/SVTODATE and return only the current Tally date — that looks
+        like a successful non-empty response, so a "fall back when empty" check
+        never fires and historical fetches silently return zero. Normal
+        incremental sync keeps ``historical=False`` (Day Book first) so the
+        live sync path is undisturbed.
         """
         resolved_to = to_date or datetime.now().date()
-        day_book_xml = await self.export_day_book(
-            company_name=company_name,
-            from_date=from_date,
-            to_date=resolved_to,
-        )
-        if not _xml_response_has_line_error(day_book_xml):
-            if _xml_response_has_vouchers(day_book_xml) or from_date == resolved_to:
-                return {"day_book": day_book_xml}
-            # Ranged request returned no vouchers — Day Book may have ignored
-            # the period. Try the Voucher Register report (read-only) instead.
-            register_xml = await self._try_voucher_register(
+        if historical:
+            return await self._export_historical(
                 company_name=company_name,
                 from_date=from_date,
                 to_date=resolved_to,
             )
-            if register_xml is not None:
-                return {"voucher_register": register_xml}
-            return {"day_book": day_book_xml}
-
-        # Day Book itself failed. Prefer Voucher Register (all voucher types,
-        # including Purchase) over the legacy per-type collection export —
-        # that path historically only asked for Sales/NEW SALE and silently
-        # zeroed out historical purchase backfills.
-        register_xml = await self._try_voucher_register(
+        return await self._export_incremental(
             company_name=company_name,
             from_date=from_date,
             to_date=resolved_to,
         )
+
+    async def _export_incremental(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> dict[str, str]:
+        """Normal sync path — Day Book first, unchanged from pre-backfill behaviour."""
+        day_book_xml = await self.export_day_book(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if not _xml_response_has_line_error(day_book_xml):
+            return {"day_book": day_book_xml}
+
+        register_xml = await self._try_export(
+            self._voucher_register_export_request(
+                company_name=company_name,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
         if register_xml is not None:
             return {"voucher_register": register_xml}
 
+        return await self._export_per_type(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+    async def _export_historical(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> dict[str, str]:
+        """Historical backfill path — Voucher Register first, then ranged Day Book,
+        then TDL collection, then per-type. Never trust a Day Book that only
+        returned today's vouchers when a multi-day window was requested.
+        """
+        register_xml = await self._try_export(
+            self._voucher_register_export_request(
+                company_name=company_name,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        if register_xml is not None:
+            return {"voucher_register": register_xml}
+
+        day_book_ranged = await self._try_export(
+            self._day_book_ranged_export_request(
+                company_name=company_name,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        if day_book_ranged is not None:
+            return {"day_book_ranged": day_book_ranged}
+
+        collection_xml = await self._try_export(
+            self._voucher_collection_export_request(
+                company_name=company_name,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        if collection_xml is not None:
+            return {"voucher_collection": collection_xml}
+
+        return await self._export_per_type(
+            company_name=company_name,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+    async def _export_per_type(
+        self,
+        *,
+        company_name: str,
+        from_date: date,
+        to_date: date,
+    ) -> dict[str, str]:
         results: dict[str, str] = {}
         for voucher_type in (*MONITORED_VOUCHER_TYPES, *PURCHASE_VOUCHER_TYPES):
             results[voucher_type] = await self.export_vouchers(
                 company_name=company_name,
                 voucher_type=voucher_type,
                 from_date=from_date,
-                to_date=resolved_to,
+                to_date=to_date,
             )
         return results
 
-    async def _try_voucher_register(
-        self,
-        *,
-        company_name: str,
-        from_date: date,
-        to_date: date,
-    ) -> str | None:
+    async def _try_export(self, payload: str) -> str | None:
         try:
-            register_xml = await self.export_voucher_register(
-                company_name=company_name,
-                from_date=from_date,
-                to_date=to_date,
-            )
+            xml_text = await self.post_xml(payload)
         except TallyConnectionError:
             return None
-        if _xml_response_has_line_error(register_xml):
+        if _xml_response_has_line_error(xml_text):
             return None
-        if not _xml_response_has_vouchers(register_xml):
+        if not _xml_response_has_vouchers(xml_text):
             return None
-        return register_xml
+        return xml_text
 
 
 def _xml_response_has_line_error(xml_text: str) -> bool:

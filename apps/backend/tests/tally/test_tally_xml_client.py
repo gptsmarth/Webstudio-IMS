@@ -21,6 +21,10 @@ REGISTER_WITH_VOUCHER = (
     "<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER REMOTEID='g2'>"
     "<VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME></VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>"
 )
+COLLECTION_WITH_VOUCHER = (
+    "<ENVELOPE><BODY><DATA><COLLECTION><VOUCHER REMOTEID='g3'>"
+    "<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME></VOUCHER></COLLECTION></DATA></BODY></ENVELOPE>"
+)
 
 
 def test_day_book_export_request_includes_company_and_typed_dates() -> None:
@@ -50,6 +54,7 @@ def test_voucher_register_export_request_is_read_only_and_ranged() -> None:
     assert "<REPORTNAME>Voucher Register</REPORTNAME>" in payload
     assert '<SVFROMDATE TYPE="Date">20260601</SVFROMDATE>' in payload
     assert '<SVTODATE TYPE="Date">20260718</SVTODATE>' in payload
+    assert "<EXPLODEFLAG>Yes</EXPLODEFLAG>" in payload
     # Read-only guarantee: never an Import request.
     assert "Import" not in payload
 
@@ -69,8 +74,10 @@ def test_xml_response_has_vouchers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_historical_export_falls_back_to_voucher_register(monkeypatch) -> None:
-    """If a ranged Day Book comes back empty, the Voucher Register export is used."""
+async def test_historical_export_prefers_voucher_register(monkeypatch) -> None:
+    """Historical backfill must ask Voucher Register FIRST — Day Book often
+    returns only today's vouchers and looks 'successful', which previously
+    short-circuited the register fallback and zeroed historical fetches."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
@@ -78,6 +85,33 @@ async def test_historical_export_falls_back_to_voucher_register(monkeypatch) -> 
         sent.append(payload)
         if "Voucher Register" in payload:
             return REGISTER_WITH_VOUCHER
+        # Day Book would return today's vouchers — must not be consulted first.
+        return DAY_BOOK_WITH_VOUCHER
+
+    monkeypatch.setattr(client, "post_xml", fake_post_xml)
+    exports = await client.export_monitored_voucher_types(
+        company_name="WEBSTUDIO",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 7, 18),
+        historical=True,
+    )
+    assert list(exports.keys()) == ["voucher_register"]
+    assert exports["voucher_register"] == REGISTER_WITH_VOUCHER
+    assert len(sent) == 1
+    assert "Voucher Register" in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_historical_falls_through_to_ranged_day_book(monkeypatch) -> None:
+    client = TallyXmlClient("tally-laptop", "9000")
+    sent: list[str] = []
+
+    async def fake_post_xml(payload: str) -> str:
+        sent.append(payload)
+        if "Voucher Register" in payload:
+            return EMPTY_DAY_BOOK
+        if "<REPORTNAME>Day Book</REPORTNAME>" in payload:
+            return DAY_BOOK_WITH_VOUCHER
         return EMPTY_DAY_BOOK
 
     monkeypatch.setattr(client, "post_xml", fake_post_xml)
@@ -85,14 +119,37 @@ async def test_historical_export_falls_back_to_voucher_register(monkeypatch) -> 
         company_name="WEBSTUDIO",
         from_date=date(2026, 6, 1),
         to_date=date(2026, 7, 18),
+        historical=True,
     )
-    assert list(exports.keys()) == ["voucher_register"]
-    assert exports["voucher_register"] == REGISTER_WITH_VOUCHER
+    assert list(exports.keys()) == ["day_book_ranged"]
     assert len(sent) == 2
 
 
 @pytest.mark.asyncio
-async def test_day_book_with_vouchers_needs_no_fallback(monkeypatch) -> None:
+async def test_historical_falls_through_to_collection(monkeypatch) -> None:
+    client = TallyXmlClient("tally-laptop", "9000")
+    sent: list[str] = []
+
+    async def fake_post_xml(payload: str) -> str:
+        sent.append(payload)
+        if "WebstudioVoucherRange" in payload:
+            return COLLECTION_WITH_VOUCHER
+        return EMPTY_DAY_BOOK
+
+    monkeypatch.setattr(client, "post_xml", fake_post_xml)
+    exports = await client.export_monitored_voucher_types(
+        company_name="WEBSTUDIO",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 7, 18),
+        historical=True,
+    )
+    assert list(exports.keys()) == ["voucher_collection"]
+    assert any("WebstudioDateFilter" in payload for payload in sent)
+
+
+@pytest.mark.asyncio
+async def test_incremental_day_book_with_vouchers_needs_no_fallback(monkeypatch) -> None:
+    """Normal sync must keep Day Book first — never disturbed by historical path."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
@@ -105,9 +162,12 @@ async def test_day_book_with_vouchers_needs_no_fallback(monkeypatch) -> None:
         company_name="WEBSTUDIO",
         from_date=date(2026, 6, 1),
         to_date=date(2026, 7, 18),
+        historical=False,
     )
     assert list(exports.keys()) == ["day_book"]
     assert len(sent) == 1
+    assert "<ID>Day Book</ID>" in sent[0]
+    assert "Voucher Register" not in sent[0]
 
 
 @pytest.mark.asyncio
@@ -126,6 +186,7 @@ async def test_same_day_export_skips_register_fallback(monkeypatch) -> None:
         company_name="WEBSTUDIO",
         from_date=today,
         to_date=today,
+        historical=False,
     )
     assert list(exports.keys()) == ["day_book"]
     assert len(sent) == 1
@@ -137,9 +198,10 @@ DAY_BOOK_LINEERROR = (
 
 
 @pytest.mark.asyncio
-async def test_day_book_lineerror_falls_back_to_voucher_register(monkeypatch) -> None:
-    """LINEERROR on Day Book must not fall back to Sales-only collection exports —
-    that silently zeroes purchase backfill. Prefer Voucher Register (all types)."""
+async def test_incremental_day_book_lineerror_falls_back_to_voucher_register(
+    monkeypatch,
+) -> None:
+    """LINEERROR on Day Book during incremental sync falls back to Voucher Register."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
@@ -154,22 +216,21 @@ async def test_day_book_lineerror_falls_back_to_voucher_register(monkeypatch) ->
         company_name="WEBSTUDIO",
         from_date=date(2026, 6, 1),
         to_date=date(2026, 7, 18),
+        historical=False,
     )
     assert list(exports.keys()) == ["voucher_register"]
     assert any("Voucher Register" in payload for payload in sent)
-    # Must NOT have issued Sales/NEW SALE/Purchase collection exports.
     assert not any("VOUCHERTYPENAME" in payload for payload in sent)
 
 
 @pytest.mark.asyncio
-async def test_lineerror_per_type_fallback_includes_purchase(monkeypatch) -> None:
+async def test_historical_per_type_fallback_includes_purchase(monkeypatch) -> None:
     """Last-resort per-type fallback must request Purchase as well as Sales."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
     async def fake_post_xml(payload: str) -> str:
         sent.append(payload)
-        # Day Book and Voucher Register both fail — force the per-type path.
         return DAY_BOOK_LINEERROR
 
     monkeypatch.setattr(client, "post_xml", fake_post_xml)
@@ -177,10 +238,11 @@ async def test_lineerror_per_type_fallback_includes_purchase(monkeypatch) -> Non
         company_name="WEBSTUDIO",
         from_date=date(2026, 6, 1),
         to_date=date(2026, 7, 18),
+        historical=True,
     )
     assert "Sales" in exports
     assert "NEW SALE" in exports
     assert "Purchase" in exports
     assert "NEW PURCHASE" in exports
-    # Day Book + Voucher Register + 4 per-type requests.
-    assert len(sent) == 6
+    # Register + ranged Day Book + collection + 4 per-type requests.
+    assert len(sent) == 7

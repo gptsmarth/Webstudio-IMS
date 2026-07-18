@@ -39,11 +39,14 @@ export function SalesPage(): JSX.Element {
     try {
       const result = await TallyService.backfillSales(backfillFrom);
       const parts = [
-        `Checked ${result.checked} sales invoice(s) from ${result.from_date} to ${result.to_date}.`,
+        `Fetched ${result.fetched} sales invoice(s) from ${result.from_date} to ${result.to_date}.`,
         `${result.sales_created} unit(s) marked sold`,
         `${result.imported} new invoice(s) imported`,
         `${result.skipped} already synced`,
       ];
+      if (result.missing_serials > 0) {
+        parts.push(`${result.missing_serials} serial(s) not found in stock`);
+      }
       if (result.failures > 0) parts.push(`${result.failures} failed — check Tally sync history`);
       setBackfillNotice(`${parts[0]} ${parts.slice(1).join(', ')}.`);
       setBackfillOpen(false);

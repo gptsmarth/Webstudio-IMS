@@ -1,6 +1,6 @@
 {
   "name": "@webstudio/auth",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "webstudio": {
-    "buildNumber": 5,
+    "buildNumber": 6,
     "releaseChannel": "stable",
     "releaseDate": "2026-07-18",
     "gitCommit": "e0ea080c9a5abeb90ef36ab13a4e4a9f6d079af6",
