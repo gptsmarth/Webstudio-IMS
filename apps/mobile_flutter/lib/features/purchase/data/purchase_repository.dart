@@ -79,6 +79,8 @@ class PurchaseRepository {
         'from_date': fromDate,
         if (toDate != null) 'to_date': toDate,
       },
+      // Backfills scan a whole date range against Tally — allow up to 5 minutes.
+      receiveTimeout: const Duration(minutes: 5),
       parser: (json) => PurchaseBackfillResult.fromJson(asJsonMap(json)),
     );
   }

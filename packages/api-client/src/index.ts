@@ -48,8 +48,12 @@ export class ApiClient {
     return response.data;
   }
 
-  async post<T>(path: string, data?: unknown): Promise<T> {
-    const response = await this.http.post<T>(path, data);
+  async post<T>(path: string, data?: unknown, options?: { timeoutMs?: number }): Promise<T> {
+    const response = await this.http.post<T>(
+      path,
+      data,
+      options?.timeoutMs ? { timeout: options.timeoutMs } : undefined,
+    );
     return response.data;
   }
 

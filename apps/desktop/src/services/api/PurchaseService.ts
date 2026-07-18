@@ -196,9 +196,14 @@ export class PurchaseService {
       to_date: toDate ?? null,
     });
     const client = await ApiClientProvider.getClient();
-    return client.post<PurchaseBackfillResponse>('/api/v1/purchase/backfill', {
-      from_date: fromDate,
-      to_date: toDate ?? null,
-    });
+    return client.post<PurchaseBackfillResponse>(
+      '/api/v1/purchase/backfill',
+      {
+        from_date: fromDate,
+        to_date: toDate ?? null,
+      },
+      // Backfills scan a whole date range against Tally — allow up to 5 minutes.
+      { timeoutMs: 300000 },
+    );
   }
 }

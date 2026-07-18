@@ -130,13 +130,24 @@ class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice
     ) -> TallyProcessedInvoice | None:
         from webstudio_backend.infrastructure.database.enums import TallyProcessingStatus
 
+        # Order by voucher (business) date first so a historical backfill —
+        # which processes old invoices recently — cannot make the dashboard
+        # "last invoice imported" jump back to an old invoice number.
         statement = (
             select(TallyProcessedInvoice)
             .where(
                 TallyProcessedInvoice.tally_company_sync_id == company_sync_id,
-                TallyProcessedInvoice.processing_status == TallyProcessingStatus.SUCCESS,
+                TallyProcessedInvoice.processing_status.in_(
+                    (
+                        TallyProcessingStatus.SUCCESS,
+                        TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                    )
+                ),
             )
-            .order_by(TallyProcessedInvoice.completed_at.desc())
+            .order_by(
+                TallyProcessedInvoice.voucher_date.desc().nulls_last(),
+                TallyProcessedInvoice.completed_at.desc().nulls_last(),
+            )
             .limit(1)
         )
         result = await self._session.execute(statement)

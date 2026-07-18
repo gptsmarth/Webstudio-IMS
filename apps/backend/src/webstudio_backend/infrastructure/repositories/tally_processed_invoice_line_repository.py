@@ -133,6 +133,45 @@ class TallyProcessedInvoiceLineRepository(SqlAlchemyRepository[TallyProcessedInv
         await self._session.flush()
         return line
 
+    async def list_retryable_missing_serial_lines(
+        self,
+        invoice_id: int,
+    ) -> list[TallyProcessedInvoiceLine]:
+        """Lines that completed without a sale because the serial was not in IMS
+        at processing time (Case C2). These are safe to retry during a historical
+        backfill once the serial has been added to inventory."""
+        statement = (
+            select(TallyProcessedInvoiceLine)
+            .where(TallyProcessedInvoiceLine.tally_processed_invoice_id == invoice_id)
+            .where(TallyProcessedInvoiceLine.line_status == TallyLineStatus.COMPLETED)
+            .where(
+                TallyProcessedInvoiceLine.line_outcome == TallyLineOutcome.UNMATCHED_SERIALIZED_ITEM
+            )
+            .where(TallyProcessedInvoiceLine.sale_id.is_(None))
+            .where(TallyProcessedInvoiceLine.inventory_item_id.is_(None))
+            .order_by(TallyProcessedInvoiceLine.line_index.asc())
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def reset_line_for_retry(
+        self,
+        line: TallyProcessedInvoiceLine,
+    ) -> TallyProcessedInvoiceLine:
+        """Return a completed-without-sale line to PENDING so the voucher
+        pipeline re-evaluates it (used by historical backfill only)."""
+        line.line_status = TallyLineStatus.PENDING
+        line.line_outcome = None
+        line.error_message = None
+        line.match_result = None
+        line.decision = None
+        line.decision_reason = None
+        line.is_unmatched_serialized = False
+        line.review_required = False
+        line.completed_at = None
+        await self._session.flush()
+        return line
+
     async def list_for_invoice(self, invoice_id: int) -> list[TallyProcessedInvoiceLine]:
         statement = (
             select(TallyProcessedInvoiceLine)

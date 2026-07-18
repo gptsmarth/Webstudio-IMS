@@ -131,9 +131,9 @@ export class RetryingApiClient {
     return this.executeWithRetry(`GET ${path}`, () => this.inner.getBlob(path, params));
   }
 
-  async post<T>(path: string, data?: unknown): Promise<T> {
+  async post<T>(path: string, data?: unknown, options?: { timeoutMs?: number }): Promise<T> {
     const res = await this.executeWithRetry(`POST ${path}`, () =>
-      this.inner.post<unknown>(path, data),
+      this.inner.post<unknown>(path, data, options),
     );
     return this.unwrap<T>(res);
   }

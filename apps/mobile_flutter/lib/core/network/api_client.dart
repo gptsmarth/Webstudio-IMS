@@ -102,9 +102,18 @@ class ApiClient {
     String path, {
     Object? data,
     Map<String, dynamic>? queryParameters,
+    Duration? receiveTimeout,
     required T Function(Object? json) parser,
   }) async {
-    return _request(() => _dio.post<dynamic>(path, data: data, queryParameters: queryParameters), parser);
+    return _request(
+      () => _dio.post<dynamic>(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: receiveTimeout != null ? Options(receiveTimeout: receiveTimeout) : null,
+      ),
+      parser,
+    );
   }
 
   Future<T> put<T>(

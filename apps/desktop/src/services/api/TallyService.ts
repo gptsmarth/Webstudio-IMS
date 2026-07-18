@@ -108,6 +108,7 @@ export interface TallySalesBackfillResult {
   checked: number;
   imported: number;
   skipped: number;
+  retried: number;
   sales_created: number;
   duplicates: number;
   missing_serials: number;
@@ -198,10 +199,15 @@ export class TallyService {
       to_date: toDate ?? null,
     });
     const client = await ApiClientProvider.getClient();
-    return client.post<TallySalesBackfillResult>('/api/v1/integrations/tally/sales/backfill', {
-      from_date: fromDate,
-      ...(toDate ? { to_date: toDate } : {}),
-    });
+    return client.post<TallySalesBackfillResult>(
+      '/api/v1/integrations/tally/sales/backfill',
+      {
+        from_date: fromDate,
+        ...(toDate ? { to_date: toDate } : {}),
+      },
+      // Backfills scan a whole date range against Tally — allow up to 5 minutes.
+      { timeoutMs: 300000 },
+    );
   }
 
   static toSummary(data: TallyDashboardData | null): TallyStatusSummary {

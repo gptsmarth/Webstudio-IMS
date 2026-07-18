@@ -44,6 +44,9 @@ export function SalesPage(): JSX.Element {
         `${result.imported} new invoice(s) imported`,
         `${result.skipped} already synced`,
       ];
+      if (result.retried > 0) {
+        parts.push(`${result.retried} previously synced invoice(s) re-checked for new stock`);
+      }
       if (result.missing_serials > 0) {
         parts.push(`${result.missing_serials} serial(s) not found in stock`);
       }

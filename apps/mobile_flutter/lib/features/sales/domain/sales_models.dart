@@ -372,6 +372,7 @@ class SalesBackfillResult extends Equatable {
     required this.checked,
     required this.imported,
     required this.skipped,
+    this.retried = 0,
     required this.salesCreated,
     required this.failures,
   });
@@ -382,6 +383,7 @@ class SalesBackfillResult extends Equatable {
   final int checked;
   final int imported;
   final int skipped;
+  final int retried;
   final int salesCreated;
   final int failures;
 
@@ -393,6 +395,7 @@ class SalesBackfillResult extends Equatable {
       checked: (json['checked'] as num?)?.toInt() ?? 0,
       imported: (json['imported'] as num?)?.toInt() ?? 0,
       skipped: (json['skipped'] as num?)?.toInt() ?? 0,
+      retried: (json['retried'] as num?)?.toInt() ?? 0,
       salesCreated: (json['sales_created'] as num?)?.toInt() ?? 0,
       failures: (json['failures'] as num?)?.toInt() ?? 0,
     );

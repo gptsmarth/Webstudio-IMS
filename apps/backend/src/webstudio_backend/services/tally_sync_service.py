@@ -262,12 +262,15 @@ class TallySyncService:
         """Historical SALES sync: fetch vouchers for a past window and process
         any that were never imported (mark matching serials sold, create sales).
 
-        Reuses the exact per-voucher pipeline of the regular sync, with two
+        Reuses the exact per-voucher pipeline of the regular sync, with three
         deliberate differences:
           * The GUID watermark is NOT used for skipping and is NEVER advanced —
             the incremental sync continues exactly where it was.
           * Already-processed invoices (GUID / fingerprint) are skipped, so the
             backfill is idempotent and can never double-sell a serial.
+          * EXCEPTION to the skip: invoices whose lines completed WITHOUT a sale
+            because the serial was missing from IMS at the time are re-checked —
+            if the unit has been added to stock since, the sale is applied now.
         """
         if _sync_lock.locked():
             raise TallyBackfillBusyError("Synchronization already in progress. Try again shortly.")
@@ -315,28 +318,48 @@ class TallySyncService:
             )
 
             error_messages: list[str] = []
+            retried_invoices = 0
+            terminal_statuses = {
+                TallyProcessingStatus.SUCCESS,
+                TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
+                TallyProcessingStatus.SKIPPED,
+            }
             for voucher in sales_vouchers:
                 counters.invoices_checked += 1
-                if await self._should_skip_voucher(company_sync.id, voucher):
-                    counters.invoices_skipped += 1
-                    continue
 
-                invoice, created = await self._processed_invoices.get_or_create_pending(
-                    company_sync_id=company_sync.id,
-                    guid=voucher.guid,
-                    master_id=voucher.master_id,
-                    voucher_number=voucher.voucher_number,
-                    printed_invoice_number=voucher.printed_invoice_number,
-                    voucher_type=voucher.voucher_type,
-                    voucher_date=voucher.voucher_date,
-                    party_name=voucher.party_name,
-                    amount=voucher.amount,
-                )
-                if not created and invoice.processing_status in {
-                    TallyProcessingStatus.SUCCESS,
-                    TallyProcessingStatus.COMPLETED_WITH_REVIEW_REQUIRED,
-                    TallyProcessingStatus.SKIPPED,
-                }:
+                # Already-processed invoices are normally skipped, BUT if any of
+                # their lines completed without a sale because the serial did not
+                # exist in IMS at the time, those lines are reset and retried —
+                # the serial may have been added to stock since then.
+                existing = await self._find_processed_invoice(company_sync.id, voucher)
+                retrying = False
+                if existing is not None and existing.processing_status in terminal_statuses:
+                    retry_lines = await self._processed_lines.list_retryable_missing_serial_lines(
+                        existing.id
+                    )
+                    if not retry_lines:
+                        counters.invoices_skipped += 1
+                        continue
+                    for line_row in retry_lines:
+                        await self._processed_lines.reset_line_for_retry(line_row)
+                    retrying = True
+                    retried_invoices += 1
+
+                if existing is not None:
+                    invoice, created = existing, False
+                else:
+                    invoice, created = await self._processed_invoices.get_or_create_pending(
+                        company_sync_id=company_sync.id,
+                        guid=voucher.guid,
+                        master_id=voucher.master_id,
+                        voucher_number=voucher.voucher_number,
+                        printed_invoice_number=voucher.printed_invoice_number,
+                        voucher_type=voucher.voucher_type,
+                        voucher_date=voucher.voucher_date,
+                        party_name=voucher.party_name,
+                        amount=voucher.amount,
+                    )
+                if not created and not retrying and invoice.processing_status in terminal_statuses:
                     counters.invoices_skipped += 1
                     continue
 
@@ -454,6 +477,7 @@ class TallySyncService:
                     "invoices_checked": counters.invoices_checked,
                     "invoices_imported": counters.invoices_imported,
                     "invoices_skipped": counters.invoices_skipped,
+                    "invoices_retried": retried_invoices,
                     "sales_created": counters.sales_created,
                     "failures": counters.failures,
                 },
@@ -464,6 +488,7 @@ class TallySyncService:
                 "checked": counters.invoices_checked,
                 "imported": counters.invoices_imported,
                 "skipped": counters.invoices_skipped,
+                "retried": retried_invoices,
                 "sales_created": counters.sales_created,
                 "duplicates": counters.duplicates,
                 "missing_serials": counters.missing_serials,
@@ -897,6 +922,19 @@ class TallySyncService:
             ),
             counters=counters,
             connection_status="connected",
+        )
+
+    async def _find_processed_invoice(self, company_sync_id: int, voucher: TallyVoucher):
+        """Locate an existing processed-invoice row by GUID or fallback fingerprint."""
+        by_guid = await self._processed_invoices.find_by_guid(company_sync_id, voucher.guid)
+        if by_guid is not None:
+            return by_guid
+        return await self._processed_invoices.find_by_fallback_fingerprint(
+            company_sync_id,
+            voucher_date=voucher.voucher_date,
+            voucher_number=voucher.voucher_number,
+            amount=voucher.amount,
+            party_name=voucher.party_name,
         )
 
     async def _should_skip_voucher(self, company_sync_id: int, voucher: TallyVoucher) -> bool:

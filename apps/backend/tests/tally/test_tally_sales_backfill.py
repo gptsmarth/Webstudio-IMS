@@ -228,6 +228,80 @@ async def test_backfill_sales_is_idempotent(
     assert sale is not None
 
 
+@pytest.mark.asyncio
+async def test_backfill_retries_missing_serial_after_stock_added(
+    db_session: AsyncSession,
+    initialized_system,
+    product_model,
+    location,
+) -> None:
+    """User scenario: an invoice was synced while the serial was NOT in IMS
+    (line completed as unmatched, invoice terminal). The unit is added to stock
+    later. A subsequent backfill must re-check that invoice and mark the unit
+    sold instead of reporting it as 'already synced'."""
+    suffix = uuid.uuid4().hex[:8].upper()
+    company = f"BF-RETRY-{suffix}"
+    serial = f"BF-RETRY-SN-{suffix}"
+    guid = f"bf-retry-guid-{suffix}"
+    await _enable(db_session, company)
+
+    xml = _envelope(_sale_voucher_xml(guid=guid, serial=serial, invoice=f"BFR/{suffix}"))
+    service = TallySyncService(db_session)
+
+    # Pass 1 — serial not in IMS yet: invoice completes without a sale.
+    reachable, build, _ = _patched_connectivity(xml)
+    with reachable, build:
+        first = await service.backfill_sales(
+            from_date=date(2026, 6, 1),
+            correlation_id="bf-retry-1",
+        )
+    await db_session.commit()
+    assert first["sales_created"] == 0
+    assert first["missing_serials"] == 1
+
+    # The unit arrives in stock afterwards (e.g. via purchase import).
+    inventory = InventoryItemRepository(db_session)
+    item = await inventory.create(
+        serial_number=serial,
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await db_session.commit()
+
+    # Pass 2 — backfill re-checks the terminal invoice and sells the unit.
+    reachable, build, _ = _patched_connectivity(xml)
+    with reachable, build:
+        second = await service.backfill_sales(
+            from_date=date(2026, 6, 1),
+            correlation_id="bf-retry-2",
+        )
+    await db_session.commit()
+
+    assert second["retried"] == 1
+    assert second["sales_created"] == 1
+    assert second["skipped"] == 0
+
+    await db_session.refresh(item)
+    assert item.status is InventoryStatus.SOLD
+    sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
+    assert sale is not None
+    assert sale.tally_voucher_guid == guid
+
+    # Pass 3 — nothing left to retry: the invoice is skipped again (idempotent).
+    reachable, build, _ = _patched_connectivity(xml)
+    with reachable, build:
+        third = await service.backfill_sales(
+            from_date=date(2026, 6, 1),
+            correlation_id="bf-retry-3",
+        )
+    await db_session.commit()
+    assert third["retried"] == 0
+    assert third["sales_created"] == 0
+    assert third["skipped"] == 1
+
+
 @pytest_asyncio.fixture
 async def api_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app = create_app(get_settings())

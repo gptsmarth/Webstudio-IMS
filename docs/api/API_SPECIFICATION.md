@@ -2395,7 +2395,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 |---|---|
 | **Endpoint** | `POST /api/v1/integrations/tally/sales/backfill` |
 | **Method** | `POST` |
-| **Purpose** | Read-only historical sales sync from a past date range — invoices never imported are processed (matching serials marked sold); already-synced invoices are skipped. The incremental GUID watermark is never advanced. |
+| **Purpose** | Read-only historical sales sync from a past date range — invoices never imported are processed (matching serials marked sold); already-synced invoices are skipped, EXCEPT invoices whose lines completed without a sale because the serial was missing from IMS at the time: those lines are reset and re-checked, so units added to stock after the original sync are sold retroactively. The incremental GUID watermark is never advanced. |
 | **Authentication Required** | Yes |
 | **Required Permission** | `tally:run_sync` |
 
@@ -2406,7 +2406,7 @@ Excel Sync is **export only** — never imports (BR-08, FR-XLS-06). API enqueues
 | `from_date` | date | Yes | Inclusive start date |
 | `to_date` | date | No | Inclusive end date — defaults to today |
 
-**Response Body (`200`):** `{ "from_date", "to_date", "fetched", "checked", "imported", "skipped", "sales_created", "duplicates", "missing_serials", "failures" }`
+**Response Body (`200`):** `{ "from_date", "to_date", "fetched", "checked", "imported", "skipped", "retried", "sales_created", "duplicates", "missing_serials", "failures" }`
 
 **Errors:** `409` when Tally integration is disabled or a sync is already running; `502` when the Tally workstation is unreachable.
 
