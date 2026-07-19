@@ -131,7 +131,6 @@ jobs:
 
       - name: Collect server assets
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release-assets
           cp artifacts/backend-package/webstudio-backend-*.tar.gz release-assets/
           cp "artifacts/server-windows-setup/WEBSTUDIO Server Setup.exe" release-assets/

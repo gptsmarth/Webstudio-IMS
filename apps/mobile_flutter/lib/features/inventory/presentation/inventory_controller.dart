@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_exception.dart';
@@ -307,6 +309,9 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         state = state.copyWith(navLevel: InventoryNavLevel.models, selectedModelId: null, clearSelection: true);
       case InventoryNavLevel.models:
         state = state.copyWith(navLevel: InventoryNavLevel.brands, selectedBrandId: null, clearSelection: true);
+        if (_isOnline) {
+          unawaited(_refreshItemsInBackground());
+        }
       case InventoryNavLevel.brands:
         break;
     }
@@ -365,7 +370,7 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
       final updated = await _ref.read(catalogueRepositoryProvider).updateProductModel(modelId, data);
       final models = state.models.map((model) => model.id == modelId ? updated : model).toList();
       state = state.copyWith(models: models, actionInProgress: false);
-      await _refreshItems(refreshModels: true);
+      unawaited(_refreshItemsInBackground(refreshModels: true));
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -374,9 +379,12 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
   Future<void> createProductModel(Map<String, dynamic> data) async {
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
-      await _ref.read(catalogueRepositoryProvider).createProductModel(data);
-      await load();
-      state = state.copyWith(actionInProgress: false);
+      final created = await _ref.read(catalogueRepositoryProvider).createProductModel(data);
+      state = state.copyWith(
+        models: [...state.models, created],
+        actionInProgress: false,
+      );
+      unawaited(_refreshItemsInBackground(refreshModels: true));
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -389,8 +397,11 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
       if (state.selectedModelId == modelId && state.navLevel == InventoryNavLevel.serials) {
         goBack();
       }
-      await load();
-      state = state.copyWith(actionInProgress: false);
+      state = state.copyWith(
+        models: state.models.where((model) => model.id != modelId).toList(),
+        actionInProgress: false,
+      );
+      unawaited(_refreshItemsInBackground(refreshModels: true));
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -425,9 +436,9 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         state = state.copyWith(actionInProgress: false, isStale: true);
         return;
       }
-      await _inventory.transferLocation(item.id, locationId);
-      await _refreshItems();
-      state = state.copyWith(actionInProgress: false);
+      final updated = await _inventory.transferLocation(item.id, locationId);
+      _applyItemLocally(updated);
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -449,8 +460,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         return;
       }
       final updated = await _inventory.transferLocation(item.id, locationId);
-      await _refreshItems();
-      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+      _applyItemLocally(updated);
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -477,12 +488,9 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         state = state.copyWith(actionInProgress: false, isStale: true);
         return;
       }
-      await _inventory.markSold(item.id, request);
-      await _refreshItems();
-      final selected = state.selectedItem?.id == item.id
-          ? state.items.where((entry) => entry.id == item.id).firstOrNull
-          : state.selectedItem;
-      state = state.copyWith(selectedItem: selected, actionInProgress: false);
+      final updated = await _inventory.markSold(item.id, request);
+      _applyItemLocally(updated);
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -538,11 +546,11 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         }
       }
       if (_isOnline) {
-        await load();
+        state = state.copyWith(actionInProgress: false);
+        unawaited(_refreshItemsInBackground(refreshModels: true));
       } else {
         state = state.copyWith(actionInProgress: false, isStale: true);
       }
-      state = state.copyWith(actionInProgress: false);
       return true;
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: formatApiError(error));
@@ -553,16 +561,30 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
   Future<void> createItems(List<CreateInventoryItemRequest> requests) async {
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
+      final created = <InventoryItem>[];
       for (final request in requests) {
         if (!_isOnline) {
           final pending = _ref.read(pendingOperationFactoryProvider).createInventory(request: request.toJson());
           await _ref.read(backgroundSyncCoordinatorProvider.notifier).enqueuePending(pending);
         } else {
-          await _inventory.createItem(request);
+          created.add(await _inventory.createItem(request));
         }
       }
-      if (_isOnline) await _refreshItems();
-      state = state.copyWith(actionInProgress: false, isStale: !_isOnline);
+      if (_isOnline && created.isNotEmpty) {
+        final items = [...state.items, ...created];
+        state = state.copyWith(
+          items: items,
+          brandSummaries: buildBrandSummaries(
+            state.brands,
+            state.distribution?.byBrand ?? const [],
+            items,
+          ),
+          actionInProgress: false,
+        );
+        unawaited(_refreshItemsInBackground());
+      } else {
+        state = state.copyWith(actionInProgress: false, isStale: !_isOnline);
+      }
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -574,8 +596,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
       final updated = await _inventory.updateItem(item.id, data);
-      await _refreshItems();
-      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+      _applyItemLocally(updated);
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -587,8 +609,18 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
       await _inventory.archiveItem(item.id);
-      await _refreshItems();
-      state = state.copyWith(clearSelection: true, actionInProgress: false);
+      final remaining = state.items.where((entry) => entry.id != item.id).toList();
+      state = state.copyWith(
+        items: remaining,
+        clearSelection: true,
+        brandSummaries: buildBrandSummaries(
+          state.brands,
+          state.distribution?.byBrand ?? const [],
+          remaining,
+        ),
+        actionInProgress: false,
+      );
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -598,8 +630,18 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
       await _inventory.deleteItem(itemId);
-      await _refreshItems(refreshModels: true);
-      state = state.copyWith(clearSelection: true, actionInProgress: false);
+      final remaining = state.items.where((entry) => entry.id != itemId).toList();
+      state = state.copyWith(
+        items: remaining,
+        clearSelection: true,
+        brandSummaries: buildBrandSummaries(
+          state.brands,
+          state.distribution?.byBrand ?? const [],
+          remaining,
+        ),
+        actionInProgress: false,
+      );
+      unawaited(_refreshItemsInBackground(refreshModels: true));
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: formatApiError(error));
     }
@@ -611,8 +653,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {
       final updated = await _inventory.restoreItem(item.id);
-      await _refreshItems();
-      state = state.copyWith(selectedItem: updated, actionInProgress: false);
+      _applyItemLocally(updated);
+      unawaited(_refreshItemsInBackground());
     } catch (error) {
       state = state.copyWith(actionInProgress: false, error: error.toString());
     }
@@ -629,6 +671,32 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
       fromCache: result.fromCache,
       isStale: result.isStale,
     );
+  }
+
+  void _applyItemLocally(InventoryItem updated) {
+    final items = [
+      for (final entry in state.items)
+        if (entry.id == updated.id) updated else entry,
+    ];
+    final distribution = state.distribution;
+    state = state.copyWith(
+      items: items,
+      selectedItem: state.selectedItem?.id == updated.id ? updated : state.selectedItem,
+      brandSummaries: buildBrandSummaries(
+        state.brands,
+        distribution?.byBrand ?? const [],
+        items,
+      ),
+      actionInProgress: false,
+    );
+  }
+
+  Future<void> _refreshItemsInBackground({bool refreshModels = false}) async {
+    try {
+      await _refreshItems(refreshModels: refreshModels);
+    } catch (_) {
+      // Keep the optimistic UI; pull-to-refresh recovers if the quiet sync fails.
+    }
   }
 }
 

@@ -118,14 +118,22 @@ Future<void> showProductImageSheet(
       ],
       ListTile(
         leading: const Icon(Icons.auto_awesome_outlined),
-        title: const Text('Fetch image via AI'),
+        title: const Text('Fetch image (background)'),
+        subtitle: const Text('Runs silently — you can keep using the app'),
         onTap: () async {
           Navigator.pop(context);
           final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Fetching product image in the background…')),
+          );
           try {
-            final url = await ref
-                .read(productImageRepositoryProvider)
-                .resolveAndWaitForImage(productModelId);
+            final repo = ref.read(productImageRepositoryProvider);
+            await repo.resolveViaAi(productModelId, wait: false);
+            final url = await repo.resolveAndWaitForImage(
+              productModelId,
+              timeout: const Duration(seconds: 30),
+              pollInterval: const Duration(seconds: 2),
+            );
             if (!context.mounted) return;
             if (url != null && url.isNotEmpty) {
               await onPatchModel(productModelId, {'product_image_url': url});
@@ -196,7 +204,7 @@ class ProductImagePreview extends StatelessWidget {
     this.bordered = true,
     this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     this.onTap,
-  }) : assert(imageUrl != null || imageBytes != null);
+  });
 
   final String? imageUrl;
   final Uint8List? imageBytes;
@@ -221,17 +229,24 @@ class ProductImagePreview extends StatelessWidget {
       padding: padding,
       alignment: Alignment.center,
       child: imageBytes != null
-          ? Image.memory(imageBytes!, fit: fit, alignment: Alignment.center)
-          : Image.network(
-              imageUrl!,
+          ? Image.memory(
+              imageBytes!,
               fit: fit,
               alignment: Alignment.center,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-              },
               errorBuilder: (_, __, ___) => _errorPlaceholder(context),
-            ),
+            )
+          : (imageUrl != null && imageUrl!.trim().isNotEmpty)
+              ? Image.network(
+                  imageUrl!,
+                  fit: fit,
+                  alignment: Alignment.center,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                  },
+                  errorBuilder: (_, __, ___) => _errorPlaceholder(context),
+                )
+              : _errorPlaceholder(context),
     );
 
     if (onTap == null) return frame;
@@ -307,14 +322,16 @@ class _ProductModelImageState extends ConsumerState<ProductModelImage> {
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     if (!mounted) return;
     final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
       _bytes = null;
     });
-    final bytes = await ref.read(productImageRepositoryProvider).fetchImageBytes(widget.imageUrl);
+    final bytes = await ref
+        .read(productImageRepositoryProvider)
+        .fetchImageBytes(widget.imageUrl, force: force);
     if (!mounted || generation != _loadGeneration) return;
     setState(() {
       _bytes = bytes;
@@ -325,9 +342,23 @@ class _ProductModelImageState extends ConsumerState<ProductModelImage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return SizedBox(
+      final colorScheme = Theme.of(context).colorScheme;
+      return Container(
         height: widget.height,
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: widget.bordered ? BorderRadius.circular(12) : BorderRadius.zero,
+          border: widget.bordered
+              ? Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.45))
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       );
     }
 
@@ -337,7 +368,7 @@ class _ProductModelImageState extends ConsumerState<ProductModelImage> {
       fit: widget.fit,
       bordered: widget.bordered,
       padding: widget.padding,
-      onRetry: _load,
+      onRetry: () => _load(force: true),
       onTap: widget.allowFullscreen && _bytes != null
           ? () {
               Navigator.of(context).push<void>(
@@ -408,7 +439,15 @@ class _ProductImageFullscreenState extends ConsumerState<ProductImageFullscreen>
                   minScale: 0.5,
                   maxScale: 4,
                   child: Center(
-                    child: Image.memory(_bytes!, fit: BoxFit.contain),
+                    child: Image.memory(
+                      _bytes!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                    ),
                   ),
                 ),
     );

@@ -33,7 +33,13 @@ export class ProductImageService {
 
   static getCachedDataUrl(productModelId: string, remoteUrl?: string | null): string | null {
     try {
-      return localStorage.getItem(this.cacheKey(productModelId, remoteUrl));
+      const cached = localStorage.getItem(this.cacheKey(productModelId, remoteUrl));
+      // Older scrapers cached 8×8 tracking pixels as data URLs (~1–2 KB).
+      if (cached && cached.length < 4096 && remoteUrl?.startsWith('/assets/product-images/')) {
+        localStorage.removeItem(this.cacheKey(productModelId, remoteUrl));
+        return null;
+      }
+      return cached;
     } catch {
       return null;
     }
@@ -104,14 +110,23 @@ export class ProductImageService {
     }
 
     if (remoteUrl?.startsWith('/assets/')) {
-      const bundledSrc = resolvePublicAsset(remoteUrl);
-      if (await this.tryDirectImage(bundledSrc)) {
-        return { src: bundledSrc, source: 'remote', canUpload: true };
+      // Packaged desktop builds may ship stale product-images that shadow the
+      // live server (and defeat self-heal). Always prefer the authenticated
+      // proxy for managed product photos; keep bundled lookup for logos only.
+      const isManagedProductImage = remoteUrl.startsWith('/assets/product-images/');
+      if (!isManagedProductImage) {
+        const bundledSrc = resolvePublicAsset(remoteUrl);
+        if (await this.tryDirectImage(bundledSrc)) {
+          return { src: bundledSrc, source: 'remote', canUpload: true };
+        }
       }
       const proxied = await this.loadViaBackendProxy(productModelId, remoteUrl);
       if (proxied) {
         return proxied;
       }
+      // Proxy 404 often means the server is self-healing — drop any stale
+      // cached junk for this URL so the next resolve can pick up the rewrite.
+      this.clearCached(productModelId, remoteUrl);
       return {
         src: ProductPlaceholderRegistry.getPlaceholder(category),
         source: 'placeholder',
@@ -168,12 +183,19 @@ export class ProductImageService {
     try {
       const blob = await ProductSpecService.fetchImageBlob(remoteUrl);
       if (!blob.type.startsWith('image/')) {
+        this.clearCached(productModelId, remoteUrl);
+        return null;
+      }
+      // Reject obviously corrupt/tiny payloads that older scrapers cached.
+      if (blob.size > 0 && blob.size < 2048) {
+        this.clearCached(productModelId, remoteUrl);
         return null;
       }
       const dataUrl = await blobToDataUrl(blob);
       this.setCachedDataUrl(productModelId, dataUrl, remoteUrl);
       return { src: dataUrl, source: 'remote', canUpload: true };
     } catch {
+      this.clearCached(productModelId, remoteUrl);
       return null;
     }
   }

@@ -276,7 +276,7 @@ class StockModelDetailView extends ConsumerWidget {
       workspaceProvider: workspaceProvider,
       existing: model,
     );
-    await ref.read(workspaceProvider.notifier).load();
+    // Form already applies an optimistic model update; no full workspace reload.
   }
 
   Future<void> _deleteModel(BuildContext context, WidgetRef ref) async {

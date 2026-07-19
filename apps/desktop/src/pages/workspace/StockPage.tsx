@@ -246,13 +246,19 @@ export function StockPage(): JSX.Element {
         />
       )}
 
-      {nav.level === 'models' && nav.brandId && (
-        <StockModelCardGrid
-          rows={modelRows}
-          loading={hierarchy.loading}
-          showPrice={nav.showSellingPrice}
-          onSelect={(modelId, label) => nav.openModel(modelId, label)}
-        />
+      {nav.brandId != null && (
+        <div
+          className="stock-page__models-layer"
+          hidden={nav.level !== 'models'}
+          aria-hidden={nav.level !== 'models'}
+        >
+          <StockModelCardGrid
+            rows={modelRows}
+            loading={hierarchy.loading}
+            showPrice={nav.showSellingPrice}
+            onSelect={(modelId, label) => nav.openModel(modelId, label)}
+          />
+        </div>
       )}
 
       {nav.level === 'serials' && selectedModel && (

@@ -75,6 +75,29 @@ def is_suspicious_placeholder_image_url(url: str) -> bool:
     return host in {"example.com", "www.example.com", "example.org", "example.net"}
 
 
+# Real product photos are never this small; 8x8 tracking pixels and tiny
+# icons slip past content-type checks because they are valid JPEG/PNG files.
+MIN_PRODUCT_IMAGE_DIMENSION = 96
+
+
+def image_bytes_too_small(content: bytes) -> bool:
+    """True when the bytes decode to an image smaller than a usable product photo.
+
+    Returns False when the bytes cannot be decoded (partial download or an
+    unsupported format like AVIF) — only a confirmed tiny image is rejected.
+    """
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            width, height = img.size
+    except Exception:
+        return False
+    return min(width, height) < MIN_PRODUCT_IMAGE_DIMENSION
+
+
 def _looks_like_image_url(url: str) -> bool:
     path = urlparse(url).path.lower()
     return any(path.endswith(ext) for ext in IMAGE_EXTENSIONS)
@@ -306,7 +329,9 @@ async def validate_image_url(url: str, *, client: httpx.AsyncClient | None = Non
             return False
         content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
         if _content_looks_like_image(response.content[:16], content_type):
-            return True
+            # Image headers (with dimensions) sit in the first bytes, so the
+            # ranged download is enough to reject tracking pixels and icons.
+            return not image_bytes_too_small(response.content)
         return _looks_like_image_url(normalized) and bool(response.content)
     except httpx.HTTPError:
         return False

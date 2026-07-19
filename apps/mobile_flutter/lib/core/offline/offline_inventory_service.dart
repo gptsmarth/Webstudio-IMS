@@ -131,20 +131,33 @@ class OfflineInventoryService {
   }
 
   Future<InventoryWorkspaceCache> _fetchAndCache() async {
-    final distribution = await _dashboard.getDistribution();
-    final items = await _inventory.fetchAllItems();
+    // Fetch the heavy lists concurrently — sequential waits were stacking into
+    // multi-minute UI freezes after every transfer/sale refresh on Android.
+    final distributionFuture = _dashboard.getDistribution();
+    final itemsFuture = _inventory.fetchAllItems();
+    final modelsFuture = () async {
+      try {
+        return await _inventory.listProductModels();
+      } catch (_) {
+        return <ProductModel>[];
+      }
+    }();
+    final locationsFuture = () async {
+      try {
+        return await _inventory.listLocations();
+      } catch (_) {
+        return <Location>[];
+      }
+    }();
 
-    List<ProductModel> models;
-    try {
-      models = await _inventory.listProductModels();
-    } catch (_) {
+    final distribution = await distributionFuture;
+    final items = await itemsFuture;
+    var models = await modelsFuture;
+    if (models.isEmpty) {
       models = deriveProductModelsFromInventoryItems(items);
     }
-
-    List<Location> locations;
-    try {
-      locations = await _inventory.listLocations();
-    } catch (_) {
+    var locations = await locationsFuture;
+    if (locations.isEmpty) {
       locations = deriveLocationsFromInventoryItems(items);
     }
 

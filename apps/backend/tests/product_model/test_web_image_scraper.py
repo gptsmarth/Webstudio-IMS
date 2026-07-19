@@ -73,3 +73,22 @@ def test_book_path_fragments_are_blocked() -> None:
     assert not is_relevant_product_image(book, "X1504VA-BQ342WS", brand_name="ASUS")
     notebook = "https://dlcdnwebimgs.asus.com/pub/ASUS/notebook/X1504VA.jpg"
     assert is_relevant_product_image(notebook, "X1504VA-BQ342WS", brand_name="ASUS")
+
+
+def test_image_bytes_too_small_rejects_tracking_pixels() -> None:
+    import io
+
+    from PIL import Image
+
+    from webstudio_backend.services.product_image_service import image_bytes_too_small
+
+    tiny = io.BytesIO()
+    Image.new("RGB", (8, 8)).save(tiny, format="JPEG")
+    assert image_bytes_too_small(tiny.getvalue()) is True
+
+    real = io.BytesIO()
+    Image.new("RGB", (400, 300)).save(real, format="JPEG")
+    assert image_bytes_too_small(real.getvalue()) is False
+
+    # Undecodable bytes (e.g. truncated/AVIF) must not be rejected.
+    assert image_bytes_too_small(b"\x00\x01\x02") is False

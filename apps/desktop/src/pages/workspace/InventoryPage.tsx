@@ -240,18 +240,24 @@ export function InventoryPage(): JSX.Element {
         />
       )}
 
-      {nav.level === 'models' && nav.brandId && (
-        <AdminModelTable
-          rows={filteredModels}
-          loading={hierarchy.loading}
-          onSelect={(modelId, label) => {
-            workspace.selectItem(null);
-            nav.openModel(modelId, label);
-          }}
-          onAddLaptop={() => setAddOpen(true)}
-          onAddAccessory={() => setAddAccessoryOpen(true)}
-          onEditModel={setEditModelId}
-        />
+      {nav.brandId != null && (
+        <div
+          className="inv-page__models-layer"
+          hidden={nav.level !== 'models'}
+          aria-hidden={nav.level !== 'models'}
+        >
+          <AdminModelTable
+            rows={filteredModels}
+            loading={hierarchy.loading}
+            onSelect={(modelId, label) => {
+              workspace.selectItem(null);
+              nav.openModel(modelId, label);
+            }}
+            onAddLaptop={() => setAddOpen(true)}
+            onAddAccessory={() => setAddAccessoryOpen(true)}
+            onEditModel={setEditModelId}
+          />
+        </div>
       )}
 
       {nav.level === 'serials' && nav.modelId && selectedModel && (

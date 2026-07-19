@@ -21,20 +21,73 @@ from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
+from webstudio_backend.services.product_image_jobs import schedule_product_image_resolve
 from webstudio_backend.services.product_image_service import (
     USER_AGENT,
+    image_bytes_too_small,
     is_safe_public_https_url,
     validate_image_url,
     validate_product_image_upload,
 )
-from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
+from webstudio_backend.services.web_image_scraper import (
+    managed_asset_search_dirs,
+    resolve_managed_assets_dir,
+)
 
 router = APIRouter(prefix="/api/v1/product-images", tags=["product-images"])
 
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
-def _serve_managed_asset(url: str) -> Response:
+def _find_managed_asset_file(relative: str):
+    """Locate a managed asset in any known storage location (data root or repo)."""
+    for assets_root in managed_asset_search_dirs():
+        root = assets_root.resolve()
+        file_path = (assets_root / relative).resolve()
+        try:
+            if file_path.is_relative_to(root) and file_path.is_file():
+                return file_path
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+# Real product photos exceed this; only files below it are decode-checked.
+_JUNK_IMAGE_MAX_BYTES = 10 * 1024
+
+
+def _is_junk_image_file(file_path) -> bool:
+    """Detect stored tracking pixels/icons that older scraper versions saved."""
+    try:
+        if file_path.stat().st_size > _JUNK_IMAGE_MAX_BYTES:
+            return False
+        return image_bytes_too_small(file_path.read_bytes())
+    except OSError:
+        return False
+
+
+async def _heal_missing_product_image(url: str, db_session: AsyncSession) -> None:
+    """Managed product-image files are named `{model_id}.{ext}`. When the file
+    is gone (e.g. storage location changed between versions), clear the dead
+    URL and re-run background discovery so the image repairs itself."""
+    relative = url.removeprefix("/assets/").lstrip("/")
+    if not relative.startswith("product-images/"):
+        return
+    stem = relative.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    try:
+        model_id = uuid.UUID(stem)
+    except ValueError:
+        return
+    repo = ProductModelRepository(db_session)
+    model = await repo.get_by_id(model_id)
+    if model is None or model.product_image_url != url:
+        return
+    model.product_image_url = None
+    await db_session.commit()
+    schedule_product_image_resolve(model_id, force=True)
+
+
+async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
     if not url.startswith("/assets/"):
         raise AppError(
             "VALIDATION_ERROR",
@@ -42,18 +95,18 @@ def _serve_managed_asset(url: str) -> Response:
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    assets_root = resolve_managed_assets_dir(create=False)
-    if assets_root is None:
-        raise AppError(
-            "NOT_FOUND",
-            "Managed asset storage is not available.",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
     relative = url.removeprefix("/assets/").lstrip("/")
-    file_path = (assets_root / relative).resolve()
-    root = assets_root.resolve()
-    if not str(file_path).startswith(str(root)) or not file_path.is_file():
+    file_path = _find_managed_asset_file(relative)
+    while file_path is not None and _is_junk_image_file(file_path):
+        try:
+            file_path.unlink()
+        except OSError:
+            file_path = None
+            break
+        # The same junk file may exist in more than one storage location.
+        file_path = _find_managed_asset_file(relative)
+    if file_path is None:
+        await _heal_missing_product_image(url, db_session)
         raise AppError(
             "NOT_FOUND",
             "Product image is not available.",
@@ -80,10 +133,11 @@ async def proxy_product_image(
     request: Request,
     current: ProductModelsOrInventoryViewDep,
     url: str = Query(..., min_length=4, max_length=512),
+    db_session: AsyncSession = DbSessionDep,
 ) -> Response:
     del request, current
     if url.startswith("/assets/"):
-        return _serve_managed_asset(url)
+        return await _serve_managed_asset(url, db_session)
 
     if not is_safe_public_https_url(url):
         raise AppError(

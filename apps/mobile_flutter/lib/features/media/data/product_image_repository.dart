@@ -25,6 +25,12 @@ class ProductImageRepository {
 
   final ApiClient _api;
   final Map<String, Uint8List> _byteCache = {};
+  final Map<String, Future<Uint8List?>> _inflight = {};
+  final Set<String> _missingUrls = {};
+  /// Managed `/assets/...` misses can self-heal to the same path; only suppress
+  /// immediate re-fetches briefly so list scroll does not hammer the proxy.
+  final Map<String, DateTime> _managedMissUntil = {};
+  static const Duration _managedMissTtl = Duration(seconds: 45);
 
   Future<ProductImageUploadResult> upload({
     required String productModelId,
@@ -56,21 +62,54 @@ class ProductImageRepository {
   }
 
   /// Fetches image bytes through the authenticated API proxy (required on mobile).
-  Future<Uint8List?> fetchImageBytes(String imageUrl) async {
+  Future<Uint8List?> fetchImageBytes(String imageUrl, {bool force = false}) async {
     final trimmed = imageUrl.trim();
     if (trimmed.isEmpty) return null;
+    if (force) {
+      _missingUrls.remove(trimmed);
+      _managedMissUntil.remove(trimmed);
+      _byteCache.remove(trimmed);
+    }
     final cached = _byteCache[trimmed];
     if (cached != null) return cached;
+    if (_missingUrls.contains(trimmed)) return null;
+    final managedMiss = _managedMissUntil[trimmed];
+    if (managedMiss != null && DateTime.now().isBefore(managedMiss)) {
+      return null;
+    }
 
-    for (var attempt = 0; attempt < 3; attempt++) {
-      final bytes = await _fetchImageBytesOnce(trimmed);
-      if (bytes != null) {
-        _byteCache[trimmed] = bytes;
-        return bytes;
+    final pending = _inflight[trimmed];
+    if (pending != null) return pending;
+
+    late final Future<Uint8List?> future;
+    future = () async {
+      try {
+        return await _fetchWithRetries(trimmed);
+      } finally {
+        // remove() returns the stored Future value; do not await it again.
+        final _ = _inflight.remove(trimmed);
       }
-      if (attempt < 2) {
-        await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
-      }
+    }();
+    _inflight[trimmed] = future;
+    return future;
+  }
+
+  Future<Uint8List?> _fetchWithRetries(String trimmed) async {
+    // Single attempt — failed images fall back to the placeholder silently.
+    // Retries were stacking into multi-second "loading / retry" freezes on Android.
+    final bytes = await _fetchImageBytesOnce(trimmed);
+    if (bytes != null) {
+      _byteCache[trimmed] = bytes;
+      _missingUrls.remove(trimmed);
+      _managedMissUntil.remove(trimmed);
+      return bytes;
+    }
+    // Managed `/assets/...` URLs can self-heal on the server to the *same*
+    // path after a 404. Never permanently blacklist them.
+    if (trimmed.startsWith('/assets/')) {
+      _managedMissUntil[trimmed] = DateTime.now().add(_managedMissTtl);
+    } else {
+      _missingUrls.add(trimmed);
     }
     return null;
   }
@@ -123,12 +162,13 @@ class ProductImageRepository {
   }
 
   /// Polls resolve-image until an image URL is available or attempts exhaust.
+  /// Starts discovery in the background (non-blocking) then polls quietly.
   Future<String?> resolveAndWaitForImage(
     String productModelId, {
-    Duration timeout = const Duration(seconds: 45),
+    Duration timeout = const Duration(seconds: 30),
     Duration pollInterval = const Duration(seconds: 2),
   }) async {
-    var result = await resolveViaAi(productModelId, wait: true);
+    var result = await resolveViaAi(productModelId, wait: false);
     final immediate = (result['product_image_url'] as String?)?.trim();
     if (immediate != null && immediate.isNotEmpty) return immediate;
 

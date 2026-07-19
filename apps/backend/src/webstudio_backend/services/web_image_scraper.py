@@ -20,6 +20,7 @@ from webstudio_backend.services.product_image_service import (
     _normalize_https_url,
     extract_image_urls_from_html,
     fetch_page_html,
+    image_bytes_too_small,
     is_safe_public_https_url,
     is_suspicious_placeholder_image_url,
     search_public_web_for_pages,
@@ -596,6 +597,24 @@ def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
     return find_public_assets_dir()
 
 
+def managed_asset_search_dirs() -> list[Path]:
+    """Every on-disk location that may hold managed ``/assets/...`` files.
+
+    Writes always go to :func:`resolve_managed_assets_dir`, but historical
+    versions persisted into the repo's public assets folder (and vice versa on
+    dev machines), so reads must search every candidate to keep old links
+    working after configuration changes.
+    """
+    dirs: list[Path] = []
+    primary = resolve_managed_assets_dir(create=False)
+    if primary is not None and primary.is_dir():
+        dirs.append(primary)
+    repo_assets = find_public_assets_dir()
+    if repo_assets is not None and repo_assets not in dirs:
+        dirs.append(repo_assets)
+    return dirs
+
+
 def _extension_for_content_type(content_type: str) -> str:
     mapping = {
         "image/jpeg": "jpg",
@@ -603,9 +622,42 @@ def _extension_for_content_type(content_type: str) -> str:
         "image/png": "png",
         "image/webp": "webp",
         "image/gif": "gif",
-        "image/avif": "avif",
+        # AVIF is accepted from the web but re-encoded to JPEG on persist —
+        # Pillow/mobile decoding for AVIF is unreliable across platforms.
+        "image/avif": "jpg",
     }
     return mapping.get(content_type.split(";")[0].strip().lower(), "jpg")
+
+
+def _bytes_for_managed_storage(content: bytes, content_type: str) -> tuple[bytes, str] | None:
+    """Normalize downloaded bytes for durable local storage.
+
+    Returns ``(payload, extension)`` or ``None`` when the image cannot be stored
+    safely (tiny/undecodable AVIF, etc.).
+    """
+    import io
+
+    from PIL import Image
+
+    normalized_type = content_type.split(";")[0].strip().lower()
+    if image_bytes_too_small(content):
+        return None
+
+    # Prefer JPEG/PNG/WebP as-is when already a common client-safe format.
+    if normalized_type in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+        return content, _extension_for_content_type(normalized_type)
+
+    # Re-encode AVIF (and other exotic formats) to JPEG when Pillow can decode.
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            if min(img.size) < 96:
+                return None
+            rgb = img.convert("RGB")
+            buffer = io.BytesIO()
+            rgb.save(buffer, format="JPEG", quality=90)
+            return buffer.getvalue(), "jpg"
+    except Exception:
+        return None
 
 
 async def persist_product_image_file(
@@ -631,13 +683,22 @@ async def persist_product_image_file(
 
     content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
     if not _content_looks_like_image(response.content[:16], content_type):
+        # AVIF often lacks classic magic bytes — still try decode/re-encode.
+        if "avif" not in content_type and not url.lower().endswith(".avif"):
+            return None
+
+    stored = _bytes_for_managed_storage(response.content, content_type or "image/jpeg")
+    if stored is None:
+        logger.info(
+            "Rejected unusable product image ({} bytes) from {}", len(response.content), url
+        )
         return None
+    payload, ext = stored
 
     folder = assets_root / "product-images"
     folder.mkdir(parents=True, exist_ok=True)
-    ext = _extension_for_content_type(content_type)
     filename = f"{model_id}.{ext}"
-    (folder / filename).write_bytes(response.content)
+    (folder / filename).write_bytes(payload)
     return f"/assets/product-images/{filename}"
 
 
@@ -699,7 +760,10 @@ async def _pick_validated_product_image(
         )
         if persist_local and model_id:
             stored = await persist_product_image_file(url, model_id=model_id, client=client)
-            return stored or url
+            if stored:
+                return stored
+            # Download failed or turned out to be a pixel/icon — try next candidate.
+            continue
         return url
     return None
 

@@ -80,35 +80,56 @@ export function useInventoryHierarchyData(permissions: string[] = []): Inventory
   permissionsRef.current = permissions;
   const permissionsKey = permissionsDependencyKey(permissions);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const plan = referenceDataFetchPlan(permissionsRef.current);
-      const [brandList, modelList, locationList, dist, inventoryItems] = await Promise.all([
-        plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
-        plan.needsProductModels
-          ? ProductModelService.listModels({ archived: false })
-          : Promise.resolve([]),
-        plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
-        plan.needsDistribution ? DashboardService.getDistribution() : Promise.resolve(null),
-        plan.needsInventoryItems ? fetchAllInventoryItems() : Promise.resolve([]),
-      ]);
-      setBrands(brandList);
-      setModels(modelList);
-      setLocations(locationList.filter((location) => location.is_active));
-      setDistribution(dist);
-      setItems(inventoryItems);
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setError(message.message ?? 'Unable to load inventory data.');
-    } finally {
-      setLoading(false);
-    }
-  }, [permissionsKey]);
+  const refresh = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent === true;
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const plan = referenceDataFetchPlan(permissionsRef.current);
+        const [brandList, modelList, locationList, dist, inventoryItems] = await Promise.all([
+          plan.needsBrands ? BrandService.listBrands() : Promise.resolve([]),
+          plan.needsProductModels
+            ? ProductModelService.listModels({ archived: false })
+            : Promise.resolve([]),
+          plan.needsLocations ? LocationService.listLocations() : Promise.resolve([]),
+          plan.needsDistribution ? DashboardService.getDistribution() : Promise.resolve(null),
+          plan.needsInventoryItems ? fetchAllInventoryItems() : Promise.resolve([]),
+        ]);
+        setBrands(brandList);
+        setModels(modelList);
+        setLocations(locationList.filter((location) => location.is_active));
+        setDistribution(dist);
+        setItems(inventoryItems);
+        if (!silent) setError(null);
+      } catch (err: unknown) {
+        if (!silent) {
+          const message = err as { message?: string };
+          setError(message.message ?? 'Unable to load inventory data.');
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [permissionsKey],
+  );
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // Quiet refresh when the window regains focus (e.g. after a Tally sale elsewhere).
+  // No periodic polling — totals update from local mutations immediately and on focus.
+  useEffect(() => {
+    const onFocus = () => {
+      void refresh({ silent: true });
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
   }, [refresh]);
 
   const brandSummaries = useMemo(

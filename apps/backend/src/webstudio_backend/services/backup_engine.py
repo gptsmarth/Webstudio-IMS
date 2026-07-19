@@ -567,8 +567,16 @@ class BackupEngine:
     def _copy_managed_assets(self, assets_dir: Path, *, company_logo: str | None) -> int:
         self._copy_brand_logos(assets_dir / "brand-logos")
         self._copy_company_logo_sync(assets_dir / "company", company_logo)
-        public_assets = self._find_public_assets_dir()
-        if public_assets is not None:
+        # Prefer the live managed root (WEBSTUDIO_DATA_ROOT/assets on servers),
+        # then any legacy search locations so product images are not skipped.
+        from webstudio_backend.services.web_image_scraper import managed_asset_search_dirs
+
+        seen: set[Path] = set()
+        for public_assets in managed_asset_search_dirs():
+            resolved = public_assets.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
             for subdir in BACKUP_MANAGED_ASSET_DIRS:
                 if subdir in {"brand-logos", "company"}:
                     continue
@@ -809,8 +817,11 @@ class BackupEngine:
         return logos if logos.is_dir() else None
 
     def _find_public_assets_dir(self) -> Path | None:
-        repo = self._find_repo_root()
-        if repo is None:
-            return None
-        assets = repo / "apps/desktop/public/assets"
-        return assets if assets.is_dir() else None
+        """Writable managed-assets root used by backups and restores.
+
+        On office/production servers this is ``{WEBSTUDIO_DATA_ROOT}/assets``.
+        Dev/test falls back to the repo public assets folder.
+        """
+        from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
+
+        return resolve_managed_assets_dir(create=True)

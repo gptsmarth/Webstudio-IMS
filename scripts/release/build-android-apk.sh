@@ -20,7 +20,11 @@ if [[ -n "${WEBSTUDIO_DEFAULT_API_URL:-}" ]]; then
   DART_DEFINES+=(--dart-define="WEBSTUDIO_DEFAULT_API_URL=${WEBSTUDIO_DEFAULT_API_URL}")
   echo "[release] Default API URL: ${WEBSTUDIO_DEFAULT_API_URL}"
 fi
-flutter build apk --release "${DART_DEFINES[@]}"
+if (( ${#DART_DEFINES[@]} )); then
+  flutter build apk --release "${DART_DEFINES[@]}"
+else
+  flutter build apk --release
+fi
 
 mkdir -p "$RELEASE_DIR"
 APK_SRC="$FLUTTER_DIR/build/app/outputs/flutter-apk/app-release.apk"

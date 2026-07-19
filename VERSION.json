@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "product": "WEBSTUDIO IMS",
-  "version": "1.9.6",
-  "build_number": 7,
+  "version": "1.9.7",
+  "build_number": 8,
   "release_channel": "stable",
-  "release_date": "2026-07-18",
+  "release_date": "2026-07-19",
   "status": "PRODUCTION READY",
-  "git_commit": "e0ea080c9a5abeb90ef36ab13a4e4a9f6d079af6",
-  "git_short": "e0ea080"
+  "git_commit": "6aaaf285ceabe84390c1deb1228380b63b382a37",
+  "git_short": "6aaaf28"
 }
