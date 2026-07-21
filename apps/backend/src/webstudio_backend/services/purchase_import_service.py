@@ -164,9 +164,12 @@ class PurchaseImportService:
             quantity = sum(_parse_quantity(line.quantity) for line in ordered)
             if quantity == 0:
                 quantity = len(serials)
-            # Pad empty slots so the UI can collect one serial per billed unit.
-            while len(serials) < quantity:
-                serials.append("")
+            # Pad only when Tally supplied serials (or a serial source) — not for
+            # accessories/lines with no serial tracking on the invoice.
+            expects_serials = bool(serials) or any(line.serial_source for line in ordered)
+            if expects_serials:
+                while len(serials) < quantity:
+                    serials.append("")
             cells = await self._build_serial_cells(serials)
             line_total = next(
                 (line.line_total for line in ordered if line.line_total is not None), None

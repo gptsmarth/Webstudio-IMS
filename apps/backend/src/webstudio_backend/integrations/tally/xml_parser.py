@@ -94,6 +94,22 @@ def _expand_serial_text(text: str) -> list[str]:
     return serials
 
 
+def _expand_batch_serial_text(text: str) -> list[str]:
+    """Batch allocation serials — trust Tally (accessories may be shorter than 8 chars)."""
+    if not text:
+        return []
+    serials: list[str] = []
+    for part in re.split(r"[,;]+", text):
+        token = part.strip()
+        if not token:
+            continue
+        if "warranty" in token.lower():
+            continue
+        if token not in serials:
+            serials.append(token)
+    return serials
+
+
 def _collect_basic_serials(line: ET.Element) -> list[str]:
     serials: list[str] = []
     for desc_list in _children_by_name(line, "BASICUSERDESCRIPTION.LIST"):
@@ -111,7 +127,7 @@ def _collect_batch_serials(line: ET.Element) -> list[str]:
     batch_serials: list[str] = []
 
     def _append_serial(raw: str) -> None:
-        for serial in _expand_serial_text(raw):
+        for serial in _expand_batch_serial_text(raw):
             if serial not in batch_serials:
                 batch_serials.append(serial)
 
@@ -155,7 +171,9 @@ def _extract_serial_from_line(line: ET.Element) -> tuple[str | None, str | None,
 
         direct = _child_text(line, "SERIALNUMBER")
         if direct:
-            direct_serials = _expand_serial_text(direct)
+            direct_serials = _expand_batch_serial_text(direct)
+            if not direct_serials:
+                direct_serials = _expand_serial_text(direct)
             if direct_serials:
                 return direct_serials[0], SERIAL_SOURCE_SERIALNUMBER, direct_serials
             if _looks_like_inventory_serial(direct):
@@ -402,14 +420,29 @@ def _printed_invoice_number(voucher: ET.Element, voucher_number: str) -> str:
     return voucher_number
 
 
+def _voucher_field(voucher: ET.Element, *names: str) -> str | None:
+    """Read a voucher field from child elements or XML attributes (e.g. REMOTEID)."""
+    for name in names:
+        value = _child_text(voucher, name)
+        if value:
+            return value
+        for attr in (name, name.upper(), name.lower()):
+            raw = voucher.get(attr)
+            if raw and str(raw).strip():
+                return str(raw).strip()
+    return None
+
+
 def parse_voucher_element(
     voucher: ET.Element, *, raw_xml: str | None = None
 ) -> TallyVoucher | None:
-    guid = _child_text(voucher, "GUID")
-    voucher_number = _child_text(voucher, "VOUCHERNUMBER")
-    voucher_type = _child_text(voucher, "VOUCHERTYPENAME")
-    if not guid or not voucher_number or not voucher_type:
+    guid = _voucher_field(voucher, "GUID", "REMOTEID")
+    voucher_number = _voucher_field(voucher, "VOUCHERNUMBER")
+    voucher_type = _voucher_field(voucher, "VOUCHERTYPENAME", "VCHTYPE")
+    if not guid or not voucher_type:
         return None
+    if not voucher_number:
+        voucher_number = guid
 
     inventory_lines: list[TallyInventoryLine] = []
     line_index = 0
