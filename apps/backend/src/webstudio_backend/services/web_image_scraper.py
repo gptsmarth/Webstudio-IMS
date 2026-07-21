@@ -617,9 +617,9 @@ def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
     """
     from webstudio_backend.core.config import get_settings
 
-    data_root = get_settings().webstudio_data_root.strip()
+    data_root = get_settings().webstudio_data_root.strip().strip('"').strip("'")
     if data_root:
-        base = Path(data_root) / "assets"
+        base = Path(data_root).expanduser() / "assets"
         if create:
             try:
                 base.mkdir(parents=True, exist_ok=True)
@@ -639,12 +639,54 @@ def managed_asset_search_dirs() -> list[Path]:
     """
     dirs: list[Path] = []
     primary = resolve_managed_assets_dir(create=False)
-    if primary is not None and primary.is_dir():
-        dirs.append(primary)
+    if primary is not None:
+        try:
+            if primary.is_dir():
+                dirs.append(primary)
+        except OSError:
+            pass
     repo_assets = find_public_assets_dir()
     if repo_assets is not None and repo_assets not in dirs:
-        dirs.append(repo_assets)
+        try:
+            if repo_assets.is_dir():
+                dirs.append(repo_assets)
+        except OSError:
+            pass
     return dirs
+
+
+_ALT_PRODUCT_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
+
+
+def find_managed_product_image_path(relative: str) -> Path | None:
+    """Locate a managed asset, tolerating Windows path separators and extension drift.
+
+    Background scrapers historically saved ``{model_id}.webp`` while some clients
+    or heal paths may look for ``.jpg``. Prefer the exact relative path first,
+    then the same stem with common image extensions.
+    """
+    normalized = relative.replace("\\", "/").lstrip("/")
+    candidates = [normalized]
+    if normalized.startswith("product-images/") and "." in Path(normalized).name:
+        stem = Path(normalized).stem
+        for ext in _ALT_PRODUCT_IMAGE_EXTENSIONS:
+            alt = f"product-images/{stem}{ext}"
+            if alt not in candidates:
+                candidates.append(alt)
+
+    for assets_root in managed_asset_search_dirs():
+        try:
+            root = assets_root.resolve()
+        except OSError:
+            continue
+        for candidate in candidates:
+            try:
+                file_path = (assets_root / candidate).resolve()
+                if file_path.is_relative_to(root) and file_path.is_file():
+                    return file_path
+            except (OSError, ValueError):
+                continue
+    return None
 
 
 def _extension_for_content_type(content_type: str) -> str:
@@ -675,11 +717,12 @@ def _bytes_for_managed_storage(content: bytes, content_type: str) -> tuple[bytes
     if image_bytes_too_small(content):
         return None
 
-    # Prefer JPEG/PNG/WebP as-is when already a common client-safe format.
-    if normalized_type in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+    # Prefer JPEG/PNG as-is. Re-encode WebP to JPEG so Android/iOS/desktop
+    # clients decode managed photos without depending on WebP MIME maps.
+    if normalized_type in {"image/jpeg", "image/jpg", "image/png"}:
         return content, _extension_for_content_type(normalized_type)
 
-    # Re-encode AVIF (and other exotic formats) to JPEG when Pillow can decode.
+    # Re-encode WebP/AVIF (and other exotic formats) to JPEG when Pillow can decode.
     try:
         with Image.open(io.BytesIO(content)) as img:
             if min(img.size) < 96:
@@ -689,6 +732,9 @@ def _bytes_for_managed_storage(content: bytes, content_type: str) -> tuple[bytes
             rgb.save(buffer, format="JPEG", quality=90)
             return buffer.getvalue(), "jpg"
     except Exception:
+        # If WebP cannot be re-encoded, keep original bytes when already WebP.
+        if normalized_type == "image/webp":
+            return content, "webp"
         return None
 
 

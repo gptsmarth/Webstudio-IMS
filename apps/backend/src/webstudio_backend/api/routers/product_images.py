@@ -31,7 +31,7 @@ from webstudio_backend.services.product_image_service import (
     validate_product_image_upload,
 )
 from webstudio_backend.services.web_image_scraper import (
-    managed_asset_search_dirs,
+    find_managed_product_image_path,
     resolve_managed_assets_dir,
 )
 
@@ -51,32 +51,35 @@ _MANAGED_IMAGE_CONTENT_TYPES = {
 }
 
 
-def _managed_image_content_type(filename: str) -> str:
+def _sniff_image_content_type(payload: bytes) -> str | None:
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if payload.startswith(b"GIF87a") or payload.startswith(b"GIF89a"):
+        return "image/gif"
+    if len(payload) >= 12 and payload[0:4] == b"RIFF" and payload[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _managed_image_content_type(filename: str, payload: bytes | None = None) -> str:
     suffix = Path(filename).suffix.lower()
     if suffix in _MANAGED_IMAGE_CONTENT_TYPES:
         return _MANAGED_IMAGE_CONTENT_TYPES[suffix]
+    if payload:
+        sniffed = _sniff_image_content_type(payload)
+        if sniffed:
+            return sniffed
     guessed = mimetypes.guess_type(filename)[0]
     return guessed or "application/octet-stream"
-
-
-def _find_managed_asset_file(relative: str):
-    """Locate a managed asset in any known storage location (data root or repo)."""
-    for assets_root in managed_asset_search_dirs():
-        root = assets_root.resolve()
-        file_path = (assets_root / relative).resolve()
-        try:
-            if file_path.is_relative_to(root) and file_path.is_file():
-                return file_path
-        except (OSError, ValueError):
-            continue
-    return None
 
 
 # Real product photos exceed this; only files below it are decode-checked.
 _JUNK_IMAGE_MAX_BYTES = 10 * 1024
 
 
-def _is_junk_image_file(file_path) -> bool:
+def _is_junk_image_file(file_path: Path) -> bool:
     """Detect stored tracking pixels/icons that older scraper versions saved."""
     try:
         if file_path.stat().st_size > _JUNK_IMAGE_MAX_BYTES:
@@ -90,7 +93,7 @@ async def _heal_missing_product_image(url: str, db_session: AsyncSession) -> Non
     """Managed product-image files are named `{model_id}.{ext}`. When the file
     is gone (e.g. storage location changed between versions), clear the dead
     URL and re-run background discovery so the image repairs itself."""
-    relative = url.removeprefix("/assets/").lstrip("/")
+    relative = url.removeprefix("/assets/").lstrip("/").replace("\\", "/")
     if not relative.startswith("product-images/"):
         return
     stem = relative.rsplit("/", 1)[-1].rsplit(".", 1)[0]
@@ -115,8 +118,8 @@ async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    relative = url.removeprefix("/assets/").lstrip("/")
-    file_path = _find_managed_asset_file(relative)
+    relative = url.removeprefix("/assets/").lstrip("/").replace("\\", "/")
+    file_path = find_managed_product_image_path(relative)
     while file_path is not None and _is_junk_image_file(file_path):
         try:
             file_path.unlink()
@@ -124,7 +127,7 @@ async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
             file_path = None
             break
         # The same junk file may exist in more than one storage location.
-        file_path = _find_managed_asset_file(relative)
+        file_path = find_managed_product_image_path(relative)
     if file_path is None:
         await _heal_missing_product_image(url, db_session)
         raise AppError(
@@ -133,7 +136,8 @@ async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    content_type = _managed_image_content_type(file_path.name)
+    payload = file_path.read_bytes()
+    content_type = _managed_image_content_type(file_path.name, payload)
     if not content_type.startswith("image/"):
         raise AppError(
             "NOT_FOUND",
@@ -141,8 +145,24 @@ async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    # If DB pointed at .webp but disk has .jpg (or vice versa), rewrite the
+    # stored URL so future clients request the file that actually exists.
+    served_url = f"/assets/product-images/{file_path.name}"
+    if served_url != url and relative.startswith("product-images/"):
+        stem = Path(relative).stem
+        try:
+            model_id = uuid.UUID(stem)
+        except ValueError:
+            model_id = None
+        if model_id is not None:
+            repo = ProductModelRepository(db_session)
+            model = await repo.get_by_id(model_id)
+            if model is not None and model.product_image_url == url:
+                model.product_image_url = served_url
+                await db_session.commit()
+
     return Response(
-        content=file_path.read_bytes(),
+        content=payload,
         media_type=content_type,
         headers={"Cache-Control": "private, max-age=86400"},
     )

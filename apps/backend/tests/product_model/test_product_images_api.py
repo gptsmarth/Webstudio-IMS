@@ -59,6 +59,7 @@ async def test_proxy_serves_webp_with_explicit_content_type(
 ) -> None:
     """Windows MIME maps often omit webp; the proxy must still return image/webp."""
     from webstudio_backend.api.routers import product_images as module
+    from webstudio_backend.services import web_image_scraper
 
     assets = tmp_path / "assets"
     (assets / "product-images").mkdir(parents=True)
@@ -66,7 +67,10 @@ async def test_proxy_serves_webp_with_explicit_content_type(
     # Minimal RIFF/WEBP header is enough for content-type routing tests.
     webp_bytes = b"RIFF\x00\x00\x00\x00WEBP" + (_PNG_BYTES[:64])
     webp_path.write_bytes(webp_bytes)
-    monkeypatch.setattr(module, "managed_asset_search_dirs", lambda: [assets])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets])
+    monkeypatch.setattr(
+        module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
+    )
 
     response = await api_client.get(
         "/api/v1/product-images/proxy",
@@ -79,6 +83,54 @@ async def test_proxy_serves_webp_with_explicit_content_type(
 
 
 @pytest.mark.asyncio
+async def test_proxy_serves_jpg_when_db_points_at_missing_webp(
+    api_client: AsyncClient,
+    salesperson_headers: dict[str, str],
+    db_session: AsyncSession,
+    brand: Brand,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the DB URL ends in .webp but only .jpg exists on disk, still serve it."""
+    from webstudio_backend.api.routers import product_images as module
+    from webstudio_backend.services import web_image_scraper
+
+    repo = ProductModelRepository(db_session)
+    model = await repo.create(
+        brand_id=brand.id,
+        model_number="EXT-DRIFT-01",
+        model_name="Extension Drift",
+        cpu="Intel Core i5",
+        gpu="Intel Iris Xe",
+        ram_gb=8,
+        storage_value=Decimal("512"),
+        storage_unit=StorageUnit.GB,
+        storage_type=StorageType.SSD,
+    )
+    webp_url = f"/assets/product-images/{model.id}.webp"
+    model.product_image_url = webp_url
+    await db_session.commit()
+
+    assets = tmp_path / "assets"
+    (assets / "product-images").mkdir(parents=True)
+    (assets / "product-images" / f"{model.id}.jpg").write_bytes(_PNG_BYTES)
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets])
+    monkeypatch.setattr(
+        module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
+    )
+
+    response = await api_client.get(
+        "/api/v1/product-images/proxy",
+        params={"url": webp_url},
+        headers=salesperson_headers,
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    await db_session.refresh(model)
+    assert model.product_image_url == f"/assets/product-images/{model.id}.jpg"
+
+
+@pytest.mark.asyncio
 async def test_proxy_serves_asset_from_any_search_dir(
     api_client: AsyncClient,
     salesperson_headers: dict[str, str],
@@ -88,6 +140,7 @@ async def test_proxy_serves_asset_from_any_search_dir(
     """Files written under an older storage location must still be served —
     the proxy searches every known managed-assets directory."""
     from webstudio_backend.api.routers import product_images as module
+    from webstudio_backend.services import web_image_scraper
 
     primary = tmp_path / "data-root" / "assets"
     legacy = tmp_path / "repo" / "assets"
@@ -95,7 +148,10 @@ async def test_proxy_serves_asset_from_any_search_dir(
     (legacy / "product-images" / "legacy-image.png").write_bytes(_PNG_BYTES)
     primary.mkdir(parents=True)
 
-    monkeypatch.setattr(module, "managed_asset_search_dirs", lambda: [primary, legacy])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [primary, legacy])
+    monkeypatch.setattr(
+        module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
+    )
 
     response = await api_client.get(
         "/api/v1/product-images/proxy",
@@ -119,6 +175,7 @@ async def test_proxy_missing_managed_image_self_heals(
     """A dead `/assets/product-images/{model_id}.*` link clears the stored URL
     and schedules background re-discovery, so the image repairs itself."""
     from webstudio_backend.api.routers import product_images as module
+    from webstudio_backend.services import web_image_scraper
 
     repo = ProductModelRepository(db_session)
     model = await repo.create(
@@ -138,7 +195,10 @@ async def test_proxy_missing_managed_image_self_heals(
 
     empty_dir = tmp_path / "assets"
     empty_dir.mkdir(parents=True)
-    monkeypatch.setattr(module, "managed_asset_search_dirs", lambda: [empty_dir])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [empty_dir])
+    monkeypatch.setattr(
+        module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
+    )
 
     scheduled: list[str] = []
     monkeypatch.setattr(
@@ -175,6 +235,7 @@ async def test_proxy_junk_pixel_image_is_deleted_and_healed(
     from PIL import Image
 
     from webstudio_backend.api.routers import product_images as module
+    from webstudio_backend.services import web_image_scraper
 
     repo = ProductModelRepository(db_session)
     model = await repo.create(
@@ -199,7 +260,10 @@ async def test_proxy_junk_pixel_image_is_deleted_and_healed(
     Image.new("RGB", (8, 8)).save(buffer, format="JPEG")
     junk_file.write_bytes(buffer.getvalue())
 
-    monkeypatch.setattr(module, "managed_asset_search_dirs", lambda: [assets_dir])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets_dir])
+    monkeypatch.setattr(
+        module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
+    )
     scheduled: list[str] = []
     monkeypatch.setattr(
         module,
