@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile, status
@@ -37,6 +38,25 @@ from webstudio_backend.services.web_image_scraper import (
 router = APIRouter(prefix="/api/v1/product-images", tags=["product-images"])
 
 _MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+# Windows Python installs often omit webp/avif from the system MIME map.
+_MANAGED_IMAGE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+}
+
+
+def _managed_image_content_type(filename: str) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix in _MANAGED_IMAGE_CONTENT_TYPES:
+        return _MANAGED_IMAGE_CONTENT_TYPES[suffix]
+    guessed = mimetypes.guess_type(filename)[0]
+    return guessed or "application/octet-stream"
 
 
 def _find_managed_asset_file(relative: str):
@@ -113,7 +133,7 @@ async def _serve_managed_asset(url: str, db_session: AsyncSession) -> Response:
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    content_type = _managed_image_content_type(file_path.name)
     if not content_type.startswith("image/"):
         raise AppError(
             "NOT_FOUND",

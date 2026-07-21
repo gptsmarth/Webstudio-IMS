@@ -1,13 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Globe, X } from 'lucide-react';
-import { confirmCatalogueRemoval } from '../../../lib/catalogue';
+import { confirmCatalogueRemoval, extractCatalogueModelNumber } from '../../../lib/catalogue';
 import type { ProductModel } from '../../../services/api/ProductModelService';
 import type { StorageType, StorageUnit } from '../../../services/api/InventoryService';
 import { formatInventoryPrice, parsePriceInput } from '../../../lib/inventoryPrice';
 import { fetchProductSpecFromInternet } from '../../../lib/productSpecLookup';
-import { extractCatalogueModelNumber } from '../../../lib/catalogue';
 import { composeModelNotes } from '../../../lib/modelNotes';
 import { isAccessoryModel } from '../../../lib/productCategory';
+import { ProductSpecService } from '../../../services/api/ProductSpecService';
+
+/** Accept pasted Windows paths and keep the canonical /assets/... form used by the API. */
+function normalizeProductImageInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const windowsMatch = trimmed.match(/[\\/]assets[\\/](product-images[\\/][^\\/]+)$/i);
+  if (windowsMatch) {
+    return `/assets/${windowsMatch[1].replace(/\\/g, '/')}`;
+  }
+  return trimmed;
+}
 
 interface InventoryModelEditDialogProps {
   open: boolean;
@@ -58,6 +69,7 @@ export function InventoryModelEditDialog({
   const [purchasePrice, setPurchasePrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [refetching, setRefetching] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,6 +90,34 @@ export function InventoryModelEditDialog({
     setSellingPrice(model.selling_price != null ? String(model.selling_price) : '');
     setError(null);
   }, [open, model]);
+
+  const handlePreviewImage = async () => {
+    const url = normalizeProductImageInput(productImageUrl);
+    if (!url) return;
+    if (url !== productImageUrl) {
+      setProductImageUrl(url);
+    }
+    setPreviewing(true);
+    setError(null);
+    try {
+      if (url.startsWith('/assets/') || url.startsWith('https://')) {
+        const blob = await ProductSpecService.fetchImageBlob(url);
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        return;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      const msg = err as { message?: string };
+      setError(
+        msg.message ??
+          'Could not load image preview. Keep /assets/product-images/... (not a Windows D:\\ path).',
+      );
+    } finally {
+      setPreviewing(false);
+    }
+  };
 
   if (!open || !model) return null;
 
@@ -126,7 +166,7 @@ export function InventoryModelEditDialog({
         storage_type: storageType,
         display: display.trim() || null,
         color_options: colorOptions.trim() || null,
-        product_image_url: productImageUrl.trim() || null,
+        product_image_url: normalizeProductImageInput(productImageUrl) || null,
         notes: notes.trim() || null,
         purchase_price: parsedPurchase,
         selling_price: parsedSelling,
@@ -343,20 +383,27 @@ export function InventoryModelEditDialog({
                   style={{ flex: 1 }}
                   value={productImageUrl}
                   onChange={(e) => setProductImageUrl(e.target.value)}
-                  placeholder="https://..."
+                  onBlur={() =>
+                    setProductImageUrl((current) => normalizeProductImageInput(current))
+                  }
+                  placeholder="/assets/product-images/... or https://..."
                 />
                 {productImageUrl && (
-                  <a
-                    href={productImageUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     className="btn btn-ghost btn-sm"
                     style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}
+                    disabled={previewing || loading}
+                    onClick={() => void handlePreviewImage()}
                   >
-                    Preview
-                  </a>
+                    {previewing ? 'Opening…' : 'Preview'}
+                  </button>
                 )}
               </div>
+              <span className="inv-dialog__hint">
+                Server-managed photos use /assets/product-images/… — do not paste a Windows file
+                path.
+              </span>
             </label>
             <label className="inv-filters__field">
               <span className="inv-filters__label">Purchase price (INR)</span>

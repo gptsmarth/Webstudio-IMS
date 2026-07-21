@@ -4,7 +4,6 @@ import { STORAGE_TYPES, STORAGE_UNITS, extractCatalogueModelNumber } from '../..
 import { composeModelNotes } from '../../lib/modelNotes';
 import { parseApiError } from '../../lib/apiError';
 import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload';
-import { resolvePublicAsset } from '../../utils/resolvePublicAsset';
 import {
   fetchProductSpecFromInternet,
   findModelNumberMatches,
@@ -342,36 +341,32 @@ export function AddLaptopWizard({
       setProductImagePreview(null);
       return;
     }
-    if (productImageUrl.startsWith('/assets/')) {
-      setProductImagePreview(resolvePublicAsset(productImageUrl));
-      return;
-    }
-    if (!productImageUrl.startsWith('https://')) {
-      setProductImagePreview(null);
-      return;
-    }
+    if (productImageUrl.startsWith('/assets/') || productImageUrl.startsWith('https://')) {
+      let cancelled = false;
+      let objectUrl: string | null = null;
 
-    let cancelled = false;
-    let objectUrl: string | null = null;
+      void ProductSpecService.fetchImageBlob(productImageUrl)
+        .then((blob) => {
+          if (cancelled) return;
+          objectUrl = URL.createObjectURL(blob);
+          setProductImagePreview(objectUrl);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setProductImagePreview(null);
+          }
+        });
 
-    void ProductSpecService.fetchImageBlob(productImageUrl)
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setProductImagePreview(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setProductImagePreview(productImageUrl);
+      return () => {
+        cancelled = true;
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
         }
-      });
+      };
+    }
 
-    return () => {
-      cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
+    setProductImagePreview(null);
+    return;
   }, [productImageUrl]);
 
   const continueWithExistingModel = async (existing: ProductModel) => {

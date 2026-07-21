@@ -51,6 +51,34 @@ async def test_product_image_proxy_requires_auth(
 
 
 @pytest.mark.asyncio
+async def test_proxy_serves_webp_with_explicit_content_type(
+    api_client: AsyncClient,
+    salesperson_headers: dict[str, str],
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows MIME maps often omit webp; the proxy must still return image/webp."""
+    from webstudio_backend.api.routers import product_images as module
+
+    assets = tmp_path / "assets"
+    (assets / "product-images").mkdir(parents=True)
+    webp_path = assets / "product-images" / "sample.webp"
+    # Minimal RIFF/WEBP header is enough for content-type routing tests.
+    webp_bytes = b"RIFF\x00\x00\x00\x00WEBP" + (_PNG_BYTES[:64])
+    webp_path.write_bytes(webp_bytes)
+    monkeypatch.setattr(module, "managed_asset_search_dirs", lambda: [assets])
+
+    response = await api_client.get(
+        "/api/v1/product-images/proxy",
+        params={"url": "/assets/product-images/sample.webp"},
+        headers=salesperson_headers,
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
+    assert response.content == webp_bytes
+
+
+@pytest.mark.asyncio
 async def test_proxy_serves_asset_from_any_search_dir(
     api_client: AsyncClient,
     salesperson_headers: dict[str, str],
