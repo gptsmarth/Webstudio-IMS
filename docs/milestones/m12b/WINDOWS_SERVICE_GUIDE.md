@@ -102,6 +102,11 @@ JWT_SECRET=<32+ bytes>
 DATABASE_URL=postgresql+asyncpg://...
 ```
 
+**Product images:** keep `WEBSTUDIO_DATA_ROOT` unquoted and equal to the install root.
+Files are stored at `{WEBSTUDIO_DATA_ROOT}\assets\product-images\`. Database URLs must stay
+`/assets/product-images/{uuid}.ext` (never a Windows path). Desktop and mobile both load
+images through `GET /api/v1/product-images/proxy`.
+
 Copy secrets from `config/env/.env.example` into `{InstallRoot}\config\env\.env` — Pydantic Settings loads this file at runtime.
 
 ---

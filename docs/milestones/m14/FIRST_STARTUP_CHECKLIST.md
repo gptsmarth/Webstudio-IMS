@@ -107,7 +107,10 @@ Verify persistence table (after ~1 min uptime):
 ## Section 8 — Optional pre-wizard configuration
 
 - [ ] AI keys in `.env` if using enrichment at go-live (`GEMINI_API_KEY`, etc.)
-- [ ] `WEBSTUDIO_DATA_ROOT` matches install root
+- [ ] `WEBSTUDIO_DATA_ROOT` matches install root (no surrounding quotes)
+- [ ] `{WEBSTUDIO_DATA_ROOT}\assets\product-images` exists and is writable by the service account
+- [ ] Sample product image loads: authenticated
+      `GET /api/v1/product-images/proxy?url=/assets/product-images/{model-id}.jpg` → HTTP 200
 - [ ] Firewall rule: TCP 8000 from office subnet
 
 ---
