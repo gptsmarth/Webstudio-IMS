@@ -169,3 +169,9 @@ class PurchaseBackfillResponse(BaseModel):
     new: int
     from_date: date
     to_date: date | None = None
+
+
+class PurchaseRefreshResponse(BaseModel):
+    voucher_id: int
+    status: str
+    refreshed: bool = True

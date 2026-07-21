@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,18 +55,13 @@ from webstudio_backend.integrations.tally.purchase_normalization import (
     models_partial_match,
     normalize_model_number,
 )
+from webstudio_backend.integrations.tally.quantity import parse_tally_quantity
 from webstudio_backend.services.inventory_service import InventoryService
 from webstudio_backend.services.product_image_jobs import schedule_product_image_resolve
 
 
 def _parse_quantity(raw: str | None) -> int:
-    if not raw:
-        return 0
-    try:
-        value = abs(Decimal(str(raw).replace(",", "")))
-    except (InvalidOperation, ValueError):
-        return 0
-    return int(value.to_integral_value())
+    return parse_tally_quantity(raw, default=0)
 
 
 def _decode_serials(raw: str | None) -> list[str]:
@@ -170,6 +164,9 @@ class PurchaseImportService:
             quantity = sum(_parse_quantity(line.quantity) for line in ordered)
             if quantity == 0:
                 quantity = len(serials)
+            # Pad empty slots so the UI can collect one serial per billed unit.
+            while len(serials) < quantity:
+                serials.append("")
             cells = await self._build_serial_cells(serials)
             line_total = next(
                 (line.line_total for line in ordered if line.line_total is not None), None
@@ -211,11 +208,15 @@ class PurchaseImportService:
     async def _build_serial_cells(self, serials: list[str]) -> list[PurchaseSerialCell]:
         cells: list[PurchaseSerialCell] = []
         for serial in serials:
-            matches = await self._inventory_repo.find_all_by_serial_number(serial)
+            trimmed = serial.strip()
+            if not trimmed:
+                cells.append(PurchaseSerialCell(serial_number="", is_duplicate=False))
+                continue
+            matches = await self._inventory_repo.find_all_by_serial_number(trimmed)
             existing = matches[0] if matches else None
             cells.append(
                 PurchaseSerialCell(
-                    serial_number=serial,
+                    serial_number=trimmed,
                     is_duplicate=bool(matches),
                     existing_status=existing.status.value if existing else None,
                 )

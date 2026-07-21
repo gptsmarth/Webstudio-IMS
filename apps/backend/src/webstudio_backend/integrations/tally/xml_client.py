@@ -342,14 +342,20 @@ class TallyXmlClient:
         from_date: date,
         to_date: date,
     ) -> dict[str, str]:
-        """Normal sync path — Day Book first, unchanged from pre-backfill behaviour."""
+        """Normal sync — Day Book for sales, plus Voucher Register for purchases.
+
+        Day Book often omits Purchase vouchers even when the export succeeds, so
+        we always supplement with a read-only Voucher Register pull and merge by
+        GUID on the sync side (register wins when it carries richer line detail).
+        """
+        results: dict[str, str] = {}
         day_book_xml = await self.export_day_book(
             company_name=company_name,
             from_date=from_date,
             to_date=to_date,
         )
         if not _xml_response_has_line_error(day_book_xml):
-            return {"day_book": day_book_xml}
+            results["day_book"] = day_book_xml
 
         register_xml = await self._try_export(
             self._voucher_register_export_request(
@@ -359,7 +365,10 @@ class TallyXmlClient:
             )
         )
         if register_xml is not None:
-            return {"voucher_register": register_xml}
+            results["voucher_register"] = register_xml
+
+        if results:
+            return results
 
         return await self._export_per_type(
             company_name=company_name,

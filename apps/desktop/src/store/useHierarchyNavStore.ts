@@ -24,6 +24,9 @@ export interface HierarchyNavState {
   productCategoryFilter: ProductCategoryFilter;
   showZeroStock: boolean;
   showSellingPrice: boolean;
+  scrollTops: Record<string, number>;
+  setScrollTop: (key: string, value: number) => void;
+  getScrollTop: (key: string) => number | undefined;
   openBrand: (brandId: number, brandName: string) => void;
   openModel: (modelId: string, modelLabel: string) => void;
   goToBrands: () => void;
@@ -47,13 +50,19 @@ const INITIAL = {
   productCategoryFilter: 'all' as ProductCategoryFilter,
   showZeroStock: false,
   showSellingPrice: readShowSellingPrice(),
+  scrollTops: {},
 };
 
 function createHierarchyNavStore(defaultShowZeroStock = false) {
   const initial = { ...INITIAL, showZeroStock: defaultShowZeroStock };
 
-  return create<HierarchyNavState>((set) => ({
+  return create<HierarchyNavState>((set, get) => ({
     ...initial,
+    setScrollTop: (key, value) =>
+      set((state) => ({
+        scrollTops: { ...state.scrollTops, [key]: value },
+      })),
+    getScrollTop: (key) => get().scrollTops[key],
     openBrand: (brandId, brandName) =>
       set((state) => ({
         level: 'models',

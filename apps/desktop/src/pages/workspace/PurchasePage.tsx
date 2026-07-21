@@ -5,6 +5,7 @@ import { PurchaseImportDialog } from '../../components/purchase/PurchaseImportDi
 import { parseApiError } from '../../lib/apiError';
 import { P } from '../../services/PermissionService';
 import { useAuthStore } from '../../store';
+import { TallyService } from '../../services/api/TallyService';
 import {
   PurchaseService,
   type PurchaseModelGroup,
@@ -47,6 +48,7 @@ export function PurchasePage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const canImport = session?.permissions?.includes(P.purchase.import) ?? false;
   const canView = session?.permissions?.includes(P.purchase.view) ?? false;
+  const canSyncTally = session?.permissions?.includes(P.tally.runSync) ?? false;
   const [items, setItems] = useState<PurchaseQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +61,8 @@ export function PurchasePage(): JSX.Element {
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
   const [backfilling, setBackfilling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [refreshingVoucher, setRefreshingVoucher] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const loadQueue = useCallback(async () => {
@@ -114,6 +118,25 @@ export function PurchasePage(): JSX.Element {
     }
   }, [backfillFrom, loadQueue]);
 
+  const runSyncNow = useCallback(async () => {
+    setSyncing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await TallyService.triggerSync();
+      setNotice(
+        'Tally sync started. Fresh purchase invoices appear here in a few seconds — use Refresh if needed.',
+      );
+      window.setTimeout(() => {
+        void loadQueue();
+      }, 4000);
+    } catch (err) {
+      setError(parseApiError(err, 'Failed to start Tally sync.'));
+    } finally {
+      setSyncing(false);
+    }
+  }, [loadQueue]);
+
   const openDetail = useCallback(async (voucherId: number) => {
     setDetailLoading(true);
     setError(null);
@@ -126,6 +149,23 @@ export function PurchasePage(): JSX.Element {
       setDetailLoading(false);
     }
   }, []);
+
+  const refreshFromTally = useCallback(async () => {
+    if (!detail) return;
+    setRefreshingVoucher(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await PurchaseService.refreshVoucher(detail.id);
+      setNotice(`Purchase ${detail.voucher_number} was refreshed from Tally.`);
+      await openDetail(detail.id);
+      await loadQueue();
+    } catch (err) {
+      setError(parseApiError(err, 'Failed to refresh this purchase from Tally.'));
+    } finally {
+      setRefreshingVoucher(false);
+    }
+  }, [detail, loadQueue, openDetail]);
 
   const refreshDetail = useCallback(async () => {
     if (detail) await openDetail(detail.id);
@@ -216,6 +256,22 @@ export function PurchasePage(): JSX.Element {
               <Ban size={14} aria-hidden /> Ignore invoice
             </button>
           )}
+          {canView && detail.status !== 'imported' && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void refreshFromTally()}
+              disabled={refreshingVoucher}
+              title="Re-read this invoice from Tally to fix quantity or serials before import"
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden
+                className={refreshingVoucher ? 'stg-spin' : undefined}
+              />{' '}
+              {refreshingVoucher ? 'Refreshing…' : 'Refresh from Tally'}
+            </button>
+          )}
         </header>
 
         <div className="card">
@@ -240,6 +296,12 @@ export function PurchasePage(): JSX.Element {
           <div className="alert alert-danger">
             <AlertCircle size={14} aria-hidden />
             <span>{error}</span>
+          </div>
+        )}
+
+        {notice && (
+          <div className="alert alert-success">
+            <span>{notice}</span>
           </div>
         )}
 
@@ -340,6 +402,18 @@ export function PurchasePage(): JSX.Element {
             onClick={() => setBackfillOpen((open) => !open)}
           >
             <CalendarClock size={14} aria-hidden /> Fetch older purchases
+          </button>
+        )}
+        {canSyncTally && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => void runSyncNow()}
+            disabled={syncing}
+            title="Pull the latest sales and purchase invoices from Tally"
+          >
+            <RefreshCw size={14} aria-hidden className={syncing ? 'stg-spin' : undefined} />{' '}
+            {syncing ? 'Syncing…' : 'Sync now'}
           </button>
         )}
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadQueue()}>

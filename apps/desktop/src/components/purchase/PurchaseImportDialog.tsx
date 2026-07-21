@@ -85,7 +85,10 @@ export function PurchaseImportDialog({
     setAccMatch(null);
     setSelectedModelId('');
     setBrandModels([]);
-    setSerials(group.serials.map((cell) => cell.serial_number));
+    const fromTally = group.serials.map((cell) => cell.serial_number);
+    const qty = group.quantity > 0 ? group.quantity : fromTally.length;
+    while (fromTally.length < qty) fromTally.push('');
+    setSerials(fromTally);
     setPurchasePrice(defaultUnitPrice);
     setStatus('available');
     setError(null);
@@ -104,7 +107,7 @@ export function PurchaseImportDialog({
         setError(parseApiError(err, 'Failed to load brands and locations.'));
       }
     })();
-  }, [open, group.serials, defaultUnitPrice]);
+  }, [open, group.serials, group.quantity, defaultUnitPrice]);
 
   const selectedModel = brandModels.find((m) => m.id === selectedModelId) ?? null;
 

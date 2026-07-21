@@ -82,11 +82,13 @@ class CompactBrandGrid extends StatelessWidget {
     required this.itemCount,
     required this.itemBuilder,
     this.padding,
+    this.scrollController,
   });
 
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
   final EdgeInsetsGeometry? padding;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +96,8 @@ class CompactBrandGrid extends StatelessWidget {
       builder: (context, constraints) {
         final crossAxisCount = AppBreakpoints.gridColumns(context, phone: 3, tablet: 4, desktop: 5);
         return GridView.builder(
+          key: const PageStorageKey<String>('inventory-brands'),
+          controller: scrollController,
           padding: padding ?? const EdgeInsets.fromLTRB(12, 8, 12, 24),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,

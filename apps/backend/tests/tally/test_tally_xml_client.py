@@ -148,13 +148,15 @@ async def test_historical_falls_through_to_collection(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_incremental_day_book_with_vouchers_needs_no_fallback(monkeypatch) -> None:
-    """Normal sync must keep Day Book first — never disturbed by historical path."""
+async def test_incremental_day_book_also_fetches_voucher_register(monkeypatch) -> None:
+    """Incremental sync supplements Day Book with Voucher Register for purchases."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
     async def fake_post_xml(payload: str) -> str:
         sent.append(payload)
+        if "Voucher Register" in payload:
+            return REGISTER_WITH_VOUCHER
         return DAY_BOOK_WITH_VOUCHER
 
     monkeypatch.setattr(client, "post_xml", fake_post_xml)
@@ -164,20 +166,22 @@ async def test_incremental_day_book_with_vouchers_needs_no_fallback(monkeypatch)
         to_date=date(2026, 7, 18),
         historical=False,
     )
-    assert list(exports.keys()) == ["day_book"]
-    assert len(sent) == 1
-    assert "<ID>Day Book</ID>" in sent[0]
-    assert "Voucher Register" not in sent[0]
+    assert set(exports.keys()) == {"day_book", "voucher_register"}
+    assert len(sent) == 2
+    assert any("<ID>Day Book</ID>" in payload for payload in sent)
+    assert any("Voucher Register" in payload for payload in sent)
 
 
 @pytest.mark.asyncio
-async def test_same_day_export_skips_register_fallback(monkeypatch) -> None:
-    """Regular incremental sync (today-only window) must keep single-request behavior."""
+async def test_same_day_export_includes_register_when_day_book_succeeds(monkeypatch) -> None:
+    """Even a today-only window fetches Voucher Register so purchases appear."""
     client = TallyXmlClient("tally-laptop", "9000")
     sent: list[str] = []
 
     async def fake_post_xml(payload: str) -> str:
         sent.append(payload)
+        if "Voucher Register" in payload:
+            return REGISTER_WITH_VOUCHER
         return EMPTY_DAY_BOOK
 
     monkeypatch.setattr(client, "post_xml", fake_post_xml)
@@ -188,8 +192,8 @@ async def test_same_day_export_skips_register_fallback(monkeypatch) -> None:
         to_date=today,
         historical=False,
     )
-    assert list(exports.keys()) == ["day_book"]
-    assert len(sent) == 1
+    assert set(exports.keys()) == {"day_book", "voucher_register"}
+    assert len(sent) == 2
 
 
 DAY_BOOK_LINEERROR = (

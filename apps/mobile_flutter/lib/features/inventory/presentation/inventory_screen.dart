@@ -641,117 +641,120 @@ class _InventoryBody extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final workspaceController = ref.read(workspaceProvider.notifier);
+
     // Keep brands/models lists mounted (Offstage) when drilling into serials so
     // scroll position is preserved on back — same pattern as desktop.
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Offstage(
-          offstage: workspace.navLevel != InventoryNavLevel.brands,
-          child: RefreshIndicator(
-            onRefresh: () => ref.read(workspaceProvider.notifier).load(),
-            child: stockOnly
-                ? StockBrandGrid(
-                    brands: workspace.visibleBrands,
-                    onSelect: (brand) =>
-                        ref.read(workspaceProvider.notifier).selectBrand(brand.brandId),
-                  )
-                : StockBrandGrid(
-                    brands: workspace.visibleBrands,
-                    showSoldUnits: true,
-                    onSelect: (brand) =>
-                        ref.read(workspaceProvider.notifier).selectBrand(brand.brandId),
-                  ),
+        Positioned.fill(
+          child: Offstage(
+            offstage: workspace.navLevel != InventoryNavLevel.brands,
+            child: RefreshIndicator(
+              onRefresh: workspaceController.load,
+              child: StockBrandGrid(
+                brands: workspace.visibleBrands,
+                scrollController: workspaceController.brandsScrollController,
+                showSoldUnits: !stockOnly,
+                onSelect: (brand) => workspaceController.selectBrand(brand.brandId),
+              ),
+            ),
           ),
         ),
-        Offstage(
-          offstage: workspace.navLevel != InventoryNavLevel.models,
-          child: RefreshIndicator(
-            onRefresh: () => ref.read(workspaceProvider.notifier).load(),
-            child: workspace.visibleModels.isEmpty
-                ? ListView(
-                    key: PageStorageKey<String>(
-                      'inventory-models-empty-${workspace.selectedBrandId ?? 0}',
-                    ),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
-                    children: [
-                      ..._modelsHeaderWidgets(context),
-                      SizedBox(height: stockOnly ? 40 : 80),
-                      EmptyStateView(
-                        icon: workspace.productCategoryFilter == ProductCategoryFilter.accessory
-                            ? Icons.mouse_outlined
-                            : stockOnly
-                                ? Icons.laptop_outlined
-                                : Icons.inventory_2_outlined,
-                        title: stockOnly ? 'No in-stock models' : 'No models for this brand',
-                        message: _modelsEmptyMessage(workspace, stockOnly),
+        Positioned.fill(
+          child: Offstage(
+            offstage: workspace.navLevel != InventoryNavLevel.models,
+            child: RefreshIndicator(
+              onRefresh: workspaceController.load,
+              child: workspace.visibleModels.isEmpty
+                  ? ListView(
+                      key: PageStorageKey<String>(
+                        'inventory-models-empty-${workspace.selectedBrandId ?? 0}',
                       ),
-                    ],
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final columns =
-                          AppBreakpoints.gridColumns(context, phone: 2, tablet: 3, desktop: 4);
-                      const horizontalPad = AppSpacing.lg * 2;
-                      final gap = 14.0 * (columns - 1);
-                      final cardWidth = (constraints.maxWidth - horizontalPad - gap) / columns;
-                      return ListView(
-                        key: PageStorageKey<String>(
-                          'inventory-models-${workspace.selectedBrandId ?? 0}',
+                      controller: workspaceController.modelsScrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
+                      children: [
+                        ..._modelsHeaderWidgets(context),
+                        SizedBox(height: stockOnly ? 40 : 80),
+                        EmptyStateView(
+                          icon: workspace.productCategoryFilter == ProductCategoryFilter.accessory
+                              ? Icons.mouse_outlined
+                              : stockOnly
+                                  ? Icons.laptop_outlined
+                                  : Icons.inventory_2_outlined,
+                          title: stockOnly ? 'No in-stock models' : 'No models for this brand',
+                          message: _modelsEmptyMessage(workspace, stockOnly),
                         ),
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
-                        children: [
-                          ..._modelsHeaderWidgets(context),
-                          Padding(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            child: Wrap(
-                              spacing: 14,
-                              runSpacing: 14,
-                              children: [
-                                for (final row in workspace.visibleModels)
-                                  SizedBox(
-                                    width: cardWidth,
-                                    child: StockModelCard(
-                                      row: row,
-                                      brandName: workspace.selectedBrand?.name,
-                                      showPrice: showPrices,
-                                      showAdminPrices: showAdminPrices,
-                                      onTap: () => ref
-                                          .read(workspaceProvider.notifier)
-                                          .selectModel(row.model.id),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                      ],
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns =
+                            AppBreakpoints.gridColumns(context, phone: 2, tablet: 3, desktop: 4);
+                        const horizontalPad = AppSpacing.lg * 2;
+                        final gap = 14.0 * (columns - 1);
+                        final cardWidth = (constraints.maxWidth - horizontalPad - gap) / columns;
+                        return ListView(
+                          key: PageStorageKey<String>(
+                            'inventory-models-${workspace.selectedBrandId ?? 0}',
                           ),
-                        ],
-                      );
-                    },
-                  ),
+                          controller: workspaceController.modelsScrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
+                          children: [
+                            ..._modelsHeaderWidgets(context),
+                            Padding(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: Wrap(
+                                spacing: 14,
+                                runSpacing: 14,
+                                children: [
+                                  for (final row in workspace.visibleModels)
+                                    SizedBox(
+                                      width: cardWidth,
+                                      child: StockModelCard(
+                                        row: row,
+                                        brandName: workspace.selectedBrand?.name,
+                                        showPrice: showPrices,
+                                        showAdminPrices: showAdminPrices,
+                                        onTap: () => workspaceController.selectModel(row.model.id),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
           ),
         ),
         if (workspace.navLevel == InventoryNavLevel.serials)
-          () {
-            final model = workspace.selectedModel;
-            if (model == null) {
-              return const Center(child: Text('Model not found'));
-            }
-            return StockModelDetailView(
-              model: model,
-              brandName: workspace.selectedBrand?.name ?? '',
-              brandLogoFilename: workspace.selectedBrand?.logoFilename,
-              units: showAdminPrices
-                  ? workspace.serialUnitsForSelectedModel
-                  : workspace.availableUnitsForSelectedModel,
-              locations: workspace.locations,
-              actionInProgress: workspace.actionInProgress,
-              brands: workspace.brands,
-              workspaceProvider: workspaceProvider,
-              inventoryAdminMode: showAdminPrices,
-              onSelectUnit: onSelectItem,
-            );
-          }(),
+          Positioned.fill(
+            child: () {
+              final model = workspace.selectedModel;
+              if (model == null) {
+                return const Center(child: Text('Model not found'));
+              }
+              return StockModelDetailView(
+                model: model,
+                brandName: workspace.selectedBrand?.name ?? '',
+                brandLogoFilename: workspace.selectedBrand?.logoFilename,
+                units: showAdminPrices
+                    ? workspace.serialUnitsForSelectedModel
+                    : workspace.availableUnitsForSelectedModel,
+                locations: workspace.locations,
+                actionInProgress: workspace.actionInProgress,
+                brands: workspace.brands,
+                workspaceProvider: workspaceProvider,
+                inventoryAdminMode: showAdminPrices,
+                onSelectUnit: onSelectItem,
+              );
+            }(),
+          ),
       ],
     );
   }

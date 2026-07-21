@@ -142,6 +142,12 @@ export interface PurchaseBackfillResponse {
   to_date: string | null;
 }
 
+export interface PurchaseRefreshResponse {
+  voucher_id: number;
+  status: string;
+  refreshed: boolean;
+}
+
 export class PurchaseService {
   static async listQueue(status?: string): Promise<PurchaseQueueItem[]> {
     LoggingService.debug('API', 'Fetching purchase queue');
@@ -204,6 +210,16 @@ export class PurchaseService {
       },
       // Backfills scan a whole date range against Tally — allow up to 5 minutes.
       { timeoutMs: 300000 },
+    );
+  }
+
+  static async refreshVoucher(voucherId: number): Promise<PurchaseRefreshResponse> {
+    LoggingService.info('API', 'Refreshing purchase voucher from Tally', { voucher_id: voucherId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<PurchaseRefreshResponse>(
+      `/api/v1/purchase/queue/${voucherId}/refresh`,
+      {},
+      { timeoutMs: 120000 },
     );
   }
 }

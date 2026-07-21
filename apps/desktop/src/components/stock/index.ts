@@ -1,3 +1,4 @@
+export { HierarchyLayer } from './HierarchyLayer';
 export { StockBrandGrid } from './StockBrandGrid';
 export { StockModelCardGrid } from './StockModelCardGrid';
 export { StockModelCard } from './StockModelCard';

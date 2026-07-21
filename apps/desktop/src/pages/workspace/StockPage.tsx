@@ -2,11 +2,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import {
   HierarchyBreadcrumb,
+  HierarchyLayer,
   HierarchyToolbar,
   StockBrandGrid,
   StockModelCardGrid,
   StockModelDetail,
 } from '../../components/stock';
+import { useHierarchyScrollRef } from '../../hooks/useHierarchyScrollRef';
 import { EditSellingPriceDialog } from '../../components/inventory/EditSellingPriceDialog';
 import { InventoryModelEditDialog } from '../../components/inventory/admin/InventoryModelEditDialog';
 import {
@@ -28,6 +30,20 @@ export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const hierarchy = useInventoryHierarchyData(session?.permissions ?? []);
   const nav = useStockNavStore();
+  const getScrollTop = useStockNavStore((state) => state.getScrollTop);
+  const setScrollTop = useStockNavStore((state) => state.setScrollTop);
+  const brandsScrollRef = useHierarchyScrollRef(
+    'brands',
+    nav.level === 'brands',
+    getScrollTop,
+    setScrollTop,
+  );
+  const modelsScrollRef = useHierarchyScrollRef(
+    `models-${nav.brandId ?? 0}`,
+    nav.level === 'models',
+    getScrollTop,
+    setScrollTop,
+  );
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -238,43 +254,47 @@ export function StockPage(): JSX.Element {
         </div>
       )}
 
-      {nav.level === 'brands' && (
-        <StockBrandGrid
-          summaries={hierarchy.brandSummaries}
-          loading={hierarchy.loading}
-          onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
-        />
-      )}
+      <div className="stock-page__stack">
+        {(nav.level === 'brands' || nav.brandId != null) && (
+          <HierarchyLayer active={nav.level === 'brands'}>
+            <StockBrandGrid
+              ref={brandsScrollRef}
+              summaries={hierarchy.brandSummaries}
+              loading={hierarchy.loading}
+              onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
+            />
+          </HierarchyLayer>
+        )}
 
-      {nav.brandId != null && (
-        <div
-          className="stock-page__models-layer"
-          hidden={nav.level !== 'models'}
-          aria-hidden={nav.level !== 'models'}
-        >
-          <StockModelCardGrid
-            rows={modelRows}
-            loading={hierarchy.loading}
-            showPrice={nav.showSellingPrice}
-            onSelect={(modelId, label) => nav.openModel(modelId, label)}
-          />
-        </div>
-      )}
+        {nav.brandId != null && (
+          <HierarchyLayer active={nav.level === 'models'}>
+            <StockModelCardGrid
+              ref={modelsScrollRef}
+              rows={modelRows}
+              loading={hierarchy.loading}
+              showPrice={nav.showSellingPrice}
+              onSelect={(modelId, label) => nav.openModel(modelId, label)}
+            />
+          </HierarchyLayer>
+        )}
 
-      {nav.level === 'serials' && selectedModel && (
-        <StockModelDetail
-          model={selectedModel}
-          units={modelUnits}
-          locations={hierarchy.locations}
-          permissions={session.permissions}
-          loading={hierarchy.loading}
-          onTransfer={handleTransfer}
-          onDeleteSerial={handleDeleteSerial}
-          actionLoading={actionLoading}
-          onEditModel={canEditFromStock ? () => setEditModelId(selectedModel.id) : undefined}
-          editModelLabel="Edit model & price"
-        />
-      )}
+        {nav.level === 'serials' && selectedModel && (
+          <HierarchyLayer active>
+            <StockModelDetail
+              model={selectedModel}
+              units={modelUnits}
+              locations={hierarchy.locations}
+              permissions={session.permissions}
+              loading={hierarchy.loading}
+              onTransfer={handleTransfer}
+              onDeleteSerial={handleDeleteSerial}
+              actionLoading={actionLoading}
+              onEditModel={canEditFromStock ? () => setEditModelId(selectedModel.id) : undefined}
+              editModelLabel="Edit model & price"
+            />
+          </HierarchyLayer>
+        )}
+      </div>
 
       <EditSellingPriceDialog
         open={priceModel !== null}

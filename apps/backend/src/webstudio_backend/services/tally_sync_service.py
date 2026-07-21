@@ -13,6 +13,7 @@ from decimal import Decimal
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import (
@@ -79,11 +80,13 @@ from webstudio_backend.integrations.tally.incremental_sync import (
     tally_sync_had_meaningful_progress,
 )
 from webstudio_backend.integrations.tally.purchase_normalization import _collapse
+from webstudio_backend.integrations.tally.quantity import parse_tally_quantity
 from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucher
 from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.integrations.tally.xml_parser import (
     catalog_model_matches_invoice,
     expand_inventory_lines,
+    merge_vouchers_by_guid,
     normalize_serial,
     parse_vouchers_xml,
     resolve_inventory_line_sale_amount,
@@ -235,6 +238,7 @@ class TallySyncService:
         vouchers: list[TallyVoucher] = []
         for xml_text in exports.values():
             vouchers.extend(parse_vouchers_xml(xml_text))
+        vouchers = merge_vouchers_by_guid(vouchers)
         vouchers = _filter_vouchers_in_date_window(
             vouchers, from_date=from_date, to_date=resolved_to
         )
@@ -244,12 +248,95 @@ class TallySyncService:
         ]
         guids = [voucher.guid for voucher in purchase_vouchers]
         existing_before = await self._purchase.count_existing_guids(company_sync.id, guids)
-        await self._project_purchase_queue(vouchers, company_sync)
+        await self._project_purchase_queue(vouchers, company_sync, reopen_ignored=True)
         unique = len(set(guids))
         return {
             "fetched": len(purchase_vouchers),
             "new": max(0, unique - existing_before),
             "export_source": next(iter(exports.keys()), "none"),
+        }
+
+    async def refresh_purchase_voucher(self, voucher_id: int) -> dict[str, object]:
+        """Re-read one purchase voucher from Tally and refresh queue lines.
+
+        Safe when nothing has been imported yet, or when only some model groups
+        were imported (non-imported groups are replaced). Fully imported vouchers
+        cannot be refreshed — fix inventory manually first.
+        """
+        header = await self._purchase.get_voucher(voucher_id)
+        if header is None:
+            raise AppError("NOT_FOUND", "Purchase voucher not found.", status_code=404)
+        if header.status == TallyPurchaseStatus.IMPORTED:
+            raise AppError(
+                "ALREADY_IMPORTED",
+                "This purchase is fully imported. Remove incorrect inventory items "
+                "manually if needed — the queue cannot overwrite imported groups.",
+                status_code=409,
+            )
+        if header.voucher_date is None:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "This voucher has no date and cannot be refreshed from Tally.",
+                status_code=422,
+            )
+
+        _, _, company_name, _ = await self.get_connection_config()
+        if not await self.is_enabled():
+            raise AppError(
+                "CONFLICT",
+                "Tally integration is disabled. Enable it in System Settings.",
+                status_code=409,
+            )
+
+        connectivity = TallyConnectivityService(self._session)
+        diagnostics = await connectivity.ensure_workstation_reachable(company_name=company_name)
+        if not diagnostics.reachable:
+            raise TallyConnectionError(
+                diagnostics.user_message,
+                user_message=diagnostics.user_message,
+            )
+        client = await connectivity.build_client_for_sync(diagnostics)
+
+        voucher_date = header.voucher_date
+        exports = await client.export_monitored_voucher_types(
+            company_name=company_name,
+            from_date=voucher_date,
+            to_date=voucher_date,
+            historical=True,
+        )
+        vouchers: list[TallyVoucher] = []
+        for xml_text in exports.values():
+            vouchers.extend(parse_vouchers_xml(xml_text))
+        vouchers = merge_vouchers_by_guid(vouchers)
+        vouchers = _filter_vouchers_in_date_window(
+            vouchers, from_date=voucher_date, to_date=voucher_date
+        )
+        tally_voucher = next(
+            (voucher for voucher in vouchers if voucher.guid == header.tally_voucher_guid),
+            None,
+        )
+        if tally_voucher is None:
+            raise AppError(
+                "NOT_FOUND",
+                "This purchase was not found in Tally for its voucher date.",
+                status_code=404,
+            )
+
+        now = datetime.now(UTC)
+        if header.status == TallyPurchaseStatus.IGNORED:
+            header.status = TallyPurchaseStatus.PENDING
+
+        if not any(line.imported for line in header.lines):
+            self._refresh_purchase_voucher_from_tally(header, tally_voucher, now=now)
+        else:
+            self._refresh_non_imported_purchase_lines(header, tally_voucher, now=now)
+
+        self._purchase.recompute_status(header)
+        await self._session.flush()
+        return {
+            "voucher_id": header.id,
+            "status": header.status.value,
+            "refreshed": True,
         }
 
     async def backfill_sales(
@@ -298,6 +385,7 @@ class TallySyncService:
             all_vouchers: list[TallyVoucher] = []
             for xml_text in exports.values():
                 all_vouchers.extend(parse_vouchers_xml(xml_text))
+            all_vouchers = merge_vouchers_by_guid(all_vouchers)
             all_vouchers = _filter_vouchers_in_date_window(
                 all_vouchers, from_date=from_date, to_date=resolved_to
             )
@@ -662,6 +750,7 @@ class TallySyncService:
             )
             for _voucher_type, xml_text in exports.items():
                 all_vouchers.extend(parse_vouchers_xml(xml_text))
+            all_vouchers = merge_vouchers_by_guid(all_vouchers)
         except TallyConnectionError as exc:
             message = exc.user_message
             await self._company_sync.update_sync_state(
@@ -1497,24 +1586,7 @@ class TallySyncService:
 
     @staticmethod
     def _parse_line_quantity(raw: str | None) -> int:
-        """Leading integer quantity from a Tally qty string (e.g. '5 Nos' -> 5)."""
-        if not raw:
-            return 1
-        digits = ""
-        for char in raw.strip():
-            if char.isdigit():
-                digits += char
-            elif char in {".", ","} and digits:
-                break  # stop at decimal — whole units only
-            elif digits:
-                break
-        if not digits:
-            return 1
-        try:
-            value = int(digits)
-        except ValueError:
-            return 1
-        return value if value > 0 else 1
+        return parse_tally_quantity(raw, default=1)
 
     async def _process_shared_ean_sale(
         self,
@@ -1842,6 +1914,8 @@ class TallySyncService:
         self,
         vouchers: list[TallyVoucher],
         company_sync: TallyCompanySync,
+        *,
+        reopen_ignored: bool = False,
     ) -> None:
         """Project Purchase vouchers into the Purchase Import Queue (idempotent by GUID).
 
@@ -1857,7 +1931,9 @@ class TallySyncService:
         for voucher in purchase_vouchers:
             try:
                 async with self._session.begin_nested():
-                    await self._upsert_purchase_voucher(voucher, company_sync)
+                    await self._upsert_purchase_voucher(
+                        voucher, company_sync, reopen_ignored=reopen_ignored
+                    )
             except Exception as exc:  # noqa: BLE001 — never break sales sync
                 logger.warning(
                     "Purchase queue projection skipped voucher {}: {}", voucher.guid, exc
@@ -1867,6 +1943,8 @@ class TallySyncService:
         self,
         voucher: TallyVoucher,
         company_sync: TallyCompanySync,
+        *,
+        reopen_ignored: bool = False,
     ) -> None:
         now = datetime.now(UTC)
         existing = await self._purchase.get_voucher_by_guid(company_sync.id, voucher.guid)
@@ -1874,6 +1952,15 @@ class TallySyncService:
             existing.last_seen_at = now
             if existing.raw_xml_gzip is None and voucher.raw_xml:
                 existing.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
+            if reopen_ignored and existing.status == TallyPurchaseStatus.IGNORED:
+                existing.status = TallyPurchaseStatus.PENDING
+                self._refresh_purchase_voucher_from_tally(existing, voucher, now=now)
+            elif existing.status == TallyPurchaseStatus.PENDING and not any(
+                line.imported for line in existing.lines
+            ):
+                self._refresh_purchase_voucher_from_tally(existing, voucher, now=now)
+            elif existing.status == TallyPurchaseStatus.PARTIALLY_IMPORTED:
+                self._refresh_non_imported_purchase_lines(existing, voucher, now=now)
             await self._session.flush()
             return
 
@@ -1910,11 +1997,95 @@ class TallySyncService:
             first_seen_at=now,
             last_seen_at=now,
         )
+        for line in self._purchase_lines_from_voucher(voucher):
+            header.lines.append(line)
+        await self._purchase.add_voucher(header)
+
+    def _refresh_purchase_voucher_from_tally(
+        self,
+        header: TallyPurchaseVoucher,
+        voucher: TallyVoucher,
+        *,
+        now: datetime,
+    ) -> None:
+        """Replace queue lines when a richer Tally export arrives before import."""
+        totals = voucher.totals
+        header.tally_master_id = voucher.master_id
+        header.tally_voucher_number = voucher.voucher_number
+        header.printed_invoice_number = voucher.printed_invoice_number
+        if (
+            voucher.printed_invoice_number
+            and voucher.printed_invoice_number != voucher.voucher_number
+        ):
+            header.reference_number = voucher.printed_invoice_number
+        header.voucher_type = voucher.voucher_type
+        header.voucher_date = voucher.voucher_date
+        header.supplier_name = voucher.party_name
+        header.subtotal = totals.subtotal
+        header.discount_amount = totals.discount_amount
+        header.round_off = totals.round_off
+        header.cgst_amount = totals.cgst_amount
+        header.sgst_amount = totals.sgst_amount
+        header.igst_amount = totals.igst_amount
+        header.cess_amount = totals.cess_amount
+        header.grand_total = totals.grand_total or self._purchase_decimal(voucher.amount)
+        header.narration = voucher.narration
+        header.last_seen_at = now
+        if voucher.raw_xml:
+            header.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
+        header.lines.clear()
+        for line in self._purchase_lines_from_voucher(voucher):
+            header.lines.append(line)
+
+    def _refresh_non_imported_purchase_lines(
+        self,
+        header: TallyPurchaseVoucher,
+        voucher: TallyVoucher,
+        *,
+        now: datetime,
+    ) -> None:
+        """Update header metadata and replace only model groups not yet imported."""
+        totals = voucher.totals
+        header.tally_master_id = voucher.master_id
+        header.tally_voucher_number = voucher.voucher_number
+        header.printed_invoice_number = voucher.printed_invoice_number
+        if (
+            voucher.printed_invoice_number
+            and voucher.printed_invoice_number != voucher.voucher_number
+        ):
+            header.reference_number = voucher.printed_invoice_number
+        header.voucher_type = voucher.voucher_type
+        header.voucher_date = voucher.voucher_date
+        header.supplier_name = voucher.party_name
+        header.subtotal = totals.subtotal
+        header.discount_amount = totals.discount_amount
+        header.round_off = totals.round_off
+        header.cgst_amount = totals.cgst_amount
+        header.sgst_amount = totals.sgst_amount
+        header.igst_amount = totals.igst_amount
+        header.cess_amount = totals.cess_amount
+        header.grand_total = totals.grand_total or self._purchase_decimal(voucher.amount)
+        header.narration = voucher.narration
+        header.last_seen_at = now
+        if voucher.raw_xml:
+            header.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
+
+        imported_group_keys = {line.group_key for line in header.lines if line.imported}
+        kept_lines = [line for line in header.lines if line.imported]
+        for line in self._purchase_lines_from_voucher(voucher):
+            if line.group_key not in imported_group_keys:
+                kept_lines.append(line)
+        header.lines.clear()
+        for line in kept_lines:
+            header.lines.append(line)
+
+    def _purchase_lines_from_voucher(self, voucher: TallyVoucher) -> list[TallyPurchaseLine]:
+        lines: list[TallyPurchaseLine] = []
         for idx, line in enumerate(voucher.inventory_lines):
             serials = list(line.batch_allocations)
             if not serials and line.serial_number:
                 serials = [line.serial_number]
-            header.lines.append(
+            lines.append(
                 TallyPurchaseLine(
                     line_index=idx,
                     stock_item_name=line.stock_item_name or "",
@@ -1932,7 +2103,7 @@ class TallySyncService:
                     line_total=self._purchase_decimal(line.line_total or line.amount),
                 )
             )
-        await self._purchase.add_voucher(header)
+        return lines
 
     async def _resolve_store_location(self, voucher_type: str):
         store_name = VOUCHER_TYPE_STORE_MAP.get(voucher_type)

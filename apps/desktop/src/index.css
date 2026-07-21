@@ -9166,6 +9166,50 @@
     overflow: hidden;
   }
 
+  .stock-page__stack,
+  .inv-page__stack {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+
+  .hierarchy-layer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .hierarchy-layer--inactive {
+    visibility: hidden;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hierarchy-layer--active {
+    z-index: 1;
+  }
+
+  .hierarchy-layer .stock-brand-grid,
+  .hierarchy-layer .stock-model-card-grid,
+  .hierarchy-layer .hierarchy-grid,
+  .hierarchy-layer .admin-model-table-section,
+  .hierarchy-layer .stock-detail {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .hierarchy-layer .admin-model-table-section {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
   .stock-page__header,
   .inv-page__header {
     margin-bottom: 14px;

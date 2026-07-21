@@ -13,11 +13,13 @@ class StockBrandGrid extends StatelessWidget {
     required this.brands,
     required this.onSelect,
     this.showSoldUnits = false,
+    this.scrollController,
   });
 
   final List<BrandInventorySummary> brands;
   final void Function(BrandInventorySummary brand) onSelect;
   final bool showSoldUnits;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +32,7 @@ class StockBrandGrid extends StatelessWidget {
     }
 
     return CompactBrandGrid(
+      scrollController: scrollController,
       itemCount: brands.length,
       itemBuilder: (context, index) {
         final brand = brands[index];

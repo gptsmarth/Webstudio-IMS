@@ -11,7 +11,13 @@ import { AddLaptopWizard } from '../../components/inventory/AddLaptopWizard';
 import { AddAccessoryWizard } from '../../components/inventory/AddAccessoryWizard';
 import { InventoryDetailDrawer } from '../../components/inventory/InventoryDetailDrawer';
 import { MarkSoldDialog } from '../../components/inventory/MarkSoldDialog';
-import { HierarchyBreadcrumb, HierarchyToolbar, StockBrandGrid } from '../../components/stock';
+import {
+  HierarchyBreadcrumb,
+  HierarchyLayer,
+  HierarchyToolbar,
+  StockBrandGrid,
+} from '../../components/stock';
+import { useHierarchyScrollRef } from '../../hooks/useHierarchyScrollRef';
 import {
   useDebouncedHierarchySearch,
   useInventoryHierarchyData,
@@ -32,6 +38,20 @@ export function InventoryPage(): JSX.Element {
   const hierarchy = useInventoryHierarchyData(session?.permissions ?? []);
   const workspace = useInventoryWorkspace(session?.permissions ?? []);
   const nav = useInventoryNavStore();
+  const getScrollTop = useInventoryNavStore((state) => state.getScrollTop);
+  const setScrollTop = useInventoryNavStore((state) => state.setScrollTop);
+  const brandsScrollRef = useHierarchyScrollRef(
+    'brands',
+    nav.level === 'brands',
+    getScrollTop,
+    setScrollTop,
+  );
+  const modelsScrollRef = useHierarchyScrollRef(
+    `models-${nav.brandId ?? 0}`,
+    nav.level === 'models',
+    getScrollTop,
+    setScrollTop,
+  );
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [addOpen, setAddOpen] = useState(false);
   const [addAccessoryOpen, setAddAccessoryOpen] = useState(false);
@@ -232,87 +252,93 @@ export function InventoryPage(): JSX.Element {
         </div>
       )}
 
-      {nav.level === 'brands' && (
-        <StockBrandGrid
-          summaries={hierarchy.brandSummaries}
-          loading={hierarchy.loading}
-          onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
-        />
-      )}
-
-      {nav.brandId != null && (
-        <div
-          className="inv-page__models-layer"
-          hidden={nav.level !== 'models'}
-          aria-hidden={nav.level !== 'models'}
-        >
-          <AdminModelTable
-            rows={filteredModels}
-            loading={hierarchy.loading}
-            onSelect={(modelId, label) => {
-              workspace.selectItem(null);
-              nav.openModel(modelId, label);
-            }}
-            onAddLaptop={() => setAddOpen(true)}
-            onAddAccessory={() => setAddAccessoryOpen(true)}
-            onEditModel={setEditModelId}
-          />
-        </div>
-      )}
-
-      {nav.level === 'serials' && nav.modelId && selectedModel && (
-        <InvModelSerialHero
-          model={selectedModel}
-          unitCount={serialUnits.length}
-          availableCount={
-            serialUnits.filter((unit) => unit.status === 'available' && !unit.is_archived).length
-          }
-          onEditModel={() => setEditModelId(selectedModel.id)}
-        />
-      )}
-
-      {nav.level === 'serials' && nav.modelId && (
-        <div
-          className={`inv-page__body ${workspace.selectedItem ? 'inv-page__body--drawer-open' : ''}`}
-        >
-          <AdminSerialTable
-            units={serialUnits}
-            locations={hierarchy.locations}
-            loading={hierarchy.loading}
-            selectedId={workspace.selectedId}
-            onSelect={(id) => void workspace.selectItem(id)}
-            onTransfer={handleTransfer}
-            onMarkSold={handleMarkSold}
-            actionLoading={workspace.actionLoading}
-          />
-          {workspace.selectedItem && (
-            <InventoryDetailDrawer
-              workspace={workspace}
-              permissions={session.permissions}
-              onTransfer={() => {}}
-              onMarkSold={() => handleMarkSold(workspace.selectedItem!.id)}
-              onArchive={() =>
-                void workspace
-                  .archiveItem()
-                  .then(() => hierarchy.refresh())
-                  .catch(() => {})
-              }
-              onRestore={() =>
-                void workspace
-                  .restoreItem()
-                  .then(() => hierarchy.refresh())
-                  .catch(() => {})
-              }
-              onDelete={() =>
-                void workspace
-                  .deleteItem()
-                  .then(() => hierarchy.refresh())
-                  .catch(() => {})
-              }
+      <div className="inv-page__stack">
+        {(nav.level === 'brands' || nav.brandId != null) && (
+          <HierarchyLayer active={nav.level === 'brands'}>
+            <StockBrandGrid
+              ref={brandsScrollRef}
+              summaries={hierarchy.brandSummaries}
+              loading={hierarchy.loading}
+              variant="detailed"
+              showSoldUnits
+              onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
             />
-          )}
-        </div>
-      )}
+          </HierarchyLayer>
+        )}
+
+        {nav.brandId != null && (
+          <HierarchyLayer active={nav.level === 'models'}>
+            <AdminModelTable
+              ref={modelsScrollRef}
+              rows={filteredModels}
+              loading={hierarchy.loading}
+              onSelect={(modelId, label) => {
+                workspace.selectItem(null);
+                nav.openModel(modelId, label);
+              }}
+              onAddLaptop={() => setAddOpen(true)}
+              onAddAccessory={() => setAddAccessoryOpen(true)}
+              onEditModel={setEditModelId}
+            />
+          </HierarchyLayer>
+        )}
+
+        {nav.level === 'serials' && nav.modelId && selectedModel && (
+          <>
+            <HierarchyLayer active>
+              <InvModelSerialHero
+                model={selectedModel}
+                unitCount={serialUnits.length}
+                availableCount={
+                  serialUnits.filter((unit) => unit.status === 'available' && !unit.is_archived)
+                    .length
+                }
+                onEditModel={() => setEditModelId(selectedModel.id)}
+              />
+            </HierarchyLayer>
+            <div
+              className={`inv-page__body ${workspace.selectedItem ? 'inv-page__body--drawer-open' : ''}`}
+            >
+              <AdminSerialTable
+                units={serialUnits}
+                locations={hierarchy.locations}
+                loading={hierarchy.loading}
+                selectedId={workspace.selectedId}
+                onSelect={(id) => void workspace.selectItem(id)}
+                onTransfer={handleTransfer}
+                onMarkSold={handleMarkSold}
+                actionLoading={workspace.actionLoading}
+              />
+              {workspace.selectedItem && (
+                <InventoryDetailDrawer
+                  workspace={workspace}
+                  permissions={session.permissions}
+                  onTransfer={() => {}}
+                  onMarkSold={() => handleMarkSold(workspace.selectedItem!.id)}
+                  onArchive={() =>
+                    void workspace
+                      .archiveItem()
+                      .then(() => hierarchy.refresh())
+                      .catch(() => {})
+                  }
+                  onRestore={() =>
+                    void workspace
+                      .restoreItem()
+                      .then(() => hierarchy.refresh())
+                      .catch(() => {})
+                  }
+                  onDelete={() =>
+                    void workspace
+                      .deleteItem()
+                      .then(() => hierarchy.refresh())
+                      .catch(() => {})
+                  }
+                />
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {nav.brandId && (
         <AddLaptopWizard

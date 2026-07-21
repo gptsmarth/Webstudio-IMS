@@ -153,3 +153,22 @@ async def backfill_purchases(
             "to_date": body.to_date.isoformat() if body.to_date else None,
         },
     )
+
+
+@router.post("/queue/{voucher_id}/refresh")
+async def refresh_purchase_voucher(
+    request: Request,
+    voucher_id: int,
+    current: PurchaseViewDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    _ = current
+    sync_service = TallySyncService(db_session)
+    try:
+        result = await sync_service.refresh_purchase_voucher(voucher_id)
+    except TallyConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.user_message,
+        ) from exc
+    return _envelope(request, result)

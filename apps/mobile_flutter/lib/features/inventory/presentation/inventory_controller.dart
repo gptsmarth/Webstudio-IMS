@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_exception.dart';
@@ -237,12 +238,16 @@ typedef InventoryWorkspaceProvider =
 
 final stockWorkspaceProvider =
     StateNotifierProvider<InventoryWorkspaceController, InventoryWorkspaceState>((ref) {
-  return InventoryWorkspaceController(ref);
+  final controller = InventoryWorkspaceController(ref);
+  ref.onDispose(controller.dispose);
+  return controller;
 });
 
 final inventoryAdminWorkspaceProvider =
     StateNotifierProvider<InventoryWorkspaceController, InventoryWorkspaceState>((ref) {
-  return InventoryWorkspaceController(ref, inventoryAdminMode: true);
+  final controller = InventoryWorkspaceController(ref, inventoryAdminMode: true);
+  ref.onDispose(controller.dispose);
+  return controller;
 });
 
 /// Admin inventory mutations (add laptop, global search → inventory).
@@ -256,6 +261,14 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
   final Ref _ref;
   final bool _inventoryAdminMode;
   bool _pricePreferenceLoaded = false;
+  final ScrollController brandsScrollController = ScrollController();
+  final ScrollController modelsScrollController = ScrollController();
+
+  void dispose() {
+    brandsScrollController.dispose();
+    modelsScrollController.dispose();
+    super.dispose();
+  }
 
   InventoryRepository get _inventory => _ref.read(inventoryRepositoryProvider);
   OfflineInventoryService get _offlineInventory => _ref.read(offlineInventoryServiceProvider);
@@ -292,6 +305,11 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
       searchField: HierarchySearchField.all,
       clearSelection: true,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (modelsScrollController.hasClients) {
+        modelsScrollController.jumpTo(0);
+      }
+    });
   }
 
   void selectModel(String modelId) {

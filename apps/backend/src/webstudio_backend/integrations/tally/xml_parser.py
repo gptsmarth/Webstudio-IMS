@@ -69,46 +69,97 @@ def normalize_serial(value: str | None) -> str | None:
     return cleaned.upper()
 
 
+def _looks_like_inventory_serial(text: str) -> bool:
+    """Filter BASICUSERDESCRIPTION noise (e.g. 'Warranty by ASUS') from serial lines."""
+    cleaned = text.strip()
+    if len(cleaned) < 8:
+        return False
+    if " " in cleaned:
+        return False
+    lower = cleaned.lower()
+    if "warranty" in lower:
+        return False
+    return any(char.isalpha() for char in cleaned) and any(char.isdigit() for char in cleaned)
+
+
+def _expand_serial_text(text: str) -> list[str]:
+    """Split one Tally field that may list serials comma- or semicolon-separated."""
+    if not text:
+        return []
+    serials: list[str] = []
+    for part in re.split(r"[,;]+", text):
+        token = part.strip()
+        if token and _looks_like_inventory_serial(token) and token not in serials:
+            serials.append(token)
+    return serials
+
+
+def _collect_basic_serials(line: ET.Element) -> list[str]:
+    serials: list[str] = []
+    for desc_list in _children_by_name(line, "BASICUSERDESCRIPTION.LIST"):
+        for description in _children_by_name(desc_list, "BASICUSERDESCRIPTION"):
+            text = (description.text or "").strip()
+            if not text:
+                continue
+            for serial in _expand_serial_text(text):
+                if serial not in serials:
+                    serials.append(serial)
+    return serials
+
+
+def _collect_batch_serials(line: ET.Element) -> list[str]:
+    batch_serials: list[str] = []
+
+    def _append_serial(raw: str) -> None:
+        for serial in _expand_serial_text(raw):
+            if serial not in batch_serials:
+                batch_serials.append(serial)
+
+    for batch in _children_by_name(line, "BATCHALLOCATIONS.LIST"):
+        serial = _child_text(batch, "SERIALNUMBER")
+        if serial:
+            _append_serial(serial)
+        for nested in batch.iter():
+            if nested is batch:
+                continue
+            if _local_name(nested.tag).upper() == "SERIALNUMBER":
+                text = (nested.text or "").strip()
+                if text:
+                    _append_serial(text)
+    return batch_serials
+
+
 def _extract_serial_from_line(line: ET.Element) -> tuple[str | None, str | None, list[str]]:
     """
     Production serial priority (WEBSTUDIO):
-      1. BASICUSERDESCRIPTION.LIST → FIRST BASICUSERDESCRIPTION only (if non-empty)
-      2. Direct SERIALNUMBER child
-      3. BATCHALLOCATIONS.LIST / SERIALNUMBER
+      1. All BATCHALLOCATIONS.LIST serials when more than one
+      2. All serial-like BASICUSERDESCRIPTION entries when more than one
+         (Tally lists qty>1 laptops as one model row with a serial per line,
+         or comma-separated serials in one description field)
+      3. Single batch serial, then single basic description, then SERIALNUMBER
 
-    Do NOT regex-scan remarks. Second+ BASICUSERDESCRIPTION entries are ignored.
-    Empty BASICUSERDESCRIPTION.LIST must never raise — fall through to SERIALNUMBER.
+    Warranty / remark lines in BASICUSERDESCRIPTION are ignored.
     """
     try:
-        # 1) First BASICUSERDESCRIPTION only when present and non-empty
-        for desc_list in _children_by_name(line, "BASICUSERDESCRIPTION.LIST"):
-            descriptions = _children_by_name(desc_list, "BASICUSERDESCRIPTION")
-            if not descriptions:
-                continue
-            text = (descriptions[0].text or "").strip()
-            if text:
-                return text, SERIAL_SOURCE_BASICUSERDESCRIPTION, [text]
+        batch_serials = _collect_batch_serials(line)
+        basic_serials = _collect_basic_serials(line)
 
-        # 2) Direct SERIALNUMBER
+        if len(batch_serials) > 1:
+            return batch_serials[0], SERIAL_SOURCE_BATCH_ALLOCATION, batch_serials
+        if len(basic_serials) > 1:
+            return basic_serials[0], SERIAL_SOURCE_BASICUSERDESCRIPTION, basic_serials
+        if len(batch_serials) == 1:
+            return batch_serials[0], SERIAL_SOURCE_BATCH_ALLOCATION, batch_serials
+        if len(basic_serials) == 1:
+            return basic_serials[0], SERIAL_SOURCE_BASICUSERDESCRIPTION, basic_serials
+
         direct = _child_text(line, "SERIALNUMBER")
         if direct:
-            return direct, SERIAL_SOURCE_SERIALNUMBER, [direct]
-
-        # 3) Batch allocations
-        batch_serials: list[str] = []
-        for batch in _children_by_name(line, "BATCHALLOCATIONS.LIST"):
-            serial = _child_text(batch, "SERIALNUMBER")
-            if serial:
-                batch_serials.append(serial)
-            for nested in batch.iter():
-                if nested is batch:
-                    continue
-                if _local_name(nested.tag).upper() == "SERIALNUMBER":
-                    text = (nested.text or "").strip()
-                    if text and text not in batch_serials:
-                        batch_serials.append(text)
-        if batch_serials:
-            return batch_serials[0], SERIAL_SOURCE_BATCH_ALLOCATION, batch_serials
+            direct_serials = _expand_serial_text(direct)
+            if direct_serials:
+                return direct_serials[0], SERIAL_SOURCE_SERIALNUMBER, direct_serials
+            if _looks_like_inventory_serial(direct):
+                return direct, SERIAL_SOURCE_SERIALNUMBER, [direct]
     except Exception:  # noqa: BLE001 — never fail voucher parse on serial extraction
         return None, None, []
 
@@ -422,6 +473,22 @@ def parse_vouchers_xml(xml_text: str) -> list[TallyVoucher]:
         seen_guids.add(parsed.guid)
         vouchers.append(parsed)
     return vouchers
+
+
+def _voucher_detail_richness(voucher: TallyVoucher) -> tuple[int, int, int]:
+    """Prefer vouchers with more batch serials, then more lines, then raw XML."""
+    batch_serials = sum(len(line.batch_allocations) for line in voucher.inventory_lines)
+    return (batch_serials, len(voucher.inventory_lines), 1 if voucher.raw_xml else 0)
+
+
+def merge_vouchers_by_guid(vouchers: list[TallyVoucher]) -> list[TallyVoucher]:
+    """Collapse duplicate GUIDs from multiple export sources (Day Book + Register)."""
+    merged: dict[str, TallyVoucher] = {}
+    for voucher in vouchers:
+        current = merged.get(voucher.guid)
+        if current is None or _voucher_detail_richness(voucher) > _voucher_detail_richness(current):
+            merged[voucher.guid] = voucher
+    return list(merged.values())
 
 
 def catalog_model_matches_invoice(ims_catalog_label: str, invoice_stock_item: str) -> bool:
