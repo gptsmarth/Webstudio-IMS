@@ -42,62 +42,59 @@ export function ConfirmPurchaseImportDialog({
 }: Props): JSX.Element | null {
   if (!open) return null;
   return (
-    <div className="inv-dialog-overlay" role="presentation" onClick={onCancel}>
-      <div
-        className="inv-dialog animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-purchase-import-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="inv-dialog__header">
-          <div>
-            <h2 id="confirm-purchase-import-title" className="inv-dialog__title">
-              Confirm import
-            </h2>
-            <p className="inv-dialog__lead">
-              Review before inventory is created. This runs in a single transaction.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="app-toolbar-icon-btn"
-            onClick={onCancel}
-            aria-label="Close"
-          >
-            <X size={16} aria-hidden />
-          </button>
-        </header>
-        <div className="inv-dialog__body" style={{ display: 'grid', gap: 6 }}>
-          <Row label="Supplier" value={summary.supplier || '—'} />
-          <Row label="Brand" value={summary.brand} />
-          <Row label="Model" value={summary.model} />
-          <Row label="Existing model" value={summary.existingModel ? 'YES' : 'NO'} />
-          <Row label="New units to import" value={String(summary.quantity)} />
-          <Row label="Serial count" value={String(summary.serialCount)} />
-          <Row
-            label="Already added"
-            value={summary.alreadyAddedCount > 0 ? `${summary.alreadyAddedCount} (skipped)` : '0'}
-          />
-          <Row label="Inventory destination" value={summary.destination} />
-          <Row label="Location" value={summary.location} />
-          <Row label="Purchase price" value={summary.purchasePrice} />
-          {error && <p className="inv-dialog__error">{error}</p>}
+    <div
+      className="inv-dialog inv-dialog--enter"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-purchase-import-title"
+    >
+      <header className="inv-dialog__header">
+        <div>
+          <h2 id="confirm-purchase-import-title" className="inv-dialog__title">
+            Confirm import
+          </h2>
+          <p className="inv-dialog__lead">
+            Review before inventory is created. This runs in a single transaction.
+          </p>
         </div>
-        <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={loading}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={onConfirm}
-            disabled={loading || summary.serialCount === 0}
-          >
-            {loading ? 'Importing…' : 'Confirm import'}
-          </button>
-        </footer>
+        <button
+          type="button"
+          className="app-toolbar-icon-btn"
+          onClick={onCancel}
+          aria-label="Close"
+        >
+          <X size={16} aria-hidden />
+        </button>
+      </header>
+      <div className="inv-dialog__body" style={{ display: 'grid', gap: 6 }}>
+        <Row label="Supplier" value={summary.supplier || '—'} />
+        <Row label="Brand" value={summary.brand} />
+        <Row label="Model" value={summary.model} />
+        <Row label="Existing model" value={summary.existingModel ? 'YES' : 'NO'} />
+        <Row label="New units to import" value={String(summary.quantity)} />
+        <Row label="Serial count" value={String(summary.serialCount)} />
+        <Row
+          label="Already added"
+          value={summary.alreadyAddedCount > 0 ? `${summary.alreadyAddedCount} (skipped)` : '0'}
+        />
+        <Row label="Inventory destination" value={summary.destination} />
+        <Row label="Location" value={summary.location} />
+        <Row label="Purchase price" value={summary.purchasePrice} />
+        {error && <p className="inv-dialog__error">{error}</p>}
       </div>
+      <footer className="inv-dialog__footer">
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={loading}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onConfirm}
+          disabled={loading || summary.serialCount === 0}
+        >
+          {loading ? 'Importing…' : 'Confirm import'}
+        </button>
+      </footer>
     </div>
   );
 }

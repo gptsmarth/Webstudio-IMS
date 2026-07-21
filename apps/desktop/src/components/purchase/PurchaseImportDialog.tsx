@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { parseApiError } from '../../lib/apiError';
-import { stripBrandPrefix } from '../../lib/catalogue';
+import { extractCatalogueModelNumber, stripBrandPrefix } from '../../lib/catalogue';
+import { ModalPortal } from '../ModalPortal';
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
 import { parsePriceInput } from '../../lib/inventoryPrice';
 import { BrandService, type Brand } from '../../services/api/BrandService';
@@ -183,6 +184,10 @@ export function PurchaseImportDialog({
     brandName,
     selectedBrand?.short_name,
   );
+  const catalogModelNumber = useMemo(() => {
+    if (match?.normalized_model_number) return match.normalized_model_number;
+    return extractCatalogueModelNumber(strippedStockName) || strippedStockName;
+  }, [match?.normalized_model_number, strippedStockName]);
 
   const runExistingImport = async () => {
     if (!selectedModel) return;
@@ -272,8 +277,9 @@ export function PurchaseImportDialog({
         loading={submitting}
         onClose={() => setShowWizard(false)}
         onConfirm={handleWizardConfirm}
-        initialModelNumber={match?.normalized_model_number ?? strippedStockName}
+        initialModelNumber={catalogModelNumber}
         initialModelName={strippedStockName}
+        forceRefreshInitialAutoFetch
         initialSerials={group.serials.map((cell) => cell.serial_number)}
         initialPurchasePrice={defaultUnitPrice}
         titleOverride={`Add model — ${brandName} (Purchase ${voucher.voucher_number})`}
@@ -283,320 +289,342 @@ export function PurchaseImportDialog({
   }
 
   return (
-    <div className="inv-dialog-overlay" role="presentation">
-      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
-        <header className="inv-dialog__header">
-          <div>
-            <h2 className="inv-dialog__title">Import — {group.stock_item_name}</h2>
-            <p className="inv-dialog__lead">
-              Supplier {voucher.supplier_name ?? '—'} · Purchase {voucher.voucher_number} · Qty{' '}
-              {group.quantity}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="app-toolbar-icon-btn"
-            onClick={onClose}
-            aria-label="Close"
+    <ModalPortal>
+      <div className="inv-dialog-overlay" role="presentation">
+        {showConfirm ? (
+          <ConfirmPurchaseImportDialog
+            open
+            loading={submitting}
+            error={error}
+            onCancel={() => setShowConfirm(false)}
+            onConfirm={() => void runExistingImport()}
+            summary={{
+              supplier: voucher.supplier_name ?? '',
+              brand: brandName,
+              model: selectedModel
+                ? `${selectedModel.model_number} — ${selectedModel.model_name}`
+                : '',
+              existingModel: true,
+              quantity: newUnitCount,
+              serialCount: newUnitCount,
+              alreadyAddedCount,
+              destination: 'Inventory (Tally Purchase)',
+              location: locationName,
+              purchasePrice: purchasePrice.trim() ? purchasePrice.trim() : '—',
+            }}
+          />
+        ) : (
+          <div
+            className="inv-dialog inv-dialog--wide inv-dialog--enter"
+            role="dialog"
+            aria-modal="true"
           >
-            <X size={16} aria-hidden />
-          </button>
-        </header>
-
-        <div className="inv-dialog__body" style={{ display: 'grid', gap: 16 }}>
-          {/* Step 1 — Brand */}
-          <div>
-            <label className="form-label">Brand</label>
-            <select
-              className="input"
-              value={brandId}
-              onChange={(e) => void handleBrandChange(Number(e.target.value))}
-            >
-              <option value={0}>Select a brand…</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.name}
-                </option>
-              ))}
-            </select>
-            <p className="add-laptop-wizard__hint">
-              The selected brand determines which catalogue is searched.
-            </p>
-          </div>
-
-          {/* Step 2 — Item type (Laptop vs Accessory) */}
-          {brandId > 0 && (
-            <div>
-              <label className="form-label">Item type</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  className={
-                    itemType === 'laptop' ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'
-                  }
-                  onClick={() => void chooseItemType('laptop')}
-                >
-                  Laptop
-                </button>
-                <button
-                  type="button"
-                  className={
-                    itemType === 'accessory' ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'
-                  }
-                  onClick={() => void chooseItemType('accessory')}
-                >
-                  Accessory
-                </button>
-              </div>
-              <p className="add-laptop-wizard__hint">
-                Choose whether this purchase line is a laptop (serial/model match) or an accessory
-                (searched by part number &amp; model name).
-              </p>
-            </div>
-          )}
-
-          {/* Step 3 — Model / accessory match within brand */}
-          {brandId > 0 && itemType && (
-            <div>
-              <label className="form-label">
-                {itemType === 'accessory' ? 'Accessory' : 'Model'}
-              </label>
-              {matching ? (
-                <p className="add-laptop-wizard__hint">
-                  Searching {itemType === 'accessory' ? 'accessories' : 'models'} within {brandName}
-                  …
+            <header className="inv-dialog__header">
+              <div>
+                <h2 className="inv-dialog__title">Import — {group.stock_item_name}</h2>
+                <p className="inv-dialog__lead">
+                  Supplier {voucher.supplier_name ?? '—'} · Purchase {voucher.voucher_number} · Qty{' '}
+                  {group.quantity}
                 </p>
-              ) : itemType === 'laptop' ? (
-                <>
-                  <select
-                    className="input"
-                    value={selectedModelId}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setSelectedModelId(value);
-                      if (value === NEW_MODEL) {
-                        setShowWizard(true);
+              </div>
+              <button
+                type="button"
+                className="app-toolbar-icon-btn"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </header>
+
+            <div className="inv-dialog__body" style={{ display: 'grid', gap: 16 }}>
+              {/* Step 1 — Brand */}
+              <div>
+                <label className="form-label">Brand</label>
+                <select
+                  className="input"
+                  value={brandId}
+                  onChange={(e) => void handleBrandChange(Number(e.target.value))}
+                >
+                  <option value={0}>Select a brand…</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="add-laptop-wizard__hint">
+                  The selected brand determines which catalogue is searched.
+                </p>
+              </div>
+
+              {/* Step 2 — Item type (Laptop vs Accessory) */}
+              {brandId > 0 && (
+                <div>
+                  <label className="form-label">Item type</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className={
+                        itemType === 'laptop' ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'
                       }
-                    }}
-                  >
-                    <option value="">Select model…</option>
-                    {match?.matches.map((m) => (
-                      <option key={m.id} value={m.id} disabled={!m.is_active}>
-                        {m.model_number} — {m.model_name}
-                        {m.match_kind === 'partial' ? ' (possible match)' : ''}
-                        {m.is_active ? '' : ' (archived)'}
-                      </option>
-                    ))}
-                    <option value={NEW_MODEL}>+ Create new model (Add Model wizard)</option>
-                  </select>
-                  {match && (
-                    <p className="add-laptop-wizard__hint">
-                      Normalized: <span className="col-mono">{match.normalized_model_number}</span>.{' '}
-                      {match.auto_selected_model_id
-                        ? 'Existing model found — new serial numbers will be appended. You can change the selection.'
-                        : match.matches.length === 0
-                          ? 'No existing model matched — create a new model.'
-                          : match.matches.some((m) => m.match_kind === 'partial')
-                            ? 'Possible match(es) found — select one to append serials, or create a new model if it is a different model.'
-                            : 'Select the matching model or create a new one.'}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <select
-                    className="input"
-                    value={selectedModelId}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setSelectedModelId(value);
-                      if (value === NEW_MODEL) {
-                        setShowWizard(true);
+                      onClick={() => void chooseItemType('laptop')}
+                    >
+                      Laptop
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        itemType === 'accessory'
+                          ? 'btn btn-secondary btn-sm'
+                          : 'btn btn-ghost btn-sm'
                       }
-                    }}
-                  >
-                    <option value="">Select accessory…</option>
-                    {accMatch?.matches.map((m) => (
-                      <option key={m.id} value={m.id} disabled={!m.is_active}>
-                        {m.model_number} — {m.model_name}
-                        {m.part_number ? ` · PN ${m.part_number}` : ''} ({Math.round(m.score * 100)}
-                        % match){m.is_active ? '' : ' (archived)'}
-                      </option>
-                    ))}
-                    <option value={NEW_MODEL}>+ Create new accessory (Add Accessory wizard)</option>
-                  </select>
-                  {accMatch && (
+                      onClick={() => void chooseItemType('accessory')}
+                    >
+                      Accessory
+                    </button>
+                  </div>
+                  <p className="add-laptop-wizard__hint">
+                    Choose whether this purchase line is a laptop (serial/model match) or an
+                    accessory (searched by part number &amp; model name).
+                  </p>
+                </div>
+              )}
+
+              {/* Step 3 — Model / accessory match within brand */}
+              {brandId > 0 && itemType && (
+                <div>
+                  <label className="form-label">
+                    {itemType === 'accessory' ? 'Accessory' : 'Model'}
+                  </label>
+                  {matching ? (
                     <p className="add-laptop-wizard__hint">
-                      Searched: <span className="col-mono">{accMatch.normalized_query}</span>.{' '}
-                      {accMatch.auto_selected_model_id
-                        ? 'Matching accessory found — new serial numbers will be appended. You can change the selection.'
-                        : accMatch.matches.length === 0
-                          ? 'No matching accessory found — create a new accessory.'
-                          : 'Select the closest accessory or create a new one.'}
+                      Searching {itemType === 'accessory' ? 'accessories' : 'models'} within{' '}
+                      {brandName}…
                     </p>
+                  ) : itemType === 'laptop' ? (
+                    <>
+                      <select
+                        className="input"
+                        value={selectedModelId}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSelectedModelId(value);
+                          if (value === NEW_MODEL) {
+                            setShowWizard(true);
+                          }
+                        }}
+                      >
+                        <option value="">Select model…</option>
+                        {match?.matches.map((m) => (
+                          <option key={m.id} value={m.id} disabled={!m.is_active}>
+                            {m.model_number} — {m.model_name}
+                            {m.match_kind === 'partial' ? ' (possible match)' : ''}
+                            {m.is_active ? '' : ' (archived)'}
+                          </option>
+                        ))}
+                        <option value={NEW_MODEL}>+ Create new model (Add Model wizard)</option>
+                      </select>
+                      {match && (
+                        <p className="add-laptop-wizard__hint">
+                          Normalized:{' '}
+                          <span className="col-mono">{match.normalized_model_number}</span>.{' '}
+                          {match.auto_selected_model_id
+                            ? 'Existing model found — new serial numbers will be appended. You can change the selection.'
+                            : match.matches.length === 0
+                              ? 'No existing model matched — create a new model.'
+                              : match.matches.some((m) => m.match_kind === 'partial')
+                                ? 'Possible match(es) found — select one to append serials, or create a new model if it is a different model.'
+                                : 'Select the matching model or create a new one.'}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        className="input"
+                        value={selectedModelId}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSelectedModelId(value);
+                          if (value === NEW_MODEL) {
+                            setShowWizard(true);
+                          }
+                        }}
+                      >
+                        <option value="">Select accessory…</option>
+                        {accMatch?.matches.map((m) => (
+                          <option key={m.id} value={m.id} disabled={!m.is_active}>
+                            {m.model_number} — {m.model_name}
+                            {m.part_number ? ` · PN ${m.part_number}` : ''} (
+                            {Math.round(m.score * 100)}% match){m.is_active ? '' : ' (archived)'}
+                          </option>
+                        ))}
+                        <option value={NEW_MODEL}>
+                          + Create new accessory (Add Accessory wizard)
+                        </option>
+                      </select>
+                      {accMatch && (
+                        <p className="add-laptop-wizard__hint">
+                          Searched: <span className="col-mono">{accMatch.normalized_query}</span>.{' '}
+                          {accMatch.auto_selected_model_id
+                            ? 'Matching accessory found — new serial numbers will be appended. You can change the selection.'
+                            : accMatch.matches.length === 0
+                              ? 'No matching accessory found — create a new accessory.'
+                              : 'Select the closest accessory or create a new one.'}
+                        </p>
+                      )}
+                    </>
                   )}
+                </div>
+              )}
+
+              {/* Step 3 — Serials + location + price (existing model append) */}
+              {selectedModel && (
+                <>
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <label className="form-label">
+                        Serial numbers ({serials.filter((s) => s.trim()).length} / Qty{' '}
+                        {group.quantity})
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setSerials((cur) => [...cur, ''])}
+                      >
+                        <Plus size={12} aria-hidden /> Add serial
+                      </button>
+                    </div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {serials.map((serial, index) => {
+                        const isAlreadyAdded = knownDuplicates.has(serial.trim().toUpperCase());
+                        return (
+                          <div
+                            key={index}
+                            style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+                          >
+                            <input
+                              className="input col-mono"
+                              style={isAlreadyAdded ? { opacity: 0.6 } : undefined}
+                              value={serial}
+                              placeholder={`Serial ${index + 1}`}
+                              onChange={(e) =>
+                                setSerials((cur) =>
+                                  cur.map((s, i) => (i === index ? e.target.value : s)),
+                                )
+                              }
+                            />
+                            {isAlreadyAdded && (
+                              <span
+                                className="badge badge-warning"
+                                title="This serial already exists in IMS — it will be skipped, not re-imported."
+                              >
+                                Already added
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className="app-toolbar-icon-btn"
+                              aria-label="Remove serial"
+                              onClick={() => setSerials((cur) => cur.filter((_, i) => i !== index))}
+                            >
+                              <Trash2 size={14} aria-hidden />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {alreadyAddedCount > 0 && (
+                      <p className="add-laptop-wizard__hint">
+                        {alreadyAddedCount} serial(s) already exist in IMS — they will be skipped
+                        and only the {newUnitCount} new unit(s) will be imported.
+                      </p>
+                    )}
+                    {alreadyAddedCount > 0 && newUnitCount === 0 && (
+                      <p className="inv-dialog__error">
+                        Every serial in this group is already in IMS — nothing left to import.
+                      </p>
+                    )}
+                    {hasInternalDuplicates && (
+                      <p className="inv-dialog__error">The serial list contains repeated values.</p>
+                    )}
+                  </div>
+
+                  <div
+                    className="inv-dialog__grid"
+                    style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}
+                  >
+                    <div>
+                      <label className="form-label">Location (applied to all)</label>
+                      <select
+                        className="input"
+                        value={locationId}
+                        onChange={(e) => setLocationId(Number(e.target.value))}
+                      >
+                        {locations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Purchase price (applied to all)</label>
+                      <input
+                        className="input inv-price-input"
+                        inputMode="decimal"
+                        placeholder="Optional"
+                        value={purchasePrice}
+                        onChange={(e) => setPurchasePrice(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Initial status</label>
+                      <select
+                        className="input"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value as InventoryStatus)}
+                      >
+                        <option value="received">Received</option>
+                        <option value="available">Available</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Colour</label>
+                      <input className="input" value={resolvedColor} readOnly />
+                    </div>
+                  </div>
                 </>
               )}
+
+              {error && <p className="inv-dialog__error">{error}</p>}
             </div>
-          )}
 
-          {/* Step 3 — Serials + location + price (existing model append) */}
-          {selectedModel && (
-            <>
-              <div>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
+            <footer className="inv-dialog__footer">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>
+                Cancel
+              </button>
+              {selectedModel && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!canImportExisting}
+                  onClick={() => setShowConfirm(true)}
                 >
-                  <label className="form-label">
-                    Serial numbers ({serials.filter((s) => s.trim()).length} / Qty {group.quantity})
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setSerials((cur) => [...cur, ''])}
-                  >
-                    <Plus size={12} aria-hidden /> Add serial
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {serials.map((serial, index) => {
-                    const isAlreadyAdded = knownDuplicates.has(serial.trim().toUpperCase());
-                    return (
-                      <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <input
-                          className="input col-mono"
-                          style={isAlreadyAdded ? { opacity: 0.6 } : undefined}
-                          value={serial}
-                          placeholder={`Serial ${index + 1}`}
-                          onChange={(e) =>
-                            setSerials((cur) =>
-                              cur.map((s, i) => (i === index ? e.target.value : s)),
-                            )
-                          }
-                        />
-                        {isAlreadyAdded && (
-                          <span
-                            className="badge badge-warning"
-                            title="This serial already exists in IMS — it will be skipped, not re-imported."
-                          >
-                            Already added
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className="app-toolbar-icon-btn"
-                          aria-label="Remove serial"
-                          onClick={() => setSerials((cur) => cur.filter((_, i) => i !== index))}
-                        >
-                          <Trash2 size={14} aria-hidden />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                {alreadyAddedCount > 0 && (
-                  <p className="add-laptop-wizard__hint">
-                    {alreadyAddedCount} serial(s) already exist in IMS — they will be skipped and
-                    only the {newUnitCount} new unit(s) will be imported.
-                  </p>
-                )}
-                {alreadyAddedCount > 0 && newUnitCount === 0 && (
-                  <p className="inv-dialog__error">
-                    Every serial in this group is already in IMS — nothing left to import.
-                  </p>
-                )}
-                {hasInternalDuplicates && (
-                  <p className="inv-dialog__error">The serial list contains repeated values.</p>
-                )}
-              </div>
-
-              <div className="inv-dialog__grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="form-label">Location (applied to all)</label>
-                  <select
-                    className="input"
-                    value={locationId}
-                    onChange={(e) => setLocationId(Number(e.target.value))}
-                  >
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Purchase price (applied to all)</label>
-                  <input
-                    className="input inv-price-input"
-                    inputMode="decimal"
-                    placeholder="Optional"
-                    value={purchasePrice}
-                    onChange={(e) => setPurchasePrice(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Initial status</label>
-                  <select
-                    className="input"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as InventoryStatus)}
-                  >
-                    <option value="received">Received</option>
-                    <option value="available">Available</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Colour</label>
-                  <input className="input" value={resolvedColor} readOnly />
-                </div>
-              </div>
-            </>
-          )}
-
-          {error && <p className="inv-dialog__error">{error}</p>}
-        </div>
-
-        <footer className="inv-dialog__footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          {selectedModel && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!canImportExisting}
-              onClick={() => setShowConfirm(true)}
-            >
-              Review &amp; import
-            </button>
-          )}
-        </footer>
+                  Review &amp; import
+                </button>
+              )}
+            </footer>
+          </div>
+        )}
       </div>
-
-      <ConfirmPurchaseImportDialog
-        open={showConfirm}
-        loading={submitting}
-        error={error}
-        onCancel={() => setShowConfirm(false)}
-        onConfirm={() => void runExistingImport()}
-        summary={{
-          supplier: voucher.supplier_name ?? '',
-          brand: brandName,
-          model: selectedModel ? `${selectedModel.model_number} — ${selectedModel.model_name}` : '',
-          existingModel: true,
-          quantity: newUnitCount,
-          serialCount: newUnitCount,
-          alreadyAddedCount,
-          destination: 'Inventory (Tally Purchase)',
-          location: locationName,
-          purchasePrice: purchasePrice.trim() ? purchasePrice.trim() : '—',
-        }}
-      />
-    </div>
+    </ModalPortal>
   );
 }

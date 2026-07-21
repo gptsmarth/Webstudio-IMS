@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
-import { STORAGE_TYPES, STORAGE_UNITS } from '../../lib/catalogue';
+import { STORAGE_TYPES, STORAGE_UNITS, extractCatalogueModelNumber } from '../../lib/catalogue';
 import { composeModelNotes } from '../../lib/modelNotes';
 import { parseApiError } from '../../lib/apiError';
 import { sanitizeCreateProductModelPayload } from '../../lib/productModelPayload';
@@ -22,6 +22,7 @@ import { formatInventoryPrice, parsePriceInput } from '../../lib/inventoryPrice'
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 import { ProductSpecService } from '../../services/api/ProductSpecService';
+import { ModalPortal } from '../ModalPortal';
 
 export interface SerialUnitEntry {
   serial_number: string;
@@ -65,6 +66,8 @@ interface AddLaptopWizardProps {
   initialPurchasePrice?: string;
   titleOverride?: string;
   submitLabelOverride?: string;
+  /** Purchase import: bypass stale enrichment cache on first specs auto-fetch. */
+  forceRefreshInitialAutoFetch?: boolean;
 }
 
 type WizardStep = 'model' | 'specs' | 'units' | 'review';
@@ -95,6 +98,7 @@ export function AddLaptopWizard({
   initialPurchasePrice,
   titleOverride,
   submitLabelOverride,
+  forceRefreshInitialAutoFetch = false,
 }: AddLaptopWizardProps): JSX.Element | null {
   const [step, setStep] = useState<WizardStep>('model');
   const [modelNumber, setModelNumber] = useState('');
@@ -150,7 +154,8 @@ export function AddLaptopWizard({
     wasOpenRef.current = true;
     const seededSerials = (initialSerials ?? []).filter((serial) => serial.trim());
     setStep('model');
-    setModelNumber(initialModelNumber ?? '');
+    const seededModel = initialModelNumber ?? '';
+    setModelNumber(extractCatalogueModelNumber(seededModel) || seededModel);
     setModelName(initialModelName ?? '');
     setMode('new');
     setProductModelId('');
@@ -270,12 +275,17 @@ export function AddLaptopWizard({
 
   const runGeminiFetch = useCallback(
     async (forceRefresh = false): Promise<boolean> => {
-      if (!modelNumber.trim()) return false;
+      const rawModel = modelNumber.trim();
+      if (!rawModel) return false;
+      const lookupModelNumber = extractCatalogueModelNumber(rawModel) || rawModel;
+      if (lookupModelNumber !== rawModel) {
+        setModelNumber(lookupModelNumber);
+      }
       setFetching(true);
       setFetchMessage(null);
       setError(null);
       try {
-        const internet = await fetchProductSpecFromInternet(modelNumber, {
+        const internet = await fetchProductSpecFromInternet(lookupModelNumber, {
           modelName: modelName.trim() || undefined,
           brandName,
           forceRefresh,
@@ -322,10 +332,10 @@ export function AddLaptopWizard({
       return;
     }
     autoFetchTriggered.current = true;
-    const forceRefresh = forceRefreshOnNextSpecsFetch.current;
+    const forceRefresh = forceRefreshOnNextSpecsFetch.current || forceRefreshInitialAutoFetch;
     forceRefreshOnNextSpecsFetch.current = false;
     void runGeminiFetch(forceRefresh);
-  }, [open, step, mode, modelNumber, runGeminiFetch]);
+  }, [open, step, mode, modelNumber, runGeminiFetch, forceRefreshInitialAutoFetch]);
 
   useEffect(() => {
     if (!productImageUrl) {
@@ -520,435 +530,500 @@ export function AddLaptopWizard({
   if (!open) return null;
 
   return (
-    <div className="inv-dialog-overlay" role="presentation">
-      <div className="inv-dialog inv-dialog--wide animate-slide-in" role="dialog" aria-modal="true">
-        <header className="inv-dialog__header">
-          <div>
-            <h2 className="inv-dialog__title">{titleOverride ?? `Add laptop — ${brandName}`}</h2>
-            <p className="inv-dialog__lead">
-              Brand is fixed to {brandName}. Step {stepLabel(step, mode)}.
-              {mode === 'existing' && step === 'units'
-                ? ' Add serial numbers for this existing model.'
-                : null}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="app-toolbar-icon-btn"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={16} aria-hidden />
-          </button>
-        </header>
-
-        <div className="inv-dialog__body add-laptop-wizard">
-          {step === 'model' && (
-            <div className="add-laptop-wizard__step">
-              <label className="form-label">Model number</label>
-              <input
-                className="input"
-                value={modelNumber}
-                onChange={(e) => {
-                  setModelNumber(e.target.value);
-                  setPossibleModels([]);
-                  setFetchMessage(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && modelNumber.trim() && !checking) {
-                    void continueFromModel();
-                  }
-                }}
-                placeholder="e.g. X151VA-AB5321WS"
-                autoFocus
-              />
-              <p className="add-laptop-wizard__hint">
-                We check the database automatically. Existing models skip configuration — you only
-                add serial numbers.
+    <ModalPortal>
+      <div className="inv-dialog-overlay" role="presentation">
+        <div
+          className="inv-dialog inv-dialog--wide inv-dialog--enter"
+          role="dialog"
+          aria-modal="true"
+        >
+          <header className="inv-dialog__header">
+            <div>
+              <h2 className="inv-dialog__title">{titleOverride ?? `Add laptop — ${brandName}`}</h2>
+              <p className="inv-dialog__lead">
+                Brand is fixed to {brandName}. Step {stepLabel(step, mode)}.
+                {mode === 'existing' && step === 'units'
+                  ? ' Add serial numbers for this existing model.'
+                  : null}
               </p>
-              {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
-              {possibleModels.length > 0 && (
-                <div className="card" style={{ display: 'grid', gap: 10 }}>
-                  <strong>Possible model already in the catalogue</strong>
-                  {possibleModels.map((model) => (
-                    <div
-                      key={model.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                      }}
-                    >
-                      <div>
-                        <div className="col-mono">{model.model_number}</div>
-                        <small>{model.model_name}</small>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        disabled={checking}
-                        onClick={() => void continueWithExistingModel(model)}
-                      >
-                        Use existing model
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={checking}
-                    onClick={continueAsNewModel}
-                  >
-                    Add as a new model instead
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={!modelNumber.trim() || checking || possibleModels.length > 0}
-                onClick={() => void continueFromModel()}
-              >
-                {checking ? 'Checking database…' : 'Continue'}
-              </button>
             </div>
-          )}
+            <button
+              type="button"
+              className="app-toolbar-icon-btn"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </header>
 
-          {step === 'specs' && (
-            <div className="add-laptop-wizard__step">
-              <p className="add-laptop-wizard__hint">
-                New model <span className="col-mono">{modelNumber}</span>
-                {fetching
-                  ? ' — auto-fetching configuration…'
-                  : ' — confirm or edit configuration below.'}
-              </p>
-              {productImagePreview || productImageUrl ? (
-                <div className="add-laptop-wizard__image">
-                  <div className="inv-product-image">
-                    <div className="inv-product-image__frame">
-                      <img
-                        src={productImagePreview || productImageUrl || ''}
-                        alt={modelName || modelNumber}
-                        className="inv-product-image__img"
-                      />
-                      <span className="inv-product-image__badge inv-product-image__badge--remote">
-                        Auto fetch
-                      </span>
-                    </div>
-                    <p className="inv-product-image__hint">
-                      Preview from auto-fetch. Saved with the new product model.
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-              <label className="form-label">
-                Model name
+          <div className="inv-dialog__body add-laptop-wizard">
+            {step === 'model' && (
+              <div className="add-laptop-wizard__step">
+                <label className="form-label">Model number</label>
                 <input
                   className="input"
-                  value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
-                  placeholder="e.g. Vivobook 15"
-                />
-              </label>
-              <div className="add-laptop-wizard__actions-row">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={fetching || !modelNumber.trim()}
-                  onClick={() => void runGeminiFetch(true)}
-                >
-                  {fetching ? 'Fetching…' : 'Auto fetch'}
-                </button>
-              </div>
-              {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
-              <div className="add-laptop-wizard__tabs" role="tablist" aria-label="Model details">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={specTab === 'configuration'}
-                  className={`add-laptop-wizard__tab${specTab === 'configuration' ? ' add-laptop-wizard__tab--active' : ''}`}
-                  onClick={() => setSpecTab('configuration')}
-                >
-                  Configuration
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={specTab === 'description'}
-                  className={`add-laptop-wizard__tab${specTab === 'description' ? ' add-laptop-wizard__tab--active' : ''}`}
-                  onClick={() => setSpecTab('description')}
-                >
-                  Description
-                </button>
-              </div>
-              {specTab === 'configuration' ? (
-                <div className="add-laptop-wizard__form-grid" role="tabpanel">
-                  <label>
-                    CPU
-                    <input className="input" value={cpu} onChange={(e) => setCpu(e.target.value)} />
-                  </label>
-                  <label>
-                    GPU
-                    <input className="input" value={gpu} onChange={(e) => setGpu(e.target.value)} />
-                  </label>
-                  <label>
-                    RAM (GB)
-                    <input
-                      className="input"
-                      value={ramGb}
-                      onChange={(e) => setRamGb(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Storage
-                    <input
-                      className="input"
-                      value={storageValue}
-                      onChange={(e) => setStorageValue(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Storage unit
-                    <select
-                      className="input"
-                      value={storageUnit}
-                      onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}
-                    >
-                      {STORAGE_UNITS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Storage type
-                    <select
-                      className="input"
-                      value={storageType}
-                      onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}
-                    >
-                      {STORAGE_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="add-laptop-wizard__field-full">
-                    Display
-                    <input
-                      className="input"
-                      value={display}
-                      onChange={(e) => setDisplay(e.target.value)}
-                    />
-                  </label>
-                  <label className="add-laptop-wizard__field-full">
-                    Color options
-                    <input
-                      className="input"
-                      value={colorOptions}
-                      onChange={(e) => setColorOptions(e.target.value)}
-                      placeholder="e.g. Quiet Blue, Cool Silver"
-                    />
-                  </label>
-                  <label className="add-laptop-wizard__field-full">
-                    Additional specs
-                    <textarea
-                      className="input add-laptop-wizard__textarea"
-                      rows={4}
-                      value={specNotes}
-                      onChange={(e) => setSpecNotes(e.target.value)}
-                      placeholder="OS, battery, weight, connectivity, warranty… (auto-filled when available)"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div className="add-laptop-wizard__description-panel" role="tabpanel">
-                  <label className="form-label">
-                    Product description
-                    <textarea
-                      className="input add-laptop-wizard__textarea"
-                      rows={8}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Retail summary for staff — positioning, key features, ideal customer. Auto-filled when available."
-                    />
-                  </label>
-                </div>
-              )}
-              <div className="add-laptop-wizard__nav">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    forceRefreshOnNextSpecsFetch.current = true;
-                    autoFetchTriggered.current = false;
-                    setProductImagePreview(null);
-                    setStep('model');
+                  value={modelNumber}
+                  onChange={(e) => {
+                    setModelNumber(e.target.value);
+                    setPossibleModels([]);
+                    setFetchMessage(null);
                   }}
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={!modelName.trim() || !cpu.trim()}
-                  onClick={() => setStep('units')}
-                >
-                  Next — serial numbers
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'units' && (
-            <div className="add-laptop-wizard__step">
-              {mode === 'existing' && selectedModel && (
-                <div className="add-laptop-wizard__existing-summary">
-                  <ProductModelSummaryPanel model={selectedModel} />
-                  {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
-                </div>
-              )}
-              <span className="inv-add-serials__hint">
-                Colour is taken from the catalogue spec for this model — no need to enter it per
-                serial.
-              </span>
-              <label className="form-label">Number of units</label>
-              <input
-                type="number"
-                className="input"
-                min={1}
-                max={50}
-                value={unitCount}
-                onChange={(e) => setUnitCount(Number(e.target.value))}
-              />
-              <label className="form-label">Initial status</label>
-              <select
-                className="input"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as InventoryStatus)}
-              >
-                <option value="received">Received</option>
-                <option value="available">Available</option>
-              </select>
-              <div className="add-laptop-wizard__units">
-                <div className="add-laptop-wizard__unit-head" aria-hidden>
-                  <span>Serial</span>
-                  <span>Location</span>
-                  <span>Purchase price</span>
-                  <span />
-                </div>
-                {units.length > 1 && (
-                  <div className="add-laptop-wizard__apply-all">
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && modelNumber.trim() && !checking) {
+                      void continueFromModel();
+                    }
+                  }}
+                  placeholder="e.g. X151VA-AB5321WS"
+                  autoFocus
+                />
+                <p className="add-laptop-wizard__hint">
+                  We check the database automatically. Existing models skip configuration — you only
+                  add serial numbers.
+                </p>
+                {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
+                {possibleModels.length > 0 && (
+                  <div className="card" style={{ display: 'grid', gap: 10 }}>
+                    <strong>Possible model already in the catalogue</strong>
+                    {possibleModels.map((model) => (
+                      <div
+                        key={model.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div className="col-mono">{model.model_number}</div>
+                          <small>{model.model_name}</small>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={checking}
+                          onClick={() => void continueWithExistingModel(model)}
+                        >
+                          Use existing model
+                        </button>
+                      </div>
+                    ))}
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      disabled={!units[0]?.current_location_id}
-                      onClick={() =>
-                        setUnits((current) => {
-                          const first = current[0];
-                          if (!first) return current;
-                          return current.map((row) => ({
-                            ...row,
-                            current_location_id: first.current_location_id,
-                          }));
-                        })
-                      }
+                      disabled={checking}
+                      onClick={continueAsNewModel}
                     >
-                      Apply first location to all
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={!units[0]?.purchase_price.trim()}
-                      onClick={() =>
-                        setUnits((current) => {
-                          const first = current[0];
-                          if (!first) return current;
-                          return current.map((row) => ({
-                            ...row,
-                            purchase_price: first.purchase_price,
-                          }));
-                        })
-                      }
-                    >
-                      Apply first purchase price to all
+                      Add as a new model instead
                     </button>
                   </div>
                 )}
-                {units.map((unit, index) => (
-                  <div
-                    key={index}
-                    className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices"
-                  >
-                    <input
-                      className="input col-mono"
-                      placeholder={`Serial ${index + 1}`}
-                      value={unit.serial_number}
-                      onChange={(e) =>
-                        setUnits((current) =>
-                          current.map((row, i) =>
-                            i === index ? { ...row, serial_number: e.target.value } : row,
-                          ),
-                        )
-                      }
-                    />
-                    <select
-                      className="input"
-                      value={unit.current_location_id}
-                      onChange={(e) =>
-                        setUnits((current) =>
-                          current.map((row, i) =>
-                            i === index
-                              ? { ...row, current_location_id: Number(e.target.value) }
-                              : row,
-                          ),
-                        )
-                      }
-                    >
-                      {locations.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="input inv-price-input"
-                      placeholder="Purchase price"
-                      inputMode="decimal"
-                      value={unit.purchase_price}
-                      onChange={(e) =>
-                        setUnits((current) =>
-                          current.map((row, i) =>
-                            i === index ? { ...row, purchase_price: e.target.value } : row,
-                          ),
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="app-toolbar-icon-btn"
-                      aria-label="Remove unit"
-                      disabled={units.length <= 1}
-                      onClick={() => removeUnit(index)}
-                    >
-                      <Trash2 size={14} aria-hidden />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {error && <p className="inv-dialog__error">{error}</p>}
-              <div className="add-laptop-wizard__nav">
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setStep(mode === 'existing' ? 'model' : 'specs')}
+                  className="btn btn-primary"
+                  disabled={!modelNumber.trim() || checking || possibleModels.length > 0}
+                  onClick={() => void continueFromModel()}
                 >
-                  Back
+                  {checking ? 'Checking database…' : 'Continue'}
                 </button>
-                {mode === 'existing' ? (
+              </div>
+            )}
+
+            {step === 'specs' && (
+              <div className="add-laptop-wizard__step">
+                <p className="add-laptop-wizard__hint">
+                  New model <span className="col-mono">{modelNumber}</span>
+                  {fetching
+                    ? ' — auto-fetching configuration…'
+                    : ' — confirm or edit configuration below.'}
+                </p>
+                {productImagePreview || productImageUrl ? (
+                  <div className="add-laptop-wizard__image">
+                    <div className="inv-product-image">
+                      <div className="inv-product-image__frame">
+                        <img
+                          src={productImagePreview || productImageUrl || ''}
+                          alt={modelName || modelNumber}
+                          className="inv-product-image__img"
+                        />
+                        <span className="inv-product-image__badge inv-product-image__badge--remote">
+                          Auto fetch
+                        </span>
+                      </div>
+                      <p className="inv-product-image__hint">
+                        Preview from auto-fetch. Saved with the new product model.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                <label className="form-label">
+                  Model name
+                  <input
+                    className="input"
+                    value={modelName}
+                    onChange={(e) => setModelName(e.target.value)}
+                    placeholder="e.g. Vivobook 15"
+                  />
+                </label>
+                <div className="add-laptop-wizard__actions-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={fetching || !modelNumber.trim()}
+                    onClick={() => {
+                      autoFetchTriggered.current = false;
+                      void runGeminiFetch(true);
+                    }}
+                  >
+                    {fetching ? 'Fetching…' : 'Auto fetch'}
+                  </button>
+                </div>
+                {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
+                <div className="add-laptop-wizard__tabs" role="tablist" aria-label="Model details">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={specTab === 'configuration'}
+                    className={`add-laptop-wizard__tab${specTab === 'configuration' ? ' add-laptop-wizard__tab--active' : ''}`}
+                    onClick={() => setSpecTab('configuration')}
+                  >
+                    Configuration
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={specTab === 'description'}
+                    className={`add-laptop-wizard__tab${specTab === 'description' ? ' add-laptop-wizard__tab--active' : ''}`}
+                    onClick={() => setSpecTab('description')}
+                  >
+                    Description
+                  </button>
+                </div>
+                {specTab === 'configuration' ? (
+                  <div className="add-laptop-wizard__form-grid" role="tabpanel">
+                    <label>
+                      CPU
+                      <input
+                        className="input"
+                        value={cpu}
+                        onChange={(e) => setCpu(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      GPU
+                      <input
+                        className="input"
+                        value={gpu}
+                        onChange={(e) => setGpu(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      RAM (GB)
+                      <input
+                        className="input"
+                        value={ramGb}
+                        onChange={(e) => setRamGb(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Storage
+                      <input
+                        className="input"
+                        value={storageValue}
+                        onChange={(e) => setStorageValue(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Storage unit
+                      <select
+                        className="input"
+                        value={storageUnit}
+                        onChange={(e) => setStorageUnit(e.target.value as 'GB' | 'TB')}
+                      >
+                        {STORAGE_UNITS.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Storage type
+                      <select
+                        className="input"
+                        value={storageType}
+                        onChange={(e) => setStorageType(e.target.value as 'SSD' | 'HDD')}
+                      >
+                        {STORAGE_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="add-laptop-wizard__field-full">
+                      Display
+                      <input
+                        className="input"
+                        value={display}
+                        onChange={(e) => setDisplay(e.target.value)}
+                      />
+                    </label>
+                    <label className="add-laptop-wizard__field-full">
+                      Color options
+                      <input
+                        className="input"
+                        value={colorOptions}
+                        onChange={(e) => setColorOptions(e.target.value)}
+                        placeholder="e.g. Quiet Blue, Cool Silver"
+                      />
+                    </label>
+                    <label className="add-laptop-wizard__field-full">
+                      Additional specs
+                      <textarea
+                        className="input add-laptop-wizard__textarea"
+                        rows={4}
+                        value={specNotes}
+                        onChange={(e) => setSpecNotes(e.target.value)}
+                        placeholder="OS, battery, weight, connectivity, warranty… (auto-filled when available)"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="add-laptop-wizard__description-panel" role="tabpanel">
+                    <label className="form-label">
+                      Product description
+                      <textarea
+                        className="input add-laptop-wizard__textarea"
+                        rows={8}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Retail summary for staff — positioning, key features, ideal customer. Auto-filled when available."
+                      />
+                    </label>
+                  </div>
+                )}
+                <div className="add-laptop-wizard__nav">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      forceRefreshOnNextSpecsFetch.current = true;
+                      autoFetchTriggered.current = false;
+                      setProductImagePreview(null);
+                      setStep('model');
+                    }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!modelName.trim() || !cpu.trim()}
+                    onClick={() => setStep('units')}
+                  >
+                    Next — serial numbers
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 'units' && (
+              <div className="add-laptop-wizard__step">
+                {mode === 'existing' && selectedModel && (
+                  <div className="add-laptop-wizard__existing-summary">
+                    <ProductModelSummaryPanel model={selectedModel} />
+                    {fetchMessage && <p className="add-laptop-wizard__hint">{fetchMessage}</p>}
+                  </div>
+                )}
+                <span className="inv-add-serials__hint">
+                  Colour is taken from the catalogue spec for this model — no need to enter it per
+                  serial.
+                </span>
+                <label className="form-label">Number of units</label>
+                <input
+                  type="number"
+                  className="input"
+                  min={1}
+                  max={50}
+                  value={unitCount}
+                  onChange={(e) => setUnitCount(Number(e.target.value))}
+                />
+                <label className="form-label">Initial status</label>
+                <select
+                  className="input"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as InventoryStatus)}
+                >
+                  <option value="received">Received</option>
+                  <option value="available">Available</option>
+                </select>
+                <div className="add-laptop-wizard__units">
+                  <div className="add-laptop-wizard__unit-head" aria-hidden>
+                    <span>Serial</span>
+                    <span>Location</span>
+                    <span>Purchase price</span>
+                    <span />
+                  </div>
+                  {units.length > 1 && (
+                    <div className="add-laptop-wizard__apply-all">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!units[0]?.current_location_id}
+                        onClick={() =>
+                          setUnits((current) => {
+                            const first = current[0];
+                            if (!first) return current;
+                            return current.map((row) => ({
+                              ...row,
+                              current_location_id: first.current_location_id,
+                            }));
+                          })
+                        }
+                      >
+                        Apply first location to all
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!units[0]?.purchase_price.trim()}
+                        onClick={() =>
+                          setUnits((current) => {
+                            const first = current[0];
+                            if (!first) return current;
+                            return current.map((row) => ({
+                              ...row,
+                              purchase_price: first.purchase_price,
+                            }));
+                          })
+                        }
+                      >
+                        Apply first purchase price to all
+                      </button>
+                    </div>
+                  )}
+                  {units.map((unit, index) => (
+                    <div
+                      key={index}
+                      className="add-laptop-wizard__unit-row add-laptop-wizard__unit-row--prices"
+                    >
+                      <input
+                        className="input col-mono"
+                        placeholder={`Serial ${index + 1}`}
+                        value={unit.serial_number}
+                        onChange={(e) =>
+                          setUnits((current) =>
+                            current.map((row, i) =>
+                              i === index ? { ...row, serial_number: e.target.value } : row,
+                            ),
+                          )
+                        }
+                      />
+                      <select
+                        className="input"
+                        value={unit.current_location_id}
+                        onChange={(e) =>
+                          setUnits((current) =>
+                            current.map((row, i) =>
+                              i === index
+                                ? { ...row, current_location_id: Number(e.target.value) }
+                                : row,
+                            ),
+                          )
+                        }
+                      >
+                        {locations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input inv-price-input"
+                        placeholder="Purchase price"
+                        inputMode="decimal"
+                        value={unit.purchase_price}
+                        onChange={(e) =>
+                          setUnits((current) =>
+                            current.map((row, i) =>
+                              i === index ? { ...row, purchase_price: e.target.value } : row,
+                            ),
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="app-toolbar-icon-btn"
+                        aria-label="Remove unit"
+                        disabled={units.length <= 1}
+                        onClick={() => removeUnit(index)}
+                      >
+                        <Trash2 size={14} aria-hidden />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {error && <p className="inv-dialog__error">{error}</p>}
+                <div className="add-laptop-wizard__nav">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setStep(mode === 'existing' ? 'model' : 'specs')}
+                  >
+                    Back
+                  </button>
+                  {mode === 'existing' ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={loading}
+                      onClick={() => void submit()}
+                    >
+                      {loading ? 'Adding…' : (submitLabelOverride ?? 'Add to inventory')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setStep('review')}
+                    >
+                      Review
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {step === 'review' && mode === 'new' && (
+              <div className="add-laptop-wizard__step">
+                <p>
+                  <strong>{modelNumber}</strong> — {modelName}
+                </p>
+                <p>{units.filter((u) => u.serial_number.trim()).length} unit(s) · New model</p>
+                <ul className="add-laptop-wizard__review-list">
+                  {units
+                    .filter((u) => u.serial_number.trim())
+                    .map((unit, index) => (
+                      <li key={index}>
+                        <span className="col-mono">{unit.serial_number}</span>
+                        <span>
+                          {locations.find((l) => l.id === unit.current_location_id)?.name}
+                        </span>
+                        <span>
+                          {unit.purchase_price.trim()
+                            ? formatInventoryPrice(parsePriceInput(unit.purchase_price))
+                            : '—'}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                {error && <p className="inv-dialog__error">{error}</p>}
+                <div className="add-laptop-wizard__nav">
+                  <button type="button" className="btn btn-ghost" onClick={() => setStep('units')}>
+                    Back
+                  </button>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -957,58 +1032,12 @@ export function AddLaptopWizard({
                   >
                     {loading ? 'Adding…' : (submitLabelOverride ?? 'Add to inventory')}
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setStep('review')}
-                  >
-                    Review
-                  </button>
-                )}
+                </div>
               </div>
-            </div>
-          )}
-
-          {step === 'review' && mode === 'new' && (
-            <div className="add-laptop-wizard__step">
-              <p>
-                <strong>{modelNumber}</strong> — {modelName}
-              </p>
-              <p>{units.filter((u) => u.serial_number.trim()).length} unit(s) · New model</p>
-              <ul className="add-laptop-wizard__review-list">
-                {units
-                  .filter((u) => u.serial_number.trim())
-                  .map((unit, index) => (
-                    <li key={index}>
-                      <span className="col-mono">{unit.serial_number}</span>
-                      <span>{locations.find((l) => l.id === unit.current_location_id)?.name}</span>
-                      <span>
-                        {unit.purchase_price.trim()
-                          ? formatInventoryPrice(parsePriceInput(unit.purchase_price))
-                          : '—'}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-              {error && <p className="inv-dialog__error">{error}</p>}
-              <div className="add-laptop-wizard__nav">
-                <button type="button" className="btn btn-ghost" onClick={() => setStep('units')}>
-                  Back
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={loading}
-                  onClick={() => void submit()}
-                >
-                  {loading ? 'Adding…' : (submitLabelOverride ?? 'Add to inventory')}
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

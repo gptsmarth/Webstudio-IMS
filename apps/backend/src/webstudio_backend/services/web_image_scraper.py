@@ -21,6 +21,7 @@ from webstudio_backend.services.product_image_service import (
     extract_image_urls_from_html,
     fetch_page_html,
     image_bytes_too_small,
+    image_has_extreme_aspect_ratio,
     is_safe_public_https_url,
     is_suspicious_placeholder_image_url,
     search_public_web_for_pages,
@@ -115,6 +116,19 @@ _UNWANTED_PATH_FRAGMENTS = (
     "magazine",
     "poster",
     "wallpaper",
+    "hdmi",
+    "displayport",
+    "thunderbolt",
+    "usb-c",
+    "usb4",
+    "type-c",
+    "connector",
+    "port-icon",
+    "feature-icon",
+    "spec-icon",
+    "certification",
+    "/icons/",
+    "/icon/",
     "/books/",
     "/book/",
     "books/",
@@ -147,6 +161,16 @@ _HARD_BLOCKED_PATH_FRAGMENTS = (
     "books/",
     "/ebook",
     "ebooks/",
+    "hdmi",
+    "displayport",
+    "thunderbolt",
+    "usb-c",
+    "usb4",
+    "connector",
+    "port-icon",
+    "feature-icon",
+    "spec-icon",
+    "certification",
 )
 
 
@@ -285,7 +309,11 @@ def url_mentions_model(url: str, model_number: str) -> bool:
     sku = _normalize_sku(model_number)
     if len(sku) < 5:
         return False
-    return sku in _normalize_sku(url)
+    normalized_url = _normalize_sku(url)
+    if sku in normalized_url:
+        return True
+    family = _normalize_sku(model_number.split("-", 1)[0])
+    return len(family) >= 5 and family in normalized_url
 
 
 def text_mentions_model(text: str, model_number: str) -> bool:
@@ -348,7 +376,7 @@ def is_relevant_product_image(
     if url_mentions_model(url, model_number):
         return True
     if is_manufacturer_image_host(url, brand_name=brand_name):
-        return True
+        return page_mentions_sku
     # Retailer images are only allowed when scraped from a page that mentions the SKU.
     if page_mentions_sku and is_retailer_image_host(url):
         path = urlparse(url).path.lower()
@@ -420,6 +448,10 @@ async def _is_usable_product_image(url: str, *, client: httpx.AsyncClient) -> bo
     if response.status_code not in {200, 206}:
         return False
     content = response.content
+    if image_bytes_too_small(content):
+        return False
+    if image_has_extreme_aspect_ratio(content):
+        return False
     # ASUS India store serves a generic 1200x1200 "coming soon" PNG (~21 KB) for missing SKUs.
     if len(content) < 30_000 and content[:8] == b"\x89PNG\r\n\x1a\n":
         return False

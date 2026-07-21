@@ -53,6 +53,25 @@ export function stripBrandPrefix(
   return out;
 }
 
+/** Laptop/part SKUs embedded in Tally marketing names (e.g. "Vivobook … UX3405CA-QL1014WS"). */
+const CATALOGUE_MODEL_NUMBER_PATTERN = /\b([A-Z][A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+)\b/gi;
+
+/**
+ * Pull the catalogue model number out of a long stock/marketing string so internet
+ * spec lookup and image discovery target the SKU, not the full Tally line name.
+ */
+export function extractCatalogueModelNumber(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return '';
+  const matches = [...trimmed.matchAll(CATALOGUE_MODEL_NUMBER_PATTERN)];
+  if (matches.length === 0) return trimmed;
+  const best = matches.reduce((longest, match) => {
+    const token = match[1]?.trim() ?? '';
+    return token.length > longest.length ? token : longest;
+  }, matches[0]?.[1]?.trim() ?? '');
+  return best.toUpperCase();
+}
+
 export function brandLogoSrc(name: string, logoFilename?: string | null): string {
   const file = BrandLogoRegistry.resolveLogoFilename(name, logoFilename);
   if (file) {

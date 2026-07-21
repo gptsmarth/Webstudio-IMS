@@ -5,6 +5,7 @@ import type { ProductModel } from '../../../services/api/ProductModelService';
 import type { StorageType, StorageUnit } from '../../../services/api/InventoryService';
 import { formatInventoryPrice, parsePriceInput } from '../../../lib/inventoryPrice';
 import { fetchProductSpecFromInternet } from '../../../lib/productSpecLookup';
+import { extractCatalogueModelNumber } from '../../../lib/catalogue';
 import { composeModelNotes } from '../../../lib/modelNotes';
 import { isAccessoryModel } from '../../../lib/productCategory';
 
@@ -138,11 +139,16 @@ export function InventoryModelEditDialog({
   };
 
   const handleRefetch = async () => {
-    if (!modelNumber.trim()) return;
+    const rawModel = modelNumber.trim();
+    if (!rawModel) return;
+    const lookupModelNumber = extractCatalogueModelNumber(rawModel) || rawModel;
+    if (lookupModelNumber !== rawModel) {
+      setModelNumber(lookupModelNumber);
+    }
     setRefetching(true);
     setError(null);
     try {
-      const spec = await fetchProductSpecFromInternet(modelNumber, {
+      const spec = await fetchProductSpecFromInternet(lookupModelNumber, {
         modelName: modelName || model.model_name,
         brandName: model.brand_name || undefined,
         forceRefresh: true,

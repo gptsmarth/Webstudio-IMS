@@ -40,17 +40,19 @@ export function InventoryPage(): JSX.Element {
   const nav = useInventoryNavStore();
   const getScrollTop = useInventoryNavStore((state) => state.getScrollTop);
   const setScrollTop = useInventoryNavStore((state) => state.setScrollTop);
-  const brandsScrollRef = useHierarchyScrollRef(
+  const { ref: brandsScrollRef, saveScrollNow: saveBrandsScroll } = useHierarchyScrollRef(
     'brands',
     nav.level === 'brands',
     getScrollTop,
     setScrollTop,
+    { ready: !hierarchy.loading },
   );
-  const modelsScrollRef = useHierarchyScrollRef(
+  const { ref: modelsScrollRef, saveScrollNow: saveModelsScroll } = useHierarchyScrollRef(
     `models-${nav.brandId ?? 0}`,
     nav.level === 'models',
     getScrollTop,
     setScrollTop,
+    { ready: !hierarchy.loading },
   );
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [addOpen, setAddOpen] = useState(false);
@@ -261,7 +263,10 @@ export function InventoryPage(): JSX.Element {
               loading={hierarchy.loading}
               variant="detailed"
               showSoldUnits
-              onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
+              onSelect={(brandId, brandName) => {
+                saveBrandsScroll();
+                nav.openBrand(brandId, brandName);
+              }}
             />
           </HierarchyLayer>
         )}
@@ -273,6 +278,7 @@ export function InventoryPage(): JSX.Element {
               rows={filteredModels}
               loading={hierarchy.loading}
               onSelect={(modelId, label) => {
+                saveModelsScroll();
                 workspace.selectItem(null);
                 nav.openModel(modelId, label);
               }}

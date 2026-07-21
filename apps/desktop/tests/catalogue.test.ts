@@ -3,6 +3,7 @@ import {
   brandLogoSrc,
   canWriteCatalogue,
   catalogueStatusLabel,
+  extractCatalogueModelNumber,
   locationTypeLabel,
   matchesSearch,
   paginateItems,
@@ -36,6 +37,14 @@ describe('catalogue utilities', () => {
     expect(brandLogoSrc('Dell', 'hp.svg')).toContain('assets/brand-logos/hp.svg');
     expect(brandLogoSrc('ASUS Laptops')).toContain('assets/brand-logos/asus.svg');
     expect(brandLogoSrc('Dell')).toMatch(/\.svg$/);
+  });
+
+  it('extracts catalogue model number from marketing names', () => {
+    expect(extractCatalogueModelNumber('Vivobook Go 14 OLED UX3405CA-QL1014WS')).toBe(
+      'UX3405CA-QL1014WS',
+    );
+    expect(extractCatalogueModelNumber('ASUS F1504FA-BQ2113WS')).toBe('F1504FA-BQ2113WS');
+    expect(extractCatalogueModelNumber('Epson L3350')).toBe('Epson L3350');
   });
 
   it('counts active models per brand only', () => {

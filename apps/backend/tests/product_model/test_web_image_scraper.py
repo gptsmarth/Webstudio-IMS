@@ -75,6 +75,42 @@ def test_book_path_fragments_are_blocked() -> None:
     assert is_relevant_product_image(notebook, "X1504VA-BQ342WS", brand_name="ASUS")
 
 
+def test_manufacturer_url_without_sku_requires_page_context() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    generic = "https://dlcdnwebimgs.asus.com/pub/ASUS/notebook/generic-hero.jpg"
+    assert not is_relevant_product_image(generic, "UX3405CA-QL1014WS", brand_name="ASUS")
+    assert is_relevant_product_image(
+        generic,
+        "UX3405CA-QL1014WS",
+        brand_name="ASUS",
+        page_mentions_sku=True,
+    )
+
+
+def test_hdmi_feature_path_is_blocked() -> None:
+    from webstudio_backend.services.web_image_scraper import is_relevant_product_image
+
+    hdmi = "https://dlcdnwebimgs.asus.com/pub/ASUS/notebook/hdmi-logo.jpg"
+    assert not is_relevant_product_image(hdmi, "UX3405CA-QL1014WS", brand_name="ASUS")
+
+
+def test_image_has_extreme_aspect_ratio_rejects_banners() -> None:
+    import io
+
+    from PIL import Image
+
+    from webstudio_backend.services.product_image_service import image_has_extreme_aspect_ratio
+
+    banner = io.BytesIO()
+    Image.new("RGB", (800, 120)).save(banner, format="JPEG")
+    assert image_has_extreme_aspect_ratio(banner.getvalue()) is True
+
+    product = io.BytesIO()
+    Image.new("RGB", (800, 600)).save(product, format="JPEG")
+    assert image_has_extreme_aspect_ratio(product.getvalue()) is False
+
+
 def test_image_bytes_too_small_rejects_tracking_pixels() -> None:
     import io
 

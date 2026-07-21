@@ -32,17 +32,19 @@ export function StockPage(): JSX.Element {
   const nav = useStockNavStore();
   const getScrollTop = useStockNavStore((state) => state.getScrollTop);
   const setScrollTop = useStockNavStore((state) => state.setScrollTop);
-  const brandsScrollRef = useHierarchyScrollRef(
+  const { ref: brandsScrollRef, saveScrollNow: saveBrandsScroll } = useHierarchyScrollRef(
     'brands',
     nav.level === 'brands',
     getScrollTop,
     setScrollTop,
+    { ready: !hierarchy.loading },
   );
-  const modelsScrollRef = useHierarchyScrollRef(
+  const { ref: modelsScrollRef, saveScrollNow: saveModelsScroll } = useHierarchyScrollRef(
     `models-${nav.brandId ?? 0}`,
     nav.level === 'models',
     getScrollTop,
     setScrollTop,
+    { ready: !hierarchy.loading },
   );
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
@@ -261,7 +263,10 @@ export function StockPage(): JSX.Element {
               ref={brandsScrollRef}
               summaries={hierarchy.brandSummaries}
               loading={hierarchy.loading}
-              onSelect={(brandId, brandName) => nav.openBrand(brandId, brandName)}
+              onSelect={(brandId, brandName) => {
+                saveBrandsScroll();
+                nav.openBrand(brandId, brandName);
+              }}
             />
           </HierarchyLayer>
         )}
@@ -273,7 +278,10 @@ export function StockPage(): JSX.Element {
               rows={modelRows}
               loading={hierarchy.loading}
               showPrice={nav.showSellingPrice}
-              onSelect={(modelId, label) => nav.openModel(modelId, label)}
+              onSelect={(modelId, label) => {
+                saveModelsScroll();
+                nav.openModel(modelId, label);
+              }}
             />
           </HierarchyLayer>
         )}

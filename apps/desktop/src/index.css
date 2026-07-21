@@ -741,6 +741,21 @@
   .animate-slide-in {
     animation: slideInRight var(--duration-slow) ease-out both;
   }
+
+  /* Dialog enter — slide only; avoid opacity:0 flash that looks like a gray screen. */
+  @keyframes dialogEnter {
+    from {
+      transform: translateX(8px);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  .inv-dialog--enter {
+    animation: dialogEnter var(--duration-slow) ease-out both;
+  }
+
   .animate-spin-ds {
     animation: spin 0.7s linear infinite;
   }

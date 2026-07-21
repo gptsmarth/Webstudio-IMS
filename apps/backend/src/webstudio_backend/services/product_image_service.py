@@ -98,6 +98,26 @@ def image_bytes_too_small(content: bytes) -> bool:
     return min(width, height) < MIN_PRODUCT_IMAGE_DIMENSION
 
 
+MAX_PRODUCT_IMAGE_ASPECT_RATIO = 2.5
+
+
+def image_has_extreme_aspect_ratio(content: bytes) -> bool:
+    """Reject wide banners / port logos (e.g. HDMI badges) that are not product photos."""
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(content)) as img:
+            width, height = img.size
+    except Exception:
+        return False
+    if width <= 0 or height <= 0:
+        return True
+    ratio = max(width, height) / min(width, height)
+    return ratio > MAX_PRODUCT_IMAGE_ASPECT_RATIO
+
+
 def _looks_like_image_url(url: str) -> bool:
     path = urlparse(url).path.lower()
     return any(path.endswith(ext) for ext in IMAGE_EXTENSIONS)

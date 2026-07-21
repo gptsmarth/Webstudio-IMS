@@ -80,7 +80,12 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
         modelId,
         modelLabel,
       }),
-    goToBrands: () => set({ ...initial }),
+    goToBrands: () =>
+      set((state) => ({
+        ...initial,
+        scrollTops: state.scrollTops,
+        showSellingPrice: state.showSellingPrice,
+      })),
     goToModels: () =>
       set((state) => ({
         level: 'models',
@@ -98,7 +103,11 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
       localStorage.setItem(STOCK_SHOW_SELLING_PRICE_KEY, String(showSellingPrice));
       set({ showSellingPrice });
     },
-    reset: () => set({ ...initial, showSellingPrice: readShowSellingPrice() }),
+    reset: () =>
+      set({
+        ...initial,
+        showSellingPrice: readShowSellingPrice(),
+      }),
   }));
 }
 
