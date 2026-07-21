@@ -1,7 +1,7 @@
 name: webstudio_ims
 description: Official WEBSTUDIO IMS mobile client — Android primary, iOS compatible.
 publish_to: none
-version: 1.9.12+12
+version: 1.9.13+13
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -65,6 +65,11 @@ flutter_native_splash:
   web: false
 
 flutter:
+  # Keep CocoaPods for iOS CI/release. Flutter 3.44+ enables SwiftPM by default;
+  # GitHub Actions macOS runners intermittently fail SPM resolve with:
+  #   The file "manifest.swift" couldn't be saved in the folder "TemporaryDirectory.*"
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true
   assets:
     - assets/images/

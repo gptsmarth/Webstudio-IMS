@@ -31,7 +31,10 @@ Milestone: 12H
 bash scripts/release/build-ios-ipa.sh
 ```
 
-Requires Xcode, signing certificates, `ExportOptions.plist`. CI iOS job disabled until secrets configured — see [M12C Installer Guide](../m12c/INSTALLER_GUIDE.md).
+Requires Xcode, signing certificates, `ExportOptions.plist`. CI builds an
+unsigned archive (`CODE_SIGNING_ALLOWED=NO`) with CocoaPods (SwiftPM disabled
+in the Flutter app to avoid CI package-resolve failures). See
+[M12C Installer Guide](../m12c/INSTALLER_GUIDE.md).
 
 ---
 

@@ -8,10 +8,27 @@ RELEASE_DIR="$ROOT/release/mobile/ios"
 
 bash "$ROOT/scripts/release/sync-branding-assets.sh"
 
+# Stable temp dir — GitHub Actions + Flutter SPM previously failed with:
+#   The file "manifest.swift" couldn't be saved in TemporaryDirectory.*
+# Even with SPM disabled, keep a project-local TMPDIR for Xcode tooling.
+export TMPDIR="${TMPDIR:-$ROOT/.tmp/ios-build}"
+mkdir -p "$TMPDIR"
+# Avoid inherited GIT_CONFIG_* overrides that can break package/git resolution.
+export GIT_CONFIG_COUNT=0
+
 cd "$FLUTTER_DIR"
+
+# Project pubspec disables SPM; reinforce for the CI Flutter install.
+flutter config --no-enable-swift-package-manager >/dev/null
+
 flutter pub get
 dart run flutter_launcher_icons
 dart run flutter_native_splash:create
+
+echo "[release] Installing CocoaPods dependencies..."
+cd ios
+pod install --repo-update
+cd ..
 
 echo "[release] Building iOS Release (no codesign)..."
 flutter build ios --release --no-codesign

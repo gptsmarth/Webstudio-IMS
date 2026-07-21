@@ -50,3 +50,6 @@ apps/mobile_flutter/android/keystores/
 
 # Logs
 *.log
+
+# Local build scratch (iOS release TMPDIR, etc.)
+.tmp/

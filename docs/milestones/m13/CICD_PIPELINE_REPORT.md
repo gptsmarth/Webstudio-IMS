@@ -164,10 +164,11 @@ git push origin v0.2.0
 
 ## Known limitations
 
-1. **iOS codesign** — Archive builds with `CODE_SIGNING_ALLOWED=NO` in CI; App Store export requires operator certificates.  
-2. **Windows/macOS signing** — Optional signing secrets not configured (M12C documented).  
-3. **workflow_dispatch** — Manual **Enterprise Release** runs build all artifacts but skip GitHub Release publish (tag required).  
-4. **Integration tests** — Flutter integration tests excluded from quality-gate (unit/widget only on ubuntu).  
+1. **iOS codesign** — Archive builds with `CODE_SIGNING_ALLOWED=NO` in CI; App Store export requires operator certificates.
+2. **iOS SwiftPM** — Flutter SPM is disabled for this app; `build-ios-ipa.sh` uses CocoaPods to avoid intermittent GitHub Actions failures writing `manifest.swift` under `TemporaryDirectory.*`.
+3. **Windows/macOS signing** — Optional `WIN_CSC_*` / platform secrets; unsigned builds may trigger SmartScreen (M12C documented).
+4. **workflow_dispatch** — Manual **Enterprise Release** runs build all artifacts but skip GitHub Release publish (tag required).
+5. **Integration tests** — Flutter integration tests excluded from quality-gate (unit/widget only on ubuntu).
 
 ---
 

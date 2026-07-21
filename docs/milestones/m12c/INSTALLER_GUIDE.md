@@ -147,6 +147,10 @@ pnpm release:sync-branding
 bash scripts/release/build-ios-ipa.sh
 ```
 
+The release script uses **CocoaPods** (Swift Package Manager is disabled in
+`apps/mobile_flutter/pubspec.yaml`). This avoids intermittent GitHub Actions
+failures where Xcode cannot write `manifest.swift` under `TemporaryDirectory.*`.
+
 ### Archive / IPA (Xcode)
 
 1. Product → Archive (Release configuration)  
