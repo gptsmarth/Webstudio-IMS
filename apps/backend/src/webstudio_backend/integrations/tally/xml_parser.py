@@ -438,8 +438,8 @@ def parse_voucher_element(
 ) -> TallyVoucher | None:
     guid = _voucher_field(voucher, "GUID", "REMOTEID")
     voucher_number = _voucher_field(voucher, "VOUCHERNUMBER")
-    voucher_type = _voucher_field(voucher, "VOUCHERTYPENAME", "VCHTYPE")
-    if not guid or not voucher_type:
+    voucher_type = _voucher_field(voucher, "VOUCHERTYPENAME", "VCHTYPE") or ""
+    if not guid:
         return None
     if not voucher_number:
         voucher_number = guid
