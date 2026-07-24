@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { parseApiError } from '../../lib/apiError';
 import { userDisplayName } from '../../lib/users';
 import { assessPasswordStrength, generateTemporaryPassword } from '../../lib/passwordStrength';
 import type { UserSummary } from '../../services/api/UserService';
@@ -37,7 +38,11 @@ export function ResetPasswordDialog({
 
   const submit = async () => {
     if (!strength.meetsMinimum) {
-      setError('Password does not meet minimum strength.');
+      setError(
+        strength.hints.length > 0
+          ? `Password does not meet policy: ${strength.hints.join('; ')}.`
+          : 'Password does not meet minimum strength.',
+      );
       return;
     }
     if (!confirmed) {
@@ -49,8 +54,7 @@ export function ResetPasswordDialog({
       await onConfirm(password);
       onClose();
     } catch (err: unknown) {
-      const message = err as { message?: string };
-      setError(message.message ?? 'Unable to reset password.');
+      setError(parseApiError(err, 'Unable to reset password.'));
     }
   };
 
@@ -105,6 +109,9 @@ export function ResetPasswordDialog({
             </div>
             <span className="usr-strength__label">{strength.label}</span>
           </div>
+          {strength.hints.length > 0 && (
+            <p className="usr-strength__hint">{strength.hints.join(' · ')}</p>
+          )}
           <label className="cat-field cat-field--checkbox usr-reset-confirm">
             <input
               type="checkbox"

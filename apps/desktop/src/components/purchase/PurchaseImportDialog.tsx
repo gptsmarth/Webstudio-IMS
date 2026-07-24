@@ -258,6 +258,7 @@ export function PurchaseImportDialog({
         initialIdentifierType="model_number"
         initialModelName={strippedStockName}
         initialSerials={group.serials.map((cell) => cell.serial_number)}
+        initialUnitCount={group.quantity}
         initialPurchasePrice={defaultUnitPrice}
         titleOverride={`Add accessory — ${brandName} (Purchase ${voucher.voucher_number})`}
         submitLabelOverride="Import to inventory"
@@ -281,6 +282,7 @@ export function PurchaseImportDialog({
         initialModelName={strippedStockName}
         forceRefreshInitialAutoFetch
         initialSerials={group.serials.map((cell) => cell.serial_number)}
+        initialUnitCount={group.quantity}
         initialPurchasePrice={defaultUnitPrice}
         titleOverride={`Add model — ${brandName} (Purchase ${voucher.voucher_number})`}
         submitLabelOverride="Import to inventory"

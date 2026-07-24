@@ -44,6 +44,13 @@ function defaultBackfillFrom(): string {
   return start.toISOString().slice(0, 10);
 }
 
+/** Recent window for Purchase "Sync now" — Register-first backfill, not Day Book-only. */
+function recentPurchaseSyncFrom(): string {
+  const start = new Date();
+  start.setDate(start.getDate() - 14);
+  return start.toISOString().slice(0, 10);
+}
+
 export function PurchasePage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
   const canImport = session?.permissions?.includes(P.purchase.import) ?? false;
@@ -123,19 +130,25 @@ export function PurchasePage(): JSX.Element {
     setError(null);
     setNotice(null);
     try {
-      await TallyService.triggerSync();
+      // Use the same Register-first path as "Fetch older" for a recent window.
+      // Full Tally Sync Now often misses purchases when Day Book omits them and
+      // Voucher Register fails silently.
+      const from = recentPurchaseSyncFrom();
+      const result = await PurchaseService.backfill(from);
       setNotice(
-        'Tally sync started. Fresh purchase invoices appear here in a few seconds — use Refresh if needed.',
+        `Fetched ${result.fetched} purchase invoice(s) since ${result.from_date} — ${result.new} new added to the queue.`,
       );
-      window.setTimeout(() => {
-        void loadQueue();
-      }, 4000);
+      await loadQueue();
+      // Keep sales sync moving in the background when permitted.
+      if (canSyncTally) {
+        void TallyService.triggerSync().catch(() => undefined);
+      }
     } catch (err) {
-      setError(parseApiError(err, 'Failed to start Tally sync.'));
+      setError(parseApiError(err, 'Failed to fetch the latest purchases from Tally.'));
     } finally {
       setSyncing(false);
     }
-  }, [loadQueue]);
+  }, [canSyncTally, loadQueue]);
 
   const openDetail = useCallback(async (voucherId: number) => {
     setDetailLoading(true);
@@ -404,13 +417,13 @@ export function PurchasePage(): JSX.Element {
             <CalendarClock size={14} aria-hidden /> Fetch older purchases
           </button>
         )}
-        {canSyncTally && (
+        {canView && (
           <button
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => void runSyncNow()}
             disabled={syncing}
-            title="Pull the latest sales and purchase invoices from Tally"
+            title="Pull recent purchase invoices from Tally (last 14 days)"
           >
             <RefreshCw size={14} aria-hidden className={syncing ? 'stg-spin' : undefined} />{' '}
             {syncing ? 'Syncing…' : 'Sync now'}

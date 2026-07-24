@@ -14,6 +14,7 @@ import type { ProductModel } from '../../services/api/ProductModelService';
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { parsePriceInput } from '../../lib/inventoryPrice';
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
+import { buildSeededWizardUnits } from '../../lib/seededWizardUnits';
 import {
   ACCESSORY_KINDS,
   accessoryKindLabel,
@@ -46,6 +47,8 @@ interface AddAccessoryWizardProps {
   initialIdentifierType?: AccessoryIdentifierType;
   initialModelName?: string;
   initialSerials?: string[];
+  /** When set (purchase qty), pad empty serial rows up to this count. */
+  initialUnitCount?: number;
   /** Default per-unit purchase price (e.g. Tally line total ÷ quantity). Editable. */
   initialPurchasePrice?: string;
   titleOverride?: string;
@@ -83,6 +86,7 @@ export function AddAccessoryWizard({
   initialIdentifierType,
   initialModelName,
   initialSerials,
+  initialUnitCount,
   initialPurchasePrice,
   titleOverride,
   submitLabelOverride,
@@ -123,6 +127,7 @@ export function AddAccessoryWizard({
   const autoFetchKeyRef = useRef<string | null>(null);
   const forceRefreshOnNextSpecsFetch = useRef(false);
   const wasOpenRef = useRef(false);
+  const skipUnitResizeRef = useRef(false);
 
   // Reset only when the dialog opens — not when `locations` is refreshed mid-wizard.
   useEffect(() => {
@@ -132,7 +137,16 @@ export function AddAccessoryWizard({
     }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
-    const seededSerials = (initialSerials ?? []).filter((serial) => serial.trim());
+    const seededUnits = buildSeededWizardUnits({
+      serials: initialSerials,
+      unitCount: initialUnitCount,
+      locationId: locations[0]?.id ?? 0,
+      purchasePrice: initialPurchasePrice ?? '',
+    });
+    const seededSerials = seededUnits
+      .map((unit) => unit.serial_number)
+      .filter((serial) => serial.trim());
+    skipUnitResizeRef.current = true;
     setStep('model');
     setIdentifierType(initialIdentifierType ?? 'part_number');
     setIdentifier(initialIdentifier ?? '');
@@ -146,23 +160,8 @@ export function AddAccessoryWizard({
     setFetchMessage(null);
     setChecking(false);
     setFetching(false);
-    setUnitCount(Math.max(1, seededSerials.length));
-    const seededPrice = initialPurchasePrice ?? '';
-    setUnits(
-      seededSerials.length > 0
-        ? seededSerials.map((serial) => ({
-            serial_number: serial,
-            current_location_id: locations[0]?.id ?? 0,
-            purchase_price: seededPrice,
-          }))
-        : [
-            {
-              serial_number: '',
-              current_location_id: locations[0]?.id ?? 0,
-              purchase_price: seededPrice,
-            },
-          ],
-    );
+    setUnitCount(seededUnits.length);
+    setUnits(seededUnits);
     setStatus('available');
     setSharedSerial(allowDuplicateSerials ? (seededSerials[0] ?? '') : '');
     setColorOptions('');
@@ -189,8 +188,13 @@ export function AddAccessoryWizard({
   }, [open, locations]);
 
   useEffect(() => {
+    if (skipUnitResizeRef.current) {
+      skipUnitResizeRef.current = false;
+      return;
+    }
     const count = Math.max(1, Math.min(50, unitCount));
     setUnits((current) => {
+      if (current.length === count) return current;
       const next = [...current];
       while (next.length < count) {
         next.push({

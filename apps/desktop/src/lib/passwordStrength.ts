@@ -8,6 +8,7 @@ export interface PasswordStrengthResult {
   hints: string[];
 }
 
+/** Match backend PasswordPolicyService defaults (min 10, upper, lower, number). */
 const MIN_LENGTH = 10;
 
 export function assessPasswordStrength(password: string): PasswordStrengthResult {
@@ -17,22 +18,28 @@ export function assessPasswordStrength(password: string): PasswordStrengthResult
   if (password.length >= MIN_LENGTH) points += 1;
   else hints.push(`At least ${MIN_LENGTH} characters`);
 
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) points += 1;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  if (hasUpper && hasLower) points += 1;
   else hints.push('Mix upper and lower case');
 
-  if (/\d/.test(password)) points += 1;
+  const hasNumber = /\d/.test(password);
+  if (hasNumber) points += 1;
   else hints.push('Include a number');
 
-  if (/[^A-Za-z0-9]/.test(password)) points += 1;
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+  if (hasSymbol) points += 1;
 
-  const meetsMinimum = password.length >= MIN_LENGTH;
+  // Server rejects passwords that fail these rules — keep the desktop gate in sync.
+  const meetsMinimum = password.length >= MIN_LENGTH && hasUpper && hasLower && hasNumber;
+
   let score: PasswordStrength = 'weak';
   let label = 'Weak';
   let percent = 20;
 
   if (!meetsMinimum) {
     score = 'weak';
-    label = 'Too short';
+    label = hints[0] ?? 'Too weak';
     percent = Math.min(25, Math.round((password.length / MIN_LENGTH) * 25));
   } else if (points <= 2) {
     score = 'fair';

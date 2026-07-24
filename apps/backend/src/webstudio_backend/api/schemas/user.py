@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from webstudio_backend.core.permissions import permissions_for_role
 from webstudio_backend.infrastructure.database.enums import ThemePreference, UserRole, UserStatus
@@ -253,4 +253,8 @@ class AssignUserAccessRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    temporary_password: str
+    # Accept legacy mobile clients that sent ``new_password``.
+    temporary_password: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("temporary_password", "new_password"),
+    )

@@ -44,7 +44,7 @@ class UserRepository {
   Future<void> resetPassword(int id, String newPassword) async {
     await _api.post(
       '${ApiPaths.users}/$id/reset-password',
-      data: {'new_password': newPassword},
+      data: {'temporary_password': newPassword},
       parser: (_) => null,
     );
   }

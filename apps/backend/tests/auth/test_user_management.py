@@ -91,6 +91,49 @@ async def test_reset_password_and_disable_user(
 
 
 @pytest.mark.asyncio
+async def test_reset_password_endpoint_accepts_policy_password(
+    api_client: AsyncClient,
+    initialized_system,
+) -> None:
+    main_headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    create_response = await api_client.post(
+        "/api/v1/users",
+        headers=main_headers,
+        json={
+            "username": "resetme",
+            "display_name": "Reset Me",
+            "role": "salesperson",
+            "temporary_password": TEST_PASSWORD,
+        },
+    )
+    assert create_response.status_code == 201
+    user_id = create_response.json()["data"]["id"]
+
+    weak = await api_client.post(
+        f"/api/v1/users/{user_id}/reset-password",
+        headers=main_headers,
+        json={"temporary_password": "alllowercase1"},
+    )
+    assert weak.status_code == 422
+    assert "uppercase" in weak.json()["error"]["message"].lower()
+
+    ok = await api_client.post(
+        f"/api/v1/users/{user_id}/reset-password",
+        headers=main_headers,
+        json={"temporary_password": "TempReset99!"},
+    )
+    assert ok.status_code == 200
+
+    # Legacy mobile clients sent new_password — keep accepting it.
+    legacy = await api_client.post(
+        f"/api/v1/users/{user_id}/reset-password",
+        headers=main_headers,
+        json={"new_password": "TempReset88!"},
+    )
+    assert legacy.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_role_permissions_endpoint(
     api_client: AsyncClient,
     initialized_system,

@@ -9199,11 +9199,14 @@
   }
 
   .hierarchy-layer--inactive {
+    /* Keep the pane mounted and sized so scrollTop is preserved across drill-down. */
     visibility: hidden;
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 0;
+    /* Avoid browsers collapsing overflow scroll while the layer is hidden. */
+    content-visibility: visible;
   }
 
   .hierarchy-layer--active {

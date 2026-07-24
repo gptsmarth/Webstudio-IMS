@@ -347,6 +347,10 @@ class TallyXmlClient:
         Day Book often omits Purchase vouchers even when the export succeeds, so
         we always supplement with a read-only Voucher Register pull and merge by
         GUID on the sync side (register wins when it carries richer line detail).
+
+        If Register is empty/fails while Day Book still returns sales, keep trying
+        the historical purchase fallbacks (ranged Day Book / TDL collection) so
+        Sync Now does not silently miss invoices that Fetch older would find.
         """
         results: dict[str, str] = {}
         day_book_xml = await self.export_day_book(
@@ -366,6 +370,29 @@ class TallyXmlClient:
         )
         if register_xml is not None:
             results["voucher_register"] = register_xml
+        else:
+            for key, payload in (
+                (
+                    "day_book_ranged",
+                    self._day_book_ranged_export_request(
+                        company_name=company_name,
+                        from_date=from_date,
+                        to_date=to_date,
+                    ),
+                ),
+                (
+                    "voucher_collection",
+                    self._voucher_collection_export_request(
+                        company_name=company_name,
+                        from_date=from_date,
+                        to_date=to_date,
+                    ),
+                ),
+            ):
+                fallback_xml = await self._try_export(payload)
+                if fallback_xml is not None:
+                    results[key] = fallback_xml
+                    break
 
         if results:
             return results

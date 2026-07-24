@@ -81,11 +81,12 @@ describe('users helpers', () => {
 });
 
 describe('password strength', () => {
-  it('requires minimum length', () => {
-    const weak = assessPasswordStrength('short');
-    expect(weak.meetsMinimum).toBe(false);
-    const strong = assessPasswordStrength('LongEnough1!');
-    expect(strong.meetsMinimum).toBe(true);
+  it('requires length, upper, lower, and number like the server policy', () => {
+    expect(assessPasswordStrength('short').meetsMinimum).toBe(false);
+    expect(assessPasswordStrength('longenough1').meetsMinimum).toBe(false); // no uppercase
+    expect(assessPasswordStrength('LONGENOUGH1').meetsMinimum).toBe(false); // no lowercase
+    expect(assessPasswordStrength('LongEnough').meetsMinimum).toBe(false); // no number
+    expect(assessPasswordStrength('LongEnough1!').meetsMinimum).toBe(true);
   });
 
   it('generates passwords meeting minimum length', () => {

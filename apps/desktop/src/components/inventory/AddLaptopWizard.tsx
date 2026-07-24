@@ -19,6 +19,7 @@ import type {
 import type { InventoryStatus } from '../../services/api/InventoryService';
 import { formatInventoryPrice, parsePriceInput } from '../../lib/inventoryPrice';
 import { defaultUnitColorFromOptions } from '../../lib/inventoryDomain';
+import { buildSeededWizardUnits } from '../../lib/seededWizardUnits';
 import { ProductModelSummaryPanel } from './ProductModelSummaryPanel';
 import { ProductSpecService } from '../../services/api/ProductSpecService';
 import { ModalPortal } from '../ModalPortal';
@@ -61,6 +62,8 @@ interface AddLaptopWizardProps {
   initialModelNumber?: string;
   initialModelName?: string;
   initialSerials?: string[];
+  /** When set (purchase qty), pad empty serial rows up to this count. */
+  initialUnitCount?: number;
   /** Default per-unit purchase price (e.g. Tally line total ÷ quantity). Editable. */
   initialPurchasePrice?: string;
   titleOverride?: string;
@@ -94,6 +97,7 @@ export function AddLaptopWizard({
   initialModelNumber,
   initialModelName,
   initialSerials,
+  initialUnitCount,
   initialPurchasePrice,
   titleOverride,
   submitLabelOverride,
@@ -137,6 +141,8 @@ export function AddLaptopWizard({
   const autoFetchTriggered = useRef(false);
   const forceRefreshOnNextSpecsFetch = useRef(false);
   const wasOpenRef = useRef(false);
+  /** Skip the unitCount resize effect once after open-seed so we do not truncate serials. */
+  const skipUnitResizeRef = useRef(false);
 
   const brandModels = productModels.filter((model) => model.brand_id === brandId);
   const selectedModel =
@@ -151,7 +157,13 @@ export function AddLaptopWizard({
     }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
-    const seededSerials = (initialSerials ?? []).filter((serial) => serial.trim());
+    const seededUnits = buildSeededWizardUnits({
+      serials: initialSerials,
+      unitCount: initialUnitCount,
+      locationId: locations[0]?.id ?? 0,
+      purchasePrice: initialPurchasePrice ?? '',
+    });
+    skipUnitResizeRef.current = true;
     setStep('model');
     const seededModel = initialModelNumber ?? '';
     setModelNumber(extractCatalogueModelNumber(seededModel) || seededModel);
@@ -163,23 +175,8 @@ export function AddLaptopWizard({
     setFetchMessage(null);
     setChecking(false);
     setFetching(false);
-    setUnitCount(Math.max(1, seededSerials.length));
-    const seededPrice = initialPurchasePrice ?? '';
-    setUnits(
-      seededSerials.length > 0
-        ? seededSerials.map((serial) => ({
-            serial_number: serial,
-            current_location_id: locations[0]?.id ?? 0,
-            purchase_price: seededPrice,
-          }))
-        : [
-            {
-              serial_number: '',
-              current_location_id: locations[0]?.id ?? 0,
-              purchase_price: seededPrice,
-            },
-          ],
-    );
+    setUnitCount(seededUnits.length);
+    setUnits(seededUnits);
     setStatus('available');
     setCpu('');
     setGpu('');
@@ -213,8 +210,13 @@ export function AddLaptopWizard({
   }, [open, locations]);
 
   useEffect(() => {
+    if (skipUnitResizeRef.current) {
+      skipUnitResizeRef.current = false;
+      return;
+    }
     const count = Math.max(1, Math.min(50, unitCount));
     setUnits((current) => {
+      if (current.length === count) return current;
       const next = [...current];
       while (next.length < count) {
         next.push({

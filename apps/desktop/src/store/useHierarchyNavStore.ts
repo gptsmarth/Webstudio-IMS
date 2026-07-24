@@ -94,6 +94,7 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
         search: state.search,
         searchField: state.searchField,
         showZeroStock: state.showZeroStock,
+        scrollTops: state.scrollTops,
       })),
     setSearch: (search) => set({ search }),
     setSearchField: (searchField) => set({ searchField }),

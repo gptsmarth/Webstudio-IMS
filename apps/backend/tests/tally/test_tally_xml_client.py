@@ -228,6 +228,34 @@ async def test_incremental_day_book_lineerror_falls_back_to_voucher_register(
 
 
 @pytest.mark.asyncio
+async def test_incremental_register_failure_tries_purchase_fallbacks(
+    monkeypatch,
+) -> None:
+    """When Register is empty, incremental sync still pulls purchase fallbacks."""
+    client = TallyXmlClient("tally-laptop", "9000")
+
+    async def fake_post_xml(payload: str) -> str:
+        if "Voucher Register" in payload:
+            return EMPTY_DAY_BOOK
+        if "REPORTNAME>Day Book" in payload or "REPORTNAME>Day Book<" in payload:
+            return REGISTER_WITH_VOUCHER  # ranged day book carries purchases
+        if "<ID>Day Book</ID>" in payload:
+            return DAY_BOOK_WITH_VOUCHER
+        return EMPTY_DAY_BOOK
+
+    monkeypatch.setattr(client, "post_xml", fake_post_xml)
+    exports = await client.export_monitored_voucher_types(
+        company_name="WEBSTUDIO",
+        from_date=date(2026, 6, 1),
+        to_date=date(2026, 7, 18),
+        historical=False,
+    )
+    assert "day_book" in exports
+    assert "voucher_register" not in exports
+    assert "day_book_ranged" in exports
+
+
+@pytest.mark.asyncio
 async def test_historical_per_type_fallback_includes_purchase(monkeypatch) -> None:
     """Last-resort per-type fallback must request Purchase as well as Sales."""
     client = TallyXmlClient("tally-laptop", "9000")

@@ -218,13 +218,30 @@ export function InventoryPage(): JSX.Element {
         rootLabel="All brands"
         brandName={nav.brandName}
         modelLabel={nav.modelLabel}
-        onRoot={() => nav.goToBrands()}
-        onBrand={nav.level === 'serials' ? () => nav.goToModels() : undefined}
+        onRoot={() => {
+          saveBrandsScroll();
+          saveModelsScroll();
+          nav.goToBrands();
+        }}
+        onBrand={
+          nav.level === 'serials'
+            ? () => {
+                saveModelsScroll();
+                nav.goToModels();
+              }
+            : undefined
+        }
         onBack={
           nav.level === 'models'
-            ? () => nav.goToBrands()
+            ? () => {
+                saveBrandsScroll();
+                nav.goToBrands();
+              }
             : nav.level === 'serials'
-              ? () => nav.goToModels()
+              ? () => {
+                  saveModelsScroll();
+                  nav.goToModels();
+                }
               : undefined
         }
         backLabel={nav.level === 'serials' ? 'Back to models' : 'Back to brands'}

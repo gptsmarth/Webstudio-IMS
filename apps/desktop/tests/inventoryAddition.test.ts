@@ -17,6 +17,36 @@ describe('parseSerialNumbers', () => {
   });
 });
 
+describe('buildSeededWizardUnits', () => {
+  it('prefills every purchase serial when quantity matches', async () => {
+    const { buildSeededWizardUnits } = await import('../src/lib/seededWizardUnits');
+    const units = buildSeededWizardUnits({
+      serials: ['W5PFCJ01V792222', 'W5PFCJ01W077226', 'W5PFCJ01WL1122'],
+      unitCount: 3,
+      locationId: 79,
+      purchasePrice: '49878',
+    });
+    expect(units).toHaveLength(3);
+    expect(units.map((unit) => unit.serial_number)).toEqual([
+      'W5PFCJ01V792222',
+      'W5PFCJ01W077226',
+      'W5PFCJ01WL1122',
+    ]);
+    expect(units.every((unit) => unit.purchase_price === '49878')).toBe(true);
+  });
+
+  it('pads empty rows when quantity exceeds known serials', async () => {
+    const { buildSeededWizardUnits } = await import('../src/lib/seededWizardUnits');
+    const units = buildSeededWizardUnits({
+      serials: ['ONLYONE'],
+      unitCount: 3,
+      locationId: 1,
+      purchasePrice: '100',
+    });
+    expect(units.map((unit) => unit.serial_number)).toEqual(['ONLYONE', '', '']);
+  });
+});
+
 describe('summarizeProductModelUnits', () => {
   const base = {
     product_model_id: '1',

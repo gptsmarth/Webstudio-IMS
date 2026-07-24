@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { parseApiError } from '../../lib/apiError';
 import { HUMAN_USER_ROLES, apiRoleLabel } from '../../lib/users';
 import { assessPasswordStrength, generateTemporaryPassword } from '../../lib/passwordStrength';
 import type { UserDetail, UserRole } from '../../services/api/UserService';
@@ -62,8 +63,7 @@ export function UserFormDialog({
         await onUpdate(displayName.trim());
         onClose();
       } catch (err: unknown) {
-        const message = err as { message?: string };
-        setError(message.message ?? 'Unable to save user.');
+        setError(parseApiError(err, 'Unable to save user.'));
       }
       return;
     }
@@ -77,7 +77,11 @@ export function UserFormDialog({
       return;
     }
     if (!strength.meetsMinimum) {
-      setError('Temporary password does not meet minimum strength.');
+      setError(
+        strength.hints.length > 0
+          ? `Temporary password does not meet policy: ${strength.hints.join('; ')}.`
+          : 'Temporary password does not meet minimum strength.',
+      );
       return;
     }
     setError(null);
@@ -90,8 +94,7 @@ export function UserFormDialog({
       });
       onClose();
     } catch (err: unknown) {
-      const message = err as { message?: string };
-      setError(message.message ?? 'Unable to create user.');
+      setError(parseApiError(err, 'Unable to create user.'));
     }
   };
 
