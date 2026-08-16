@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.models.restore_run import RestoreRun
+from webstudio_backend.infrastructure.database.models.user import User
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
 
 
@@ -29,6 +30,20 @@ class RestoreRunRepository(SqlAlchemyRepository[RestoreRun]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, RestoreRun)
 
+    async def _resolve_actor_user_id(self, actor_user_id: int | None) -> int | None:
+        """Guard against a stale actor id.
+
+        An entire_database restore truncates and reloads `users`, so the id captured
+        from the session that *started* the restore may no longer exist by the time this
+        row is written (e.g. a temporary setup-wizard admin, wiped by the restore it
+        triggered). Falling back to NULL keeps `actor_display_name` for the audit trail
+        instead of failing the FK constraint outright.
+        """
+        if actor_user_id is None:
+            return None
+        exists = await self._session.scalar(select(User.id).where(User.id == actor_user_id))
+        return actor_user_id if exists is not None else None
+
     async def create_run(
         self,
         *,
@@ -38,6 +53,7 @@ class RestoreRunRepository(SqlAlchemyRepository[RestoreRun]):
         actor_user_id: int | None,
         actor_display_name: str | None,
     ) -> RestoreRun:
+        safe_actor_user_id = await self._resolve_actor_user_id(actor_user_id)
         return await self.add(
             RestoreRun(
                 filename=filename,
@@ -45,7 +61,7 @@ class RestoreRunRepository(SqlAlchemyRepository[RestoreRun]):
                 restore_scope=restore_scope,
                 status="running",
                 verification_status="pending",
-                actor_user_id=actor_user_id,
+                actor_user_id=safe_actor_user_id,
                 actor_display_name=actor_display_name,
             ),
         )
@@ -89,6 +105,7 @@ class RestoreRunRepository(SqlAlchemyRepository[RestoreRun]):
         existing = result.scalar_one_or_none()
         if existing is None:
             # entire_database restore replaces table data; re-insert completion record.
+            safe_actor_user_id = await self._resolve_actor_user_id(snapshot.actor_user_id)
             return await self.add(
                 RestoreRun(
                     filename=snapshot.filename,
@@ -98,7 +115,7 @@ class RestoreRunRepository(SqlAlchemyRepository[RestoreRun]):
                     verification_status=verification_status,
                     emergency_backup_filename=emergency_backup_filename,
                     duration_ms=duration_ms,
-                    actor_user_id=snapshot.actor_user_id,
+                    actor_user_id=safe_actor_user_id,
                     actor_display_name=snapshot.actor_display_name,
                     warnings_json=warnings_json,
                     errors_json=errors_json,

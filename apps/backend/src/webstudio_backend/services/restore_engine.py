@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
@@ -526,34 +527,81 @@ class RestoreEngine:
                 verification_checks=check_payload,
             )
         except Exception as exc:
+            # Bookkeeping below (run history, audit log, alerts) must never hide `exc` —
+            # that hid the real cause of a past production incident. Every step here is
+            # isolated: if it fails, log it, roll back the session, and keep going, so the
+            # original error always reaches the caller intact.
             errors.append(str(exc))
+            await self._session.rollback()
+
             if run_snapshot is None:
-                await _begin_restore_run()
-            assert run_snapshot is not None
-            await self._runs.mark_completed(
-                run_snapshot,
-                emergency_backup_filename=emergency_filename,
-                duration_ms=int((time.perf_counter() - started) * 1000),
-                verification_status="failed",
-                warnings=warnings,
-                errors=errors,
-            )
-            await self._audit_restore(
-                filename=filename,
-                restore_scope=restore_scope,
-                source=source,
-                emergency_backup_filename=emergency_filename,
-                verification_status="failed",
-                actor_user_id=actor_user_id,
-                actor_display_name=actor_display_name,
-                success=False,
-                rollback=rollback,
-            )
-            await alerts.notify_restore_failed(
-                filename=filename,
-                restore_scope=restore_scope,
-                detail=str(exc),
-            )
+                try:
+                    await _begin_restore_run()
+                except Exception as bookkeeping_exc:
+                    logger.warning(
+                        "restore.begin_run_failed_during_error_handling",
+                        original_error=str(exc),
+                        bookkeeping_error=str(bookkeeping_exc),
+                    )
+                    await self._session.rollback()
+
+            if run_snapshot is not None:
+                try:
+                    await self._runs.mark_completed(
+                        run_snapshot,
+                        emergency_backup_filename=emergency_filename,
+                        duration_ms=int((time.perf_counter() - started) * 1000),
+                        verification_status="failed",
+                        warnings=warnings,
+                        errors=errors,
+                    )
+                except Exception as bookkeeping_exc:
+                    logger.warning(
+                        "restore.mark_completed_failed_during_error_handling",
+                        original_error=str(exc),
+                        bookkeeping_error=str(bookkeeping_exc),
+                    )
+                    await self._session.rollback()
+            else:
+                logger.warning(
+                    "restore.no_run_record_for_failed_restore",
+                    filename=filename,
+                    original_error=str(exc),
+                )
+
+            try:
+                await self._audit_restore(
+                    filename=filename,
+                    restore_scope=restore_scope,
+                    source=source,
+                    emergency_backup_filename=emergency_filename,
+                    verification_status="failed",
+                    actor_user_id=actor_user_id,
+                    actor_display_name=actor_display_name,
+                    success=False,
+                    rollback=rollback,
+                )
+            except Exception as bookkeeping_exc:
+                logger.warning(
+                    "restore.audit_failed_during_error_handling",
+                    original_error=str(exc),
+                    bookkeeping_error=str(bookkeeping_exc),
+                )
+                await self._session.rollback()
+
+            try:
+                await alerts.notify_restore_failed(
+                    filename=filename,
+                    restore_scope=restore_scope,
+                    detail=str(exc),
+                )
+            except Exception as alert_exc:
+                logger.warning(
+                    "restore.alert_failed_during_error_handling",
+                    original_error=str(exc),
+                    alert_error=str(alert_exc),
+                )
+
             await self._session.commit()
             raise RepositoryError(f"Restore failed: {exc}") from exc
 

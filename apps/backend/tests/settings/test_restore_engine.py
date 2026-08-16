@@ -243,3 +243,47 @@ async def test_mark_completed_reinserts_when_restore_run_row_missing(
     assert completed.verification_status == "success"
     assert completed.duration_ms == 42
     assert completed.id != snapshot.id
+
+
+@pytest.mark.asyncio
+async def test_create_run_falls_back_to_null_actor_when_actor_missing(
+    db_session: AsyncSession,
+    initialized_system,
+) -> None:
+    """Regression test: a data-only entire_database restore truncates and reloads
+    `users`, so the actor who *started* the restore (e.g. a temporary setup-wizard
+    admin) may no longer exist by the time this row is written. That used to raise
+    a ForeignKeyViolationError that masked the real restore failure underneath it.
+    """
+    from webstudio_backend.infrastructure.repositories.restore_run_repository import (
+        RestoreRunRepository,
+    )
+    from webstudio_backend.infrastructure.repositories.user_repository import UserRepository
+
+    repo = RestoreRunRepository(db_session)
+
+    main_admin = await UserRepository(db_session).get_main_admin()
+    assert main_admin is not None
+
+    # A real, currently-existing user id is preserved as-is.
+    run_with_valid_actor = await repo.create_run(
+        filename="webstudio-backup-valid-actor.tar.gz",
+        source="local",
+        restore_scope="entire_database",
+        actor_user_id=main_admin.id,
+        actor_display_name=main_admin.display_name,
+    )
+    assert run_with_valid_actor.actor_user_id == main_admin.id
+
+    # An actor id that no longer exists falls back to NULL instead of crashing —
+    # the display name is still preserved for the audit trail.
+    stale_actor_id = main_admin.id + 999_999
+    run_with_stale_actor = await repo.create_run(
+        filename="webstudio-backup-stale-actor.tar.gz",
+        source="local",
+        restore_scope="entire_database",
+        actor_user_id=stale_actor_id,
+        actor_display_name="Temporary Setup Admin",
+    )
+    assert run_with_stale_actor.actor_user_id is None
+    assert run_with_stale_actor.actor_display_name == "Temporary Setup Admin"

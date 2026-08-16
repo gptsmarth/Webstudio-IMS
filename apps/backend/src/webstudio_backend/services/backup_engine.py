@@ -432,6 +432,14 @@ class BackupEngine:
             "--data-only",
             "--no-owner",
             "--no-privileges",
+            # users <-> custom_access_roles is a circular FK (0029_custom_access_roles):
+            # users.custom_access_role_id -> custom_access_roles.id, and
+            # custom_access_roles.created_by_user_id -> users.id. A data-only restore has
+            # no valid COPY order that satisfies both at once. --disable-triggers wraps each
+            # COPY with ALTER TABLE ... DISABLE/ENABLE TRIGGER ALL, which also suspends the
+            # internal FK-check triggers during load, so load order stops mattering. No
+            # user-defined triggers exist on any WEBSTUDIO table, so nothing else is affected.
+            "--disable-triggers",
             f"--exclude-table-data={DATABASE_SCHEMA}.alembic_version",
         ]
         user, _password, _host, _port, db_name = self._postgres_connection()
