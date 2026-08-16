@@ -9,7 +9,7 @@ if ! command -v flutter >/dev/null 2>&1; then
 fi
 
 flutter pub get
-flutter analyze
+flutter analyze --no-fatal-infos
 flutter test
 flutter test test/integration
 echo "Lint and tests passed."

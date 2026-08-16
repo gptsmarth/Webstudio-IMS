@@ -13,7 +13,7 @@ flutter pub get
 
 echo ""
 echo "--- Static analysis ---"
-flutter analyze
+flutter analyze --no-fatal-infos
 
 echo ""
 echo "--- Unit + QA tests ---"

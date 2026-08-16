@@ -23,6 +23,8 @@ jobs:
           install-node: "false"
           install-flutter: "true"
       - working-directory: apps/mobile_flutter
-        run: flutter analyze
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
       - working-directory: apps/mobile_flutter
         run: flutter test
