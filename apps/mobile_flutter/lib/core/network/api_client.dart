@@ -255,7 +255,7 @@ class ApiClient {
   ) async {
     try {
       final response = await call();
-      return _unwrap(response.data, parser);
+      return await _unwrap(response.data, parser);
     } on DioException catch (error) {
       throw _mapDioError(error);
     }
