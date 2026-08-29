@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import {
   HierarchyBreadcrumb,
@@ -46,6 +46,42 @@ export function StockPage(): JSX.Element {
     setScrollTop,
     { ready: !hierarchy.loading },
   );
+  // The hierarchy panes above are meant to scroll internally (see useHierarchyScrollRef),
+  // but if the shared `#main-content` app-shell container ever ends up being the one that
+  // actually overflows for a given window size, its own scrollTop still gets clamped when
+  // switching levels and nothing restores it — same root cause as the Purchase list/detail
+  // toggle. Save/restore it alongside the existing per-pane scroll handling as a safety net.
+  const mainScrollByKeyRef = useRef<Record<string, number>>({});
+  const mainScrollKey =
+    nav.level === 'brands'
+      ? 'brands'
+      : nav.level === 'models'
+        ? `models-${nav.brandId ?? 0}`
+        : null;
+
+  const saveMainScroll = useCallback(() => {
+    if (!mainScrollKey) return;
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) mainScrollByKeyRef.current[mainScrollKey] = mainEl.scrollTop;
+  }, [mainScrollKey]);
+
+  useLayoutEffect(() => {
+    if (!mainScrollKey) return;
+    const target = mainScrollByKeyRef.current[mainScrollKey];
+    if (target == null) return;
+    const mainEl = document.getElementById('main-content');
+    if (!mainEl) return;
+    let attempts = 0;
+    const tryRestore = () => {
+      mainEl.scrollTop = target;
+      attempts += 1;
+      if (Math.abs(mainEl.scrollTop - target) > 1 && attempts < 8) {
+        requestAnimationFrame(tryRestore);
+      }
+    };
+    tryRestore();
+  }, [mainScrollKey]);
+
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -191,12 +227,14 @@ export function StockPage(): JSX.Element {
         onRoot={() => {
           saveBrandsScroll();
           saveModelsScroll();
+          saveMainScroll();
           nav.goToBrands();
         }}
         onBrand={
           nav.level === 'serials'
             ? () => {
                 saveModelsScroll();
+                saveMainScroll();
                 nav.goToModels();
               }
             : undefined
@@ -205,11 +243,13 @@ export function StockPage(): JSX.Element {
           nav.level === 'models'
             ? () => {
                 saveBrandsScroll();
+                saveMainScroll();
                 nav.goToBrands();
               }
             : nav.level === 'serials'
               ? () => {
                   saveModelsScroll();
+                  saveMainScroll();
                   nav.goToModels();
                 }
               : undefined
@@ -282,6 +322,7 @@ export function StockPage(): JSX.Element {
               loading={hierarchy.loading}
               onSelect={(brandId, brandName) => {
                 saveBrandsScroll();
+                saveMainScroll();
                 nav.openBrand(brandId, brandName);
               }}
             />
@@ -297,6 +338,7 @@ export function StockPage(): JSX.Element {
               showPrice={nav.showSellingPrice}
               onSelect={(modelId, label) => {
                 saveModelsScroll();
+                saveMainScroll();
                 nav.openModel(modelId, label);
               }}
             />
