@@ -177,6 +177,46 @@ If any of these fail, fix them before proposing a release build — do not push 
 
 ---
 
+## 6a. Before proposing a build: the CI gate is not optional
+
+Do not tell the user this feature is "ready" or suggest cutting a release until every command in §6 has actually been run and shown green in this exact session — not assumed, not "should pass." Tonight's incident happened in part because a corner like this got cut once already. Concretely, before saying "ready for a build":
+
+1. Run every command listed in §6, in order, and paste/report the real output.
+2. If backend tests need a local Postgres and none is running, start one (`docker run --name webstudio-ci-postgres -e POSTGRES_USER=webstudio_app -e POSTGRES_PASSWORD=webstudio_app -e POSTGRES_DB=webstudio_test -p 5432:5432 -d postgres:16-alpine`, or reuse this project's own dev container if one is already running via `compose.yaml` — check `docker ps` first) rather than skipping the backend suite.
+3. If `flutter analyze`/`flutter test` need to run and this change didn't touch mobile code at all, still run them once to confirm nothing regressed — don't assume "I didn't touch that app" is the same as "it still passes."
+4. Only once all of §6 is genuinely green should you tell the user it's ready to tag and build.
+
+## 6b. How to actually trigger a build on GitHub (read this before pushing anything)
+
+This repo has **two remotes**, and mixing them up cost real time during the incident this spec came out of. Confirm before doing anything:
+
+```bash
+git remote -v
+```
+
+You should see:
+- **`origin`** → `https://github.com/Smarthsingh/WEBSTUDIO-IMS` — the real, canonical repo. This is what the production server's auto-update GitHub sync (`WEBSTUDIO_GITHUB_REPO=Smarthsingh/WEBSTUDIO-IMS`) actually points at, and what shows up if you browse to GitHub and look at the "real" project.
+- **`gptsmarth`** → `https://github.com/gptsmarth/Webstudio-IMS.git` — a fork. This is the repo where release builds actually got triggered from during the incident, because that's the remote this local checkout's `feature/database-core` branch is set up to push to by default, and because the Actions workflows (which exist identically in both repos, since the fork has the same file history) were run from there. **`main` in either repo is an unrelated, essentially-empty 3-commit stub — it has never been used for a real release.** Every real release tag (`v1.0.0` through the latest) lives on `feature/database-core`, not `main`. Don't push to `main` expecting anything to happen; it won't.
+
+**Push commits (code changes) to both, so neither drifts out of sync:**
+```bash
+git push origin feature/database-core
+git push gptsmarth feature/database-core
+```
+Plain branch pushes like this never trigger a build — the release workflow only fires on a version tag. This is safe to do freely; it can't accidentally kick off a release.
+
+**Trigger an actual build**, only once §6a's checks are all green, by pushing a **new** version tag (git tags are immutable — reusing an existing tag number requires a destructive force-push, which is a deliberate, separate decision, not a default):
+```bash
+git tag vX.Y.Z && git push gptsmarth vX.Y.Z
+```
+Pick the next unused tag — check first with `git tag -l "v*"` so you don't collide with one that already exists. This feature is a genuinely new capability, not a bugfix, so a minor version bump (e.g. the next `vX.(Y+1).0`) fits better than a patch bump — but that's a judgment call for whoever's cutting the release, not a hard rule.
+
+The tag push triggers **Enterprise Release** (`.github/workflows/release.yml`) automatically on `gptsmarth/Webstudio-IMS` — no manual workflow click needed. Watch it at `https://github.com/gptsmarth/Webstudio-IMS/actions`. **Do not run this command yourself if you're an AI agent implementing this spec — it triggers a real production build.** Hand the exact command to the human and let them run it, the same way every tag push and force-push in the incident that produced this spec was handed to the user to execute, never run automatically by the assistant.
+
+**Which account/credentials "push" runs as:** whatever this machine's git is already configured with (check `git config user.name` / `git config user.email`, and note it isn't necessarily the same as either GitHub account name — it's just commit-author metadata; actual push authorization comes from whatever credential helper or SSH key this machine already has set up for these two remotes, which was already working throughout the incident this spec came from, so nothing new needs configuring here).
+
+---
+
 ## 7. Setup guide (what the shop owner does, once, by hand)
 
 This happens in Google Cloud Console, before the "Connect Google Drive" button in the app will work. None of it requires a paid plan.
