@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
-import { tallyHealthLabel } from '../../lib/tallyDisplay';
+import { formatCountdown, tallyHealthLabel } from '../../lib/tallyDisplay';
+import { useLiveCountdown } from '../../hooks/useLiveCountdown';
 import type { TallyStatusSummary } from '../../services/api/TallyService';
 
 interface TallyReadinessPanelProps {
@@ -17,16 +18,23 @@ export function TallyReadinessPanel({
   onSync,
   syncing,
 }: TallyReadinessPanelProps): JSX.Element {
+  const operational = tally.operational;
+  const pendingRetry = operational?.pending_retry ?? tally.pending_retry;
+  const liveRetrySeconds = useLiveCountdown(
+    pendingRetry ? (operational?.retry_countdown_seconds ?? null) : null,
+  );
+
   if (loading) {
     return <div className="skeleton tally-panel__skeleton" />;
   }
 
-  const operational = tally.operational;
   const connected = operational?.is_connected ?? tally.is_connected;
   const health = operational?.sync_health ?? tally.connection_health;
   const todaysImports = operational?.imported_today ?? tally.todays_imports;
-  const pendingRetry = operational?.pending_retry ?? tally.pending_retry;
-  const retryLabel = operational?.retry_countdown_label;
+  const retryLabel =
+    liveRetrySeconds != null
+      ? formatCountdown(liveRetrySeconds)
+      : operational?.retry_countdown_label;
 
   return (
     <div className="tally-dashboard-widget">

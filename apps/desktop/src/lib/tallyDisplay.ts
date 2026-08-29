@@ -86,6 +86,14 @@ export function tallyStatusBadgeClass(status: string): string {
   }
 }
 
+/** Matches the backend's _format_countdown() in tally_dashboard_service.py exactly. */
+export function formatCountdown(totalSeconds: number): string {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function formatPollingInterval(seconds: number): string {
   if (seconds % 3600 === 0) {
     const hours = seconds / 3600;

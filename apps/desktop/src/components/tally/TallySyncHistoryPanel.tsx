@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Search } from 'lucide-react';
 import { formatDateTime } from '../../lib/datetime';
 import {
+  formatCountdown,
   tallyStatusBadgeClass,
   type TallyOperationalSummary,
   type TallySyncHistoryEntry,
 } from '../../lib/tallyDisplay';
+import { useLiveCountdown } from '../../hooks/useLiveCountdown';
 import { TallyService, type TallySyncHistoryFilters } from '../../services/api/TallyService';
 import { useAuthStore } from '../../store';
 
@@ -226,6 +228,13 @@ export function TallyOperationalMetrics({
   const session = useAuthStore((state) => state.session);
   const isMainAdmin = session?.role === 'main_admin';
   const checkpoint = operational.sync_checkpoint;
+  const liveRetrySeconds = useLiveCountdown(
+    operational.pending_retry ? operational.retry_countdown_seconds : null,
+  );
+  const liveRetryLabel =
+    operational.pending_retry && liveRetrySeconds != null
+      ? `Retry in ${formatCountdown(liveRetrySeconds)}`
+      : null;
 
   return (
     <div className="tally-ops-grid">
@@ -293,13 +302,15 @@ export function TallyOperationalMetrics({
       </div>
       <div className="tally-ops-card tally-ops-card--wide">
         <span className="tally-ops-card__label">Scheduler status</span>
-        <span className="tally-ops-card__value">{operational.scheduler_status_label}</span>
+        <span className="tally-ops-card__value">
+          {liveRetryLabel ?? operational.scheduler_status_label}
+        </span>
       </div>
-      {operational.pending_retry && operational.retry_countdown_label && (
+      {operational.pending_retry && liveRetrySeconds != null && (
         <div className="tally-ops-card">
           <span className="tally-ops-card__label">Retry countdown</span>
           <span className="tally-ops-card__value tally-ops-card__value--warn">
-            {operational.retry_countdown_label}
+            {formatCountdown(liveRetrySeconds)}
           </span>
         </div>
       )}
@@ -353,7 +364,8 @@ export function TallyOperationalMetrics({
           <div className="tally-ops-card tally-ops-card--wide">
             <span className="tally-ops-card__label">Current scheduler state</span>
             <span className="tally-ops-card__value">
-              {checkpoint.scheduler_status_label || checkpoint.scheduler_status || '—'}
+              {liveRetryLabel ??
+                (checkpoint.scheduler_status_label || checkpoint.scheduler_status || '—')}
             </span>
           </div>
         </>
