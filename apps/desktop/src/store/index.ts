@@ -5,3 +5,4 @@ export * from './useSearchStore';
 export * from './useInventoryStore';
 export { useStockNavStore, useInventoryNavStore } from './useHierarchyNavStore';
 export type { HierarchyLevel, HierarchyNavState } from './useHierarchyNavStore';
+export * from './useSalesScrollStore';

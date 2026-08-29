@@ -571,7 +571,12 @@ export class SettingsService {
   ): Promise<BackupCreateResult> {
     LoggingService.info('API', 'Creating enterprise backup');
     const client = await ApiClientProvider.getClient();
-    return client.post<BackupCreateResult>('/api/v1/settings/backups', payload);
+    // A full backup (dump + copy every product image + compress) can legitimately take
+    // longer than the shared 15s default on a real dataset — this only widens the wait
+    // for this one call, it doesn't change what the backup itself does.
+    return client.post<BackupCreateResult>('/api/v1/settings/backups', payload, {
+      timeoutMs: 120000,
+    });
   }
 
   static async restoreBackup(payload: {

@@ -11,6 +11,8 @@ import {
 import { hasActiveSalesFilters } from '../../lib/salesExport';
 import { canViewPurchasePrice } from '../../lib/inventory';
 import { useAuthStore } from '../../store';
+import { useHierarchyScrollRef } from '../../hooks/useHierarchyScrollRef';
+import { useSalesScrollStore } from '../../store/useSalesScrollStore';
 import type { SalesSortField, SalesWorkspaceState } from '../../hooks/useSalesWorkspace';
 import type { SaleListItem } from '../../services/api/SalesService';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
@@ -135,6 +137,17 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
   const [cancelTarget, setCancelTarget] = useState<SaleListItem | null>(null);
   const resizeRef = useRef<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+  const getScrollTop = useSalesScrollStore((state) => state.getScrollTop);
+  const setScrollTop = useSalesScrollStore((state) => state.setScrollTop);
+  const { ref: scrollRef } = useHierarchyScrollRef(
+    'sales-table',
+    true,
+    getScrollTop,
+    setScrollTop,
+    {
+      ready: !workspace.loading,
+    },
+  );
 
   const hasFilters = hasActiveSalesFilters(workspace.filters, workspace.search);
 
@@ -213,6 +226,7 @@ export function SalesTable({ workspace, onView }: SalesTableProps): JSX.Element 
   return (
     <div className="sales-table-shell">
       <div
+        ref={scrollRef}
         className="sales-table-scroll"
         tabIndex={0}
         role="grid"
