@@ -164,3 +164,39 @@ class BackupAlertService:
             category=NotificationCategory.SYSTEM,
             created_by=NotificationCreator.SYSTEM,
         )
+
+    async def notify_cloud_sync_completed(self, *, uploaded_count: int) -> None:
+        if not await self.is_enabled():
+            return
+        await self._notifications.create_notification(
+            notification_type=NotificationType.CLOUD_SYNC_COMPLETED,
+            severity=NotificationSeverity.INFO,
+            title="Cloud backup sync completed",
+            message=f"{uploaded_count} backup(s) uploaded to Google Drive.",
+            category=NotificationCategory.SYSTEM,
+            created_by=NotificationCreator.SYSTEM,
+        )
+
+    async def notify_cloud_sync_failed(self, *, detail: str) -> None:
+        if not await self.is_enabled():
+            return
+        await self._notifications.create_notification(
+            notification_type=NotificationType.CLOUD_SYNC_FAILED,
+            severity=NotificationSeverity.WARNING,
+            title="Cloud backup sync failed",
+            message=detail,
+            category=NotificationCategory.SYSTEM,
+            created_by=NotificationCreator.SYSTEM,
+        )
+
+    async def notify_cloud_reconnect_needed(self, *, detail: str) -> None:
+        if not await self.is_enabled():
+            return
+        await self._notifications.create_notification(
+            notification_type=NotificationType.CLOUD_RECONNECT_NEEDED,
+            severity=NotificationSeverity.WARNING,
+            title="Google Drive reconnect needed",
+            message=detail,
+            category=NotificationCategory.SYSTEM,
+            created_by=NotificationCreator.SYSTEM,
+        )

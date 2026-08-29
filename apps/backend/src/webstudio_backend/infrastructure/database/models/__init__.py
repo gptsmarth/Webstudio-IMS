@@ -6,6 +6,9 @@ from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.client_version_observation import (
     ClientVersionObservation,
 )
+from webstudio_backend.infrastructure.database.models.cloud_backup_connection import (
+    CloudBackupConnection,
+)
 from webstudio_backend.infrastructure.database.models.custom_access_role import (
     CustomAccessRole,
     CustomAccessRolePermission,
@@ -59,6 +62,7 @@ __all__ = [
     "BackupRun",
     "Brand",
     "ClientVersionObservation",
+    "CloudBackupConnection",
     "CustomAccessRole",
     "CustomAccessRolePermission",
     "EnterpriseRollbackRun",

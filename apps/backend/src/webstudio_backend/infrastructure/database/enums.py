@@ -97,6 +97,9 @@ class NotificationType(StrEnum):
     RESTORE_COMPLETED = "restore_completed"
     RESTORE_FAILED = "restore_failed"
     BACKUP_VERIFICATION_FAILED = "backup_verification_failed"
+    CLOUD_SYNC_COMPLETED = "cloud_sync_completed"
+    CLOUD_SYNC_FAILED = "cloud_sync_failed"
+    CLOUD_RECONNECT_NEEDED = "cloud_reconnect_needed"
 
 
 class NotificationCategory(StrEnum):

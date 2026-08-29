@@ -58,6 +58,23 @@ class BackupRunRepository(SqlAlchemyRepository[BackupRun]):
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    async def list_pending_cloud_uploads(self, *, limit: int = 5) -> list[BackupRun]:
+        statement = (
+            select(BackupRun)
+            .where(
+                BackupRun.status == "completed",
+                BackupRun.is_archived.is_(False),
+                or_(
+                    BackupRun.cloud_upload_status.is_(None),
+                    BackupRun.cloud_upload_status.in_(["pending", "failed"]),
+                ),
+            )
+            .order_by(BackupRun.created_at.asc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
     async def search(
         self,
         filters: BackupHistoryFilters,

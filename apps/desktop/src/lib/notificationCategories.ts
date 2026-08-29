@@ -34,6 +34,9 @@ export function notificationTypeLabel(type: string): string {
     restore_completed: 'Restore completed',
     restore_failed: 'Restore failed',
     backup_verification_failed: 'Backup verification failed',
+    cloud_sync_completed: 'Cloud sync completed',
+    cloud_sync_failed: 'Cloud sync failed',
+    cloud_reconnect_needed: 'Cloud reconnect needed',
   };
   return labels[type] ?? type.replaceAll('_', ' ');
 }

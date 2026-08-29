@@ -116,6 +116,14 @@ class Settings(BaseSettings):
     webstudio_release_sync_scheduler: bool = Field(
         default=True, validation_alias="WEBSTUDIO_RELEASE_SYNC_SCHEDULER"
     )
+    webstudio_cloud_backup_sync_scheduler: bool = Field(
+        default=True, validation_alias="WEBSTUDIO_CLOUD_BACKUP_SYNC_SCHEDULER"
+    )
+
+    google_drive_client_id: str = Field(default="", validation_alias="GOOGLE_DRIVE_CLIENT_ID")
+    google_drive_client_secret: str = Field(
+        default="", validation_alias="GOOGLE_DRIVE_CLIENT_SECRET"
+    )
 
     @field_validator(
         "webstudio_tally_scheduler",
@@ -125,6 +133,7 @@ class Settings(BaseSettings):
         "webstudio_maintenance_scheduler",
         "webstudio_tally_connectivity_probe",
         "webstudio_release_sync_scheduler",
+        "webstudio_cloud_backup_sync_scheduler",
         mode="before",
     )
     @classmethod

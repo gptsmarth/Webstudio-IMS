@@ -22,6 +22,13 @@ class ServerReconnectMonitor {
   ProviderSubscription<AsyncValue<bool>>? _connectivitySub;
   bool _running = false;
   bool _wasOnline = true;
+  int _consecutiveFailures = 0;
+
+  /// After this many back-to-back failed probes without connectivity_plus ever
+  /// reporting offline (e.g. a Wi-Fi power-save socket death that the OS never
+  /// surfaces as a disconnect), reset the HTTP client so polling can self-heal
+  /// instead of retrying forever on the same dead connection.
+  static const int _resetAfterConsecutiveFailures = 2;
 
   void start() {
     if (_running) return;
@@ -30,11 +37,24 @@ class ServerReconnectMonitor {
     _connectivitySub = _ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
       final online = next.valueOrNull ?? true;
       if (!_wasOnline && online) {
+        _ref.read(apiClientProvider).reset();
+        _consecutiveFailures = 0;
         unawaited(_probe(fullDiscovery: true));
       }
       _wasOnline = online;
     });
     unawaited(_probe());
+  }
+
+  /// Forces an immediate reconnect attempt with a fresh HTTP client. Used when the
+  /// app resumes from the background: a connection left idle while backgrounded can
+  /// come back looking "open" but dead, and periodic `start()` alone won't reset it
+  /// since it no-ops while already running.
+  void forceReprobe() {
+    if (!_running) return;
+    _ref.read(apiClientProvider).reset();
+    _consecutiveFailures = 0;
+    unawaited(_probe(fullDiscovery: true));
   }
 
   void dispose() {
@@ -50,7 +70,16 @@ class ServerReconnectMonitor {
     final client = _ref.read(apiClientProvider);
     var healthy = await client.checkHealthLive();
     if (!_running) return;
-    if (healthy) return;
+    if (healthy) {
+      _consecutiveFailures = 0;
+      return;
+    }
+
+    _consecutiveFailures += 1;
+    if (_consecutiveFailures >= _resetAfterConsecutiveFailures) {
+      client.reset();
+      _consecutiveFailures = 0;
+    }
 
     final repo = _ref.read(serverRepositoryProvider);
     final config = _ref.read(appConfigProvider);

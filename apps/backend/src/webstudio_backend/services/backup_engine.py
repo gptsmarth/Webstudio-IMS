@@ -348,6 +348,10 @@ class BackupEngine:
             "creator_display_name": run.creator_display_name,
             "storage_backend": run.storage_backend,
             "is_archived": run.is_archived,
+            "cloud_upload_status": run.cloud_upload_status,
+            "cloud_uploaded_at": (
+                run.cloud_uploaded_at.isoformat() if run.cloud_uploaded_at else None
+            ),
         }
 
     def _legacy_entry(self, path: Path) -> dict:
@@ -370,6 +374,8 @@ class BackupEngine:
             "creator_display_name": None,
             "storage_backend": "local",
             "is_archived": False,
+            "cloud_upload_status": None,
+            "cloud_uploaded_at": None,
         }
 
     def _legacy_sql_files(self) -> list[Path]:

@@ -110,10 +110,16 @@ export function useHierarchyScrollRef(
     });
 
     const element = ref.current;
+    // Deliberately calls restoreScroll() directly rather than tryRestore(): the rAF
+    // bootstrap loop above caps its own attempts to avoid spinning forever when there's
+    // nothing to restore, but real data (product images, larger lists over a LAN) can
+    // finish laying out well after that budget is exhausted — ResizeObserver only fires
+    // on genuine size changes, so it's safe to let it keep retrying for as long as the
+    // pane stays active, instead of going permanently dead once `attempts` maxes out.
     const observer =
       element && typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
-            tryRestore();
+            if (!cancelled) restoreScroll();
           })
         : null;
     if (element && observer) observer.observe(element);

@@ -48,3 +48,8 @@ class BackupRun(Base, PrimaryKeyMixin):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_archived: Mapped[bool] = mapped_column(default=False, nullable=False)
+    cloud_uploaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cloud_upload_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    cloud_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)

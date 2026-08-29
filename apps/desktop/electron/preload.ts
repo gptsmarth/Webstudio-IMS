@@ -46,3 +46,7 @@ contextBridge.exposeInMainWorld('windowControls', {
   zoomOut: () => ipcRenderer.invoke('window:zoomOut') as Promise<number>,
   resetZoom: () => ipcRenderer.invoke('window:resetZoom') as Promise<number>,
 });
+
+contextBridge.exposeInMainWorld('cloudBackup', {
+  connectGoogleDrive: () => ipcRenderer.invoke('cloudBackup:connectGoogleDrive'),
+});

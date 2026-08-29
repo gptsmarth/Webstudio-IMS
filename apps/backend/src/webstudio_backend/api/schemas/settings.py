@@ -175,6 +175,8 @@ class BackupHistoryEntry(BaseModel):
     creator_display_name: str | None = None
     storage_backend: str = "local"
     is_archived: bool = False
+    cloud_upload_status: str | None = None
+    cloud_uploaded_at: str | None = None
 
 
 class RestoreHistoryEntry(BaseModel):
@@ -208,7 +210,9 @@ class BackupSettings(BaseModel):
 
 class BackupSettingsUpdate(BaseModel):
     backup_folder: str = Field(min_length=1, max_length=512)
-    storage_backend: str = Field(default="local", pattern="^(local|cloud|nas|external_drive)$")
+    storage_backend: str = Field(
+        default="local", pattern="^(local|cloud|nas|external_drive|google_drive)$"
+    )
     schedule: str = Field(default="manual", pattern="^(manual|daily|weekly|monthly)$")
     retention_policy: str = Field(
         default="last_30",
@@ -501,3 +505,23 @@ class RecoveryReportsResponse(BaseModel):
     failed_backups: int = 0
     failure_analysis: list[RecoveryFailureAnalysis] = Field(default_factory=list)
     export_supported: bool = False
+
+
+class CloudBackupConnectRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+    account_email: str = Field(min_length=1, max_length=256)
+
+
+class CloudBackupStatusResponse(BaseModel):
+    provider: str = "google_drive"
+    connected: bool = False
+    account_email: str | None = None
+    status: str = "disconnected"
+    last_sync_at: str | None = None
+    last_sync_status: str | None = None
+    last_error: str | None = None
+    retention_count: int = 25
+
+
+class CloudBackupRetentionUpdate(BaseModel):
+    retention_count: int = Field(default=25, ge=5, le=100)

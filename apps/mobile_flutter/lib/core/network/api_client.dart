@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,10 +40,22 @@ class ApiClient {
     _dio.options.headers['X-Client-Platform'] = config.clientPlatform;
   }
 
+  /// Discards the underlying HTTP client and its pooled connections.
+  ///
+  /// A connection sitting idle across a Wi-Fi radio sleep, NAT re-map, or app
+  /// backgrounding can come back "open" but dead — every request on it then hangs
+  /// or fails until the process is restarted. Call this before a reconnect attempt
+  /// so the retry uses a fresh socket instead of reusing the poisoned one.
+  void reset() {
+    _dio.httpClientAdapter.close(force: true);
+    _dio.httpClientAdapter = IOHttpClientAdapter();
+  }
+
   void _configureDio() {
     _dio.options = BaseOptions(
       baseUrl: _config.apiBaseUrl,
       connectTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
         'Accept': 'application/json',

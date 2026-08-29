@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Database, Download, RefreshCw, Shield } from 'lucide-react';
+import { AlertTriangle, Cloud, Database, Download, RefreshCw, Shield } from 'lucide-react';
 import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
 import { auditSeverityBadgeClass, auditSeverityLabel } from '../../lib/audit';
 import { formatBytes } from '../../lib/settings';
@@ -24,7 +24,11 @@ import {
 } from '../../services/api/IntegrationKeyService';
 import { VersionService } from '../../services/VersionService';
 import { PlatformService, type PlatformVersionInfo } from '../../services/api/PlatformService';
-import type { SettingsWorkspace, BackupSettingsUpdate } from '../../services/api/SettingsService';
+import type {
+  SettingsWorkspace,
+  BackupSettingsUpdate,
+  CloudBackupStatus,
+} from '../../services/api/SettingsService';
 import { SettingsService } from '../../services/api/SettingsService';
 import {
   canExecuteRestore,
@@ -1304,6 +1308,158 @@ export function NotificationsPanel({ workspace, data }: PanelProps): JSX.Element
   );
 }
 
+function GoogleDriveCloudBackupControls({ canManage }: { canManage: boolean }): JSX.Element {
+  const [status, setStatus] = useState<CloudBackupStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retentionInput, setRetentionInput] = useState(25);
+
+  const loadStatus = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await SettingsService.getCloudBackupStatus();
+      setStatus(result);
+      setRetentionInput(result.retention_count);
+    } catch (err) {
+      setError(parseApiError(err, 'Could not load Google Drive status.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
+
+  const handleConnect = async () => {
+    setError(null);
+    if (!window.cloudBackup) {
+      setError('Google Drive connection is only available in the desktop app.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const oauthResult = await window.cloudBackup.connectGoogleDrive();
+      const result = await SettingsService.connectGoogleDrive(oauthResult);
+      setStatus(result);
+      setRetentionInput(result.retention_count);
+    } catch (err) {
+      setError(parseApiError(err, 'Could not connect Google Drive.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (
+      !window.confirm(
+        'Disconnect Google Drive? Future backups will stop uploading to Drive. ' +
+          'Existing local backups and backups already uploaded to Drive are not deleted.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await SettingsService.disconnectGoogleDrive();
+      setStatus(result);
+    } catch (err) {
+      setError(parseApiError(err, 'Could not disconnect Google Drive.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRetentionSave = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await SettingsService.updateCloudBackupRetention(retentionInput);
+      setStatus(result);
+    } catch (err) {
+      setError(parseApiError(err, 'Could not update retention count.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="stg-muted">Loading Google Drive status…</p>;
+  }
+
+  return (
+    <div className="stg-cloud-backup">
+      {error && <p className="stg-backup-error">{error}</p>}
+      {status?.connected ? (
+        <>
+          <div className="stg-readonly-grid">
+            <Readonly label="Connected account" value={status.account_email ?? '—'} />
+            <Readonly
+              label="Last sync"
+              value={status.last_sync_at ? formatDateTime(status.last_sync_at) : 'Not synced yet'}
+            />
+            <Readonly label="Sync status" value={status.last_sync_status ?? 'pending'} />
+          </div>
+          {status.status === 'error' && status.last_error && (
+            <p className="stg-backup-error">{status.last_error}</p>
+          )}
+          <div className="stg-form" style={{ maxWidth: 240 }}>
+            <Field label="Keep most recent N backups on Drive">
+              <input
+                className="input"
+                type="number"
+                min={5}
+                max={100}
+                value={retentionInput}
+                onChange={(e) => setRetentionInput(Number(e.target.value))}
+                disabled={!canManage || busy}
+              />
+            </Field>
+            {canManage && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={busy || retentionInput === status.retention_count}
+                onClick={() => void handleRetentionSave()}
+              >
+                Save retention
+              </button>
+            )}
+          </div>
+          {canManage && (
+            <div className="stg-actions">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={busy}
+                onClick={() => void handleDisconnect()}
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        canManage && (
+          <div className="stg-actions">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy}
+              onClick={() => void handleConnect()}
+            >
+              <Cloud size={14} aria-hidden />
+              Connect Google Drive
+            </button>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
   const permissions = useAuthStore((state) => state.session?.permissions ?? []);
   const canRunBackup = canManageBackup(permissions);
@@ -1515,8 +1671,14 @@ export function BackupPanel({ workspace, data }: PanelProps): JSX.Element {
               <option value="nas">NAS (future-ready)</option>
               <option value="external_drive">External drive (future-ready)</option>
               <option value="cloud">Cloud storage (future-ready)</option>
+              <option value="google_drive">Google Drive</option>
             </select>
           </Field>
+          {form.storage_backend === 'google_drive' && (
+            <Field label="Google Drive">
+              <GoogleDriveCloudBackupControls canManage={canRunBackup} />
+            </Field>
+          )}
           <SaveButton
             label="Save backup policy"
             saving={workspace.saving}

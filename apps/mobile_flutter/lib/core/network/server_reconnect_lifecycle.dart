@@ -34,7 +34,9 @@ class _ServerReconnectLifecycleObserverState extends ConsumerState<ServerReconne
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      ref.read(serverReconnectProvider).start();
+      final monitor = ref.read(serverReconnectProvider);
+      monitor.start();
+      monitor.forceReprobe();
     }
   }
 

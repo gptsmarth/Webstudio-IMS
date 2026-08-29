@@ -5303,6 +5303,12 @@
     color: var(--color-danger);
   }
 
+  .stg-cloud-backup {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
   .stg-restore-overlay {
     position: fixed;
     inset: 0;

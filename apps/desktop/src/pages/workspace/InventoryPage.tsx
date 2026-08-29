@@ -71,13 +71,6 @@ export function InventoryPage(): JSX.Element {
     }
   }, [canWrite, session, setRoute]);
 
-  useEffect(
-    () => () => {
-      useInventoryNavStore.getState().reset();
-    },
-    [],
-  );
-
   const brandSummary = useMemo(
     () => hierarchy.brandSummaries.find((row) => row.brandId === nav.brandId) ?? null,
     [hierarchy.brandSummaries, nav.brandId],

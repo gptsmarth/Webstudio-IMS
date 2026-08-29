@@ -207,6 +207,7 @@ export function BackupAdminCenter({
               <th>Duration</th>
               <th>Size</th>
               <th>Status</th>
+              <th>Cloud</th>
               <th>Version</th>
               <th>Actions</th>
             </tr>
@@ -214,7 +215,7 @@ export function BackupAdminCenter({
           <tbody>
             {history.length === 0 && !loading && (
               <tr>
-                <td colSpan={9} className="stg-muted">
+                <td colSpan={10} className="stg-muted">
                   No backups match the current filters.
                 </td>
               </tr>
@@ -236,6 +237,27 @@ export function BackupAdminCenter({
                   >
                     {item.status ?? item.verification_status}
                   </span>
+                </td>
+                <td>
+                  {item.cloud_upload_status ? (
+                    <span
+                      className={`stg-backup-verify stg-backup-verify--${
+                        item.cloud_upload_status === 'uploaded'
+                          ? 'success'
+                          : item.cloud_upload_status === 'failed'
+                            ? 'failed'
+                            : 'unknown'
+                      }`}
+                    >
+                      {item.cloud_upload_status === 'uploaded'
+                        ? 'Synced to Drive'
+                        : item.cloud_upload_status === 'failed'
+                          ? 'Sync failed'
+                          : 'Pending'}
+                    </span>
+                  ) : (
+                    <span className="stg-muted">—</span>
+                  )}
                 </td>
                 <td>{item.app_version ?? '—'}</td>
                 <td>

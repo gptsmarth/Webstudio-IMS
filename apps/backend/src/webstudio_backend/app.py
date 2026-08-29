@@ -70,6 +70,7 @@ from webstudio_backend.services.audit_retention_scheduler import (
     maybe_purge_audit_logs,
 )
 from webstudio_backend.services.backup_scheduler import backup_scheduler_loop
+from webstudio_backend.services.cloud_backup_sync_scheduler import cloud_backup_sync_scheduler_loop
 from webstudio_backend.services.maintenance_scheduler import maintenance_scheduler_loop
 from webstudio_backend.services.mdns_advertisement_service import MdnsAdvertisementService
 from webstudio_backend.services.notification_scheduler import notification_scheduler_loop
@@ -92,6 +93,7 @@ _notification_scheduler_task: asyncio.Task | None = None
 _maintenance_scheduler_task: asyncio.Task | None = None
 _tally_connectivity_probe_task: asyncio.Task | None = None
 _release_sync_task: asyncio.Task | None = None
+_cloud_backup_sync_task: asyncio.Task | None = None
 _product_image_backfill_task: asyncio.Task | None = None
 _scheduler_persist_task: asyncio.Task | None = None
 _mdns_service: MdnsAdvertisementService | None = None
@@ -173,6 +175,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _notification_scheduler_task, _maintenance_scheduler_task, _scheduler_persist_task
     global _tally_connectivity_probe_task
     global _release_sync_task, _product_image_backfill_task
+    global _cloud_backup_sync_task
     global _mdns_service
 
     settings: Settings = app.state.settings
@@ -214,6 +217,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     tally_probe_enabled = not settings.is_test and settings.webstudio_tally_connectivity_probe
     release_sync_enabled = not settings.is_test and settings.webstudio_release_sync_scheduler
+    cloud_backup_sync_enabled = (
+        not settings.is_test and settings.webstudio_cloud_backup_sync_scheduler
+    )
 
     if scheduler_enabled:
         try:
@@ -256,6 +262,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:
             pass
         _release_sync_task = asyncio.create_task(release_sync_loop())
+    if cloud_backup_sync_enabled:
+        _cloud_backup_sync_task = asyncio.create_task(cloud_backup_sync_scheduler_loop())
     if not settings.is_test:
         from webstudio_backend.services.product_image_jobs import (
             product_image_backfill_loop,
@@ -284,6 +292,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _maintenance_scheduler_task = None
     await _cancel_task(_tally_connectivity_probe_task)
     _tally_connectivity_probe_task = None
+    await _cancel_task(_cloud_backup_sync_task)
+    _cloud_backup_sync_task = None
     await _cancel_task(_release_sync_task)
     _release_sync_task = None
     await _cancel_task(_product_image_backfill_task)

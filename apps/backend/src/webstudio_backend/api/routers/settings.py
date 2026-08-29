@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.api.dependencies.auth import (
+    AuthenticatedUser,
     BackupManageDep,
     BackupOrRestoreViewDep,
     BackupViewDep,
@@ -39,6 +40,9 @@ from webstudio_backend.api.schemas.settings import (
     BackupValidateRequest,
     BackupValidateResponse,
     BackupVerifyResponse,
+    CloudBackupConnectRequest,
+    CloudBackupRetentionUpdate,
+    CloudBackupStatusResponse,
     CompatibilityReport,
     ExcelSettings,
     GeneralSettings,
@@ -62,6 +66,7 @@ from webstudio_backend.core.config import Settings
 from webstudio_backend.core.dependencies import AppSettingsDep, DbSessionDep
 from webstudio_backend.core.permissions import user_has_permission
 from webstudio_backend.core.request_context import get_correlation_id, get_request_id
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.backup_run_filters import BackupHistoryFilters
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
@@ -71,6 +76,10 @@ from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.backup_production_validation_service import (
     BackupProductionValidationService,
 )
+from webstudio_backend.services.cloud_backup_connection_service import (
+    CloudBackupConnectionService,
+)
+from webstudio_backend.services.google_drive_client import GoogleDriveError
 from webstudio_backend.services.recovery_service import RecoveryService
 from webstudio_backend.services.restore_engine import RestoreEngine
 from webstudio_backend.services.settings_service import SettingsService
@@ -117,6 +126,15 @@ def _envelope(request: Request, data: object, meta: ResponseMeta | None = None) 
 
 def _page_meta(page: int, page_size: int, total_items: int, total_pages: int) -> ResponseMeta:
     return build_page_meta(page, page_size, total_items, total_pages)
+
+
+def _actor(current: AuthenticatedUser) -> AuditActor:
+    user = current.user
+    return AuditActor(
+        user_id=user.id,
+        display_name=user.display_name or user.username,
+        role=user.role.value,
+    )
 
 
 async def _health_snapshot(db_session: AsyncSession) -> tuple[str, str]:
@@ -938,3 +956,73 @@ async def mobile_restore_history(
     reports = await recovery.get_reports()
     items = [RestoreHistoryEntry(**row).model_dump() for row in reports.recovery_history]
     return _envelope(request, items)
+
+
+@router.get("/backups/cloud/status")
+async def cloud_backup_status(
+    request: Request,
+    current: BackupViewDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    _ = current
+    service = CloudBackupConnectionService(db_session, app_settings)
+    status_payload = await service.get_status()
+    return _envelope(request, CloudBackupStatusResponse(**status_payload).model_dump())
+
+
+@router.post("/backups/cloud/google-drive/connect")
+async def connect_google_drive(
+    request: Request,
+    body: CloudBackupConnectRequest,
+    current: BackupManageDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    service = CloudBackupConnectionService(db_session, app_settings)
+    try:
+        result = await service.connect(
+            refresh_token=body.refresh_token,
+            account_email=body.account_email,
+            actor=_actor(current),
+        )
+    except GoogleDriveError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    await db_session.commit()
+    return _envelope(request, CloudBackupStatusResponse(**result).model_dump())
+
+
+@router.post("/backups/cloud/google-drive/disconnect")
+async def disconnect_google_drive(
+    request: Request,
+    current: BackupManageDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    service = CloudBackupConnectionService(db_session, app_settings)
+    try:
+        result = await service.disconnect(actor=_actor(current))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db_session.commit()
+    return _envelope(request, CloudBackupStatusResponse(**result).model_dump())
+
+
+@router.patch("/backups/cloud/retention")
+async def update_cloud_backup_retention(
+    request: Request,
+    body: CloudBackupRetentionUpdate,
+    current: BackupManageDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings: Settings = AppSettingsDep,
+) -> dict:
+    service = CloudBackupConnectionService(db_session, app_settings)
+    try:
+        result = await service.update_retention(
+            retention_count=body.retention_count,
+            actor=_actor(current),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db_session.commit()
+    return _envelope(request, CloudBackupStatusResponse(**result).model_dump())

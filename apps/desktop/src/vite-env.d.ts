@@ -104,6 +104,15 @@ interface WindowControlsNamespace {
   resetZoom: () => Promise<number>;
 }
 
+interface GoogleDriveOAuthResult {
+  refresh_token: string;
+  account_email: string;
+}
+
+interface CloudBackupNamespace {
+  connectGoogleDrive: () => Promise<GoogleDriveOAuthResult>;
+}
+
 interface Window {
   api?: ApiNamespace;
   config?: ConfigNamespace;
@@ -112,4 +121,5 @@ interface Window {
   network?: NetworkNamespace;
   update?: UpdateNamespace;
   windowControls?: WindowControlsNamespace;
+  cloudBackup?: CloudBackupNamespace;
 }

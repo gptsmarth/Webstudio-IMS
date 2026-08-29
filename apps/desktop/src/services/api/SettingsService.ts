@@ -157,6 +157,8 @@ export interface BackupHistoryEntry {
   creator_display_name?: string | null;
   storage_backend?: string;
   is_archived?: boolean;
+  cloud_upload_status?: 'pending' | 'uploaded' | 'failed' | null;
+  cloud_uploaded_at?: string | null;
 }
 
 export interface BackupAdminDashboard {
@@ -309,9 +311,20 @@ export interface BackupSettings {
 
 export interface BackupSettingsUpdate {
   backup_folder: string;
-  storage_backend: 'local' | 'cloud' | 'nas' | 'external_drive';
+  storage_backend: 'local' | 'cloud' | 'nas' | 'external_drive' | 'google_drive';
   schedule: 'manual' | 'daily' | 'weekly' | 'monthly';
   retention_policy: 'last_7' | 'last_30' | 'last_90' | 'unlimited' | 'custom';
+  retention_count: number;
+}
+
+export interface CloudBackupStatus {
+  provider: string;
+  connected: boolean;
+  account_email: string | null;
+  status: 'connected' | 'disconnected' | 'error';
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_error: string | null;
   retention_count: number;
 }
 
@@ -521,6 +534,36 @@ export class SettingsService {
   static async updateBackup(payload: BackupSettingsUpdate): Promise<BackupSettings> {
     const client = await ApiClientProvider.getClient();
     return client.patch<BackupSettings>('/api/v1/settings/backup', payload);
+  }
+
+  static async getCloudBackupStatus(): Promise<CloudBackupStatus> {
+    const client = await ApiClientProvider.getClient();
+    return client.get<CloudBackupStatus>('/api/v1/settings/backups/cloud/status');
+  }
+
+  static async connectGoogleDrive(payload: {
+    refresh_token: string;
+    account_email: string;
+  }): Promise<CloudBackupStatus> {
+    LoggingService.info('API', 'Connecting Google Drive cloud backup');
+    const client = await ApiClientProvider.getClient();
+    return client.post<CloudBackupStatus>(
+      '/api/v1/settings/backups/cloud/google-drive/connect',
+      payload,
+    );
+  }
+
+  static async disconnectGoogleDrive(): Promise<CloudBackupStatus> {
+    LoggingService.warn('API', 'Disconnecting Google Drive cloud backup');
+    const client = await ApiClientProvider.getClient();
+    return client.post<CloudBackupStatus>('/api/v1/settings/backups/cloud/google-drive/disconnect');
+  }
+
+  static async updateCloudBackupRetention(retentionCount: number): Promise<CloudBackupStatus> {
+    const client = await ApiClientProvider.getClient();
+    return client.patch<CloudBackupStatus>('/api/v1/settings/backups/cloud/retention', {
+      retention_count: retentionCount,
+    });
   }
 
   static async createBackup(

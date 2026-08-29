@@ -509,6 +509,144 @@ if (!gotTheLock) {
     },
   );
 
+  // --- Google Drive cloud backup: installed-app OAuth "loopback" flow (same pattern
+  // gh/gcloud use) — see docs/architecture/future/cloud-backup-sync.md §3.2. The Desktop
+  // OAuth client's ID/secret are distributed as env vars, same as WEBSTUDIO_GITHUB_TOKEN.
+  const GOOGLE_DRIVE_CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID ?? '';
+  const GOOGLE_DRIVE_CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET ?? '';
+  const GOOGLE_DRIVE_SCOPES =
+    'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+  const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+
+  const runGoogleDriveOAuthLoopback = (): Promise<{
+    refresh_token: string;
+    account_email: string;
+  }> =>
+    new Promise((resolve, reject) => {
+      if (!GOOGLE_DRIVE_CLIENT_ID || !GOOGLE_DRIVE_CLIENT_SECRET) {
+        reject(
+          new Error(
+            'Google Drive is not configured on this installation. Set ' +
+              'GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET and restart the app.',
+          ),
+        );
+        return;
+      }
+
+      let settled = false;
+      const server = http.createServer();
+      const timeout = setTimeout(() => {
+        finish(() => reject(new Error('Google sign-in timed out. Please try again.')));
+      }, OAUTH_TIMEOUT_MS);
+
+      const finish = (action: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        server.close();
+        action();
+      };
+
+      server.on('request', (req, res) => {
+        const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+        const code = url.searchParams.get('code');
+        const oauthError = url.searchParams.get('error');
+
+        const respondAndClose = (html: string): void => {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(html);
+        };
+
+        if (oauthError) {
+          respondAndClose(
+            '<html><body><p>Google sign-in was cancelled. You can close this tab.</p></body></html>',
+          );
+          finish(() => reject(new Error(`Google sign-in failed: ${oauthError}`)));
+          return;
+        }
+        if (!code) {
+          respondAndClose('<html><body><p>Missing authorization code.</p></body></html>');
+          return;
+        }
+
+        respondAndClose(
+          '<html><body><p>Google Drive connected. You can close this tab and return to WEBSTUDIO.</p></body></html>',
+        );
+
+        const port = (server.address() as { port: number }).port;
+        const redirectUri = `http://127.0.0.1:${port}`;
+
+        void (async () => {
+          try {
+            const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                code,
+                client_id: GOOGLE_DRIVE_CLIENT_ID,
+                client_secret: GOOGLE_DRIVE_CLIENT_SECRET,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code',
+              }),
+            });
+            const tokenPayload = (await tokenResponse.json()) as {
+              refresh_token?: string;
+              access_token?: string;
+              error_description?: string;
+              error?: string;
+            };
+            if (!tokenResponse.ok || !tokenPayload.refresh_token || !tokenPayload.access_token) {
+              throw new Error(
+                tokenPayload.error_description ||
+                  tokenPayload.error ||
+                  'Google did not return a refresh token. Try disconnecting the app at ' +
+                    'myaccount.google.com/permissions and reconnecting.',
+              );
+            }
+
+            const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
+            });
+            const userInfo = (await userInfoResponse.json()) as { email?: string };
+            if (!userInfoResponse.ok || !userInfo.email) {
+              throw new Error('Could not read the connected Google account email.');
+            }
+
+            finish(() =>
+              resolve({
+                refresh_token: tokenPayload.refresh_token!,
+                account_email: userInfo.email!,
+              }),
+            );
+          } catch (error) {
+            finish(() => reject(error instanceof Error ? error : new Error(String(error))));
+          }
+        })();
+      });
+
+      server.listen(0, '127.0.0.1', () => {
+        const port = (server.address() as { port: number }).port;
+        const redirectUri = `http://127.0.0.1:${port}`;
+        const consentUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        consentUrl.searchParams.set('client_id', GOOGLE_DRIVE_CLIENT_ID);
+        consentUrl.searchParams.set('redirect_uri', redirectUri);
+        consentUrl.searchParams.set('response_type', 'code');
+        consentUrl.searchParams.set('scope', GOOGLE_DRIVE_SCOPES);
+        consentUrl.searchParams.set('access_type', 'offline');
+        consentUrl.searchParams.set('prompt', 'consent');
+        writeLog('Main', 'info', 'Opening Google Drive OAuth consent screen');
+        void shell.openExternal(consentUrl.toString());
+      });
+
+      server.on('error', (error) => {
+        finish(() => reject(error));
+      });
+    });
+
+  ipcMain.handle('cloudBackup:connectGoogleDrive', async () => {
+    return runGoogleDriveOAuthLoopback();
+  });
+
   ipcMain.handle('update:installAndRestart', async (_event, installerPath: string) => {
     writeLog('Main', 'info', `Installing client update from ${installerPath}`);
     if (process.platform === 'win32') {
