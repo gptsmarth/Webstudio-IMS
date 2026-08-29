@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Upload } from 'lucide-react';
-import {
-  ProductImageService,
-  type ProductImageResult,
-} from '../../services/images/ProductImageService';
+import { ProductImageService } from '../../services/images/ProductImageService';
+import { useProductImage } from '../../hooks/useProductImage';
 
 interface ProductImagePanelProps {
   productModelId: string;
@@ -20,42 +18,19 @@ export function ProductImagePanel({
   imageUrl,
   readOnly = false,
 }: ProductImagePanelProps): JSX.Element {
-  const [image, setImage] = useState<ProductImageResult | null>(null);
   const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const apply = (result: ProductImageResult) => {
-      if (!cancelled) setImage(result);
-    };
-
-    void ProductImageService.resolve(productModelId, { remoteUrl: imageUrl }).then((result) => {
-      apply(result);
-      // If the model has no image yet, background discovery may finish shortly —
-      // re-check a couple of times without blocking the add flow.
-      if (!imageUrl?.trim() && result.source === 'placeholder') {
-        pollTimer = setTimeout(() => {
-          if (cancelled) return;
-          void ProductImageService.resolve(productModelId, { remoteUrl: null }).then((again) => {
-            apply(again);
-            if (again.source === 'placeholder' && !cancelled) {
-              pollTimer = setTimeout(() => {
-                if (cancelled) return;
-                void ProductImageService.resolve(productModelId, { remoteUrl: null }).then(apply);
-              }, 12_000);
-            }
-          });
-        }, 6_000);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      if (pollTimer) clearTimeout(pollTimer);
-    };
-  }, [productModelId, imageUrl]);
+  const [uploadedOverride, setUploadedOverride] = useState<{ id: string; src: string } | null>(
+    null,
+  );
+  // Background discovery may still be running when this panel first mounts (e.g. right
+  // after adding a product) — useProductImage keeps re-checking until it finishes.
+  const image = useProductImage(productModelId, { remoteUrl: imageUrl });
+  const displaySrc =
+    uploadedOverride?.id === productModelId
+      ? uploadedOverride.src
+      : image.loading
+        ? null
+        : image.src;
 
   const onUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (readOnly) return;
@@ -64,7 +39,7 @@ export function ProductImagePanel({
     setUploading(true);
     try {
       const result = await ProductImageService.uploadFromFile(productModelId, file);
-      setImage(result);
+      setUploadedOverride({ id: productModelId, src: result.src });
     } finally {
       setUploading(false);
       event.target.value = '';
@@ -76,9 +51,9 @@ export function ProductImagePanel({
   return (
     <div className="inv-product-image">
       <div className="inv-product-image__frame">
-        {image ? (
+        {displaySrc ? (
           <img
-            src={image.src}
+            src={displaySrc}
             alt={modelName}
             className="inv-product-image__img"
             onError={(event) => {

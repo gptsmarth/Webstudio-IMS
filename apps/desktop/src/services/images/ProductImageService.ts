@@ -5,7 +5,7 @@ import { ProductSpecService } from '../api/ProductSpecService';
 const CACHE_PREFIX = 'webstudio.product-image.';
 const LOCAL_UPLOAD_CACHE_SUFFIX = '__local__';
 
-export type ProductImageSource = 'cached' | 'placeholder' | 'remote' | 'none';
+export type ProductImageSource = 'cached' | 'placeholder' | 'remote' | 'none' | 'pending';
 
 export interface ProductImageResult {
   src: string;
@@ -141,9 +141,11 @@ export class ProductImageService {
         // Backend may return source=pending while discovery runs in the background.
         resolvedRemoteUrl = resolved.product_image_url?.trim() || null;
         if (!resolvedRemoteUrl && resolved.source === 'pending') {
+          // Distinct from a genuine 'placeholder' (nothing findable) so callers know it's
+          // worth checking back — background discovery is still running server-side.
           return {
             src: ProductPlaceholderRegistry.getPlaceholder(category),
-            source: 'placeholder',
+            source: 'pending',
             canUpload: true,
           };
         }

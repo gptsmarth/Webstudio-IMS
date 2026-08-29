@@ -3,7 +3,7 @@ import { ChevronRight, Laptop, MousePointer2 } from 'lucide-react';
 import type { ModelInventoryRow } from '../../lib/inventoryHierarchy';
 import { isAccessoryModel } from '../../lib/productCategory';
 import { buildStockModelSpecLines, stockAvailabilityLabel } from '../../lib/stockModelCard';
-import { ProductImageService } from '../../services/images/ProductImageService';
+import { useProductImage } from '../../hooks/useProductImage';
 
 interface StockModelRowProps {
   row: ModelInventoryRow;
@@ -16,9 +16,12 @@ export function StockModelRow({
   onSelect,
   hideBrand = true,
 }: StockModelRowProps): JSX.Element {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [imageFailed, setImageFailed] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageBroken, setImageBroken] = useState(false);
+  const image = useProductImage(row.model.id, {
+    remoteUrl: row.model.product_image_url,
+    brandName: row.model.brand_name,
+    modelName: row.model.model_name,
+  });
   const specLines = useMemo(() => buildStockModelSpecLines(row.model), [row.model]);
   const inStock = row.availableUnits > 0;
   const specPreview = useMemo(
@@ -29,26 +32,11 @@ export function StockModelRow({
         .join(' · '),
     [specLines],
   );
+  const showImage = !image.loading && !image.failed && !imageBroken;
 
   useEffect(() => {
-    let cancelled = false;
-    setImageLoading(true);
-    setImageFailed(false);
-    void ProductImageService.resolve(row.model.id, {
-      remoteUrl: row.model.product_image_url,
-      brandName: row.model.brand_name,
-      modelName: row.model.model_name,
-    }).then((result) => {
-      if (!cancelled) {
-        setImageSrc(result.src);
-        setImageFailed(result.source === 'placeholder');
-        setImageLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [row.model.brand_name, row.model.id, row.model.model_name, row.model.product_image_url]);
+    setImageBroken(false);
+  }, [image.src]);
 
   return (
     <button
@@ -57,18 +45,15 @@ export function StockModelRow({
       onClick={onSelect}
     >
       <div className="stock-model-row__media">
-        {imageLoading ? (
+        {image.loading ? (
           <div className="stock-model-row__image stock-model-row__image--placeholder skeleton" />
-        ) : imageSrc && !imageFailed ? (
+        ) : showImage ? (
           <img
-            src={imageSrc}
+            src={image.src}
             alt={row.model.model_name}
             className="stock-model-row__image"
             loading="lazy"
-            onError={() => {
-              setImageFailed(true);
-              setImageSrc(ProductImageService.getPlaceholderSrc());
-            }}
+            onError={() => setImageBroken(true)}
           />
         ) : (
           <div className="stock-model-row__image stock-model-row__image--placeholder" aria-hidden>

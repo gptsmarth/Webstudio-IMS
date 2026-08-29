@@ -3,7 +3,7 @@ import { Laptop } from 'lucide-react';
 import type { ProductModel } from '../../../services/api/ProductModelService';
 import { buildStockModelSpecLines } from '../../../lib/stockModelCard';
 import { formatInventoryPrice } from '../../../lib/inventoryPrice';
-import { ProductImageService } from '../../../services/images/ProductImageService';
+import { useProductImage } from '../../../hooks/useProductImage';
 import { InventoryBrandCell } from '../InventoryBrandCell';
 
 interface InvModelSerialHeroProps {
@@ -19,34 +19,28 @@ export function InvModelSerialHero({
   availableCount,
   onEditModel,
 }: InvModelSerialHeroProps): JSX.Element {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageBroken, setImageBroken] = useState(false);
+  const image = useProductImage(model.id, {
+    remoteUrl: model.product_image_url,
+    brandName: model.brand_name,
+    modelName: model.model_name,
+  });
   const specLines = useMemo(() => buildStockModelSpecLines(model), [model]);
+  const showImage = !image.loading && !image.failed && !imageBroken;
 
   useEffect(() => {
-    let cancelled = false;
-    void ProductImageService.resolve(model.id, {
-      remoteUrl: model.product_image_url,
-      brandName: model.brand_name,
-      modelName: model.model_name,
-    }).then((result) => {
-      if (!cancelled) setImageSrc(result.src);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [model.id, model.product_image_url]);
+    setImageBroken(false);
+  }, [image.src]);
 
   return (
     <section className="inv-model-hero" aria-label="Model overview">
       <div className="inv-model-hero__media">
-        {imageSrc ? (
+        {showImage ? (
           <img
-            src={imageSrc}
+            src={image.src}
             alt={model.model_name}
             className="inv-model-hero__image"
-            onError={(event) => {
-              event.currentTarget.src = ProductImageService.getPlaceholderSrc();
-            }}
+            onError={() => setImageBroken(true)}
           />
         ) : (
           <div className="inv-model-hero__image inv-model-hero__image--placeholder" aria-hidden>

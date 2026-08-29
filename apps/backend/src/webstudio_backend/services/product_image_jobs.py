@@ -7,17 +7,25 @@ import time
 import uuid
 
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.database.session import get_session_factory
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
+from webstudio_backend.services.ai.config import resolve_ai_config
 from webstudio_backend.services.ai.prompts import default_image_search_query
 from webstudio_backend.services.product_image_service import resolve_product_image
 from webstudio_backend.services.scheduler_runtime_service import sleep_until_next_run
 from webstudio_backend.services.web_image_scraper import _BACKGROUND_MAX_QUERIES
+
+# Small, bounded budget for the Gemini-fallback pass — free scraping already tried up
+# to _BACKGROUND_MAX_QUERIES queries and found nothing, so this only needs to validate
+# the handful of pages Gemini's search grounding points at, not repeat a full search.
+_GEMINI_FALLBACK_MAX_QUERIES = 3
 
 _inflight: dict[str, asyncio.Task[None]] = {}
 # model_id -> unix timestamp when a failed attempt may be retried
@@ -72,6 +80,58 @@ def schedule_product_image_resolve(
     return True
 
 
+async def _try_gemini_image_fallback(
+    session: AsyncSession,
+    *,
+    model_number: str,
+    brand_name: str | None,
+    model_name: str | None,
+    model_id: str,
+    image_query: str,
+) -> str | None:
+    """Second-chance image discovery via Gemini's search grounding, reached only when
+    free web scraping alone found nothing. Never raises — returns None (identical to
+    "still no image found") on any failure or if Gemini isn't configured, so local
+    image discovery never depends on Gemini being set up or working.
+    """
+    try:
+        from webstudio_backend.services.ai.providers.gemini import GeminiProvider
+
+        settings = get_settings()
+        ai_config = await resolve_ai_config(session, settings)
+        if not ai_config.gemini.api_key.strip():
+            return None
+
+        provider = GeminiProvider(ai_config)
+        grounding_body = await provider.find_image_page_grounding(
+            model_number,
+            brand_name=brand_name,
+            model_name=model_name,
+        )
+        if not grounding_body:
+            return None
+
+        image_url = await resolve_product_image(
+            model_number=model_number,
+            brand_name=brand_name,
+            model_name=model_name,
+            model_id=model_id,
+            persist_local=True,
+            image_search_query=image_query,
+            grounding_body=grounding_body,
+            max_queries=_GEMINI_FALLBACK_MAX_QUERIES,
+        )
+        if image_url:
+            logger.info(
+                "Background image resolve found an image for {} via Gemini fallback",
+                model_number,
+            )
+        return image_url
+    except Exception:
+        logger.exception("Gemini image fallback failed for {}", model_number)
+        return None
+
+
 async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
     key = str(model_id)
     try:
@@ -109,6 +169,15 @@ async def _run_product_image_resolve(model_id: uuid.UUID) -> None:
                     image_search_query=image_query,
                     max_queries=_BACKGROUND_MAX_QUERIES,
                 )
+                if not image_url:
+                    image_url = await _try_gemini_image_fallback(
+                        session,
+                        model_number=pm.model_number,
+                        brand_name=brand_name,
+                        model_name=pm.model_name,
+                        model_id=str(pm.id),
+                        image_query=image_query,
+                    )
                 if not image_url:
                     logger.info(
                         "Background image resolve found nothing for {} ({})",

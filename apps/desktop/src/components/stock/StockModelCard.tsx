@@ -8,7 +8,7 @@ import {
   stockAvailabilityLabel,
   type StockModelSpecLine,
 } from '../../lib/stockModelCard';
-import { ProductImageService } from '../../services/images/ProductImageService';
+import { useProductImage } from '../../hooks/useProductImage';
 
 const COLLAPSED_SPEC_COUNT = 6;
 
@@ -49,10 +49,13 @@ export function StockModelCard({
   showPrice = false,
   onSelect,
 }: StockModelCardProps): JSX.Element {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [imageFailed, setImageFailed] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
   const [specsExpanded, setSpecsExpanded] = useState(false);
+  const [imageBroken, setImageBroken] = useState(false);
+  const image = useProductImage(row.model.id, {
+    remoteUrl: row.model.product_image_url,
+    brandName: row.model.brand_name,
+    modelName: row.model.model_name,
+  });
   const specLines = useMemo(
     () => orderStockCardSpecLines(buildStockModelSpecLines(row.model)),
     [row.model],
@@ -60,26 +63,11 @@ export function StockModelCard({
   const screenHint = displayScreenHint(row.model.display);
   const visibleSpecs = specsExpanded ? specLines : specLines.slice(0, COLLAPSED_SPEC_COUNT);
   const hasMoreSpecs = specLines.length > COLLAPSED_SPEC_COUNT;
+  const showImage = !image.loading && !image.failed && !imageBroken;
 
   useEffect(() => {
-    let cancelled = false;
-    setImageLoading(true);
-    setImageFailed(false);
-    void ProductImageService.resolve(row.model.id, {
-      remoteUrl: row.model.product_image_url,
-      brandName: row.model.brand_name,
-      modelName: row.model.model_name,
-    }).then((result) => {
-      if (!cancelled) {
-        setImageSrc(result.src);
-        setImageFailed(result.source === 'placeholder');
-        setImageLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [row.model.brand_name, row.model.id, row.model.model_name, row.model.product_image_url]);
+    setImageBroken(false);
+  }, [image.src]);
 
   return (
     <article className="stock-model-card">
@@ -92,18 +80,15 @@ export function StockModelCard({
         </div>
 
         <div className="stock-model-card__media">
-          {imageLoading ? (
+          {image.loading ? (
             <div className="stock-model-card__image stock-model-card__image--placeholder skeleton" />
-          ) : imageSrc && !imageFailed ? (
+          ) : showImage ? (
             <img
-              src={imageSrc}
+              src={image.src}
               alt={row.model.model_name}
               className="stock-model-card__image"
               loading="lazy"
-              onError={() => {
-                setImageFailed(true);
-                setImageSrc(ProductImageService.getPlaceholderSrc());
-              }}
+              onError={() => setImageBroken(true)}
             />
           ) : (
             <div

@@ -399,6 +399,46 @@ class GeminiProvider(AIProvider):
             model_name=model_name,
         )
 
+    async def find_image_page_grounding(
+        self,
+        model_number: str,
+        *,
+        brand_name: str | None = None,
+        model_name: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Grounded search used only as a fallback to harvest candidate product-page
+        URLs for image discovery, after free web scraping alone found nothing usable.
+
+        Returns Gemini's raw response body (read via extract_grounding_page_urls) or
+        None on any failure — callers must treat that identically to "still no image
+        found," never as an error. This costs one Gemini call, so it only runs when
+        scraping has already failed, not on every product.
+        """
+        if not self.is_configured():
+            return None
+        query_bits = [part for part in (brand_name, model_name, model_number) if part]
+        prompt = (
+            "Search the web and find the official manufacturer product page or a major "
+            f"retailer listing for this exact product: {' '.join(query_bits)}. "
+            "Reply with a short confirmation sentence only."
+        )
+        try:
+            gemini_model = self._model_chain(max_models=1)[0]
+            payload = _build_payload(prompt, use_grounding=True)
+            AIProviderHealthTracker.record_request("gemini")
+            body = await self._generate(gemini_model, payload)
+            AIProviderHealthTracker.record_success("gemini")
+            return body
+        except AIProviderError as exc:
+            AIProviderHealthTracker.record_failure("gemini", message=exc.message)
+            logger.info("Gemini image-page grounding failed for {}: {}", model_number, exc.message)
+            return None
+        except Exception:
+            logger.exception(
+                "Unexpected error during Gemini image-page grounding for {}", model_number
+            )
+            return None
+
     async def test_connection(self) -> ProviderTestResult:
         if not self.is_configured():
             return ProviderTestResult(
