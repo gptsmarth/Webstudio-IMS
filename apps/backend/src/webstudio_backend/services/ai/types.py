@@ -31,7 +31,7 @@ class AIProviderConfig:
     fallback_chain: list[ProviderId] = field(default_factory=lambda: ["gemini"])
     enrichment_enabled: bool = True
     timeout_seconds: int = 90
-    retry_count: int = 2
+    retry_count: int = 1  # matches resolve_ai_config's default when ai_retry_count is unset
     gemini: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("gemini"))
     groq: ProviderCredentials = field(default_factory=lambda: ProviderCredentials("groq"))
     openrouter: ProviderCredentials = field(

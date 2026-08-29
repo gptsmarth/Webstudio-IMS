@@ -54,12 +54,14 @@ class GeminiProvider(AIProvider):
         return bool(self._api_key)
 
     def _model_chain(self, *, max_models: int = MAX_SPEC_LOOKUP_MODELS) -> list[str]:
-        chain: list[str] = []
+        # The admin's configured model always goes first — it's an explicit choice (e.g.
+        # picking a stronger paid-tier model) and shouldn't be silently outranked by
+        # whichever model happened to succeed most often process-wide. The "winning
+        # model" heuristic only fills the remaining fallback slot(s).
+        chain: list[str] = [self._model.strip() or DEFAULT_MODEL]
         winner = most_successful_gemini_model()
-        if winner:
-            chain.append(winner)
-        for candidate in (self._model, DEFAULT_MODEL, FAST_FALLBACK_MODEL):
-            name = candidate.strip()
+        for candidate in (winner, DEFAULT_MODEL, FAST_FALLBACK_MODEL):
+            name = (candidate or "").strip()
             if name and name not in chain:
                 chain.append(name)
         return chain[:max_models]

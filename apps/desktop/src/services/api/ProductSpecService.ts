@@ -53,12 +53,26 @@ const RETRIABLE_SPEC_LOOKUP_CODES = new Set([
   'QUOTA_EXCEEDED',
 ]);
 
+// Not retriable (retrying won't help until the admin fixes it), but still needs its own
+// actionable message rather than being folded into a generic "no match" result — e.g. a
+// missing/cleared Gemini API key should never look identical to "this SKU wasn't found."
+const ACTIONABLE_SPEC_LOOKUP_CODES = new Set(['NOT_CONFIGURED']);
+
 export function isRetriableSpecLookupError(err: unknown): boolean {
   if (err instanceof SpecLookupError) {
     return RETRIABLE_SPEC_LOOKUP_CODES.has(err.code);
   }
   const code = (err as { code?: string }).code;
   return typeof code === 'string' && RETRIABLE_SPEC_LOOKUP_CODES.has(code);
+}
+
+function isThrowableSpecLookupCode(code: string | undefined): boolean {
+  return Boolean(
+    code &&
+    (RETRIABLE_SPEC_LOOKUP_CODES.has(code) ||
+      ACTIONABLE_SPEC_LOOKUP_CODES.has(code) ||
+      code === 'SERVICE_UNAVAILABLE'),
+  );
 }
 
 export class ProductSpecService {
@@ -80,11 +94,8 @@ export class ProductSpecService {
       );
     } catch (err: unknown) {
       const api = err as { code?: string; message?: string };
-      if (
-        api.code &&
-        (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')
-      ) {
-        throw new SpecLookupError(api.code, api.message ?? 'Gemini lookup failed.');
+      if (isThrowableSpecLookupCode(api.code)) {
+        throw new SpecLookupError(api.code!, api.message ?? 'Gemini lookup failed.');
       }
       return null;
     }
@@ -106,11 +117,8 @@ export class ProductSpecService {
       );
     } catch (err: unknown) {
       const api = err as { code?: string; message?: string };
-      if (
-        api.code &&
-        (RETRIABLE_SPEC_LOOKUP_CODES.has(api.code) || api.code === 'SERVICE_UNAVAILABLE')
-      ) {
-        throw new SpecLookupError(api.code, api.message ?? 'Gemini lookup failed.');
+      if (isThrowableSpecLookupCode(api.code)) {
+        throw new SpecLookupError(api.code!, api.message ?? 'Gemini lookup failed.');
       }
       return null;
     }
