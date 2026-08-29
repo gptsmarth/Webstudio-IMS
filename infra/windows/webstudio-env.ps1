@@ -233,7 +233,10 @@ function Get-NssmEnvironmentPairs {
         "WEBSTUDIO_GITHUB_REPO",
         "WEBSTUDIO_GITHUB_TOKEN",
         "GEMINI_API_KEY",
-        "OPENAI_API_KEY"
+        "OPENAI_API_KEY",
+        "WEBSTUDIO_CLOUD_BACKUP_SYNC_SCHEDULER",
+        "GOOGLE_DRIVE_CLIENT_ID",
+        "GOOGLE_DRIVE_CLIENT_SECRET"
     )
 
     $pairs = @()
