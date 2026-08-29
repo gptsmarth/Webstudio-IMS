@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, Ban, CalendarClock, RefreshCw, X } from 'lucide-react';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { PurchaseImportDialog } from '../../components/purchase/PurchaseImportDialog';
@@ -150,18 +150,46 @@ export function PurchasePage(): JSX.Element {
     }
   }, [canSyncTally, loadQueue]);
 
+  // Purchase's list and detail views are two full return branches of the same
+  // component, not separately-mounted panes — the shared `.app-content` scroll
+  // container's height shrinks to fit the (usually shorter) detail view, which
+  // clamps its scrollTop, and nothing restores it when coming back to the list.
+  // Save/restore that scroll position manually around the list<->detail toggle.
+  const listScrollTopRef = useRef(0);
+  const returningFromDetailRef = useRef(false);
+
   const openDetail = useCallback(async (voucherId: number) => {
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) listScrollTopRef.current = mainEl.scrollTop;
     setDetailLoading(true);
     setError(null);
     try {
       const data = await PurchaseService.getVoucher(voucherId);
       setDetail(data);
+      returningFromDetailRef.current = true;
     } catch (err) {
       setError(parseApiError(err, 'Failed to load voucher detail.'));
     } finally {
       setDetailLoading(false);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    if (detail !== null || !returningFromDetailRef.current) return;
+    returningFromDetailRef.current = false;
+    const mainEl = document.getElementById('main-content');
+    if (!mainEl) return;
+    const target = listScrollTopRef.current;
+    let attempts = 0;
+    const tryRestore = () => {
+      mainEl.scrollTop = target;
+      attempts += 1;
+      if (Math.abs(mainEl.scrollTop - target) > 1 && attempts < 6) {
+        requestAnimationFrame(tryRestore);
+      }
+    };
+    tryRestore();
+  }, [detail]);
 
   const refreshFromTally = useCallback(async () => {
     if (!detail) return;
