@@ -36,6 +36,7 @@ ErrorCode = Literal[
     "CATALOGUE_DELETE_BLOCKED",
     "SESSION_IDLE_TIMEOUT",
     "ALREADY_IMPORTED",
+    "ALREADY_IGNORED",
 ]
 
 

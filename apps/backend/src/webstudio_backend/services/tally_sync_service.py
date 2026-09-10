@@ -141,6 +141,9 @@ class TallySyncCounters:
     model_mismatches: int = 0
     failures: int = 0
     skipped_vouchers: int = 0
+    # Per-unit detail for units marked sold this run — surfaced once in the
+    # backfill response, never persisted (see SalesPage "Sync older sales").
+    sold_units: list[dict] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -578,6 +581,7 @@ class TallySyncService:
                 "skipped": counters.invoices_skipped,
                 "retried": retried_invoices,
                 "sales_created": counters.sales_created,
+                "sold_units": counters.sold_units,
                 "duplicates": counters.duplicates,
                 "missing_serials": counters.missing_serials,
                 "failures": counters.failures,
@@ -1582,6 +1586,16 @@ class TallySyncService:
         stats["completed"] += 1
         stats["sales"] += 1
         counters.sales_created += 1
+        counters.sold_units.append(
+            {
+                "brand": sale.snapshot_brand_name,
+                "model_name": sale.snapshot_model_name,
+                "model_number": sale.snapshot_model_number,
+                "serial_number": sale.snapshot_serial_number,
+                "customer_name": sale.customer_name,
+                "sold_at": sale.sold_at.isoformat(),
+            }
+        )
         return outcome
 
     @staticmethod
@@ -1727,6 +1741,16 @@ class TallySyncService:
             )
             last_sale_id = sale.id
             sold_ids.append(unit.id)
+            counters.sold_units.append(
+                {
+                    "brand": sale.snapshot_brand_name,
+                    "model_name": sale.snapshot_model_name,
+                    "model_number": sale.snapshot_model_number,
+                    "serial_number": sale.snapshot_serial_number,
+                    "customer_name": sale.customer_name,
+                    "sold_at": sale.sold_at.isoformat(),
+                }
+            )
             await self._recorder.record_inventory_status_change(
                 unit,
                 old_status=old_status,

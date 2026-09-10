@@ -28,7 +28,9 @@ from webstudio_backend.api.schemas.purchase import (
 )
 from webstudio_backend.core.exceptions import AppError
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import (
+    AuditSource,
     InventorySource,
     ProductCategory,
     ProductModelStatus,
@@ -344,7 +346,9 @@ class PurchaseImportService:
 
     # ---- Import (transactional) -------------------------------------------
 
-    async def ignore_voucher(self, voucher_id: int) -> PurchaseIgnoreResponse:
+    async def ignore_voucher(
+        self, voucher_id: int, *, actor: AuditActor | None = None
+    ) -> PurchaseIgnoreResponse:
         """Dismiss a fetched purchase voucher from the review queue.
 
         Tombstoned (status=ignored, row retained) so the same Tally voucher is
@@ -360,6 +364,44 @@ class PurchaseImportService:
                 status_code=409,
             )
         await self._purchase.ignore_voucher(voucher)
+        await AuditRecorder(self._session).record_system_action(
+            entity_type="tally_purchase_voucher",
+            entity_id=str(voucher.id),
+            description=f"Purchase {voucher.tally_voucher_number} ignored from the review queue",
+            source=AuditSource.MANUAL,
+            actor=actor,
+        )
+        return PurchaseIgnoreResponse(voucher_id=voucher.id, status=voucher.status.value)
+
+    async def close_voucher(
+        self, voucher_id: int, *, actor: AuditActor | None = None
+    ) -> PurchaseIgnoreResponse:
+        """Manually mark a voucher Imported, permanently, even if not every
+        line group was brought into inventory. Use when the remaining lines
+        are deliberately being left out (e.g. accessories not worth tracking).
+        """
+        voucher = await self._require_voucher(voucher_id)
+        if voucher.status == TallyPurchaseStatus.IMPORTED:
+            return PurchaseIgnoreResponse(voucher_id=voucher.id, status=voucher.status.value)
+        if voucher.status == TallyPurchaseStatus.IGNORED:
+            raise AppError(
+                "ALREADY_IGNORED",
+                "This purchase is ignored — bring it back via a Tally backfill before marking "
+                "it imported.",
+                status_code=409,
+            )
+        skipped = sum(1 for line in voucher.lines if not line.imported)
+        await self._purchase.close_voucher(voucher)
+        await AuditRecorder(self._session).record_system_action(
+            entity_type="tally_purchase_voucher",
+            entity_id=str(voucher.id),
+            description=(
+                f"Purchase {voucher.tally_voucher_number} manually marked imported "
+                f"({skipped} line(s) left out)"
+            ),
+            source=AuditSource.MANUAL,
+            actor=actor,
+        )
         return PurchaseIgnoreResponse(voucher_id=voucher.id, status=voucher.status.value)
 
     async def import_group(

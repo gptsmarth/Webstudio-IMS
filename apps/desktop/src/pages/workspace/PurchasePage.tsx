@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Ban, CalendarClock, RefreshCw, X } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Ban,
+  CalendarClock,
+  CheckCircle2,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { PurchaseImportDialog } from '../../components/purchase/PurchaseImportDialog';
 import { parseApiError } from '../../lib/apiError';
@@ -13,12 +21,13 @@ import {
   type PurchaseVoucherDetail,
 } from '../../services/api/PurchaseService';
 
-type StatusFilter = '' | 'pending' | 'partially_imported' | 'imported';
+type StatusFilter = '' | 'pending' | 'partially_imported' | 'imported' | 'ignored';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   partially_imported: 'Partially imported',
   imported: 'Imported',
+  ignored: 'Ignored',
 };
 
 function money(value: string | number | null | undefined): string {
@@ -34,7 +43,9 @@ function StatusBadge({ status }: { status: string }): JSX.Element {
       ? 'badge badge-success'
       : status === 'partially_imported'
         ? 'badge badge-warning'
-        : 'badge';
+        : status === 'ignored'
+          ? 'badge badge-neutral'
+          : 'badge';
   return <span className={cls}>{STATUS_LABELS[status] ?? status}</span>;
 }
 
@@ -65,6 +76,13 @@ export function PurchasePage(): JSX.Element {
   const [importGroup, setImportGroup] = useState<PurchaseModelGroup | null>(null);
   const [ignoreTarget, setIgnoreTarget] = useState<{ id: number; label: string } | null>(null);
   const [ignoring, setIgnoring] = useState(false);
+  const [closeTarget, setCloseTarget] = useState<{
+    id: number;
+    label: string;
+    skipped: number;
+    total: number;
+  } | null>(null);
+  const [closing, setClosing] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
   const [backfilling, setBackfilling] = useState(false);
@@ -105,6 +123,23 @@ export function PurchasePage(): JSX.Element {
       setIgnoring(false);
     }
   }, [ignoreTarget, loadQueue]);
+
+  const confirmClose = useCallback(async () => {
+    if (!closeTarget) return;
+    setClosing(true);
+    setError(null);
+    try {
+      await PurchaseService.markImported(closeTarget.id);
+      setNotice(`Purchase ${closeTarget.label} was marked imported.`);
+      setCloseTarget(null);
+      setDetail(null);
+      await loadQueue();
+    } catch (err) {
+      setError(parseApiError(err, 'Failed to mark the purchase voucher imported.'));
+    } finally {
+      setClosing(false);
+    }
+  }, [closeTarget, loadQueue]);
 
   const runBackfill = useCallback(async () => {
     if (!backfillFrom) return;
@@ -272,6 +307,66 @@ export function PurchasePage(): JSX.Element {
     </div>
   ) : null;
 
+  const closeDialog = closeTarget ? (
+    <div
+      className="cat-dialog-overlay"
+      role="presentation"
+      onClick={() => !closing && setCloseTarget(null)}
+    >
+      <div
+        className="cat-dialog animate-slide-in"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="cat-dialog__header">
+          <h2 className="cat-dialog__title">Mark this purchase invoice as imported?</h2>
+          <button
+            type="button"
+            className="app-toolbar-icon-btn"
+            onClick={() => setCloseTarget(null)}
+            aria-label="Close"
+            disabled={closing}
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="cat-dialog__body">
+          <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+            <AlertCircle size={14} aria-hidden />
+            <span>
+              Purchase <strong>{closeTarget.label}</strong> will move to Imported. This is permanent
+              —{' '}
+              <strong>
+                {closeTarget.skipped} of {closeTarget.total} line(s)
+              </strong>{' '}
+              you haven&apos;t added to inventory will be left out and can&apos;t be imported from
+              this invoice later.
+            </span>
+          </div>
+        </div>
+        <footer className="cat-dialog__footer">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setCloseTarget(null)}
+            disabled={closing}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void confirmClose()}
+            disabled={closing}
+          >
+            {closing ? 'Marking…' : 'Mark as imported'}
+          </button>
+        </footer>
+      </div>
+    </div>
+  ) : null;
+
   // ---- Voucher detail view ----
   if (detail) {
     return (
@@ -286,8 +381,30 @@ export function PurchasePage(): JSX.Element {
               Supplier {detail.supplier_name ?? '—'} · Invoice {detail.invoice_number ?? '—'} ·{' '}
               {detail.voucher_date ?? '—'} · <StatusBadge status={detail.status} />
             </p>
+            {detail.status === 'ignored' && (
+              <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 12 }}>
+                Ignored invoices stay hidden from the queue. To bring this one back, fetch older
+                purchases from Tally for its date.
+              </p>
+            )}
           </div>
-          {canImport && detail.status !== 'imported' && (
+          {canImport && detail.status !== 'imported' && detail.status !== 'ignored' && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() =>
+                setCloseTarget({
+                  id: detail.id,
+                  label: detail.voucher_number,
+                  skipped: detail.groups.filter((g) => !g.imported).length,
+                  total: detail.groups.length,
+                })
+              }
+            >
+              Mark as imported
+            </button>
+          )}
+          {canImport && detail.status !== 'imported' && detail.status !== 'ignored' && (
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -297,7 +414,7 @@ export function PurchasePage(): JSX.Element {
               <Ban size={14} aria-hidden /> Ignore invoice
             </button>
           )}
-          {canView && detail.status !== 'imported' && (
+          {canView && detail.status !== 'imported' && detail.status !== 'ignored' && (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -420,6 +537,7 @@ export function PurchasePage(): JSX.Element {
           />
         )}
         {ignoreDialog}
+        {closeDialog}
       </div>
     );
   }
@@ -510,16 +628,20 @@ export function PurchasePage(): JSX.Element {
       )}
 
       <div style={{ display: 'flex', gap: 8 }}>
-        {(['', 'pending', 'partially_imported', 'imported'] as StatusFilter[]).map((value) => (
-          <button
-            key={value || 'all'}
-            type="button"
-            className={statusFilter === value ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'}
-            onClick={() => setStatusFilter(value)}
-          >
-            {value ? STATUS_LABELS[value] : 'All'}
-          </button>
-        ))}
+        {(['', 'pending', 'partially_imported', 'imported', 'ignored'] as StatusFilter[]).map(
+          (value) => (
+            <button
+              key={value || 'all'}
+              type="button"
+              className={
+                statusFilter === value ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'
+              }
+              onClick={() => setStatusFilter(value)}
+            >
+              {value ? STATUS_LABELS[value] : 'All'}
+            </button>
+          ),
+        )}
       </div>
 
       {error && (
@@ -585,7 +707,26 @@ export function PurchasePage(): JSX.Element {
                     <StatusBadge status={item.status} />
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    {canImport && item.status !== 'imported' && (
+                    {canImport && item.status !== 'imported' && item.status !== 'ignored' && (
+                      <button
+                        type="button"
+                        className="app-toolbar-icon-btn"
+                        aria-label={`Mark purchase ${item.voucher_number} as imported`}
+                        title="Mark as imported"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCloseTarget({
+                            id: item.id,
+                            label: item.voucher_number,
+                            skipped: item.pending_group_count,
+                            total: item.group_count,
+                          });
+                        }}
+                      >
+                        <CheckCircle2 size={14} aria-hidden />
+                      </button>
+                    )}
+                    {canImport && item.status !== 'imported' && item.status !== 'ignored' && (
                       <button
                         type="button"
                         className="app-toolbar-icon-btn"
@@ -608,6 +749,7 @@ export function PurchasePage(): JSX.Element {
 
       {detailLoading && <p style={{ color: 'var(--color-text-tertiary)' }}>Opening voucher…</p>}
       {ignoreDialog}
+      {closeDialog}
     </div>
   );
 }

@@ -58,8 +58,14 @@ class TallyPurchaseRepository:
         if status is not None:
             base = base.where(TallyPurchaseVoucher.status == status)
         else:
-            # Ignored vouchers are tombstoned — hidden from the default queue.
-            base = base.where(TallyPurchaseVoucher.status != TallyPurchaseStatus.IGNORED)
+            # Default ("All") queue means "still open" — ignored vouchers are
+            # tombstoned and fully-imported ones are done, so both are hidden
+            # here and only reachable via their own status filter.
+            base = base.where(
+                TallyPurchaseVoucher.status.not_in(
+                    (TallyPurchaseStatus.IGNORED, TallyPurchaseStatus.IMPORTED)
+                )
+            )
 
         count_stmt = select(func.count()).select_from(base.subquery())
         total = int((await self._session.execute(count_stmt)).scalar_one())
@@ -87,6 +93,14 @@ class TallyPurchaseRepository:
         voucher.last_seen_at = datetime.now(UTC)
         await self._session.flush()
 
+    async def close_voucher(self, voucher: TallyPurchaseVoucher) -> None:
+        """Manually mark a voucher Imported, permanently, regardless of which
+        line groups were actually brought into inventory. Terminal — see the
+        early-return for IMPORTED in ``recompute_status``."""
+        voucher.status = TallyPurchaseStatus.IMPORTED
+        voucher.last_seen_at = datetime.now(UTC)
+        await self._session.flush()
+
     async def count_existing_guids(self, company_sync_id: int, guids: list[str]) -> int:
         """How many of the given voucher GUIDs already exist for this company."""
         if not guids:
@@ -99,8 +113,9 @@ class TallyPurchaseRepository:
 
     def recompute_status(self, voucher: TallyPurchaseVoucher) -> TallyPurchaseStatus:
         """Derive queue status from per-line import flags."""
-        # Ignored is a terminal, user-set state — never auto-override it.
-        if voucher.status == TallyPurchaseStatus.IGNORED:
+        # Ignored and manually-closed-Imported are terminal, user-set states —
+        # never auto-override them from line-level import flags.
+        if voucher.status in (TallyPurchaseStatus.IGNORED, TallyPurchaseStatus.IMPORTED):
             return voucher.status
         if not voucher.lines:
             voucher.status = TallyPurchaseStatus.PENDING

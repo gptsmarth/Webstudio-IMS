@@ -101,6 +101,15 @@ export interface TallySyncHistoryFilters {
   offset?: number;
 }
 
+export interface TallyBackfillSoldUnit {
+  brand: string | null;
+  model_name: string | null;
+  model_number: string | null;
+  serial_number: string | null;
+  customer_name: string | null;
+  sold_at: string;
+}
+
 export interface TallySalesBackfillResult {
   from_date: string;
   to_date: string;
@@ -110,6 +119,7 @@ export interface TallySalesBackfillResult {
   skipped: number;
   retried: number;
   sales_created: number;
+  sold_units: TallyBackfillSoldUnit[];
   duplicates: number;
   missing_serials: number;
   failures: number;

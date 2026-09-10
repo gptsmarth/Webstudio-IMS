@@ -196,6 +196,15 @@ export class PurchaseService {
     return client.post<PurchaseIgnoreResponse>(`/api/v1/purchase/queue/${voucherId}/ignore`, {});
   }
 
+  static async markImported(voucherId: number): Promise<PurchaseIgnoreResponse> {
+    LoggingService.info('API', 'Marking purchase voucher imported', { voucher_id: voucherId });
+    const client = await ApiClientProvider.getClient();
+    return client.post<PurchaseIgnoreResponse>(
+      `/api/v1/purchase/queue/${voucherId}/mark-imported`,
+      {},
+    );
+  }
+
   static async backfill(fromDate: string, toDate?: string): Promise<PurchaseBackfillResponse> {
     LoggingService.info('API', 'Backfilling purchases from Tally', {
       from_date: fromDate,

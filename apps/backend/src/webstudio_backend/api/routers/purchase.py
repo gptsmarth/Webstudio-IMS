@@ -116,8 +116,22 @@ async def ignore_purchase_voucher(
     current: PurchaseImportDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    _ = current
-    result = await PurchaseImportService(db_session).ignore_voucher(voucher_id)
+    result = await PurchaseImportService(db_session).ignore_voucher(
+        voucher_id, actor=_actor(current)
+    )
+    return _envelope(request, result.model_dump(mode="json"))
+
+
+@router.post("/queue/{voucher_id}/mark-imported")
+async def mark_purchase_voucher_imported(
+    request: Request,
+    voucher_id: int,
+    current: PurchaseImportDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    result = await PurchaseImportService(db_session).close_voucher(
+        voucher_id, actor=_actor(current)
+    )
     return _envelope(request, result.model_dump(mode="json"))
 
 

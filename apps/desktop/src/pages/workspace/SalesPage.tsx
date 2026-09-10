@@ -11,7 +11,7 @@ import { useSalesWorkspace } from '../../hooks/useSalesWorkspace';
 import { canExportSales } from '../../lib/sales';
 import { parseApiError } from '../../lib/apiError';
 import { P } from '../../services/PermissionService';
-import { TallyService } from '../../services/api/TallyService';
+import { TallyService, type TallyBackfillSoldUnit } from '../../services/api/TallyService';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 
@@ -29,6 +29,7 @@ export function SalesPage(): JSX.Element {
   const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
   const [backfilling, setBackfilling] = useState(false);
   const [backfillNotice, setBackfillNotice] = useState<string | null>(null);
+  const [backfillSoldUnits, setBackfillSoldUnits] = useState<TallyBackfillSoldUnit[]>([]);
   const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const runBackfill = useCallback(async () => {
@@ -36,6 +37,7 @@ export function SalesPage(): JSX.Element {
     setBackfilling(true);
     setBackfillError(null);
     setBackfillNotice(null);
+    setBackfillSoldUnits([]);
     try {
       const result = await TallyService.backfillSales(backfillFrom);
       const parts = [
@@ -52,6 +54,7 @@ export function SalesPage(): JSX.Element {
       }
       if (result.failures > 0) parts.push(`${result.failures} failed — check Tally sync history`);
       setBackfillNotice(`${parts[0]} ${parts.slice(1).join(', ')}.`);
+      setBackfillSoldUnits(result.sold_units ?? []);
       setBackfillOpen(false);
       await workspace.refresh();
     } catch (err) {
@@ -142,10 +145,41 @@ export function SalesPage(): JSX.Element {
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => setBackfillNotice(null)}
+            onClick={() => {
+              setBackfillNotice(null);
+              setBackfillSoldUnits([]);
+            }}
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {backfillNotice && backfillSoldUnits.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table className="table-root">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Serial</th>
+                <th>Customer</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {backfillSoldUnits.map((unit, index) => (
+                <tr key={`${unit.serial_number ?? 'unit'}-${index}`}>
+                  <td>
+                    {[unit.brand, unit.model_name || unit.model_number].filter(Boolean).join(' ') ||
+                      '—'}
+                  </td>
+                  <td className="col-mono">{unit.serial_number ?? '—'}</td>
+                  <td>{unit.customer_name ?? '—'}</td>
+                  <td>{unit.sold_at.slice(0, 10)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
