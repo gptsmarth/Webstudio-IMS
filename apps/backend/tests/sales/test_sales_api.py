@@ -118,6 +118,51 @@ async def test_list_sales_allows_null_inventory_item_id(
 
 
 @pytest.mark.asyncio
+async def test_search_by_model_number_finds_sale(
+    api_client: AsyncClient,
+    admin_headers: dict[str, str],
+    db_session: AsyncSession,
+) -> None:
+    """Regression: the sales search bar matched model NAME but not model
+    NUMBER, so searching by a model number returned nothing even though a
+    matching sale existed."""
+    suffix = uuid.uuid4().hex[:8].upper()
+    model_number = f"X1502ZA-{suffix}"
+    sale = Sale(
+        inventory_item_id=None,
+        sale_source=SaleSource.MANUAL,
+        sold_at=datetime.now(UTC),
+        invoice_number=f"INV-MODELSEARCH-{suffix}",
+        snapshot_serial_number=f"SN-{suffix}",
+        snapshot_brand_name="ASUS",
+        snapshot_model_number=model_number,
+        snapshot_model_name="Vivobook 15",
+        snapshot_location_name="Warehouse",
+    )
+    db_session.add(sale)
+    await db_session.commit()
+
+    response = await api_client.get(
+        "/api/v1/sales", headers=admin_headers, params={"search": model_number}
+    )
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    match = next((row for row in payload if row["invoice_number"] == sale.invoice_number), None)
+    assert match is not None, f"expected a sale matching model number {model_number!r}"
+
+    # A search matching only a substring of the model number must also work.
+    partial_response = await api_client.get(
+        "/api/v1/sales", headers=admin_headers, params={"search": suffix}
+    )
+    assert partial_response.status_code == 200
+    partial_payload = partial_response.json()["data"]
+    partial_match = next(
+        (row for row in partial_payload if row["invoice_number"] == sale.invoice_number), None
+    )
+    assert partial_match is not None
+
+
+@pytest.mark.asyncio
 async def test_get_sale_detail_with_snapshot_only(
     api_client: AsyncClient,
     admin_headers: dict[str, str],

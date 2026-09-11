@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -85,10 +86,14 @@ export function PurchasePage(): JSX.Element {
   const [closing, setClosing] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
+  const [backfillTo, setBackfillTo] = useState<string>('');
   const [backfilling, setBackfilling] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [refreshingVoucher, setRefreshingVoucher] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<'ignore' | 'import' | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -106,6 +111,10 @@ export function PurchasePage(): JSX.Element {
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [statusFilter]);
 
   const confirmIgnore = useCallback(async () => {
     if (!ignoreTarget) return;
@@ -141,13 +150,35 @@ export function PurchasePage(): JSX.Element {
     }
   }, [closeTarget, loadQueue]);
 
+  const confirmBulkAction = useCallback(async () => {
+    if (!bulkConfirm || selectedIds.size === 0) return;
+    setBulkRunning(true);
+    setError(null);
+    const ids = Array.from(selectedIds);
+    const action =
+      bulkConfirm === 'ignore' ? PurchaseService.ignoreVoucher : PurchaseService.markImported;
+    const results = await Promise.allSettled(ids.map((id) => action(id)));
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+    const verb = bulkConfirm === 'ignore' ? 'ignored' : 'marked imported';
+    setNotice(
+      failed === 0
+        ? `${succeeded} purchase(s) ${verb}.`
+        : `${succeeded} purchase(s) ${verb}, ${failed} failed — they may already be imported or ignored.`,
+    );
+    setBulkConfirm(null);
+    setSelectedIds(new Set());
+    setBulkRunning(false);
+    await loadQueue();
+  }, [bulkConfirm, selectedIds, loadQueue]);
+
   const runBackfill = useCallback(async () => {
     if (!backfillFrom) return;
     setBackfilling(true);
     setError(null);
     setNotice(null);
     try {
-      const result = await PurchaseService.backfill(backfillFrom);
+      const result = await PurchaseService.backfill(backfillFrom, backfillTo || undefined);
       setNotice(
         `Fetched ${result.fetched} purchase invoice(s) since ${result.from_date} — ${result.new} new added to the queue.`,
       );
@@ -158,7 +189,7 @@ export function PurchasePage(): JSX.Element {
     } finally {
       setBackfilling(false);
     }
-  }, [backfillFrom, loadQueue]);
+  }, [backfillFrom, backfillTo, loadQueue]);
 
   const runSyncNow = useCallback(async () => {
     setSyncing(true);
@@ -248,124 +279,205 @@ export function PurchasePage(): JSX.Element {
     await loadQueue();
   }, [detail, openDetail, loadQueue]);
 
-  const ignoreDialog = ignoreTarget ? (
-    <div
-      className="cat-dialog-overlay"
-      role="presentation"
-      onClick={() => !ignoring && setIgnoreTarget(null)}
-    >
-      <div
-        className="cat-dialog animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="cat-dialog__header">
-          <h2 className="cat-dialog__title">Ignore this purchase invoice?</h2>
-          <button
-            type="button"
-            className="app-toolbar-icon-btn"
-            onClick={() => setIgnoreTarget(null)}
-            aria-label="Close"
-            disabled={ignoring}
+  const ignoreDialog = ignoreTarget
+    ? createPortal(
+        <div
+          className="cat-dialog-overlay"
+          role="presentation"
+          onClick={() => !ignoring && setIgnoreTarget(null)}
+        >
+          <div
+            className="cat-dialog animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
           >
-            <X size={16} />
-          </button>
-        </header>
-        <div className="cat-dialog__body">
-          <div className="alert alert-danger" style={{ marginBottom: 12 }}>
-            <AlertCircle size={14} aria-hidden />
-            <span>
-              Purchase <strong>{ignoreTarget.label}</strong> will be removed from the queue and will{' '}
-              <strong>not</strong> be fetched again on future Tally syncs. Any inventory you already
-              imported from it is kept. This does not change anything in Tally.
-            </span>
+            <header className="cat-dialog__header">
+              <h2 className="cat-dialog__title">Ignore this purchase invoice?</h2>
+              <button
+                type="button"
+                className="app-toolbar-icon-btn"
+                onClick={() => setIgnoreTarget(null)}
+                aria-label="Close"
+                disabled={ignoring}
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="cat-dialog__body">
+              <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+                <AlertCircle size={14} aria-hidden />
+                <span>
+                  Purchase <strong>{ignoreTarget.label}</strong> will be removed from the queue and
+                  will <strong>not</strong> be fetched again on future Tally syncs. Any inventory
+                  you already imported from it is kept. This does not change anything in Tally.
+                </span>
+              </div>
+              <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+                You can bring it back later by fetching older purchases for its date.
+              </p>
+            </div>
+            <footer className="cat-dialog__footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIgnoreTarget(null)}
+                disabled={ignoring}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void confirmIgnore()}
+                disabled={ignoring}
+              >
+                {ignoring ? 'Removing…' : 'Ignore and remove'}
+              </button>
+            </footer>
           </div>
-          <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-            You can bring it back later by fetching older purchases for its date.
-          </p>
-        </div>
-        <footer className="cat-dialog__footer">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setIgnoreTarget(null)}
-            disabled={ignoring}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => void confirmIgnore()}
-            disabled={ignoring}
-          >
-            {ignoring ? 'Removing…' : 'Ignore and remove'}
-          </button>
-        </footer>
-      </div>
-    </div>
-  ) : null;
+        </div>,
+        document.body,
+      )
+    : null;
 
-  const closeDialog = closeTarget ? (
-    <div
-      className="cat-dialog-overlay"
-      role="presentation"
-      onClick={() => !closing && setCloseTarget(null)}
-    >
-      <div
-        className="cat-dialog animate-slide-in"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="cat-dialog__header">
-          <h2 className="cat-dialog__title">Mark this purchase invoice as imported?</h2>
-          <button
-            type="button"
-            className="app-toolbar-icon-btn"
-            onClick={() => setCloseTarget(null)}
-            aria-label="Close"
-            disabled={closing}
+  const closeDialog = closeTarget
+    ? createPortal(
+        <div
+          className="cat-dialog-overlay"
+          role="presentation"
+          onClick={() => !closing && setCloseTarget(null)}
+        >
+          <div
+            className="cat-dialog animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
           >
-            <X size={16} />
-          </button>
-        </header>
-        <div className="cat-dialog__body">
-          <div className="alert alert-danger" style={{ marginBottom: 12 }}>
-            <AlertCircle size={14} aria-hidden />
-            <span>
-              Purchase <strong>{closeTarget.label}</strong> will move to Imported. This is permanent
-              —{' '}
-              <strong>
-                {closeTarget.skipped} of {closeTarget.total} line(s)
-              </strong>{' '}
-              you haven&apos;t added to inventory will be left out and can&apos;t be imported from
-              this invoice later.
-            </span>
+            <header className="cat-dialog__header">
+              <h2 className="cat-dialog__title">Mark this purchase invoice as imported?</h2>
+              <button
+                type="button"
+                className="app-toolbar-icon-btn"
+                onClick={() => setCloseTarget(null)}
+                aria-label="Close"
+                disabled={closing}
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="cat-dialog__body">
+              <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+                <AlertCircle size={14} aria-hidden />
+                <span>
+                  Purchase <strong>{closeTarget.label}</strong> will move to Imported. This is
+                  permanent —{' '}
+                  <strong>
+                    {closeTarget.skipped} of {closeTarget.total} line(s)
+                  </strong>{' '}
+                  you haven&apos;t added to inventory will be left out and can&apos;t be imported
+                  from this invoice later.
+                </span>
+              </div>
+            </div>
+            <footer className="cat-dialog__footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setCloseTarget(null)}
+                disabled={closing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void confirmClose()}
+                disabled={closing}
+              >
+                {closing ? 'Marking…' : 'Mark as imported'}
+              </button>
+            </footer>
           </div>
-        </div>
-        <footer className="cat-dialog__footer">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setCloseTarget(null)}
-            disabled={closing}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  const bulkDialog = bulkConfirm
+    ? createPortal(
+        <div
+          className="cat-dialog-overlay"
+          role="presentation"
+          onClick={() => !bulkRunning && setBulkConfirm(null)}
+        >
+          <div
+            className="cat-dialog animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => void confirmClose()}
-            disabled={closing}
-          >
-            {closing ? 'Marking…' : 'Mark as imported'}
-          </button>
-        </footer>
-      </div>
-    </div>
-  ) : null;
+            <header className="cat-dialog__header">
+              <h2 className="cat-dialog__title">
+                {bulkConfirm === 'ignore'
+                  ? `Ignore ${selectedIds.size} purchase invoice(s)?`
+                  : `Mark ${selectedIds.size} purchase invoice(s) as imported?`}
+              </h2>
+              <button
+                type="button"
+                className="app-toolbar-icon-btn"
+                onClick={() => setBulkConfirm(null)}
+                aria-label="Close"
+                disabled={bulkRunning}
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="cat-dialog__body">
+              <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+                <AlertCircle size={14} aria-hidden />
+                <span>
+                  {bulkConfirm === 'ignore' ? (
+                    <>
+                      These invoices will be removed from the queue and won&apos;t be fetched again
+                      on future Tally syncs. Any inventory already imported from them is kept.
+                    </>
+                  ) : (
+                    <>
+                      These invoices will move to Imported, permanently. Any line(s) not yet added
+                      to inventory will be left out and can&apos;t be imported later.
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+            <footer className="cat-dialog__footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setBulkConfirm(null)}
+                disabled={bulkRunning}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void confirmBulkAction()}
+                disabled={bulkRunning}
+              >
+                {bulkRunning
+                  ? 'Working…'
+                  : bulkConfirm === 'ignore'
+                    ? 'Ignore and remove'
+                    : 'Mark as imported'}
+              </button>
+            </footer>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
 
   // ---- Voucher detail view ----
   if (detail) {
@@ -585,8 +697,9 @@ export function PurchasePage(): JSX.Element {
           <div>
             <h3 style={{ margin: 0, fontSize: 15 }}>Fetch older purchase invoices</h3>
             <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              Read-only. Pulls Purchase invoices from Tally starting at the date you pick (up to
-              today) into this queue. Nothing is imported automatically and Tally is never modified.
+              Read-only. Pulls Purchase invoices from Tally in the date range you pick (to date
+              defaults to today) into this queue. Nothing is imported automatically and Tally is
+              never modified.
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -596,8 +709,20 @@ export function PurchasePage(): JSX.Element {
                 type="date"
                 className="input"
                 value={backfillFrom}
-                max={new Date().toISOString().slice(0, 10)}
+                max={backfillTo || new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setBackfillFrom(e.target.value)}
+                disabled={backfilling}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>To date (optional)</span>
+              <input
+                type="date"
+                className="input"
+                value={backfillTo}
+                min={backfillFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBackfillTo(e.target.value)}
                 disabled={backfilling}
               />
             </label>
@@ -651,10 +776,73 @@ export function PurchasePage(): JSX.Element {
         </div>
       )}
 
+      {canImport && selectedIds.size > 0 && (
+        <div
+          className="card"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 16px',
+          }}
+        >
+          <span style={{ fontSize: 13 }}>{selectedIds.size} selected</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setBulkConfirm('import')}
+          >
+            Mark as imported
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--color-danger, #c0392b)' }}
+            onClick={() => setBulkConfirm('ignore')}
+          >
+            Ignore
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="table-root">
           <thead>
             <tr>
+              {canImport && (
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all actionable purchases"
+                    checked={
+                      items.some(
+                        (item) => item.status === 'pending' || item.status === 'partially_imported',
+                      ) &&
+                      items
+                        .filter(
+                          (item) =>
+                            item.status === 'pending' || item.status === 'partially_imported',
+                        )
+                        .every((item) => selectedIds.has(item.id))
+                    }
+                    onChange={(e) => {
+                      const selectable = items.filter(
+                        (item) => item.status === 'pending' || item.status === 'partially_imported',
+                      );
+                      setSelectedIds(
+                        e.target.checked ? new Set(selectable.map((item) => item.id)) : new Set(),
+                      );
+                    }}
+                  />
+                </th>
+              )}
               <th>Supplier</th>
               <th>Date</th>
               <th>Voucher no.</th>
@@ -670,14 +858,14 @@ export function PurchasePage(): JSX.Element {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={canImport ? 11 : 10} style={{ textAlign: 'center', padding: 24 }}>
                   Loading purchase queue…
                 </td>
               </tr>
             )}
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={canImport ? 11 : 10} style={{ textAlign: 'center', padding: 24 }}>
                   No purchase vouchers in the queue yet. They appear automatically after a Tally
                   sync.
                 </td>
@@ -690,6 +878,25 @@ export function PurchasePage(): JSX.Element {
                   onClick={() => void openDetail(item.id)}
                   style={{ cursor: 'pointer' }}
                 >
+                  {canImport && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {(item.status === 'pending' || item.status === 'partially_imported') && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select purchase ${item.voucher_number}`}
+                          checked={selectedIds.has(item.id)}
+                          onChange={(e) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(item.id);
+                              else next.delete(item.id);
+                              return next;
+                            });
+                          }}
+                        />
+                      )}
+                    </td>
+                  )}
                   <td>{item.supplier_name ?? '—'}</td>
                   <td>{item.voucher_date ?? '—'}</td>
                   <td className="col-mono">{item.voucher_number}</td>
@@ -750,6 +957,7 @@ export function PurchasePage(): JSX.Element {
       {detailLoading && <p style={{ color: 'var(--color-text-tertiary)' }}>Opening voucher…</p>}
       {ignoreDialog}
       {closeDialog}
+      {bulkDialog}
     </div>
   );
 }

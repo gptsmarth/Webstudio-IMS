@@ -481,13 +481,26 @@ def parse_voucher_element(
     )
 
 
-def parse_vouchers_xml(xml_text: str) -> list[TallyVoucher]:
+class TallyXmlTruncatedError(Exception):
+    """Raised (strict mode only) when a Tally export response is malformed —
+    almost always a response cut off mid-stream on a large historical export.
+
+    A genuinely empty result is well-formed XML with zero VOUCHER elements and
+    never raises this; only a parse failure does.
+    """
+
+
+def parse_vouchers_xml(xml_text: str, *, strict: bool = False) -> list[TallyVoucher]:
     cleaned = _sanitize_xml_text(xml_text)
     if not cleaned:
         return []
     try:
         root = ET.fromstring(cleaned)
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        if strict:
+            raise TallyXmlTruncatedError(
+                "Tally export response could not be parsed — likely truncated"
+            ) from exc
         return []
 
     vouchers: list[TallyVoucher] = []

@@ -27,6 +27,7 @@ export function SalesPage(): JSX.Element {
   const canRunTallySync = session?.permissions?.includes(P.tally.runSync) ?? false;
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState<string>(defaultBackfillFrom());
+  const [backfillTo, setBackfillTo] = useState<string>('');
   const [backfilling, setBackfilling] = useState(false);
   const [backfillNotice, setBackfillNotice] = useState<string | null>(null);
   const [backfillSoldUnits, setBackfillSoldUnits] = useState<TallyBackfillSoldUnit[]>([]);
@@ -39,7 +40,7 @@ export function SalesPage(): JSX.Element {
     setBackfillNotice(null);
     setBackfillSoldUnits([]);
     try {
-      const result = await TallyService.backfillSales(backfillFrom);
+      const result = await TallyService.backfillSales(backfillFrom, backfillTo || undefined);
       const parts = [
         `Fetched ${result.fetched} sales invoice(s) from ${result.from_date} to ${result.to_date}.`,
         `${result.sales_created} unit(s) marked sold`,
@@ -62,7 +63,7 @@ export function SalesPage(): JSX.Element {
     } finally {
       setBackfilling(false);
     }
-  }, [backfillFrom, workspace]);
+  }, [backfillFrom, backfillTo, workspace]);
 
   if (!session) {
     return (
@@ -101,10 +102,11 @@ export function SalesPage(): JSX.Element {
           <div>
             <h3 style={{ margin: 0, fontSize: 15 }}>Sync older sales invoices from Tally</h3>
             <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              Read-only fetch. Sales invoices from the date you pick (up to today) are checked
-              against stock — any serial still in stock that was billed in Tally is marked sold.
-              Invoices already synced are skipped, so nothing is ever sold twice. Tally is never
-              modified.
+              Read-only fetch. Sales invoices in the date range you pick (to date defaults to today)
+              are checked against stock — any serial still in stock that was billed in Tally is
+              marked sold. Invoices already synced are skipped, so nothing is ever sold twice. Tally
+              is never modified. A full year works in one go, but picking a narrower range (e.g. two
+              months at a time) finishes faster and puts less load on Tally.
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -114,8 +116,20 @@ export function SalesPage(): JSX.Element {
                 type="date"
                 className="input"
                 value={backfillFrom}
-                max={new Date().toISOString().slice(0, 10)}
+                max={backfillTo || new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setBackfillFrom(e.target.value)}
+                disabled={backfilling}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>To date (optional)</span>
+              <input
+                type="date"
+                className="input"
+                value={backfillTo}
+                min={backfillFrom}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBackfillTo(e.target.value)}
                 disabled={backfilling}
               />
             </label>

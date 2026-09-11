@@ -40,8 +40,9 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 from webstudio_backend.infrastructure.repositories.tally_company_sync_repository import (
     TallyCompanySyncRepository,
 )
+from webstudio_backend.integrations.tally.xml_client import TallyConnectionError
 from webstudio_backend.services.tally_connectivity_service import TallyConnectivityService
-from webstudio_backend.services.tally_sync_service import TallySyncService
+from webstudio_backend.services.tally_sync_service import TallySyncService, _chunk_date_range
 
 
 def _envelope(vouchers_xml: str) -> str:
@@ -300,6 +301,114 @@ async def test_backfill_retries_missing_serial_after_stock_added(
     assert third["retried"] == 0
     assert third["sales_created"] == 0
     assert third["skipped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_backfill_sales_chunks_wide_ranges_and_survives_one_bad_chunk(
+    db_session: AsyncSession,
+    initialized_system,
+    product_model,
+    location,
+) -> None:
+    """A wide date range is fetched in bounded slices (see _chunk_date_range),
+    not one request for the whole window. A Tally connection failure on one
+    slice must not roll back or block sales already matched in other slices."""
+    suffix = uuid.uuid4().hex[:8].upper()
+    company = f"BF-CHUNK-{suffix}"
+    serial_a = f"BF-CHUNK-A-{suffix}"
+    serial_b = f"BF-CHUNK-B-{suffix}"
+    guid_a = f"bf-chunk-a-{suffix}"
+    guid_b = f"bf-chunk-b-{suffix}"
+    await _enable(db_session, company)
+
+    inventory = InventoryItemRepository(db_session)
+    item_a = await inventory.create(
+        serial_number=serial_a,
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    item_b = await inventory.create(
+        serial_number=serial_b,
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await db_session.commit()
+
+    from_date = date(2026, 1, 1)
+    to_date = date(2026, 3, 31)
+    chunks = _chunk_date_range(from_date, to_date)
+    assert len(chunks) >= 3, "test needs a range spanning at least 3 chunks"
+
+    first_chunk_from, first_chunk_to = chunks[0]
+    last_chunk_from, last_chunk_to = chunks[-1]
+
+    xml_a = _envelope(
+        _sale_voucher_xml(
+            guid=guid_a,
+            serial=serial_a,
+            invoice=f"BFA/{suffix}",
+            voucher_date=first_chunk_from.strftime("%Y%m%d"),
+        )
+    )
+    xml_b = _envelope(
+        _sale_voucher_xml(
+            guid=guid_b,
+            serial=serial_b,
+            invoice=f"BFB/{suffix}",
+            voucher_date=last_chunk_to.strftime("%Y%m%d"),
+        )
+    )
+
+    call_ranges: list[tuple[date, date]] = []
+
+    async def fake_export(*, company_name, from_date, to_date, historical):
+        call_ranges.append((from_date, to_date))
+        if (from_date, to_date) == (first_chunk_from, first_chunk_to):
+            return {"voucher_register": xml_a}
+        if (from_date, to_date) == (last_chunk_from, last_chunk_to):
+            return {"voucher_register": xml_b}
+        # Every chunk in between simulates a lost Tally connection.
+        raise TallyConnectionError("simulated network failure", user_message="boom")
+
+    fake_client = SimpleNamespace(export_monitored_voucher_types=AsyncMock(side_effect=fake_export))
+    diagnostics = SimpleNamespace(reachable=True, user_message="")
+    reachable = patch.object(
+        TallyConnectivityService,
+        "ensure_workstation_reachable",
+        new=AsyncMock(return_value=diagnostics),
+    )
+    build = patch.object(
+        TallyConnectivityService,
+        "build_client_for_sync",
+        new=AsyncMock(return_value=fake_client),
+    )
+
+    service = TallySyncService(db_session)
+    with reachable, build:
+        summary = await service.backfill_sales(
+            from_date=from_date,
+            to_date=to_date,
+            correlation_id="bf-chunk-test",
+        )
+    await db_session.commit()
+
+    # One request per chunk — never one request for the whole range.
+    assert len(call_ranges) == len(chunks)
+    assert summary["sales_created"] == 2
+    assert summary["failures"] >= 1
+
+    await db_session.refresh(item_a)
+    await db_session.refresh(item_b)
+    assert item_a.status is InventoryStatus.SOLD
+    assert item_b.status is InventoryStatus.SOLD
+    sale_a = await SaleRepository(db_session).get_by_inventory_item_id(item_a.id)
+    sale_b = await SaleRepository(db_session).get_by_inventory_item_id(item_b.id)
+    assert sale_a is not None
+    assert sale_b is not None
 
 
 @pytest_asyncio.fixture

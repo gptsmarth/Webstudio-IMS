@@ -11,6 +11,10 @@ from webstudio_backend.integrations.tally.xml_client import (
     _xml_response_has_line_error,
     _xml_response_has_vouchers,
 )
+from webstudio_backend.integrations.tally.xml_parser import (
+    TallyXmlTruncatedError,
+    parse_vouchers_xml,
+)
 
 EMPTY_DAY_BOOK = "<ENVELOPE><BODY><DATA></DATA></BODY></ENVELOPE>"
 DAY_BOOK_WITH_VOUCHER = (
@@ -278,3 +282,19 @@ async def test_historical_per_type_fallback_includes_purchase(monkeypatch) -> No
     assert "NEW PURCHASE" in exports
     # Register + ranged Day Book + collection + 4 per-type requests.
     assert len(sent) == 7
+
+
+def test_parse_vouchers_xml_swallows_malformed_by_default() -> None:
+    truncated = "<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER><VOUCHERTYPENAME>Sal"
+    assert parse_vouchers_xml(truncated) == []
+
+
+def test_parse_vouchers_xml_empty_response_is_not_an_error_even_in_strict_mode() -> None:
+    empty = "<ENVELOPE><BODY><DATA></DATA></BODY></ENVELOPE>"
+    assert parse_vouchers_xml(empty, strict=True) == []
+
+
+def test_parse_vouchers_xml_strict_raises_on_truncated_response() -> None:
+    truncated = "<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER><VOUCHERTYPENAME>Sal"
+    with pytest.raises(TallyXmlTruncatedError):
+        parse_vouchers_xml(truncated, strict=True)

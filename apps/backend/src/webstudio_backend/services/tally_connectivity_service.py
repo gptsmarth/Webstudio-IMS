@@ -74,11 +74,13 @@ class TallyConnectivityService:
         return diagnostics
 
     async def build_client_for_sync(
-        self, diagnostics: TallyConnectionDiagnostics
+        self, diagnostics: TallyConnectionDiagnostics, *, timeout: float | None = None
     ) -> TallyXmlClient:
         if not diagnostics.reachable or diagnostics.resolved_ip is None:
             raise TallyHostValidationError(diagnostics.user_message)
-        return TallyXmlClient(diagnostics.resolved_ip, diagnostics.port)
+        if timeout is None:
+            return TallyXmlClient(diagnostics.resolved_ip, diagnostics.port)
+        return TallyXmlClient(diagnostics.resolved_ip, diagnostics.port, timeout=timeout)
 
     async def build_health_payload(self) -> dict[str, object]:
         host, port, company_name = await self.get_config()

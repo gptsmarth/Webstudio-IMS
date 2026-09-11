@@ -679,6 +679,8 @@ class ReportRepository:
                         Sale.snapshot_brand_name.ilike(f"%{term}%"),
                         ProductModel.model_name.ilike(f"%{term}%"),
                         Sale.snapshot_model_name.ilike(f"%{term}%"),
+                        ProductModel.model_number.ilike(f"%{term}%"),
+                        Sale.snapshot_model_number.ilike(f"%{term}%"),
                         Location.name.ilike(f"%{term}%"),
                         Sale.snapshot_location_name.ilike(f"%{term}%"),
                     ),

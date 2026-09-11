@@ -215,8 +215,12 @@ export class TallyService {
         from_date: fromDate,
         ...(toDate ? { to_date: toDate } : {}),
       },
-      // Backfills scan a whole date range against Tally — allow up to 5 minutes.
-      { timeoutMs: 300000 },
+      // The backend now fetches wide ranges in ~30-day chunks (each with its
+      // own Tally timeout), so a multi-month/full-year backfill can take a
+      // while end to end even though every individual chunk is fast. 20
+      // minutes comfortably covers a full year in the slow case; a narrower
+      // date range (picked in the UI) finishes in a fraction of that.
+      { timeoutMs: 1_200_000 },
     );
   }
 
