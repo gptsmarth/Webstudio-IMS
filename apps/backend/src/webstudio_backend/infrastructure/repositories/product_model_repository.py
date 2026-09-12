@@ -6,13 +6,14 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import Select, func, inspect, select, text
+from sqlalchemy import Select, exists, func, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import (
     AccessoryKind,
+    InventoryStatus,
     ProductCategory,
     ProductModelStatus,
     StorageType,
@@ -353,19 +354,55 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         result = await self._session.execute(statement)
         return list(result.scalars().all())
 
+    @staticmethod
+    def _has_available_stock_clause():
+        # Refreshing a model's live price only matters while it can actually
+        # be sold — skipping out-of-stock models cuts wasted Gemini spend on
+        # products nobody can currently buy. purchase_import_service calls
+        # has_available_stock() below, before importing new units, to detect
+        # a restock of a previously out-of-stock model and fetch its price
+        # immediately rather than waiting for this filter to naturally start
+        # passing on the next scheduled sweep — mirroring the immediate fetch
+        # a genuinely new model already gets.
+        return exists(
+            select(InventoryItem.id).where(
+                InventoryItem.product_model_id == ProductModel.id,
+                InventoryItem.status == InventoryStatus.AVAILABLE,
+                InventoryItem.is_archived.is_(False),
+            )
+        )
+
+    async def has_available_stock(self, model_id: uuid.UUID) -> bool:
+        """Whether this specific model currently has at least one available,
+        non-archived unit."""
+        statement = select(
+            exists(
+                select(InventoryItem.id).where(
+                    InventoryItem.product_model_id == model_id,
+                    InventoryItem.status == InventoryStatus.AVAILABLE,
+                    InventoryItem.is_archived.is_(False),
+                )
+            )
+        )
+        result = await self._session.execute(statement)
+        return bool(result.scalar())
+
     async def list_ids_needing_asus_price_refresh(
         self, *, stale_before: datetime, limit: int = 20
     ) -> list[uuid.UUID]:
-        """Active ASUS models whose live price was never checked, or was last
-        checked before `stale_before` (for the weekly background refresh)."""
+        """Active, in-stock ASUS laptops (accessories are out of scope)
+        whose live price was never checked, or was last checked before
+        `stale_before` (for the weekly background refresh)."""
         statement = (
             select(ProductModel.id)
             .join(Brand, ProductModel.brand_id == Brand.id)
             .where(
                 ProductModel.status == ProductModelStatus.ACTIVE,
+                ProductModel.category == ProductCategory.LAPTOP,
                 func.upper(Brand.name) == "ASUS",
                 (ProductModel.live_price_checked_at.is_(None))
                 | (ProductModel.live_price_checked_at < stale_before),
+                self._has_available_stock_clause(),
             )
             .order_by(ProductModel.live_price_checked_at.asc().nullsfirst())
             .limit(max(1, min(limit, 200)))
@@ -374,13 +411,16 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         return list(result.scalars().all())
 
     async def list_ids_for_asus_brand(self) -> list[uuid.UUID]:
-        """All active ASUS models, for a manual bulk "Update prices" refresh."""
+        """All active, in-stock ASUS laptops (accessories are out of scope),
+        for a manual bulk "Update prices" refresh."""
         statement = (
             select(ProductModel.id)
             .join(Brand, ProductModel.brand_id == Brand.id)
             .where(
                 ProductModel.status == ProductModelStatus.ACTIVE,
+                ProductModel.category == ProductCategory.LAPTOP,
                 func.upper(Brand.name) == "ASUS",
+                self._has_available_stock_clause(),
             )
         )
         result = await self._session.execute(statement)

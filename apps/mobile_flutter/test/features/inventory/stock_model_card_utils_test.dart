@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:webstudio_ims/features/inventory/domain/inventory_models.dart';
+import 'package:webstudio_ims/features/inventory/domain/product_category.dart';
 import 'package:webstudio_ims/features/inventory/domain/stock_model_card_utils.dart';
 
 void main() {
@@ -81,6 +82,28 @@ void main() {
     );
     expect(asus.isAsusBrand, isTrue);
     expect(other.isAsusBrand, isFalse);
+  });
+
+  test('ProductModel.isAsusLaptop excludes ASUS accessories', () {
+    const asusLaptop = ProductModel(
+      id: 'm5',
+      brandId: 2,
+      brandName: 'ASUS',
+      modelNumber: 'M1605NAQ-MB095WS',
+      modelName: 'Vivobook 16',
+      status: 'active',
+    );
+    const asusAccessory = ProductModel(
+      id: 'm6',
+      brandId: 2,
+      brandName: 'ASUS',
+      category: ProductCategory.accessory,
+      modelNumber: 'AC65-06',
+      modelName: '65W USB Type-C AC Adapter',
+      status: 'active',
+    );
+    expect(asusLaptop.isAsusLaptop, isTrue);
+    expect(asusAccessory.isAsusLaptop, isFalse);
   });
 
   test('ProductModel.fromJson parses live price fields', () {

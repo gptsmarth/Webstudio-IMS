@@ -479,6 +479,7 @@ class PurchaseImportService:
         existing_model = request.mode == "existing"
         model_id: uuid.UUID
         newly_created_model = False
+        restocked_from_zero = False
         if existing_model:
             if request.product_model_id is None:
                 raise AppError("VALIDATION_ERROR", "product_model_id is required.", status_code=422)
@@ -496,6 +497,12 @@ class PurchaseImportService:
                     "PRODUCT_MODEL_ARCHIVED", "Product model is not active.", status_code=422
                 )
             model_id = model.id
+            # ASUS's scheduled/bulk price refresh skips out-of-stock models
+            # (cost optimization) — checked here, before this import adds new
+            # units, so a model coming back into stock gets its price
+            # refreshed immediately instead of waiting on that filter to
+            # naturally start passing again on the next scheduled sweep.
+            restocked_from_zero = not await self._models.has_available_stock(model_id)
         else:
             if request.new_product_model is None:
                 raise AppError(
@@ -564,6 +571,12 @@ class PurchaseImportService:
             # Background image discovery — never blocks the import commit.
             schedule_product_image_resolve(model_id)
             # ASUS-only live price lookup — no-ops for every other brand.
+            schedule_asus_price_refresh(model_id)
+        elif restocked_from_zero and imported > 0:
+            # An existing model that had zero available units is being
+            # restocked — fetch its price immediately rather than waiting
+            # for the scheduled sweep, which was skipping it entirely while
+            # it had nothing to sell.
             schedule_asus_price_refresh(model_id)
 
         return PurchaseImportResponse(

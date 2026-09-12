@@ -51,6 +51,7 @@ from webstudio_backend.infrastructure.repositories.product_model_repository impo
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.types import AIProviderError
 from webstudio_backend.services.asus_live_price_jobs import (
+    get_asus_bulk_run_status,
     schedule_all_asus_price_refreshes,
     schedule_asus_price_refresh,
 )
@@ -289,6 +290,21 @@ async def create_product_model(
             str(DuplicateModelNumberError(body.brand_id, body.model_number)),
             status_code=status.HTTP_409_CONFLICT,
         ) from err
+
+
+@router.get("/refresh-live-prices/status")
+async def get_asus_live_price_refresh_status(
+    request: Request,
+    current: ProductModelsSellingPriceDep,
+) -> dict:
+    """Real progress for the most recent bulk "Update prices" run — lets any
+    client (desktop or mobile) poll for live/resumable progress regardless
+    of which page it's on, whether it triggered the run itself, or whether
+    the app was reopened mid-run or after it finished. Declared ahead of the
+    `/{model_id}` route below so this static path isn't swallowed as a
+    model_id."""
+    _ = current
+    return _envelope(request, get_asus_bulk_run_status())
 
 
 @router.get("/{model_id}")

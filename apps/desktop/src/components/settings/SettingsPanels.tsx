@@ -891,7 +891,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
             />
           </Field>
           <Field
-            label="ASUS live price refresh (days)"
+            label="ASUS price refresh (days)"
             hint="How often ASUS stock prices auto-refresh via Gemini search. Raise this to spend less API quota; a new ASUS model or a manual 'Update prices' click always fetches immediately regardless of this setting."
           >
             <input
@@ -904,7 +904,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               onChange={(e) =>
                 setForm({
                   ...form,
-                  asus_price_refresh_stale_days: Number(e.target.value) || 7,
+                  asus_price_refresh_stale_days: Number(e.target.value) || 30,
                 })
               }
             />

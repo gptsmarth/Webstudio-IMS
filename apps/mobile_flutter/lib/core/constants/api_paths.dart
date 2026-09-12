@@ -42,6 +42,7 @@ abstract final class ApiPaths {
   static String productModelResolveImage(String id) => '/api/v1/product-models/$id/resolve-image';
   static String productModelRefreshLivePrice(String id) => '/api/v1/product-models/$id/refresh-live-price';
   static const productModelsRefreshLivePrices = '/api/v1/product-models/refresh-live-prices';
+  static const productModelsRefreshLivePricesStatus = '/api/v1/product-models/refresh-live-prices/status';
 
   static const tallyConnectionTest = '/api/v1/integrations/tally/connection/test';
   static const tallySyncTrigger = '/api/v1/integrations/tally/sync/trigger';

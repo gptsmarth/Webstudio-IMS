@@ -215,4 +215,14 @@ class CatalogueRepository {
     );
     return (result['scheduled'] as num?)?.toInt() ?? 0;
   }
+
+  /// Real progress for the most recent bulk "Update prices" run — lets the
+  /// UI poll for live/resumable progress instead of only ever showing the
+  /// initial "scheduled" count with no way to tell when it's actually done.
+  Future<AsusPriceRefreshStatus> getAsusPriceRefreshStatus() async {
+    return _api.get(
+      ApiPaths.productModelsRefreshLivePricesStatus,
+      parser: (json) => AsusPriceRefreshStatus.fromJson(json! as Map<String, dynamic>),
+    );
+  }
 }

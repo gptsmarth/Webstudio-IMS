@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import {
   HierarchyBreadcrumb,
   HierarchyLayer,
@@ -16,7 +16,10 @@ import {
   useInventoryHierarchyData,
 } from '../../hooks/useInventoryHierarchyData';
 import { InventoryService } from '../../services/api/InventoryService';
-import { ProductModelService } from '../../services/api/ProductModelService';
+import {
+  ProductModelService,
+  type AsusPriceRefreshStatus,
+} from '../../services/api/ProductModelService';
 import { ProductImageService } from '../../services/images/ProductImageService';
 import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
@@ -25,6 +28,9 @@ import { P, PermissionService } from '../../services/PermissionService';
 import { canEditStockProductModel } from '../../lib/inventory';
 import { matchesCategoryFilter } from '../../lib/inventoryHierarchy';
 import { BrandLogoImage } from '../../components/branding/BrandLogoImage';
+
+const ASUS_RUN_DISMISSED_KEY = 'webstudio_asus_price_run_dismissed_at';
+const ASUS_RUN_POLL_INTERVAL_MS = 4000;
 
 export function StockPage(): JSX.Element {
   const session = useAuthStore((state) => state.session);
@@ -85,8 +91,6 @@ export function StockPage(): JSX.Element {
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [livePriceRefreshing, setLivePriceRefreshing] = useState(false);
-  const [livePriceNotice, setLivePriceNotice] = useState<string | null>(null);
   const [priceModelId, setPriceModelId] = useState<string | null>(null);
   const [editModelId, setEditModelId] = useState<string | null>(null);
 
@@ -177,24 +181,125 @@ export function StockPage(): JSX.Element {
     [hierarchy, priceModelId],
   );
 
-  const handleUpdateAsusLivePrices = useCallback(async () => {
-    setLivePriceRefreshing(true);
-    setLivePriceNotice(null);
-    setActionError(null);
+  // ASUS price refresh progress: server-tracked (see get_asus_bulk_run_status
+  // on the backend) rather than component-local state, so it survives
+  // navigating away and back, switching tabs, or even restarting the app —
+  // any client polling the same endpoint sees the same real progress.
+  const showAsusPriceBar = nav.level === 'models' && nav.brandName?.trim().toUpperCase() === 'ASUS';
+  const [asusRunStatus, setAsusRunStatus] = useState<AsusPriceRefreshStatus | null>(null);
+  const [asusRunStarting, setAsusRunStarting] = useState(false);
+  const [asusRunError, setAsusRunError] = useState<string | null>(null);
+  const [asusRunDismissedAt, setAsusRunDismissedAt] = useState<string | null>(() => {
     try {
-      const result = await ProductModelService.refreshAllLivePrices();
-      setLivePriceNotice(
-        result.scheduled > 0
-          ? `Refreshing live prices for ${result.scheduled} ASUS model(s)…`
-          : 'No ASUS models to refresh.',
-      );
-    } catch (err: unknown) {
-      const message = err as { message?: string };
-      setActionError(message.message ?? 'Could not start the live price refresh.');
-    } finally {
-      setLivePriceRefreshing(false);
+      return localStorage.getItem(ASUS_RUN_DISMISSED_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [pollNonce, setPollNonce] = useState(0);
+  const refreshedForFinishedAtRef = useRef<string | null>(null);
+
+  const fetchAsusRunStatus = useCallback(async () => {
+    try {
+      const status = await ProductModelService.getLivePriceRefreshStatus();
+      setAsusRunStatus(status);
+      return status;
+    } catch {
+      return null;
     }
   }, []);
+
+  // useInventoryHierarchyData returns a fresh object every render, so a
+  // ref (rather than a raw dependency) is what lets the polling effect
+  // below call the latest hierarchy.refresh() without re-running itself
+  // every time this component re-renders — including its OWN status
+  // updates below, which would otherwise tear down and restart the
+  // interval on every single poll tick, before it ever got a chance to
+  // fire again on its own schedule ("frozen"/erratic instead of live).
+  const hierarchyRef = useRef(hierarchy);
+  useEffect(() => {
+    hierarchyRef.current = hierarchy;
+  });
+
+  useEffect(() => {
+    if (!showAsusPriceBar) return;
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const tick = async () => {
+      const status = await fetchAsusRunStatus();
+      if (cancelled || !status) return;
+      if (status.in_progress > 0) {
+        if (intervalId === null) {
+          intervalId = setInterval(() => void tick(), ASUS_RUN_POLL_INTERVAL_MS);
+        }
+        return;
+      }
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      if (
+        status.total > 0 &&
+        status.finished_at &&
+        refreshedForFinishedAtRef.current !== status.finished_at
+      ) {
+        refreshedForFinishedAtRef.current = status.finished_at;
+        await hierarchyRef.current.refresh();
+      }
+    };
+
+    void tick();
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) clearInterval(intervalId);
+    };
+  }, [showAsusPriceBar, pollNonce, fetchAsusRunStatus]);
+
+  const handleUpdateAsusLivePrices = useCallback(async () => {
+    setAsusRunStarting(true);
+    setAsusRunError(null);
+    try {
+      await ProductModelService.refreshAllLivePrices();
+      setPollNonce((n) => n + 1);
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setAsusRunError(message.message ?? 'Could not start the ASUS price refresh.');
+    } finally {
+      setAsusRunStarting(false);
+    }
+  }, []);
+
+  const handleDismissAsusRun = useCallback(() => {
+    if (!asusRunStatus?.finished_at) return;
+    setAsusRunDismissedAt(asusRunStatus.finished_at);
+    try {
+      localStorage.setItem(ASUS_RUN_DISMISSED_KEY, asusRunStatus.finished_at);
+    } catch {
+      // Best-effort persistence only — dismissing still works for this session.
+    }
+  }, [asusRunStatus]);
+
+  const asusRunMessage = useMemo(() => {
+    if (!asusRunStatus || asusRunStatus.total === 0) return null;
+    if (asusRunStatus.in_progress > 0) {
+      return `Refreshing ASUS prices — ${asusRunStatus.completed} of ${asusRunStatus.total} done…`;
+    }
+    if (asusRunStatus.finished_at && asusRunStatus.finished_at !== asusRunDismissedAt) {
+      return `Done — refreshed ${asusRunStatus.total} ASUS model(s).`;
+    }
+    return null;
+  }, [asusRunStatus, asusRunDismissedAt]);
+
+  const asusRunShowDismiss = Boolean(
+    asusRunStatus &&
+    asusRunStatus.total > 0 &&
+    asusRunStatus.in_progress === 0 &&
+    asusRunStatus.finished_at &&
+    asusRunStatus.finished_at !== asusRunDismissedAt,
+  );
+
+  const asusRunActive = (asusRunStatus?.in_progress ?? 0) > 0;
 
   const handleUpdateModel = useCallback(
     async (patch: Parameters<typeof ProductModelService.updateModel>[1]) => {
@@ -310,7 +415,7 @@ export function StockPage(): JSX.Element {
             />
             <span>Show selling prices on cards</span>
           </label>
-          {nav.brandName?.trim().toUpperCase() === 'ASUS' && (
+          {showAsusPriceBar && (
             <>
               <label className="stock-page__price-toggle">
                 <input
@@ -318,19 +423,34 @@ export function StockPage(): JSX.Element {
                   checked={nav.showLivePrice}
                   onChange={(event) => nav.setShowLivePrice(event.target.checked)}
                 />
-                <span>Show live price on cards</span>
+                <span>Show ASUS price on cards</span>
               </label>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => void handleUpdateAsusLivePrices()}
-                disabled={livePriceRefreshing}
+                disabled={asusRunStarting || asusRunActive}
               >
-                {livePriceRefreshing ? 'Starting…' : 'Update prices'}
+                {asusRunStarting ? 'Starting…' : asusRunActive ? 'Refreshing…' : 'Update prices'}
               </button>
-              {livePriceNotice && (
-                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
-                  {livePriceNotice}
+              {asusRunMessage && (
+                <span className="stock-page__asus-price-notice">
+                  {asusRunMessage}
+                  {asusRunShowDismiss && (
+                    <button
+                      type="button"
+                      className="stock-page__asus-price-notice-dismiss"
+                      onClick={handleDismissAsusRun}
+                      aria-label="Dismiss"
+                    >
+                      <X size={13} aria-hidden />
+                    </button>
+                  )}
+                </span>
+              )}
+              {asusRunError && (
+                <span className="stock-page__asus-price-notice stock-page__asus-price-notice--error">
+                  {asusRunError}
                 </span>
               )}
             </>
@@ -405,6 +525,8 @@ export function StockPage(): JSX.Element {
               actionLoading={actionLoading}
               onEditModel={canEditFromStock ? () => setEditModelId(selectedModel.id) : undefined}
               editModelLabel="Edit model & price"
+              showSellingPrice={nav.showSellingPrice}
+              showAsusPrice={nav.showLivePrice}
             />
           </HierarchyLayer>
         )}

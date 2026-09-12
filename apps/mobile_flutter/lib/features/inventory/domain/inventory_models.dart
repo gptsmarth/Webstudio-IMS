@@ -300,6 +300,10 @@ class ProductModel extends Equatable {
   bool get isAccessory => isAccessoryModel(category: category);
   bool get isLaptop => isLaptopModel(category: category);
 
+  /// ASUS live price is laptops-only — accessories (chargers, adapters,
+  /// etc.) are explicitly out of scope even when the brand is ASUS.
+  bool get isAsusLaptop => isAsusBrand && isLaptop;
+
   String get specsLabel {
     if (isAccessory) {
       final parts = <String>[accessoryKindLabel(accessoryKind)];

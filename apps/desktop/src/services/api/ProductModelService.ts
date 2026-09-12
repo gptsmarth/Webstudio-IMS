@@ -150,4 +150,17 @@ export class ProductModelService {
     const client = await ApiClientProvider.getClient();
     return client.post<{ scheduled: number }>('/api/v1/product-models/refresh-live-prices', {});
   }
+
+  static async getLivePriceRefreshStatus(): Promise<AsusPriceRefreshStatus> {
+    const client = await ApiClientProvider.getClient();
+    return client.get<AsusPriceRefreshStatus>('/api/v1/product-models/refresh-live-prices/status');
+  }
+}
+
+export interface AsusPriceRefreshStatus {
+  total: number;
+  completed: number;
+  in_progress: number;
+  started_at: string | null;
+  finished_at: string | null;
 }

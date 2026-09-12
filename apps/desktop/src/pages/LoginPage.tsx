@@ -419,14 +419,34 @@ export const LoginPage: React.FC<Props> = ({
             left: 40,
             right: 40,
             display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: 11,
-            color: 'rgba(255,255,255,0.4)',
-            fontFamily: 'var(--font-mono)',
+            flexDirection: 'column',
+            gap: 8,
           }}
         >
-          <span>WEBSTUDIO IMS v{appVersion}</span>
-          <span>SECURE CONNECTION ACTIVE</span>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 11,
+              color: 'rgba(255,255,255,0.4)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            <span>WEBSTUDIO IMS v{appVersion}</span>
+            <span>SECURE CONNECTION ACTIVE</span>
+          </div>
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.35)',
+            }}
+          >
+            Powered by TechSS
+          </div>
         </div>
       </div>
 

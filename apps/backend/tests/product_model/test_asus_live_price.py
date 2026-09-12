@@ -10,23 +10,36 @@ Proves refresh_asus_live_price:
 
 from __future__ import annotations
 
+import asyncio
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
+import httpx
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import (
+    InventoryStatus,
+    LocationType,
     SettingValueType,
     StorageType,
     StorageUnit,
 )
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
+from webstudio_backend.infrastructure.repositories.inventory_item_repository import (
+    InventoryItemRepository,
+)
+from webstudio_backend.infrastructure.repositories.location_repository import LocationRepository
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
+from webstudio_backend.services import asus_live_price_jobs as asus_jobs_module
+from webstudio_backend.services import asus_live_price_service as asus_price_service_module
 from webstudio_backend.services.ai.providers import gemini as gemini_module
 from webstudio_backend.services.asus_live_price_jobs import (
     _DEFAULT_STALE_AFTER_DAYS,
@@ -35,6 +48,8 @@ from webstudio_backend.services.asus_live_price_jobs import (
     _MIN_STALE_AFTER_DAYS,
     _concurrency_limiter,
     _get_stale_after_days,
+    get_asus_bulk_run_status,
+    schedule_all_asus_price_refreshes,
 )
 from webstudio_backend.services.asus_live_price_service import refresh_asus_live_price
 
@@ -54,6 +69,24 @@ async def _make_model(db_session: AsyncSession, brand_id: int, model_number: str
     )
     await db_session.commit()
     return model
+
+
+async def _add_available_unit(db_session: AsyncSession, product_model_id: uuid.UUID) -> None:
+    """Bulk/scheduled ASUS price refresh now skips models with zero available
+    stock (cost optimization) — tests that need a model to actually be
+    picked up by that sweep must give it at least one available unit."""
+    location = await LocationRepository(db_session).create(
+        f"Test Location {uuid.uuid4().hex[:8]}", location_type=LocationType.WAREHOUSE
+    )
+    await db_session.commit()
+    await InventoryItemRepository(db_session).create(
+        serial_number=f"SN-{uuid.uuid4().hex[:10].upper()}",
+        product_model_id=product_model_id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await db_session.commit()
 
 
 async def _configure_gemini(db_session: AsyncSession) -> None:
@@ -154,6 +187,174 @@ async def test_non_asus_source_domain_rejected_even_if_high_confidence(
 
 
 @pytest.mark.asyncio
+async def test_general_asus_com_domain_is_not_enough_only_the_india_store_is_accepted(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deliberately narrower than "any asus.com subdomain": ASUS's general
+    marketing/spec pages (www.asus.com) don't carry a real purchasable price,
+    only in.store.asus.com does — only that exact store domain is accepted."""
+    model = await _make_model(db_session, brand.id, "ASUS-012")
+    await _configure_gemini(db_session)
+
+    async def fake_general_asus_site(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 89990,
+            "source_url": "https://www.asus.com/in/laptops/for-home/vivobook/some-model/",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_general_asus_site)
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "not_found"
+    await db_session.refresh(model)
+    assert model.live_price is None
+
+
+@pytest.mark.asyncio
+async def test_accessory_category_never_calls_gemini(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Accessories (chargers, adapters, etc.) are explicitly out of scope —
+    only ASUS laptops get a live price."""
+    from webstudio_backend.infrastructure.database.enums import AccessoryKind, ProductCategory
+
+    accessory = await ProductModelRepository(db_session).create(
+        brand_id=brand.id,
+        model_number="AC65-06",
+        model_name="65W USB Type-C AC Adapter",
+        category=ProductCategory.ACCESSORY,
+        accessory_kind=AccessoryKind.ADAPTER,
+    )
+    await db_session.commit()
+    await _configure_gemini(db_session)
+
+    async def fail_if_called(self, *args, **kwargs):
+        raise AssertionError("Gemini should never be called for an accessory")
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fail_if_called)
+
+    status = await refresh_asus_live_price(db_session, accessory.id)
+    assert status == "not_applicable"
+
+
+class _FakeRedirectResponse:
+    def __init__(self, location: str | None) -> None:
+        self.headers = {"location": location} if location else {}
+
+
+class _FakeRedirectClient:
+    """Stands in for httpx.AsyncClient — returns a canned redirect Location
+    instead of making a real network call to vertexaisearch.cloud.google.com."""
+
+    def __init__(
+        self, *, location: str | None = None, raise_error: bool = False, **_: object
+    ) -> None:
+        self._location = location
+        self._raise_error = raise_error
+
+    async def __aenter__(self) -> _FakeRedirectClient:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> bool:
+        return False
+
+    async def get(self, url: str) -> _FakeRedirectResponse:
+        if self._raise_error:
+            raise httpx.ConnectTimeout("simulated redirect-resolution failure")
+        return _FakeRedirectResponse(self._location)
+
+
+@pytest.mark.asyncio
+async def test_vertexaisearch_redirect_resolving_to_asus_is_accepted(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test: Gemini's Search grounding frequently cites sources
+    through Google's own vertexaisearch.cloud.google.com tracking redirect
+    rather than the real page URL. A naive domain check on that wrapper URL
+    wrongly rejected genuine ASUS-sourced answers — this proves the redirect
+    is resolved to its real target before the domain check runs."""
+    model = await _make_model(db_session, brand.id, "ASUS-009")
+    await _configure_gemini(db_session)
+
+    async def fake_grounded_redirect(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 91990,
+            "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/FAKE123",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_grounded_redirect)
+    monkeypatch.setattr(
+        asus_price_service_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: _FakeRedirectClient(
+            location="https://in.store.asus.com/real-product-page.html"
+        ),
+    )
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "ok"
+    await db_session.refresh(model)
+    assert model.live_price == Decimal("91990")
+    assert model.live_price_source_url == "https://in.store.asus.com/real-product-page.html"
+
+
+@pytest.mark.asyncio
+async def test_vertexaisearch_redirect_resolving_to_non_asus_is_still_rejected(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = await _make_model(db_session, brand.id, "ASUS-010")
+    await _configure_gemini(db_session)
+
+    async def fake_grounded_redirect(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 45000,
+            "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/FAKE456",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_grounded_redirect)
+    monkeypatch.setattr(
+        asus_price_service_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: _FakeRedirectClient(location="https://www.amazon.in/dp/example"),
+    )
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "not_found"
+    await db_session.refresh(model)
+    assert model.live_price is None
+
+
+@pytest.mark.asyncio
+async def test_vertexaisearch_redirect_resolution_failure_degrades_gracefully(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A network hiccup resolving the redirect must never raise — it should
+    just fall back to rejecting, same as before this resolution existed."""
+    model = await _make_model(db_session, brand.id, "ASUS-011")
+    await _configure_gemini(db_session)
+
+    async def fake_grounded_redirect(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 50000,
+            "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/FAKE789",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_grounded_redirect)
+    monkeypatch.setattr(
+        asus_price_service_module.httpx,
+        "AsyncClient",
+        lambda **kwargs: _FakeRedirectClient(raise_error=True),
+    )
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "not_found"
+
+
+@pytest.mark.asyncio
 async def test_successful_lookup_stores_price_and_source(
     db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -230,10 +431,10 @@ async def test_stale_after_days_reads_admin_configured_value(
     db_session: AsyncSession, test_settings
 ) -> None:
     await SystemSettingRepository(db_session).set_value(
-        "asus_price_refresh_stale_days", "30", value_type=SettingValueType.INTEGER
+        "asus_price_refresh_stale_days", "45", value_type=SettingValueType.INTEGER
     )
     await db_session.commit()
-    assert await _get_stale_after_days(db_session) == 30
+    assert await _get_stale_after_days(db_session) == 45
 
 
 @pytest.mark.asyncio
@@ -265,3 +466,166 @@ async def test_asus_price_job_concurrency_is_capped() -> None:
     for _ in range(_MAX_CONCURRENT_ASUS_PRICE_JOBS):
         _concurrency_limiter.release()
     assert _concurrency_limiter.locked() is False
+
+
+def test_bulk_run_status_defaults_when_never_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    assert get_asus_bulk_run_status() == {
+        "total": 0,
+        "completed": 0,
+        "in_progress": 0,
+        "started_at": None,
+        "finished_at": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_bulk_run_with_no_asus_models_finishes_immediately(
+    db_session: AsyncSession, test_settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    scheduled = await schedule_all_asus_price_refreshes()
+    assert scheduled == 0
+    status = get_asus_bulk_run_status()
+    assert status["total"] == 0
+    assert status["finished_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_bulk_refresh_skips_out_of_stock_models(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cost optimization: refreshing a model's live price only matters while
+    it can actually be sold. An ASUS model with zero available units must be
+    skipped by both the bulk "Update prices" trigger and the scheduled sweep,
+    so quota isn't spent tracking unsellable stock."""
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    in_stock = await _make_model(db_session, brand.id, "ASUS-INSTOCK")
+    out_of_stock = await _make_model(db_session, brand.id, "ASUS-OUTOFSTOCK")
+    await _add_available_unit(db_session, in_stock.id)
+
+    repo = ProductModelRepository(db_session)
+    ids_for_bulk = await repo.list_ids_for_asus_brand()
+    assert in_stock.id in ids_for_bulk
+    assert out_of_stock.id not in ids_for_bulk
+
+    ids_for_sweep = await repo.list_ids_needing_asus_price_refresh(
+        stale_before=datetime.now(UTC), limit=10
+    )
+    assert in_stock.id in ids_for_sweep
+    assert out_of_stock.id not in ids_for_sweep
+
+
+@pytest.mark.asyncio
+async def test_bulk_and_sweep_exclude_accessories(
+    db_session: AsyncSession, test_settings, brand
+) -> None:
+    """Only ASUS laptops are eligible — an in-stock ASUS accessory must
+    never appear in either the bulk "Update prices" list or the scheduled
+    sweep's "due" list."""
+    from webstudio_backend.infrastructure.database.enums import AccessoryKind, ProductCategory
+
+    laptop = await _make_model(db_session, brand.id, "ASUS-LAPTOP-ONLY")
+    await _add_available_unit(db_session, laptop.id)
+
+    accessory = await ProductModelRepository(db_session).create(
+        brand_id=brand.id,
+        model_number="AC65-07",
+        model_name="65W USB Type-C AC Adapter",
+        category=ProductCategory.ACCESSORY,
+        accessory_kind=AccessoryKind.ADAPTER,
+    )
+    await db_session.commit()
+    await _add_available_unit(db_session, accessory.id)
+
+    repo = ProductModelRepository(db_session)
+    ids_for_bulk = await repo.list_ids_for_asus_brand()
+    assert laptop.id in ids_for_bulk
+    assert accessory.id not in ids_for_bulk
+
+    ids_for_sweep = await repo.list_ids_needing_asus_price_refresh(
+        stale_before=datetime.now(UTC), limit=10
+    )
+    assert laptop.id in ids_for_sweep
+    assert accessory.id not in ids_for_sweep
+
+
+@pytest.mark.asyncio
+async def test_bulk_run_tracks_live_progress_and_completion(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proves the "Update prices" button's progress is real server state,
+    not a one-shot message — total/in_progress/completed update as jobs
+    finish, and `finished_at` only gets set once every job is truly done."""
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    model_a = await _make_model(db_session, brand.id, "ASUS-BULK-A")
+    model_b = await _make_model(db_session, brand.id, "ASUS-BULK-B")
+    await _add_available_unit(db_session, model_a.id)
+    await _add_available_unit(db_session, model_b.id)
+
+    release = asyncio.Event()
+
+    async def blocked_refresh(session, model_id):
+        await release.wait()
+        return "ok"
+
+    monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", blocked_refresh)
+
+    scheduled = await schedule_all_asus_price_refreshes()
+    assert scheduled == 2
+
+    await asyncio.sleep(0.05)
+    mid_status = get_asus_bulk_run_status()
+    assert mid_status["total"] == 2
+    assert mid_status["in_progress"] == 2
+    assert mid_status["completed"] == 0
+    assert mid_status["started_at"] is not None
+    assert mid_status["finished_at"] is None
+
+    release.set()
+    await asyncio.sleep(0.05)
+    final_status = get_asus_bulk_run_status()
+    assert final_status["total"] == 2
+    assert final_status["in_progress"] == 0
+    assert final_status["completed"] == 2
+    assert final_status["finished_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_refresh_status_endpoint_reports_zero_when_idle(
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lets the "Update prices" button poll for real completion."""
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    response = await api_client.get(
+        "/api/v1/product-models/refresh-live-prices/status", headers=main_admin_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["in_progress"] == 0
+    assert response.json()["data"]["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_refresh_status_route_does_not_shadow_get_by_id(
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    db_session: AsyncSession,
+    brand,
+) -> None:
+    """Regression guard: the new static `/refresh-live-prices/status` route
+    must be registered ahead of `/{model_id}` so it isn't captured as a
+    model_id lookup — and `/{model_id}` must keep working normally too."""
+    model = await _make_model(db_session, brand.id, "ASUS-007")
+
+    status_response = await api_client.get(
+        "/api/v1/product-models/refresh-live-prices/status", headers=main_admin_headers
+    )
+    assert status_response.status_code == 200
+
+    by_id_response = await api_client.get(
+        f"/api/v1/product-models/{model.id}", headers=main_admin_headers
+    )
+    assert by_id_response.status_code == 200
+    assert by_id_response.json()["data"]["model_number"] == "ASUS-007"

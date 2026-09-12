@@ -8,7 +8,7 @@ naturally self-throttles — no separate failure-cooldown map is needed the
 way missing-image backfill needs one (a missing image stays missing forever
 with nothing marking "recently tried").
 
-The refresh cadence (default 7 days) is admin-configurable via the
+The refresh cadence (default 30 days) is admin-configurable via the
 ``asus_price_refresh_stale_days`` system setting (Settings > Integrations),
 so a real Gemini API call is never wasted more often than the admin wants —
 see ``_get_stale_after_days``.
@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +35,7 @@ from webstudio_backend.services.asus_live_price_service import refresh_asus_live
 from webstudio_backend.services.scheduler_runtime_service import sleep_until_next_run
 
 _inflight: dict[str, asyncio.Task[None]] = {}
-_DEFAULT_STALE_AFTER_DAYS = 7
+_DEFAULT_STALE_AFTER_DAYS = 30
 _MIN_STALE_AFTER_DAYS = 1
 _MAX_STALE_AFTER_DAYS = 90
 _BACKFILL_SWEEP_INTERVAL_SECONDS = 6 * 60 * 60  # check every 6 hours what's due
@@ -43,6 +44,14 @@ _BACKFILL_BATCH_SIZE = 10
 # this low regardless of catalog size or how large a bulk refresh is.
 _MAX_CONCURRENT_ASUS_PRICE_JOBS = 2
 _concurrency_limiter = asyncio.Semaphore(_MAX_CONCURRENT_ASUS_PRICE_JOBS)
+
+# Tracks the most recent bulk "Update prices" run so any client (desktop or
+# mobile) can poll real server-side progress regardless of which page it's
+# on, whether it triggered the run itself, or whether it was reopened after
+# the run had already started or finished. Server-side rather than
+# client-side state so multiple frontends/devices see the same truth, and so
+# navigating away and back (or restarting the app) doesn't lose the picture.
+_bulk_run: dict[str, Any] | None = None
 
 
 def is_asus_price_job_running(model_id: uuid.UUID | str) -> bool:
@@ -137,12 +146,75 @@ async def schedule_all_asus_price_refreshes() -> int:
         repo = ProductModelRepository(session)
         model_ids = await repo.list_ids_for_asus_brand()
 
-    scheduled = 0
+    scheduled_keys: list[str] = []
     for model_id in model_ids:
         if schedule_asus_price_refresh(model_id, force=True):
-            scheduled += 1
-    logger.info("ASUS live price bulk refresh scheduled {} model(s)", scheduled)
-    return scheduled
+            scheduled_keys.append(str(model_id))
+    _start_bulk_run_tracking(scheduled_keys)
+    logger.info("ASUS live price bulk refresh scheduled {} model(s)", len(scheduled_keys))
+    return len(scheduled_keys)
+
+
+def _start_bulk_run_tracking(model_keys: list[str]) -> None:
+    """Begin tracking a fresh bulk run, replacing whatever run was tracked
+    before (there's only ever one "current/most recent" bulk run — matches
+    the "Update prices" button being a single admin-triggered action rather
+    than something concurrent runs need to be distinguished between)."""
+    global _bulk_run
+    now = datetime.now(UTC).isoformat()
+    remaining = set(model_keys)
+    run: dict[str, Any] = {
+        "total": len(model_keys),
+        "remaining": remaining,
+        "started_at": now,
+        "finished_at": now if not model_keys else None,
+    }
+    _bulk_run = run
+
+    for key in model_keys:
+        task = _inflight.get(key)
+        if task is None or task.done():
+            # Finished (or was never actually scheduled) before we could
+            # attach a callback — count it as already done.
+            remaining.discard(key)
+            continue
+        task.add_done_callback(lambda _task, k=key, r=run: _on_bulk_run_job_done(r, k))
+
+    if not remaining and run["finished_at"] is None:
+        run["finished_at"] = datetime.now(UTC).isoformat()
+
+
+def _on_bulk_run_job_done(run: dict[str, Any], model_key: str) -> None:
+    # Guard against a stale callback firing after a newer bulk run replaced
+    # this one in `_bulk_run` — only ever mutate the run it was attached to.
+    run["remaining"].discard(model_key)
+    if not run["remaining"] and run["finished_at"] is None:
+        run["finished_at"] = datetime.now(UTC).isoformat()
+
+
+def get_asus_bulk_run_status() -> dict[str, Any]:
+    """Real progress for the most recent bulk "Update prices" run, if any
+    has happened this server session. `total`/`completed`/`in_progress`
+    reflect only that specific run's models, not unrelated single-model or
+    scheduled-sweep refreshes that might also be running concurrently."""
+    run = _bulk_run
+    if run is None:
+        return {
+            "total": 0,
+            "completed": 0,
+            "in_progress": 0,
+            "started_at": None,
+            "finished_at": None,
+        }
+    remaining = len(run["remaining"])
+    total = run["total"]
+    return {
+        "total": total,
+        "completed": total - remaining,
+        "in_progress": remaining,
+        "started_at": run["started_at"],
+        "finished_at": run["finished_at"],
+    }
 
 
 async def asus_live_price_backfill_loop() -> None:

@@ -144,15 +144,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   Future<void> _updateAsusLivePrices() async {
     final controller = ref.read(_provider.notifier);
-    final scheduled = await controller.refreshAsusLivePrices();
+    await controller.refreshAsusLivePrices();
     if (!mounted) return;
     final error = ref.read(_provider).error;
-    final message = error != null
-        ? 'Could not update prices: $error'
-        : scheduled > 0
-            ? 'Fetching live prices for $scheduled model(s)… check back shortly.'
-            : 'No ASUS models needed a price refresh.';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update prices: $error')));
+    }
   }
 
   Future<void> _openLookup() async {
@@ -482,46 +481,88 @@ class _AsusLivePriceBar extends StatelessWidget {
   const _AsusLivePriceBar({
     required this.showLivePrice,
     required this.onToggle,
-    required this.updating,
+    required this.starting,
+    required this.runActive,
     required this.onUpdatePrices,
+    required this.message,
+    required this.showDismiss,
+    required this.onDismiss,
   });
 
   final bool showLivePrice;
   final ValueChanged<bool> onToggle;
-  final bool updating;
+  final bool starting;
+  final bool runActive;
   final VoidCallback onUpdatePrices;
+  final String? message;
+  final bool showDismiss;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final busy = starting || runActive;
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      color: theme.colorScheme.surfaceContainerLowest,
       child: Padding(
-        padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.sm),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                value: showLivePrice,
-                onChanged: (value) {
-                  if (value != null) onToggle(value);
-                },
-                title: const Text('Show live price on cards'),
-                controlAffinity: ListTileControlAffinity.leading,
+            Row(
+              children: [
+                Expanded(
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: showLivePrice,
+                    onChanged: (value) {
+                      if (value != null) onToggle(value);
+                    },
+                    title: const Text('Show ASUS price on cards'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                TextButton.icon(
+                  onPressed: busy ? null : onUpdatePrices,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh, size: 18),
+                  label: Text(starting ? 'Starting…' : runActive ? 'Refreshing…' : 'Update prices'),
+                ),
+              ],
+            ),
+            if (message != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        message!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (showDismiss)
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 14),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Dismiss',
+                        onPressed: onDismiss,
+                      ),
+                  ],
+                ),
               ),
-            ),
-            TextButton.icon(
-              onPressed: updating ? null : onUpdatePrices,
-              icon: updating
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh, size: 18),
-              label: const Text('Update prices'),
-            ),
           ],
         ),
       ),
@@ -644,7 +685,10 @@ class _InventoryBody extends ConsumerWidget {
 
   static const _scrollBottomPadding = 96.0;
 
-  List<Widget> _modelsHeaderWidgets(BuildContext context) {
+  List<Widget> _modelsHeaderWidgets(
+    BuildContext context,
+    InventoryWorkspaceController workspaceController,
+  ) {
     return [
       if (stockOnly && workspace.selectedBrandSummary != null)
         StockBrandSummaryPanel(
@@ -687,8 +731,12 @@ class _InventoryBody extends ConsumerWidget {
         _AsusLivePriceBar(
           showLivePrice: showLivePrice,
           onToggle: onToggleLivePrice,
-          updating: workspace.actionInProgress,
+          starting: workspace.asusPriceRunStarting,
+          runActive: (workspace.asusPriceRunStatus?.inProgress ?? 0) > 0,
           onUpdatePrices: onUpdateLivePrices,
+          message: workspace.asusPriceRunMessage,
+          showDismiss: workspace.asusPriceRunShowsDismiss,
+          onDismiss: workspaceController.dismissAsusPriceRun,
         ),
       _CategoryFilterBar(
         filter: workspace.productCategoryFilter,
@@ -757,7 +805,7 @@ class _InventoryBody extends ConsumerWidget {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
                       children: [
-                        ..._modelsHeaderWidgets(context),
+                        ..._modelsHeaderWidgets(context, workspaceController),
                         SizedBox(height: stockOnly ? 40 : 80),
                         EmptyStateView(
                           icon: workspace.productCategoryFilter == ProductCategoryFilter.accessory
@@ -785,7 +833,7 @@ class _InventoryBody extends ConsumerWidget {
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.only(bottom: _scrollBottomPadding),
                           children: [
-                            ..._modelsHeaderWidgets(context),
+                            ..._modelsHeaderWidgets(context, workspaceController),
                             Padding(
                               padding: const EdgeInsets.all(AppSpacing.md),
                               child: Wrap(
@@ -833,6 +881,8 @@ class _InventoryBody extends ConsumerWidget {
                 brands: workspace.brands,
                 workspaceProvider: workspaceProvider,
                 inventoryAdminMode: showAdminPrices,
+                showSellingPrice: showPrices,
+                showAsusPrice: showLivePrice,
                 onSelectUnit: onSelectItem,
               );
             }(),

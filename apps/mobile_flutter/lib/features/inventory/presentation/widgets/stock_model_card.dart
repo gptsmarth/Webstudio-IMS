@@ -175,12 +175,12 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
                     Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                     const SizedBox(height: 8),
                   ],
-                  if (widget.showLivePrice && model.isAsusBrand) ...[
+                  if (widget.showLivePrice && model.isAsusLaptop) ...[
                     RichText(
                       text: TextSpan(
                         style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
                         children: [
-                          const TextSpan(text: 'Live Price: '),
+                          const TextSpan(text: 'ASUS Price: '),
                           TextSpan(
                             text: formatLivePrice(model.livePrice),
                             style: TextStyle(

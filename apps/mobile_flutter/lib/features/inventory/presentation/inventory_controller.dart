@@ -10,6 +10,7 @@ import '../../../core/offline/offline_providers.dart';
 import '../../../core/offline/offline_inventory_service.dart';
 import '../../../core/offline/pending_operation_factory.dart';
 import '../data/stock_show_price_preferences.dart';
+import '../../catalogue/domain/catalogue_models.dart';
 import '../../catalogue/presentation/catalogue_controller.dart';
 import '../../dashboard/domain/dashboard_models.dart';
 import '../data/inventory_repository.dart';
@@ -43,6 +44,9 @@ class InventoryWorkspaceState {
     this.showZeroStock = false,
     this.showSellingPrice = false,
     this.showLivePrice = false,
+    this.asusPriceRunStatus,
+    this.asusPriceRunDismissedAt,
+    this.asusPriceRunStarting = false,
     this.productCategoryFilter = ProductCategoryFilter.all,
     this.fromCache = false,
     this.isStale = false,
@@ -69,7 +73,31 @@ class InventoryWorkspaceState {
   final bool showZeroStock;
   final bool showSellingPrice;
   final bool showLivePrice;
+  final AsusPriceRefreshStatus? asusPriceRunStatus;
+  final String? asusPriceRunDismissedAt;
+  final bool asusPriceRunStarting;
   final ProductCategoryFilter productCategoryFilter;
+
+  /// True only while there's a completed, undismissed bulk run to show —
+  /// mirrors desktop's "Done — refreshed N ASUS model(s)." banner + dismiss.
+  bool get asusPriceRunShowsDismiss {
+    final status = asusPriceRunStatus;
+    if (status == null || status.total == 0 || status.inProgress > 0) return false;
+    final finishedAt = status.finishedAt;
+    return finishedAt != null && finishedAt != asusPriceRunDismissedAt;
+  }
+
+  String? get asusPriceRunMessage {
+    final status = asusPriceRunStatus;
+    if (status == null || status.total == 0) return null;
+    if (status.inProgress > 0) {
+      return 'Refreshing ASUS prices — ${status.completed} of ${status.total} done…';
+    }
+    if (asusPriceRunShowsDismiss) {
+      return 'Done — refreshed ${status.total} ASUS model(s).';
+    }
+    return null;
+  }
   final bool fromCache;
   final bool isStale;
 
@@ -202,6 +230,9 @@ class InventoryWorkspaceState {
     bool? showZeroStock,
     bool? showSellingPrice,
     bool? showLivePrice,
+    AsusPriceRefreshStatus? asusPriceRunStatus,
+    String? asusPriceRunDismissedAt,
+    bool? asusPriceRunStarting,
     ProductCategoryFilter? productCategoryFilter,
     bool? fromCache,
     bool? isStale,
@@ -230,6 +261,9 @@ class InventoryWorkspaceState {
       showZeroStock: showZeroStock ?? this.showZeroStock,
       showSellingPrice: showSellingPrice ?? this.showSellingPrice,
       showLivePrice: showLivePrice ?? this.showLivePrice,
+      asusPriceRunStatus: asusPriceRunStatus ?? this.asusPriceRunStatus,
+      asusPriceRunDismissedAt: asusPriceRunDismissedAt ?? this.asusPriceRunDismissedAt,
+      asusPriceRunStarting: asusPriceRunStarting ?? this.asusPriceRunStarting,
       productCategoryFilter: productCategoryFilter ?? this.productCategoryFilter,
       fromCache: fromCache ?? this.fromCache,
       isStale: isStale ?? this.isStale,
@@ -267,10 +301,14 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
   bool _pricePreferenceLoaded = false;
   final ScrollController brandsScrollController = ScrollController();
   final ScrollController modelsScrollController = ScrollController();
+  Timer? _asusPricePollTimer;
+  String? _asusPriceRunRefreshedForFinishedAt;
+  static const _asusPricePollInterval = Duration(seconds: 4);
 
   void dispose() {
     brandsScrollController.dispose();
     modelsScrollController.dispose();
+    _asusPricePollTimer?.cancel();
     super.dispose();
   }
 
@@ -314,6 +352,12 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         modelsScrollController.jumpTo(0);
       }
     });
+    if (!_inventoryAdminMode && state.selectedBrand?.name.trim().toUpperCase() == 'ASUS') {
+      unawaited(syncAsusPriceRunStatus());
+    } else {
+      _asusPricePollTimer?.cancel();
+      _asusPricePollTimer = null;
+    }
   }
 
   void selectModel(String modelId) {
@@ -331,6 +375,8 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
         state = state.copyWith(navLevel: InventoryNavLevel.models, selectedModelId: null, clearSelection: true);
       case InventoryNavLevel.models:
         state = state.copyWith(navLevel: InventoryNavLevel.brands, selectedBrandId: null, clearSelection: true);
+        _asusPricePollTimer?.cancel();
+        _asusPricePollTimer = null;
         if (_isOnline) {
           unawaited(_refreshItemsInBackground());
         }
@@ -366,21 +412,68 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     _pricePreferenceLoaded = true;
     final show = await StockShowPricePreferences.readShowSellingPrice();
     final showLive = await StockShowPricePreferences.readShowLivePrice();
-    state = state.copyWith(showSellingPrice: show, showLivePrice: showLive);
+    final dismissedAt = await StockShowPricePreferences.readAsusPriceRunDismissedAt();
+    state = state.copyWith(
+      showSellingPrice: show,
+      showLivePrice: showLive,
+      asusPriceRunDismissedAt: dismissedAt,
+    );
   }
 
-  /// ASUS-only bulk "Update prices" trigger. Returns how many models were
-  /// scheduled for a background refresh; the refreshed values arrive on the
-  /// next reload rather than synchronously.
-  Future<int> refreshAsusLivePrices() async {
-    state = state.copyWith(actionInProgress: true, clearError: true);
+  /// ASUS-only bulk "Update prices" trigger. Progress is tracked server-side
+  /// (see `get_asus_bulk_run_status` on the backend), so it survives
+  /// navigating away and back, switching apps, or reopening later — call
+  /// [syncAsusPriceRunStatus] (e.g. on screen init) to pick up an
+  /// already-running or already-finished run without needing to press the
+  /// button again.
+  Future<void> refreshAsusLivePrices() async {
+    state = state.copyWith(asusPriceRunStarting: true, clearError: true);
     try {
-      final scheduled = await _ref.read(catalogueRepositoryProvider).refreshAllLivePrices();
-      state = state.copyWith(actionInProgress: false);
-      return scheduled;
+      await _ref.read(catalogueRepositoryProvider).refreshAllLivePrices();
+      await syncAsusPriceRunStatus();
     } catch (error) {
-      state = state.copyWith(actionInProgress: false, error: error.toString());
-      return 0;
+      state = state.copyWith(error: error.toString());
+    } finally {
+      state = state.copyWith(asusPriceRunStarting: false);
+    }
+  }
+
+  /// Fetches real progress from the server and starts/stops polling to
+  /// match — call this on screen init as well as after triggering a fresh
+  /// run, so returning to the screen mid-run (or after it finished) always
+  /// shows the true current state.
+  Future<void> syncAsusPriceRunStatus() async {
+    AsusPriceRefreshStatus status;
+    try {
+      status = await _ref.read(catalogueRepositoryProvider).getAsusPriceRefreshStatus();
+    } catch (_) {
+      return;
+    }
+    state = state.copyWith(asusPriceRunStatus: status);
+
+    if (status.inProgress > 0) {
+      _asusPricePollTimer ??= Timer.periodic(_asusPricePollInterval, (_) {
+        unawaited(syncAsusPriceRunStatus());
+      });
+      return;
+    }
+
+    _asusPricePollTimer?.cancel();
+    _asusPricePollTimer = null;
+
+    final finishedAt = status.finishedAt;
+    if (status.total > 0 && finishedAt != null && _asusPriceRunRefreshedForFinishedAt != finishedAt) {
+      _asusPriceRunRefreshedForFinishedAt = finishedAt;
+      unawaited(_refreshItemsInBackground(refreshModels: true));
+    }
+  }
+
+  void dismissAsusPriceRun() {
+    final finishedAt = state.asusPriceRunStatus?.finishedAt;
+    if (finishedAt == null) return;
+    state = state.copyWith(asusPriceRunDismissedAt: finishedAt);
+    if (!_inventoryAdminMode) {
+      StockShowPricePreferences.writeAsusPriceRunDismissedAt(finishedAt);
     }
   }
 

@@ -19,6 +19,10 @@ from webstudio_backend.infrastructure.repositories.inventory_item_repository imp
     InventoryItemDetailRow,
     InventoryItemRepository,
 )
+from webstudio_backend.infrastructure.repositories.product_model_repository import (
+    ProductModelRepository,
+)
+from webstudio_backend.services.asus_live_price_jobs import schedule_asus_price_refresh
 from webstudio_backend.services.sale_service import ManualSaleResult, SaleService
 
 
@@ -54,6 +58,13 @@ class InventoryService:
         inventory_source: InventorySource = InventorySource.MANUAL,
         actor: AuditActor,
     ) -> InventoryItemDetailRow:
+        # Checked before creating: ASUS's scheduled/bulk price refresh skips
+        # out-of-stock models (cost optimization), so a model coming back
+        # into stock here needs its price refreshed immediately rather than
+        # waiting for that filter to naturally start passing again later.
+        restocked_from_zero = status == InventoryStatus.AVAILABLE and not (
+            await ProductModelRepository(self._session).has_available_stock(product_model_id)
+        )
         item = await self._repo.create(
             serial_number=serial_number,
             product_model_id=product_model_id,
@@ -65,6 +76,9 @@ class InventoryService:
             inventory_source=inventory_source,
             actor=actor,
         )
+        if restocked_from_zero:
+            # ASUS-only live price lookup — no-ops for every other brand.
+            schedule_asus_price_refresh(product_model_id)
         detail = await self._repo.get_detail(item.id)
         assert detail is not None
         return detail

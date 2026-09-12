@@ -172,6 +172,100 @@ async def test_import_existing_appends_and_sets_inventory_source(
     assert detail.json()["data"]["status"] == "partially_imported"
 
 
+async def test_import_existing_from_zero_stock_triggers_asus_price_refresh(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    product_model: ProductModel,
+    purchase_voucher: TallyPurchaseVoucher,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cost optimization elsewhere skips out-of-stock models from the
+    scheduled/bulk ASUS price sweep — this proves a model coming back into
+    stock via purchase import still gets its price refreshed immediately,
+    rather than silently waiting on that filter to start passing again."""
+    import webstudio_backend.services.purchase_import_service as purchase_import_module
+
+    triggered: list[str] = []
+    monkeypatch.setattr(
+        purchase_import_module,
+        "schedule_asus_price_refresh",
+        lambda model_id: triggered.append(str(model_id)),
+    )
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS F1504FA-BQ2113WS",
+            "brand_id": brand.id,
+            "mode": "existing",
+            "product_model_id": str(product_model.id),
+            "serial_numbers": ["SNPUR001", "SNPUR002"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "status": "available",
+            "purchase_price": 50000,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert triggered == [str(product_model.id)]
+
+
+async def test_import_existing_already_in_stock_does_not_retrigger_asus_price_refresh(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    product_model: ProductModel,
+    purchase_voucher: TallyPurchaseVoucher,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Restocking a model that already had available stock is routine, not a
+    "back from zero" event — shouldn't spend a Gemini call on every single
+    restock, only on the zero-to-nonzero transition."""
+    import webstudio_backend.services.purchase_import_service as purchase_import_module
+
+    await InventoryItemRepository(db_session).create(
+        serial_number="ALREADY-IN-STOCK-1",
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    await db_session.commit()
+
+    triggered: list[str] = []
+    monkeypatch.setattr(
+        purchase_import_module,
+        "schedule_asus_price_refresh",
+        lambda model_id: triggered.append(str(model_id)),
+    )
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS F1504FA-BQ2113WS",
+            "brand_id": brand.id,
+            "mode": "existing",
+            "product_model_id": str(product_model.id),
+            "serial_numbers": ["SNPUR001", "SNPUR002"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "status": "available",
+            "purchase_price": 50000,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert triggered == []
+
+
 async def test_import_new_model_creates_model_and_units(
     db_session: AsyncSession,
     api_client: AsyncClient,

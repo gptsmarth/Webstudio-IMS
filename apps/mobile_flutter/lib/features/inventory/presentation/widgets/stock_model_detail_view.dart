@@ -27,6 +27,8 @@ class StockModelDetailView extends ConsumerWidget {
     required this.workspaceProvider,
     this.actionInProgress = false,
     this.inventoryAdminMode = false,
+    this.showSellingPrice = true,
+    this.showAsusPrice = false,
   });
 
   final ProductModel model;
@@ -39,6 +41,8 @@ class StockModelDetailView extends ConsumerWidget {
   final void Function(InventoryItem item) onSelectUnit;
   final bool actionInProgress;
   final bool inventoryAdminMode;
+  final bool showSellingPrice;
+  final bool showAsusPrice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,6 +59,8 @@ class StockModelDetailView extends ConsumerWidget {
     final priceLabel = formatDetailPrice(model.sellingPrice);
     final purchaseLabel = formatCardPrice(model.purchasePrice);
     final sellingLabel = formatCardPrice(model.sellingPrice);
+    final isAsusModel = model.isAsusLaptop;
+    final asusPriceLabel = isAsusModel ? formatLivePrice(model.livePrice) : null;
     final specLines = buildStockModelSpecLines(model);
     final notesText = modelDescriptionText(model.notes);
     final title = displayModelTitle(brandName, model.modelName);
@@ -153,23 +159,33 @@ class StockModelDetailView extends ConsumerWidget {
                         sellingLabel: sellingLabel,
                         purchaseLabel: purchaseLabel,
                       ),
-                    ] else if (priceLabel != null) ...[
+                    ] else if ((showSellingPrice && priceLabel != null) ||
+                        (showAsusPrice && isAsusModel)) ...[
                       const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEA580C).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFEA580C).withValues(alpha: 0.2)),
-                        ),
-                        child: Text(
-                          priceLabel,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: const Color(0xFFEA580C),
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          if (showSellingPrice && priceLabel != null)
+                            _PriceChip(
+                              label: 'Selling price',
+                              value: priceLabel,
+                              valueColor: const Color(0xFFEA580C),
+                              background: const Color(0xFFEA580C).withValues(alpha: 0.08),
+                              border: const Color(0xFFEA580C).withValues(alpha: 0.2),
+                            ),
+                          if (showAsusPrice && isAsusModel)
+                            _PriceChip(
+                              label: 'ASUS price',
+                              value: asusPriceLabel ?? 'NA',
+                              valueColor: Theme.of(context).colorScheme.onSurface,
+                              background: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              border: Theme.of(context).dividerColor,
+                              subtitle: model.livePriceUpdatedAt != null
+                                  ? 'as of ${formatRelativeTime(model.livePriceUpdatedAt!)}'
+                                  : null,
+                            ),
+                        ],
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -351,6 +367,66 @@ class StockModelDetailView extends ConsumerWidget {
     } else {
       messenger.showSnackBar(SnackBar(content: Text('${item.serialNumber} removed from stock.')));
     }
+  }
+}
+
+class _PriceChip extends StatelessWidget {
+  const _PriceChip({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+    required this.background,
+    required this.border,
+    this.subtitle,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+  final Color background;
+  final Color border;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: valueColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle!,
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

@@ -285,6 +285,17 @@ class _BrandHeader extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
           ),
+          SizedBox(height: AppSpacing.lg),
+          Text(
+            'POWERED BY TECHSS',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
         ],
       ),
     );

@@ -466,7 +466,7 @@ class SettingsService:
 
     async def _integrations_group(self) -> IntegrationsSettings:
         config = await resolve_ai_config(self._session, self._app_settings)
-        asus_price_refresh_stale_days = await self._get_int("asus_price_refresh_stale_days", 7)
+        asus_price_refresh_stale_days = await self._get_int("asus_price_refresh_stale_days", 30)
         fallback_raw = await self._get_str("ai_fallback_chain")
         try:
             fallback_chain = json.loads(fallback_raw) if fallback_raw else config.fallback_chain

@@ -138,6 +138,34 @@ class LocationDeletePreview {
       );
 }
 
+/// Real server-side progress for the most recent bulk "Update prices" run.
+/// Server-tracked (not client-local) so any device polling this endpoint
+/// sees the same true progress, whether it triggered the run itself or is
+/// reopening the app mid-run or after it finished.
+class AsusPriceRefreshStatus {
+  const AsusPriceRefreshStatus({
+    required this.total,
+    required this.completed,
+    required this.inProgress,
+    required this.startedAt,
+    required this.finishedAt,
+  });
+
+  final int total;
+  final int completed;
+  final int inProgress;
+  final String? startedAt;
+  final String? finishedAt;
+
+  factory AsusPriceRefreshStatus.fromJson(Map<String, dynamic> json) => AsusPriceRefreshStatus(
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        completed: (json['completed'] as num?)?.toInt() ?? 0,
+        inProgress: (json['in_progress'] as num?)?.toInt() ?? 0,
+        startedAt: json['started_at'] as String?,
+        finishedAt: json['finished_at'] as String?,
+      );
+}
+
 bool canWriteCatalogue(List<String> permissions) {
   const keys = [
     'brands:create',

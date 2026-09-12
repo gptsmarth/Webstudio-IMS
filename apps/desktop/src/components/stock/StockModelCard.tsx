@@ -135,31 +135,33 @@ export function StockModelCard({
             </>
           )}
 
-          {showLivePrice && row.model.brand_name?.trim().toUpperCase() === 'ASUS' && (
-            <>
-              <div className="stock-model-card__price-block">
-                <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
-                  Live Price:{' '}
-                  <strong style={{ color: 'var(--color-text-primary)' }}>
-                    {row.model.live_price ? formatCardPrice(row.model.live_price) : 'NA'}
-                  </strong>
-                </p>
-                {row.model.live_price_updated_at && (
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--color-text-tertiary)',
-                      margin: '2px 0 0',
-                    }}
-                    title={row.model.live_price_source_url ?? undefined}
-                  >
-                    as of {formatRelativeTime(row.model.live_price_updated_at)}
+          {showLivePrice &&
+            row.model.brand_name?.trim().toUpperCase() === 'ASUS' &&
+            row.model.category !== 'accessory' && (
+              <>
+                <div className="stock-model-card__price-block">
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                    ASUS Price:{' '}
+                    <strong style={{ color: 'var(--color-text-primary)' }}>
+                      {row.model.live_price ? formatCardPrice(row.model.live_price) : 'NA'}
+                    </strong>
                   </p>
-                )}
-              </div>
-              <hr className="stock-model-card__divider" />
-            </>
-          )}
+                  {row.model.live_price_updated_at && (
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--color-text-tertiary)',
+                        margin: '2px 0 0',
+                      }}
+                      title={row.model.live_price_source_url ?? undefined}
+                    >
+                      as of {formatRelativeTime(row.model.live_price_updated_at)}
+                    </p>
+                  )}
+                </div>
+                <hr className="stock-model-card__divider" />
+              </>
+            )}
 
           {specLines.length > 0 && (
             <div className="stock-model-card__specs">

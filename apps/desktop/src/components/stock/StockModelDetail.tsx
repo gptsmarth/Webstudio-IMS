@@ -8,6 +8,7 @@ import { ProductImagePanel } from '../inventory/ProductImagePanel';
 import { canTransferStockLocation, canDeleteInventorySerial } from '../../lib/inventory';
 import { buildStockModelSpecLines } from '../../lib/stockModelCard';
 import { splitModelNotes } from '../../lib/modelNotes';
+import { formatRelativeTime } from '../../lib/datetime';
 import { StockSerialRowActionsMenu } from './StockSerialRowActionsMenu';
 
 interface StockModelDetailProps {
@@ -21,6 +22,20 @@ interface StockModelDetailProps {
   actionLoading?: boolean;
   onEditModel?: () => void;
   editModelLabel?: string;
+  showSellingPrice?: boolean;
+  showAsusPrice?: boolean;
+}
+
+function formatCurrency(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '' || Number(value) <= 0) return null;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+    .format(Number(value))
+    .replace('₹', '₹ ');
 }
 
 export function StockModelDetail({
@@ -34,6 +49,8 @@ export function StockModelDetail({
   actionLoading,
   onEditModel,
   editModelLabel = 'Edit model & price',
+  showSellingPrice = true,
+  showAsusPrice = false,
 }: StockModelDetailProps): JSX.Element {
   const canTransfer = canTransferStockLocation(permissions);
   const canDelete = canDeleteInventorySerial(permissions) && Boolean(onDeleteSerial);
@@ -43,16 +60,11 @@ export function StockModelDetail({
   const [menu, setMenu] = useState<{ item: InventoryItemDetail; rect: DOMRect } | null>(null);
   const [transferItem, setTransferItem] = useState<InventoryItemDetail | null>(null);
 
-  const formattedPrice = model.selling_price
-    ? new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-        .format(model.selling_price)
-        .replace('₹', '₹ ')
-    : null;
+  const formattedPrice = formatCurrency(model.selling_price);
+  const isAsusModel =
+    model.brand_name?.trim().toUpperCase() === 'ASUS' && model.category !== 'accessory';
+  const formattedLivePrice = isAsusModel ? formatCurrency(model.live_price) : null;
+  const showPriceRow = (showSellingPrice && formattedPrice) || (showAsusPrice && isAsusModel);
 
   if (loading) {
     return <div className="skeleton stock-detail__skeleton" />;
@@ -92,19 +104,86 @@ export function StockModelDetail({
           </div>
           <p className="stock-detail__model-number col-mono">{model.model_number}</p>
 
-          {formattedPrice && (
-            <div
-              style={{
-                margin: '12px 0 16px',
-                padding: '10px 14px',
-                background: 'rgba(234, 88, 12, 0.08)',
-                borderRadius: '6px',
-                border: '1px solid rgba(234, 88, 12, 0.2)',
-              }}
-            >
-              <p style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ea580c' }}>
-                {formattedPrice}
-              </p>
+          {showPriceRow && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '12px 0 16px' }}>
+              {showSellingPrice && formattedPrice && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    background: 'rgba(234, 88, 12, 0.08)',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(234, 88, 12, 0.2)',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-tertiary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Selling price
+                  </p>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: '#ea580c',
+                    }}
+                  >
+                    {formattedPrice}
+                  </p>
+                </div>
+              )}
+              {showAsusPrice && isAsusModel && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    background: 'var(--color-bg-raised)',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: 'var(--color-text-tertiary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    ASUS price
+                  </p>
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: 'var(--color-text-primary)',
+                    }}
+                  >
+                    {formattedLivePrice ?? 'NA'}
+                  </p>
+                  {model.live_price_updated_at && (
+                    <p
+                      style={{
+                        margin: '2px 0 0',
+                        fontSize: '11px',
+                        color: 'var(--color-text-tertiary)',
+                      }}
+                      title={model.live_price_source_url ?? undefined}
+                    >
+                      as of {formatRelativeTime(model.live_price_updated_at)}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
