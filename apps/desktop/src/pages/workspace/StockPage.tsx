@@ -623,8 +623,8 @@ export function StockPage(): JSX.Element {
         onConfirm={handleUpdateModel}
         showLivePriceField={Boolean(
           editModel &&
-            editModel.brand_name?.trim().toUpperCase() === 'ASUS' &&
-            editModel.category !== 'accessory',
+          editModel.brand_name?.trim().toUpperCase() === 'ASUS' &&
+          editModel.category !== 'accessory',
         )}
         onConfirmLivePrice={handleUpdateModelLivePrice}
       />
