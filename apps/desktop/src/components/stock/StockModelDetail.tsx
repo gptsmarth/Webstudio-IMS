@@ -24,6 +24,8 @@ interface StockModelDetailProps {
   editModelLabel?: string;
   showSellingPrice?: boolean;
   showAsusPrice?: boolean;
+  onToggleShowSellingPrice?: (checked: boolean) => void;
+  onToggleShowAsusPrice?: (checked: boolean) => void;
 }
 
 function formatCurrency(value: number | string | null | undefined): string | null {
@@ -51,6 +53,8 @@ export function StockModelDetail({
   editModelLabel = 'Edit model & price',
   showSellingPrice = true,
   showAsusPrice = false,
+  onToggleShowSellingPrice,
+  onToggleShowAsusPrice,
 }: StockModelDetailProps): JSX.Element {
   const canTransfer = canTransferStockLocation(permissions);
   const canDelete = canDeleteInventorySerial(permissions) && Boolean(onDeleteSerial);
@@ -65,6 +69,7 @@ export function StockModelDetail({
     model.brand_name?.trim().toUpperCase() === 'ASUS' && model.category !== 'accessory';
   const formattedLivePrice = isAsusModel ? formatCurrency(model.live_price) : null;
   const showPriceRow = (showSellingPrice && formattedPrice) || (showAsusPrice && isAsusModel);
+  const showPriceToggles = Boolean(onToggleShowSellingPrice || onToggleShowAsusPrice);
 
   if (loading) {
     return <div className="skeleton stock-detail__skeleton" />;
@@ -103,6 +108,31 @@ export function StockModelDetail({
             )}
           </div>
           <p className="stock-detail__model-number col-mono">{model.model_number}</p>
+
+          {showPriceToggles && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '10px 0 0' }}>
+              {onToggleShowSellingPrice && (
+                <label className="stock-page__price-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showSellingPrice}
+                    onChange={(event) => onToggleShowSellingPrice(event.target.checked)}
+                  />
+                  <span>Show selling price</span>
+                </label>
+              )}
+              {onToggleShowAsusPrice && isAsusModel && (
+                <label className="stock-page__price-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showAsusPrice}
+                    onChange={(event) => onToggleShowAsusPrice(event.target.checked)}
+                  />
+                  <span>Show ASUS price</span>
+                </label>
+              )}
+            </div>
+          )}
 
           {showPriceRow && (
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '12px 0 16px' }}>

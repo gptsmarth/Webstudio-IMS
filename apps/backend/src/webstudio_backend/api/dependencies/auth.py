@@ -225,6 +225,12 @@ ProductModelsSellingPriceDep = Annotated[
         require_any_permission("product_models:selling_price:edit", "inventory:stock_edit"),
     ),
 ]
+# Bulk/manual "Update prices" triggers real Gemini API spend per click — admin tiers only,
+# unlike editing the selling price or manually entering a live price (both broader tiers).
+ProductModelsLivePriceRefreshDep = Annotated[
+    AuthenticatedUser,
+    Depends(require_permission("product_models:live_price:refresh")),
+]
 
 LocationsViewDep = Annotated[AuthenticatedUser, Depends(require_permission("locations:view"))]
 # Stock browse, transfers, and inventory screens need location names for users with inventory access.

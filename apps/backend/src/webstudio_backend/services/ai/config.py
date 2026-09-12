@@ -171,3 +171,17 @@ async def resolve_gemini_credentials(
     """Backward-compatible Gemini credential resolver."""
     config = await resolve_ai_config(session, app_settings)
     return config.gemini.api_key, config.gemini.model
+
+
+async def resolve_asus_price_gemini_api_key(session: AsyncSession) -> str:
+    """Dedicated Gemini API key for ASUS live-price lookups.
+
+    Kept entirely separate from the general `gemini_api_key` (used for spec
+    lookup, image resolution, and enrichment) so the two can be configured,
+    rotated, rate-limited, or billed independently — e.g. a low-quota key
+    just for price checks that can't starve the spec-lookup key, or vice
+    versa. There is no fallback to the general key: if this one isn't set,
+    ASUS price lookups report `not_configured` even if the general key is.
+    """
+    repo = SystemSettingRepository(session)
+    return (await repo.get_string("asus_price_gemini_api_key") or "").strip()

@@ -18,3 +18,7 @@ bool canDeleteProductModels(List<String> permissions) =>
     permissions.contains('product_models:delete') || permissions.contains('product_models:archive');
 
 bool canEditProductModels(List<String> permissions) => permissions.contains('product_models:edit');
+
+/// Bulk/manual "Update prices" spends real Gemini API quota per click — admin tiers only.
+bool canRefreshAsusLivePrices(List<String> permissions) =>
+    permissions.contains('product_models:live_price:refresh');

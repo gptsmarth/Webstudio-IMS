@@ -56,6 +56,7 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
   late final TextEditingController _colorOptions;
   late final TextEditingController _imageUrl;
   late final TextEditingController _sellingPrice;
+  late final TextEditingController _livePrice;
   late final TextEditingController _purchasePrice;
   late final TextEditingController _notes;
   late int? _brandId;
@@ -80,6 +81,7 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
     _colorOptions = TextEditingController(text: m?.colorOptions ?? '');
     _imageUrl = TextEditingController(text: m?.productImageUrl ?? '');
     _sellingPrice = TextEditingController(text: m?.sellingPrice?.toString() ?? '');
+    _livePrice = TextEditingController(text: m?.livePrice?.toString() ?? '');
     _purchasePrice = TextEditingController(text: m?.purchasePrice?.toString() ?? '');
     _notes = TextEditingController(text: m?.notes ?? '');
     _brandId = m?.brandId ?? widget.defaultBrandId ?? (widget.brands.isNotEmpty ? widget.brands.first.id : null);
@@ -101,6 +103,7 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
     _colorOptions.dispose();
     _imageUrl.dispose();
     _sellingPrice.dispose();
+    _livePrice.dispose();
     _purchasePrice.dispose();
     _notes.dispose();
     super.dispose();
@@ -376,6 +379,21 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
             decoration: _field('Selling price (INR)'),
             keyboardType: TextInputType.number,
           ),
+          if (isEdit && widget.existing!.isAsusLaptop) ...[
+            _gap(),
+            TextField(
+              controller: _livePrice,
+              decoration: _field('ASUS price (manual)'),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              widget.existing!.livePriceStatus == 'manual'
+                  ? 'Manually entered — the next successful automatic refresh overwrites it.'
+                  : 'For when the automatic ASUS search comes back NA or wrong.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
           _gap(),
           TextField(
             controller: _notes,
@@ -400,6 +418,14 @@ class _ProductModelFormSheetState extends ConsumerState<_ProductModelFormSheet> 
                     try {
                       if (isEdit) {
                         await ctrl.updateProductModel(widget.existing!.id, _payload());
+                        if (widget.existing!.isAsusLaptop) {
+                          final parsedLive = _livePrice.text.trim().isEmpty
+                              ? null
+                              : double.tryParse(_livePrice.text.trim());
+                          if (parsedLive != widget.existing!.livePrice) {
+                            await ctrl.updateLivePrice(widget.existing!.id, parsedLive);
+                          }
+                        }
                       } else {
                         await ctrl.createProductModel(_payload());
                       }

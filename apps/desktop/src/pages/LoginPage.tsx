@@ -776,6 +776,19 @@ export const LoginPage: React.FC<Props> = ({
               {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
           </div>
+          <div
+            style={{
+              marginTop: 10,
+              textAlign: 'center',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--color-text-tertiary)',
+            }}
+          >
+            Powered by TechSS
+          </div>
         </div>
       </div>
 

@@ -76,6 +76,20 @@ def test_purchase_permissions_by_role() -> None:
     assert "product_models:create" in normalized
 
 
+def test_asus_live_price_refresh_is_admin_tier_only() -> None:
+    """The bulk/manual "Update prices" trigger spends real Gemini API quota
+    per click — Main Admin and Admin both have it, Salesperson does not, and
+    it can never be granted to a custom role (so a custom role named
+    "manager" still can't get it)."""
+    from webstudio_backend.core.permissions import ASSIGNABLE_PERMISSIONS
+
+    permission = "product_models:live_price:refresh"
+    assert role_has_permission(UserRole.MAIN_ADMIN, permission)
+    assert role_has_permission(UserRole.ADMIN, permission)
+    assert not role_has_permission(UserRole.SALESPERSON, permission)
+    assert permission not in ASSIGNABLE_PERMISSIONS
+
+
 def test_role_has_any_permission() -> None:
     assert role_has_any_permission(UserRole.ADMIN, "users:view", "inventory:edit")
     assert not role_has_any_permission(UserRole.SALESPERSON, "users:view", "inventory:create")

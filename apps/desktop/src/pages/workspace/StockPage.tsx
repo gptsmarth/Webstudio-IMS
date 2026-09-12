@@ -25,7 +25,7 @@ import { useStockNavStore } from '../../store/useHierarchyNavStore';
 import { useAuthStore } from '../../store';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { P, PermissionService } from '../../services/PermissionService';
-import { canEditStockProductModel } from '../../lib/inventory';
+import { canEditStockProductModel, canRefreshAsusLivePrices } from '../../lib/inventory';
 import { matchesCategoryFilter } from '../../lib/inventoryHierarchy';
 import { BrandLogoImage } from '../../components/branding/BrandLogoImage';
 
@@ -127,6 +127,7 @@ export function StockPage(): JSX.Element {
 
   const permissionService = PermissionService.from(session?.permissions);
   const canEditFromStock = session ? canEditStockProductModel(session.permissions) : false;
+  const canTriggerAsusRefresh = session ? canRefreshAsusLivePrices(session.permissions) : false;
 
   const handleTransfer = useCallback(
     async (itemId: string, locationId: number) => {
@@ -160,6 +161,25 @@ export function StockPage(): JSX.Element {
       }
     },
     [hierarchy],
+  );
+
+  const handleUpdateModelLivePrice = useCallback(
+    async (livePrice: number | null) => {
+      if (!editModelId) return;
+      setActionLoading(true);
+      setActionError(null);
+      try {
+        await ProductModelService.updateLivePrice(editModelId, { live_price: livePrice });
+        await hierarchy.refresh();
+      } catch (err: unknown) {
+        const message = err as { message?: string };
+        setActionError(message.message ?? 'Could not update ASUS price.');
+        throw err;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [editModelId, hierarchy],
   );
 
   const handleUpdateModelSellingPrice = useCallback(
@@ -459,14 +479,17 @@ export function StockPage(): JSX.Element {
                 />
                 <span>Show ASUS price on cards</span>
               </label>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void handleUpdateAsusLivePrices()}
-                disabled={asusRunStarting || asusRunActive}
-              >
-                {asusRunStarting ? 'Starting…' : asusRunActive ? 'Refreshing…' : 'Update prices'}
-              </button>
+              {canTriggerAsusRefresh && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void handleUpdateAsusLivePrices()}
+                  disabled={asusRunStarting || asusRunActive}
+                  title="Admin only — spends real Gemini API quota"
+                >
+                  {asusRunStarting ? 'Starting…' : asusRunActive ? 'Refreshing…' : 'Update prices'}
+                </button>
+              )}
               {asusRunMessage && (
                 <span className="stock-page__asus-price-notice">
                   {asusRunMessage}
@@ -482,7 +505,7 @@ export function StockPage(): JSX.Element {
                   )}
                 </span>
               )}
-              {asusRunShowRetry && (
+              {asusRunShowRetry && canTriggerAsusRefresh && (
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -576,6 +599,8 @@ export function StockPage(): JSX.Element {
               editModelLabel="Edit model & price"
               showSellingPrice={nav.showSellingPrice}
               showAsusPrice={nav.showLivePrice}
+              onToggleShowSellingPrice={nav.setShowSellingPrice}
+              onToggleShowAsusPrice={nav.setShowLivePrice}
             />
           </HierarchyLayer>
         )}
@@ -596,6 +621,12 @@ export function StockPage(): JSX.Element {
         loading={actionLoading}
         onClose={() => setEditModelId(null)}
         onConfirm={handleUpdateModel}
+        showLivePriceField={Boolean(
+          editModel &&
+            editModel.brand_name?.trim().toUpperCase() === 'ASUS' &&
+            editModel.category !== 'accessory',
+        )}
+        onConfirmLivePrice={handleUpdateModelLivePrice}
       />
     </div>
   );

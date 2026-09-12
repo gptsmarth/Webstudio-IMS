@@ -94,7 +94,9 @@ class IntegrationsSettings(BaseModel):
     ai_enrichment_enabled: bool = True
     ai_timeout_seconds: int = 90
     ai_retry_count: int = 2
-    asus_price_refresh_stale_days: int = 30
+    asus_price_refresh_stale_days: int = 60
+    asus_price_gemini_configured: bool = False
+    asus_price_gemini_api_key_hint: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     groq_configured: bool = False
     groq_api_key_hint: str | None = None
@@ -119,11 +121,13 @@ class IntegrationsSettingsUpdate(BaseModel):
         default=2, ge=0, le=5, description="Total spec lookup attempts (includes the first try)."
     )
     asus_price_refresh_stale_days: int = Field(
-        default=30,
+        default=60,
         ge=1,
-        le=90,
+        le=180,
         description="How often (in days) ASUS live prices are auto-refreshed via Gemini.",
     )
+    asus_price_gemini_api_key: str | None = Field(default=None, max_length=256)
+    clear_asus_price_gemini_api_key: bool = False
     groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
     groq_api_key: str | None = Field(default=None, max_length=256)
     clear_groq_api_key: bool = False

@@ -281,6 +281,29 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         await self._session.flush()
         return product_model
 
+    async def set_manual_live_price(
+        self,
+        product_model: ProductModel,
+        *,
+        price: Decimal | None,
+    ) -> ProductModel:
+        """A user manually enters/corrects the ASUS live price (e.g. when an
+        automatic lookup came back NA or wrong). Marked `live_price_status =
+        "manual"` so the UI can distinguish it from a Gemini-sourced price;
+        the next successful automatic refresh (scheduled or "Update prices")
+        overwrites it exactly like any other price, so a manual entry is a
+        stopgap, not a permanent override.
+        """
+        now = datetime.now(UTC)
+        product_model.live_price = price
+        product_model.live_price_status = "manual" if price is not None else "not_found"
+        product_model.live_price_source_url = None
+        product_model.live_price_checked_at = now
+        product_model.live_price_updated_at = now
+        await self._session.flush()
+        await self._session.refresh(product_model)
+        return product_model
+
     async def archive(
         self,
         product_model: ProductModel,

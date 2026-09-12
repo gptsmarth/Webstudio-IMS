@@ -61,7 +61,13 @@ from webstudio_backend.services.settings_registry import SETTING_DEFAULTS
 from webstudio_backend.services.system_info_service import SystemInfoService
 
 _SENSITIVE_SETTING_KEYS = frozenset(
-    {"gemini_api_key", "openai_api_key", "groq_api_key", "openrouter_api_key"}
+    {
+        "gemini_api_key",
+        "asus_price_gemini_api_key",
+        "openai_api_key",
+        "groq_api_key",
+        "openrouter_api_key",
+    }
 )
 
 
@@ -335,6 +341,18 @@ class SettingsService:
         elif payload.gemini_api_key is not None and payload.gemini_api_key.strip():
             await self._set_str("gemini_api_key", payload.gemini_api_key.strip(), actor_id=actor_id)
 
+        if payload.clear_asus_price_gemini_api_key:
+            await self._set_str("asus_price_gemini_api_key", "", actor_id=actor_id)
+        elif (
+            payload.asus_price_gemini_api_key is not None
+            and payload.asus_price_gemini_api_key.strip()
+        ):
+            await self._set_str(
+                "asus_price_gemini_api_key",
+                payload.asus_price_gemini_api_key.strip(),
+                actor_id=actor_id,
+            )
+
         await self._set_str(
             "ai_primary_provider", payload.ai_primary_provider.strip().lower(), actor_id=actor_id
         )
@@ -466,7 +484,8 @@ class SettingsService:
 
     async def _integrations_group(self) -> IntegrationsSettings:
         config = await resolve_ai_config(self._session, self._app_settings)
-        asus_price_refresh_stale_days = await self._get_int("asus_price_refresh_stale_days", 30)
+        asus_price_refresh_stale_days = await self._get_int("asus_price_refresh_stale_days", 60)
+        asus_price_gemini_api_key = (await self._get_str("asus_price_gemini_api_key") or "").strip()
         fallback_raw = await self._get_str("ai_fallback_chain")
         try:
             fallback_chain = json.loads(fallback_raw) if fallback_raw else config.fallback_chain
@@ -500,6 +519,8 @@ class SettingsService:
             ai_timeout_seconds=config.timeout_seconds,
             ai_retry_count=config.retry_count,
             asus_price_refresh_stale_days=asus_price_refresh_stale_days,
+            asus_price_gemini_configured=bool(asus_price_gemini_api_key),
+            asus_price_gemini_api_key_hint=mask_api_key(asus_price_gemini_api_key),
             groq_model=config.groq.model,
             groq_configured=bool(config.groq.api_key),
             groq_api_key_hint=mask_api_key(config.groq.api_key),

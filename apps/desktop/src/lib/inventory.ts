@@ -12,6 +12,7 @@ import {
   canEditStockLaptop as canEditStockLaptopPermission,
   canEditStockProductModel as canEditStockProductModelPermission,
   canMarkSold as canMarkSoldPermission,
+  canRefreshAsusLivePrices as canRefreshAsusLivePricesPermission,
   canTransferStockLocation as canTransferStockLocationPermission,
   canViewPurchasePrice as canViewPurchasePricePermission,
   canWriteInventory as canWriteInventoryPermission,
@@ -176,4 +177,8 @@ export function canArchiveProductModels(permissions: string[]): boolean {
     P.productModels.delete,
     'product_models:archive',
   );
+}
+
+export function canRefreshAsusLivePrices(permissions: string[]): boolean {
+  return canRefreshAsusLivePricesPermission(permissions);
 }

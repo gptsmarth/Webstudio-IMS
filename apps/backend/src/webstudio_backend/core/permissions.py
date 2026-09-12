@@ -58,6 +58,7 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     "product_models:edit",
     "product_models:delete",
     "product_models:selling_price:edit",
+    "product_models:live_price:refresh",
     # Catalogue — locations
     "locations:view",
     "locations:create",
@@ -145,6 +146,7 @@ _ADMIN: frozenset[str] = frozenset(
         "product_models:edit",
         "product_models:delete",
         "product_models:selling_price:edit",
+        "product_models:live_price:refresh",
         "locations:view",
         "locations:create",
         "locations:edit",
@@ -218,6 +220,10 @@ _CUSTOM_ROLE_DENIED: frozenset[str] = frozenset(
         "sync:worker",
         "tally:worker",
         "health:integrations",
+        # Bulk/manual "Update prices" spends real Gemini API quota per click —
+        # kept to admin tiers only (Main Admin, Admin), never a custom role,
+        # regardless of what a custom role is named.
+        "product_models:live_price:refresh",
     },
 )
 

@@ -751,8 +751,10 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
     asus_price_refresh_stale_days: integrations.asus_price_refresh_stale_days,
   });
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [asusPriceGeminiApiKey, setAsusPriceGeminiApiKey] = useState('');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [clearGeminiKey, setClearGeminiKey] = useState(false);
+  const [clearAsusPriceGeminiKey, setClearAsusPriceGeminiKey] = useState(false);
   const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
@@ -768,8 +770,10 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
       asus_price_refresh_stale_days: integrations.asus_price_refresh_stale_days,
     });
     setGeminiApiKey('');
+    setAsusPriceGeminiApiKey('');
     setOpenaiApiKey('');
     setClearGeminiKey(false);
+    setClearAsusPriceGeminiKey(false);
     setClearOpenaiKey(false);
   }, [integrations]);
 
@@ -833,6 +837,8 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               ai_timeout_seconds: form.ai_timeout_seconds,
               ai_retry_count: form.ai_retry_count,
               asus_price_refresh_stale_days: form.asus_price_refresh_stale_days,
+              asus_price_gemini_api_key: asusPriceGeminiApiKey.trim() || null,
+              clear_asus_price_gemini_api_key: clearAsusPriceGeminiKey,
             });
           }}
         >
@@ -892,19 +898,19 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
           </Field>
           <Field
             label="ASUS price refresh (days)"
-            hint="How often ASUS stock prices auto-refresh via Gemini search. Raise this to spend less API quota; a new ASUS model or a manual 'Update prices' click always fetches immediately regardless of this setting."
+            hint="How often ASUS stock prices auto-refresh via Gemini search. Raise this to spend less API quota; a new ASUS model, a restocked model, or a manual 'Update prices' click always fetches immediately regardless of this setting."
           >
             <input
               className="input"
               type="number"
               min={1}
-              max={90}
+              max={180}
               value={form.asus_price_refresh_stale_days}
               disabled={!workspace.canWrite}
               onChange={(e) =>
                 setForm({
                   ...form,
-                  asus_price_refresh_stale_days: Number(e.target.value) || 30,
+                  asus_price_refresh_stale_days: Number(e.target.value) || 60,
                 })
               }
             />
@@ -972,6 +978,52 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
           >
             {testingProvider === 'gemini' ? 'Testing Gemini…' : 'Test Gemini connection'}
           </button>
+
+          <h3 className="stg-subheading">ASUS Price Lookup (Gemini)</h3>
+          <p className="stg-section__lead">
+            A separate key used only for the "Update prices" ASUS live-price search — kept apart
+            from the general Gemini key above so the two can be configured, throttled, or billed
+            independently.
+          </p>
+          <Readonly
+            label="ASUS price lookup key status"
+            value={
+              integrations.asus_price_gemini_configured
+                ? `Configured (${integrations.asus_price_gemini_api_key_hint ?? '••••'})`
+                : 'Not configured'
+            }
+          />
+          <Field
+            label="ASUS price lookup API key"
+            hint={
+              integrations.asus_price_gemini_configured
+                ? 'Leave blank to keep the current key.'
+                : 'Get a key at aistudio.google.com/apikey — can be the same or a different key from above.'
+            }
+          >
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder={integrations.asus_price_gemini_configured ? '••••••••••••' : 'AIza…'}
+              value={asusPriceGeminiApiKey}
+              disabled={!workspace.canWrite || clearAsusPriceGeminiKey}
+              onChange={(e) => setAsusPriceGeminiApiKey(e.target.value)}
+            />
+          </Field>
+          {integrations.asus_price_gemini_configured && workspace.canWrite && (
+            <label className="stg-check">
+              <input
+                type="checkbox"
+                checked={clearAsusPriceGeminiKey}
+                onChange={(e) => {
+                  setClearAsusPriceGeminiKey(e.target.checked);
+                  if (e.target.checked) setAsusPriceGeminiApiKey('');
+                }}
+              />
+              Remove stored ASUS price lookup API key
+            </label>
+          )}
 
           <h3 className="stg-subheading">OpenAI API (ChatGPT)</h3>
           <Readonly

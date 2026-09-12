@@ -85,6 +85,8 @@ export interface IntegrationsSettings {
   ai_timeout_seconds: number;
   ai_retry_count: number;
   asus_price_refresh_stale_days: number;
+  asus_price_gemini_configured: boolean;
+  asus_price_gemini_api_key_hint: string | null;
   groq_model: string;
   groq_configured: boolean;
   groq_api_key_hint: string | null;
@@ -107,6 +109,8 @@ export interface IntegrationsSettingsUpdate {
   ai_timeout_seconds: number;
   ai_retry_count: number;
   asus_price_refresh_stale_days: number;
+  asus_price_gemini_api_key?: string | null;
+  clear_asus_price_gemini_api_key?: boolean;
   groq_model?: string;
   groq_api_key?: string | null;
   clear_groq_api_key?: boolean;

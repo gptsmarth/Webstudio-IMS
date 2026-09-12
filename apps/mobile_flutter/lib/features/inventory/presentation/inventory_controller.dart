@@ -549,6 +549,20 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     }
   }
 
+  /// Manually enter/correct the ASUS live price — same trust tier as editing
+  /// the selling price. The next successful automatic refresh overwrites it.
+  Future<void> updateLivePrice(String modelId, double? livePrice) async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final updated =
+          await _ref.read(catalogueRepositoryProvider).updateLivePrice(modelId, livePrice);
+      final models = state.models.map((model) => model.id == modelId ? updated : model).toList();
+      state = state.copyWith(models: models, actionInProgress: false);
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+    }
+  }
+
   Future<void> createProductModel(Map<String, dynamic> data) async {
     state = state.copyWith(actionInProgress: true, clearError: true);
     try {

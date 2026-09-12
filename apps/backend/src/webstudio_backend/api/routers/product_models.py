@@ -15,6 +15,7 @@ from webstudio_backend.api.dependencies.auth import (
     ProductModelsCreateDep,
     ProductModelsDeleteDep,
     ProductModelsEditDep,
+    ProductModelsLivePriceRefreshDep,
     ProductModelsOrInventoryViewDep,
     ProductModelsSellingPriceDep,
 )
@@ -28,6 +29,7 @@ from webstudio_backend.api.schemas.product_model import (
     ProductModelResponse,
     ProductModelSpecLookupRequest,
     ProductModelSpecLookupResponse,
+    UpdateLivePriceRequest,
     UpdateProductModelRequest,
     UpdateSellingPriceRequest,
 )
@@ -440,16 +442,47 @@ async def update_product_model_selling_price(
     return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
 
 
+@router.patch("/{model_id}/live-price")
+async def update_product_model_live_price(
+    request: Request,
+    model_id: uuid.UUID,
+    body: UpdateLivePriceRequest,
+    current: ProductModelsSellingPriceDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    """Manually set (or clear) the ASUS live price — same trust tier as
+    editing the selling price. Lets a user fix a wrong/missing price by hand;
+    the next successful automatic refresh (scheduled or "Update prices")
+    silently overwrites it again, so a manual correction never sticks around
+    once the real price is fetchable."""
+    repo = ProductModelRepository(db_session)
+    pm = await repo.get_by_id(model_id)
+    if not pm:
+        raise AppError(
+            "NOT_FOUND",
+            f"Product model with ID {model_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    updated = await repo.set_manual_live_price(pm, price=body.live_price)
+    await db_session.commit()
+    brand_repo = BrandRepository(db_session)
+    brand = await brand_repo.get_by_id(updated.brand_id)
+    brand_name = brand.name if brand else None
+    return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
+
+
 @router.post("/{model_id}/refresh-live-price")
 async def refresh_product_model_live_price(
     request: Request,
     model_id: uuid.UUID,
-    current: ProductModelsSellingPriceDep,
+    current: ProductModelsLivePriceRefreshDep,
     db_session: AsyncSession = DbSessionDep,
 ) -> dict:
-    """ASUS-only. Schedules an immediate background refresh — no-ops (but
-    still returns success) for any other brand, matching the scheduler's
-    own no-op behavior rather than surfacing it as an error."""
+    """ASUS-only, admin-tier only (spends real Gemini API quota). Schedules
+    an immediate background refresh — no-ops (but still returns success) for
+    any other brand, matching the scheduler's own no-op behavior rather than
+    surfacing it as an error."""
+    _ = current
     repo = ProductModelRepository(db_session)
     pm = await repo.get_by_id(model_id)
     if not pm:
@@ -465,9 +498,11 @@ async def refresh_product_model_live_price(
 @router.post("/refresh-live-prices")
 async def refresh_all_asus_live_prices(
     request: Request,
-    current: ProductModelsSellingPriceDep,
+    current: ProductModelsLivePriceRefreshDep,
 ) -> dict:
-    """The "Update prices" button — refreshes every active ASUS model now."""
+    """The "Update prices" button — refreshes every active ASUS model now.
+    Admin-tier only: a single click can spend real Gemini API quota across
+    the whole catalogue."""
     _ = current
     scheduled = await schedule_all_asus_price_refreshes()
     return _envelope(request, {"scheduled": scheduled})
@@ -476,10 +511,11 @@ async def refresh_all_asus_live_prices(
 @router.post("/refresh-live-prices/retry-failed")
 async def retry_failed_asus_live_prices(
     request: Request,
-    current: ProductModelsSellingPriceDep,
+    current: ProductModelsLivePriceRefreshDep,
 ) -> dict:
     """The "Retry failed" button — re-runs only the models that didn't come
-    back "ok" in the most recent bulk run."""
+    back "ok" in the most recent bulk run. Admin-tier only, same as the bulk
+    trigger it complements."""
     _ = current
     scheduled = await retry_failed_asus_price_refreshes()
     return _envelope(request, {"scheduled": scheduled})

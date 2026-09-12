@@ -35,9 +35,9 @@ from webstudio_backend.services.asus_live_price_service import refresh_asus_live
 from webstudio_backend.services.scheduler_runtime_service import sleep_until_next_run
 
 _inflight: dict[str, asyncio.Task[str]] = {}
-_DEFAULT_STALE_AFTER_DAYS = 30
+_DEFAULT_STALE_AFTER_DAYS = 60
 _MIN_STALE_AFTER_DAYS = 1
-_MAX_STALE_AFTER_DAYS = 90
+_MAX_STALE_AFTER_DAYS = 180
 _BACKFILL_SWEEP_INTERVAL_SECONDS = 6 * 60 * 60  # check every 6 hours what's due
 _BACKFILL_BATCH_SIZE = 10
 # A real Gemini API call per job (unlike the free-scraping image jobs) — keep

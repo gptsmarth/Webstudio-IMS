@@ -11,6 +11,7 @@ previously-successful price on a failed attempt.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
@@ -24,8 +25,12 @@ from webstudio_backend.infrastructure.repositories.brand_repository import Brand
 from webstudio_backend.infrastructure.repositories.product_model_repository import (
     ProductModelRepository,
 )
-from webstudio_backend.services.ai.config import resolve_ai_config
+from webstudio_backend.services.ai.config import (
+    resolve_ai_config,
+    resolve_asus_price_gemini_api_key,
+)
 from webstudio_backend.services.ai.providers.gemini import GeminiProvider
+from webstudio_backend.services.ai.types import ProviderCredentials
 
 # Accept a price sourced only from ASUS's own India store, regardless of what
 # the model claims — an LLM's compliance with prompt instructions is never
@@ -118,11 +123,20 @@ async def refresh_asus_live_price(session: AsyncSession, model_id: uuid.UUID) ->
 
     settings = get_settings()
     ai_config = await resolve_ai_config(session, settings)
-    if not ai_config.gemini.api_key.strip():
+    asus_price_api_key = await resolve_asus_price_gemini_api_key(session)
+    if not asus_price_api_key:
         await repo.update_live_price(pm, status="not_configured")
         return "not_configured"
 
-    provider = GeminiProvider(ai_config)
+    # A dedicated API key just for price lookups, kept separate from the
+    # general spec/image/enrichment key — same model, different credential.
+    price_lookup_config = replace(
+        ai_config,
+        gemini=ProviderCredentials(
+            provider="gemini", api_key=asus_price_api_key, model=ai_config.gemini.model
+        ),
+    )
+    provider = GeminiProvider(price_lookup_config)
     try:
         result = await provider.lookup_live_price(
             pm.model_number,

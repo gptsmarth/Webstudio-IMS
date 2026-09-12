@@ -116,6 +116,8 @@ async def test_settings_integrations_patch(
         "ai_timeout_seconds": 90,
         "ai_retry_count": 2,
         "asus_price_refresh_stale_days": 15,
+        "asus_price_gemini_api_key": "AIzaSyAsusPriceKey0987654321",
+        "clear_asus_price_gemini_api_key": False,
         "groq_model": "llama-3.3-70b-versatile",
         "clear_groq_api_key": False,
         "openrouter_model": "meta-llama/llama-3.3-70b-instruct:free",
@@ -132,3 +134,7 @@ async def test_settings_integrations_patch(
     assert "gemini" in updated["ai_fallback_chain"]
     assert len(updated["ai_provider_health"]) >= 4
     assert updated["asus_price_refresh_stale_days"] == 15
+    # ASUS price lookups keep their own key, separate from the general one above.
+    assert updated["asus_price_gemini_configured"] is True
+    assert updated["asus_price_gemini_api_key_hint"] is not None
+    assert "4321" in updated["asus_price_gemini_api_key_hint"]

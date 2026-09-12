@@ -54,6 +54,7 @@ export const P = {
     edit: 'product_models:edit',
     delete: 'product_models:delete',
     sellingPriceEdit: 'product_models:selling_price:edit',
+    livePriceRefresh: 'product_models:live_price:refresh',
   },
   locations: {
     view: 'locations:view',
@@ -285,6 +286,11 @@ export function canEditStockProductModel(permissions: string[]): boolean {
 
 export function canEditProductModels(permissions: string[]): boolean {
   return PermissionService.from(permissions).has(P.productModels.edit);
+}
+
+/** Bulk/manual "Update prices" spends real Gemini API quota per click — admin tiers only. */
+export function canRefreshAsusLivePrices(permissions: string[]): boolean {
+  return PermissionService.from(permissions).has(P.productModels.livePriceRefresh);
 }
 
 export function canWriteCatalogue(permissions: string[]): boolean {

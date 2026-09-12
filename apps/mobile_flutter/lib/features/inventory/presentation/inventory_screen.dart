@@ -241,6 +241,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
     final canCreate = inv_perms.canCreateInventory(permissions);
     final canCreateModel = inv_perms.canCreateProductModels(permissions);
+    final canUpdateAsusLivePrices = inv_perms.canRefreshAsusLivePrices(permissions);
     final stockOnly = isStockOnlyUser(permissions) || widget.stockBrowseMode;
     final showPrices = stockOnly ? workspace.showSellingPrice : true;
     final showLivePrice = stockOnly ? workspace.showLivePrice : true;
@@ -289,6 +290,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               onSelectItem: _openDetail,
               onTogglePrices: controller.setShowSellingPrice,
               onToggleLivePrice: controller.setShowLivePrice,
+              canUpdateLivePrices: canUpdateAsusLivePrices,
               onUpdateLivePrices: _updateAsusLivePrices,
               onToggleZeroStock: controller.setShowZeroStock,
               onCategoryFilter: () => _showCategoryFilterSheet(context, workspace.productCategoryFilter),
@@ -481,6 +483,7 @@ class _AsusLivePriceBar extends StatelessWidget {
   const _AsusLivePriceBar({
     required this.showLivePrice,
     required this.onToggle,
+    required this.canTriggerRefresh,
     required this.starting,
     required this.runActive,
     required this.onUpdatePrices,
@@ -495,6 +498,7 @@ class _AsusLivePriceBar extends StatelessWidget {
 
   final bool showLivePrice;
   final ValueChanged<bool> onToggle;
+  final bool canTriggerRefresh;
   final bool starting;
   final bool runActive;
   final VoidCallback onUpdatePrices;
@@ -531,18 +535,20 @@ class _AsusLivePriceBar extends StatelessWidget {
                     controlAffinity: ListTileControlAffinity.leading,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                TextButton.icon(
-                  onPressed: busy ? null : onUpdatePrices,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh, size: 18),
-                  label: Text(starting ? 'Starting…' : runActive ? 'Refreshing…' : 'Update prices'),
-                ),
+                if (canTriggerRefresh) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  TextButton.icon(
+                    onPressed: busy ? null : onUpdatePrices,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh, size: 18),
+                    label: Text(starting ? 'Starting…' : runActive ? 'Refreshing…' : 'Update prices'),
+                  ),
+                ],
               ],
             ),
             if (message != null)
@@ -571,7 +577,7 @@ class _AsusLivePriceBar extends StatelessWidget {
                   ],
                 ),
               ),
-            if (showRetry)
+            if (showRetry && canTriggerRefresh)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
@@ -683,6 +689,7 @@ class _InventoryBody extends ConsumerWidget {
     required this.onSelectItem,
     required this.onTogglePrices,
     required this.onToggleLivePrice,
+    required this.canUpdateLivePrices,
     required this.onUpdateLivePrices,
     required this.onToggleZeroStock,
     required this.onCategoryFilter,
@@ -694,6 +701,7 @@ class _InventoryBody extends ConsumerWidget {
   final bool showPrices;
   final bool showAdminPrices;
   final bool showLivePrice;
+  final bool canUpdateLivePrices;
   final bool modelSearchExpanded;
   final VoidCallback? onToggleModelSearch;
   final ValueChanged<String> onSearchChanged;
@@ -757,6 +765,7 @@ class _InventoryBody extends ConsumerWidget {
         _AsusLivePriceBar(
           showLivePrice: showLivePrice,
           onToggle: onToggleLivePrice,
+          canTriggerRefresh: canUpdateLivePrices,
           starting: workspace.asusPriceRunStarting,
           runActive: (workspace.asusPriceRunStatus?.inProgress ?? 0) > 0,
           onUpdatePrices: onUpdateLivePrices,
@@ -913,6 +922,8 @@ class _InventoryBody extends ConsumerWidget {
                 inventoryAdminMode: showAdminPrices,
                 showSellingPrice: showPrices,
                 showAsusPrice: showLivePrice,
+                onToggleShowSellingPrice: stockOnly ? onTogglePrices : null,
+                onToggleShowAsusPrice: stockOnly ? onToggleLivePrice : null,
                 onSelectUnit: onSelectItem,
               );
             }(),

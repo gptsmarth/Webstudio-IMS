@@ -91,8 +91,10 @@ async def _add_available_unit(db_session: AsyncSession, product_model_id: uuid.U
 
 
 async def _configure_gemini(db_session: AsyncSession) -> None:
+    # ASUS live-price lookups use their own dedicated key (`asus_price_gemini_api_key`),
+    # kept separate from the general spec/image/enrichment key (`gemini_api_key`).
     await SystemSettingRepository(db_session).set_value(
-        "gemini_api_key", "fake-key-for-test", value_type=SettingValueType.STRING
+        "asus_price_gemini_api_key", "fake-key-for-test", value_type=SettingValueType.STRING
     )
     await db_session.commit()
 
@@ -118,12 +120,62 @@ async def test_non_asus_brand_never_calls_gemini(
 @pytest.mark.asyncio
 async def test_no_gemini_key_configured(db_session: AsyncSession, test_settings, brand) -> None:
     model = await _make_model(db_session, brand.id, "ASUS-001")
-    # No gemini_api_key set anywhere.
+    # No asus_price_gemini_api_key set anywhere.
     status = await refresh_asus_live_price(db_session, model.id)
     assert status == "not_configured"
     await db_session.refresh(model)
     assert model.live_price_status == "not_configured"
     assert model.live_price is None
+
+
+@pytest.mark.asyncio
+async def test_general_gemini_key_alone_is_not_enough(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The general spec/image/enrichment key (`gemini_api_key`) is kept
+    entirely separate from the dedicated ASUS price-lookup key — having only
+    the general one configured must still report `not_configured`."""
+    model = await _make_model(db_session, brand.id, "ASUS-013")
+    await SystemSettingRepository(db_session).set_value(
+        "gemini_api_key", "general-key-only", value_type=SettingValueType.STRING
+    )
+    await db_session.commit()
+
+    async def fail_if_called(self, *args, **kwargs):
+        raise AssertionError("Gemini should never be called without the dedicated price key")
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fail_if_called)
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "not_configured"
+    await db_session.refresh(model)
+    assert model.live_price_status == "not_configured"
+
+
+@pytest.mark.asyncio
+async def test_dedicated_price_key_is_used_even_without_general_key(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reverse also holds: the dedicated ASUS price key works on its own,
+    with no general `gemini_api_key` configured at all."""
+    model = await _make_model(db_session, brand.id, "ASUS-014")
+    await _configure_gemini(db_session)
+
+    seen_api_keys: list[str] = []
+
+    async def fake_success(self, model_number, *, brand_name=None, model_name=None):
+        seen_api_keys.append(self._api_key)
+        return {
+            "price": 61990,
+            "source_url": "https://in.store.asus.com/some-model.html",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_success)
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "ok"
+    assert seen_api_keys == ["fake-key-for-test"]
 
 
 @pytest.mark.asyncio
@@ -717,3 +769,119 @@ async def test_refresh_status_route_does_not_shadow_get_by_id(
     )
     assert by_id_response.status_code == 200
     assert by_id_response.json()["data"]["model_number"] == "ASUS-007"
+
+
+@pytest.mark.asyncio
+async def test_refresh_endpoints_are_admin_only(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    main_admin_headers: dict[str, str],
+    admin_headers: dict[str, str],
+    salesperson_headers: dict[str, str],
+    brand,
+) -> None:
+    """ "Update prices" spends real Gemini API quota per click — only Main
+    Admin and Admin can trigger it. A salesperson (or any other role/custom
+    role) is forbidden, matching the explicit "admin only" requirement."""
+    model = await _make_model(db_session, brand.id, "ASUS-ADMIN-ONLY")
+
+    resp = await api_client.post(
+        f"/api/v1/product-models/{model.id}/refresh-live-price", headers=salesperson_headers
+    )
+    assert resp.status_code == 403
+
+    resp = await api_client.post(
+        "/api/v1/product-models/refresh-live-prices", headers=salesperson_headers
+    )
+    assert resp.status_code == 403
+
+    resp = await api_client.post(
+        "/api/v1/product-models/refresh-live-prices/retry-failed", headers=salesperson_headers
+    )
+    assert resp.status_code == 403
+
+    # Admin and Main Admin are both allowed through.
+    resp = await api_client.post(
+        f"/api/v1/product-models/{model.id}/refresh-live-price", headers=admin_headers
+    )
+    assert resp.status_code == 200
+
+    resp = await api_client.post(
+        f"/api/v1/product-models/{model.id}/refresh-live-price", headers=main_admin_headers
+    )
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_manual_live_price_edit_is_available_at_the_selling_price_tier(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    salesperson_headers: dict[str, str],
+    brand,
+) -> None:
+    """Anyone who can edit the selling price can also manually enter/correct
+    the ASUS live price — no admin-only restriction here, unlike the bulk
+    refresh trigger."""
+    model = await _make_model(db_session, brand.id, "ASUS-MANUAL-001")
+
+    resp = await api_client.patch(
+        f"/api/v1/product-models/{model.id}/live-price",
+        json={"live_price": 54999},
+        headers=salesperson_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["live_price"] == 54999.0
+    assert data["live_price_status"] == "manual"
+
+    await db_session.refresh(model)
+    assert model.live_price_source_url is None
+    assert model.live_price_checked_at is not None
+
+
+@pytest.mark.asyncio
+async def test_manual_live_price_is_overwritten_by_next_successful_automatic_refresh(
+    db_session: AsyncSession,
+    test_settings,
+    brand,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A manual correction is a stopgap, not a permanent override: the next
+    successful automatic refresh silently overwrites it."""
+    model = await _make_model(db_session, brand.id, "ASUS-MANUAL-002")
+    repo = ProductModelRepository(db_session)
+    await repo.set_manual_live_price(model, price=Decimal("41999"))
+    await db_session.commit()
+
+    await _configure_gemini(db_session)
+
+    async def fake_success(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 46990,
+            "source_url": "https://in.store.asus.com/some-model.html",
+            "confidence": "high",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_success)
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "ok"
+    await db_session.refresh(model)
+    assert model.live_price == Decimal("46990")
+    assert model.live_price_status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_manual_live_price_can_be_cleared(
+    db_session: AsyncSession, test_settings, brand
+) -> None:
+    model = await _make_model(db_session, brand.id, "ASUS-MANUAL-003")
+    repo = ProductModelRepository(db_session)
+    await repo.set_manual_live_price(model, price=Decimal("41999"))
+    await db_session.commit()
+
+    await repo.set_manual_live_price(model, price=None)
+    await db_session.commit()
+    await db_session.refresh(model)
+    assert model.live_price is None
+    assert model.live_price_status == "not_found"

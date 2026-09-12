@@ -186,6 +186,16 @@ class CatalogueRepository {
     );
   }
 
+  /// Manually enter/correct the ASUS live price — same trust tier as editing
+  /// the selling price. The next successful automatic refresh overwrites it.
+  Future<ProductModel> updateLivePrice(String id, double? livePrice) async {
+    return _api.patch(
+      '${ApiPaths.productModels}/$id/live-price',
+      data: {'live_price': livePrice},
+      parser: (json) => ProductModel.fromJson(json! as Map<String, dynamic>),
+    );
+  }
+
   Future<Map<String, dynamic>> resolveProductImage(String modelId) async {
     return _api.post(
       ApiPaths.productModelResolveImage(modelId),

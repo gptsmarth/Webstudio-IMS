@@ -43,6 +43,9 @@ interface InventoryModelEditDialogProps {
     selling_price: number | null;
   }) => Promise<void>;
   onArchive?: () => Promise<void>;
+  /** Only offered for ASUS laptops — accessories and other brands never get a live price. */
+  showLivePriceField?: boolean;
+  onConfirmLivePrice?: (livePrice: number | null) => Promise<void>;
 }
 
 export function InventoryModelEditDialog({
@@ -53,6 +56,8 @@ export function InventoryModelEditDialog({
   onClose,
   onConfirm,
   onArchive,
+  showLivePriceField = false,
+  onConfirmLivePrice,
 }: InventoryModelEditDialogProps): JSX.Element | null {
   const [modelNumber, setModelNumber] = useState('');
   const [modelName, setModelName] = useState('');
@@ -68,6 +73,7 @@ export function InventoryModelEditDialog({
   const [notes, setNotes] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [livePrice, setLivePrice] = useState('');
   const [refetching, setRefetching] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +94,7 @@ export function InventoryModelEditDialog({
     setNotes(model.notes ?? '');
     setPurchasePrice(model.purchase_price != null ? String(model.purchase_price) : '');
     setSellingPrice(model.selling_price != null ? String(model.selling_price) : '');
+    setLivePrice(model.live_price != null ? String(model.live_price) : '');
     setError(null);
   }, [open, model]);
 
@@ -152,6 +159,11 @@ export function InventoryModelEditDialog({
       setError('Enter a valid selling price or leave blank.');
       return;
     }
+    const parsedLive = livePrice.trim() ? parsePriceInput(livePrice) : null;
+    if (showLivePriceField && livePrice.trim() && parsedLive === null) {
+      setError('Enter a valid ASUS price or leave blank.');
+      return;
+    }
 
     setError(null);
     try {
@@ -171,6 +183,12 @@ export function InventoryModelEditDialog({
         purchase_price: parsedPurchase,
         selling_price: parsedSelling,
       });
+      if (showLivePriceField && onConfirmLivePrice) {
+        const currentLive = model.live_price ?? null;
+        if (parsedLive !== currentLive) {
+          await onConfirmLivePrice(parsedLive);
+        }
+      }
       onClose();
     } catch (err: unknown) {
       const message = err as { message?: string };
@@ -435,6 +453,23 @@ export function InventoryModelEditDialog({
                 </span>
               )}
             </label>
+            {showLivePriceField && (
+              <label className="inv-filters__field">
+                <span className="inv-filters__label">ASUS price (manual)</span>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={livePrice}
+                  onChange={(e) => setLivePrice(e.target.value)}
+                  placeholder="e.g. 54999"
+                />
+                <span className="inv-dialog__hint">
+                  {model.live_price_status === 'manual'
+                    ? 'Manually entered — the next successful automatic refresh overwrites it.'
+                    : 'For when the automatic ASUS search comes back NA or wrong.'}
+                </span>
+              </label>
+            )}
             <label className="inv-filters__field inv-model-edit__span-2">
               <span className="inv-filters__label">Notes</span>
               <textarea

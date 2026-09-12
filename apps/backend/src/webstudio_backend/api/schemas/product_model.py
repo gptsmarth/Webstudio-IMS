@@ -118,6 +118,10 @@ class UpdateSellingPriceRequest(BaseModel):
     selling_price: Decimal | None = Field(default=None, ge=0)
 
 
+class UpdateLivePriceRequest(BaseModel):
+    live_price: Decimal | None = Field(default=None, ge=0)
+
+
 class ProductModelSpecLookupRequest(BaseModel):
     model_number: str = Field(min_length=1, max_length=64)
     model_name: str | None = Field(default=None, max_length=128)

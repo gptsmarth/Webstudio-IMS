@@ -30,7 +30,14 @@ export interface ProductModel {
   purchase_price?: number | null;
   selling_price?: number | null;
   live_price?: number | null;
-  live_price_status?: 'ok' | 'not_found' | 'error' | 'not_configured' | 'not_applicable' | null;
+  live_price_status?:
+    | 'ok'
+    | 'not_found'
+    | 'error'
+    | 'not_configured'
+    | 'not_applicable'
+    | 'manual'
+    | null;
   live_price_source_url?: string | null;
   live_price_checked_at?: string | null;
   live_price_updated_at?: string | null;
@@ -65,6 +72,10 @@ export type UpdateProductModelRequest = Partial<CreateProductModelRequest>;
 
 export interface UpdateSellingPriceRequest {
   selling_price?: number | null;
+}
+
+export interface UpdateLivePriceRequest {
+  live_price?: number | null;
 }
 
 export interface ProductModelListParams {
@@ -131,6 +142,13 @@ export class ProductModelService {
   ): Promise<ProductModel> {
     const client = await ApiClientProvider.getClient();
     return client.patch<ProductModel>(`/api/v1/product-models/${id}/selling-price`, data);
+  }
+
+  /** Manually enter/correct the ASUS live price — same trust tier as editing
+   * the selling price. The next successful automatic refresh overwrites it. */
+  static async updateLivePrice(id: string, data: UpdateLivePriceRequest): Promise<ProductModel> {
+    const client = await ApiClientProvider.getClient();
+    return client.patch<ProductModel>(`/api/v1/product-models/${id}/live-price`, data);
   }
 
   static async deleteModel(id: string): Promise<void> {

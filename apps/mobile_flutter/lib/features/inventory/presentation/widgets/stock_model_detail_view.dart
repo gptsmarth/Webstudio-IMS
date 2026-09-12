@@ -29,6 +29,8 @@ class StockModelDetailView extends ConsumerWidget {
     this.inventoryAdminMode = false,
     this.showSellingPrice = true,
     this.showAsusPrice = false,
+    this.onToggleShowSellingPrice,
+    this.onToggleShowAsusPrice,
   });
 
   final ProductModel model;
@@ -43,6 +45,8 @@ class StockModelDetailView extends ConsumerWidget {
   final bool inventoryAdminMode;
   final bool showSellingPrice;
   final bool showAsusPrice;
+  final ValueChanged<bool>? onToggleShowSellingPrice;
+  final ValueChanged<bool>? onToggleShowAsusPrice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -149,6 +153,28 @@ class StockModelDetailView extends ConsumerWidget {
                               onPressed: actionInProgress ? null : () => _deleteModel(context, ref),
                               icon: Icon(Icons.delete_outline, size: 18, color: Theme.of(context).colorScheme.error),
                               label: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                            ),
+                        ],
+                      ),
+                    ],
+                    if (!inventoryAdminMode &&
+                        (onToggleShowSellingPrice != null || onToggleShowAsusPrice != null)) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 0,
+                        children: [
+                          if (onToggleShowSellingPrice != null)
+                            _InlinePriceToggle(
+                              label: 'Show selling price',
+                              value: showSellingPrice,
+                              onChanged: onToggleShowSellingPrice!,
+                            ),
+                          if (onToggleShowAsusPrice != null && isAsusModel)
+                            _InlinePriceToggle(
+                              label: 'Show ASUS price',
+                              value: showAsusPrice,
+                              onChanged: onToggleShowAsusPrice!,
                             ),
                         ],
                       ),
@@ -367,6 +393,42 @@ class StockModelDetailView extends ConsumerWidget {
     } else {
       messenger.showSnackBar(SnackBar(content: Text('${item.serialNumber} removed from stock.')));
     }
+  }
+}
+
+class _InlinePriceToggle extends StatelessWidget {
+  const _InlinePriceToggle({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: value,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: (v) => onChanged(v ?? false),
+            ),
+            const SizedBox(width: 4),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
   }
 }
 
