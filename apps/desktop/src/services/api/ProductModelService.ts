@@ -155,6 +155,14 @@ export class ProductModelService {
     const client = await ApiClientProvider.getClient();
     return client.get<AsusPriceRefreshStatus>('/api/v1/product-models/refresh-live-prices/status');
   }
+
+  static async retryFailedLivePrices(): Promise<{ scheduled: number }> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<{ scheduled: number }>(
+      '/api/v1/product-models/refresh-live-prices/retry-failed',
+      {},
+    );
+  }
 }
 
 export interface AsusPriceRefreshStatus {
@@ -163,4 +171,5 @@ export interface AsusPriceRefreshStatus {
   in_progress: number;
   started_at: string | null;
   finished_at: string | null;
+  failed_model_ids: string[];
 }

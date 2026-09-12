@@ -49,6 +49,7 @@ from webstudio_backend.services.asus_live_price_jobs import (
     _concurrency_limiter,
     _get_stale_after_days,
     get_asus_bulk_run_status,
+    retry_failed_asus_price_refreshes,
     schedule_all_asus_price_refreshes,
 )
 from webstudio_backend.services.asus_live_price_service import refresh_asus_live_price
@@ -476,6 +477,7 @@ def test_bulk_run_status_defaults_when_never_run(monkeypatch: pytest.MonkeyPatch
         "in_progress": 0,
         "started_at": None,
         "finished_at": None,
+        "failed_model_ids": [],
     }
 
 
@@ -589,6 +591,92 @@ async def test_bulk_run_tracks_live_progress_and_completion(
     assert final_status["in_progress"] == 0
     assert final_status["completed"] == 2
     assert final_status["finished_at"] is not None
+    assert final_status["failed_model_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_run_lists_failed_model_ids_for_retry(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that comes back "not_found" (or any non-"ok" outcome) must be
+    listed in `failed_model_ids` once the run finishes, so the UI can offer
+    a "Retry failed" action scoped to just those models."""
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    good = await _make_model(db_session, brand.id, "ASUS-GOOD")
+    bad = await _make_model(db_session, brand.id, "ASUS-BAD")
+    await _add_available_unit(db_session, good.id)
+    await _add_available_unit(db_session, bad.id)
+
+    async def fake_refresh(session, model_id):
+        return "ok" if model_id == good.id else "not_found"
+
+    monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", fake_refresh)
+
+    scheduled = await schedule_all_asus_price_refreshes()
+    assert scheduled == 2
+    await asyncio.sleep(0.05)
+
+    status = get_asus_bulk_run_status()
+    assert status["finished_at"] is not None
+    assert status["failed_model_ids"] == [str(bad.id)]
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_reschedules_only_the_failed_models(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    good = await _make_model(db_session, brand.id, "ASUS-RETRY-GOOD")
+    bad = await _make_model(db_session, brand.id, "ASUS-RETRY-BAD")
+    await _add_available_unit(db_session, good.id)
+    await _add_available_unit(db_session, bad.id)
+
+    calls: list[uuid.UUID] = []
+
+    async def fake_refresh(session, model_id):
+        calls.append(model_id)
+        return "ok" if model_id == good.id else "not_found"
+
+    monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", fake_refresh)
+
+    await schedule_all_asus_price_refreshes()
+    await asyncio.sleep(0.05)
+    assert set(calls) == {good.id, bad.id}
+
+    retried = await retry_failed_asus_price_refreshes()
+    assert retried == 1
+    await asyncio.sleep(0.05)
+
+    # Only the failed model was retried — the already-good one wasn't touched.
+    assert calls == [good.id, bad.id, bad.id]
+    retry_status = get_asus_bulk_run_status()
+    assert retry_status["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_with_nothing_failed_returns_zero(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    model = await _make_model(db_session, brand.id, "ASUS-ALL-GOOD")
+    await _add_available_unit(db_session, model.id)
+
+    async def fake_refresh(session, model_id):
+        return "ok"
+
+    monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", fake_refresh)
+    await schedule_all_asus_price_refreshes()
+    await asyncio.sleep(0.05)
+
+    assert await retry_failed_asus_price_refreshes() == 0
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_with_no_prior_run_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(asus_jobs_module, "_bulk_run", None)
+    assert await retry_failed_asus_price_refreshes() == 0
 
 
 @pytest.mark.asyncio

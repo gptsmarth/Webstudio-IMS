@@ -34,7 +34,7 @@ from webstudio_backend.infrastructure.repositories.system_setting_repository imp
 from webstudio_backend.services.asus_live_price_service import refresh_asus_live_price
 from webstudio_backend.services.scheduler_runtime_service import sleep_until_next_run
 
-_inflight: dict[str, asyncio.Task[None]] = {}
+_inflight: dict[str, asyncio.Task[str]] = {}
 _DEFAULT_STALE_AFTER_DAYS = 30
 _MIN_STALE_AFTER_DAYS = 1
 _MAX_STALE_AFTER_DAYS = 90
@@ -78,12 +78,12 @@ def schedule_asus_price_refresh(
     if existing is not None and not existing.done():
         return False
 
-    task = asyncio.create_task(
+    task: asyncio.Task[str] = asyncio.create_task(
         _run_asus_price_refresh(uuid.UUID(str(model_id))), name=f"asus-live-price:{key}"
     )
     _inflight[key] = task
 
-    def _cleanup(done: asyncio.Task[None]) -> None:
+    def _cleanup(done: asyncio.Task[str]) -> None:
         current = _inflight.get(key)
         if current is done:
             _inflight.pop(key, None)
@@ -92,7 +92,9 @@ def schedule_asus_price_refresh(
     return True
 
 
-async def _run_asus_price_refresh(model_id: uuid.UUID) -> None:
+async def _run_asus_price_refresh(model_id: uuid.UUID) -> str:
+    """Returns the resulting status string ("ok", "not_found", "error", ...)
+    so a bulk run can track per-model outcomes for a later "retry failed"."""
     key = str(model_id)
     try:
         async with _concurrency_limiter:
@@ -101,8 +103,10 @@ async def _run_asus_price_refresh(model_id: uuid.UUID) -> None:
                 status = await refresh_asus_live_price(session, model_id)
                 await session.commit()
                 logger.debug("ASUS live price refresh for {} finished: {}", model_id, status)
+                return status
     except Exception:
         logger.exception("ASUS live price refresh failed unexpectedly for model {}", model_id)
+        return "error"
     finally:
         _inflight.pop(key, None)
 
@@ -155,6 +159,28 @@ async def schedule_all_asus_price_refreshes() -> int:
     return len(scheduled_keys)
 
 
+async def retry_failed_asus_price_refreshes() -> int:
+    """Re-run only the models that didn't come back "ok" in the most recent
+    bulk run (a search-effort miss on one attempt doesn't mean the price
+    genuinely isn't there — retrying costs nothing extra since it's scoped
+    to just the failures, not the whole catalog again). Returns how many
+    were newly scheduled; 0 if there's no prior run or nothing failed."""
+    run = _bulk_run
+    if run is None:
+        return 0
+    failed_keys = [key for key, status in run["outcomes"].items() if status != "ok"]
+    if not failed_keys:
+        return 0
+
+    scheduled_keys: list[str] = []
+    for key in failed_keys:
+        if schedule_asus_price_refresh(key, force=True):
+            scheduled_keys.append(key)
+    _start_bulk_run_tracking(scheduled_keys)
+    logger.info("ASUS live price retry scheduled {} model(s)", len(scheduled_keys))
+    return len(scheduled_keys)
+
+
 def _start_bulk_run_tracking(model_keys: list[str]) -> None:
     """Begin tracking a fresh bulk run, replacing whatever run was tracked
     before (there's only ever one "current/most recent" bulk run — matches
@@ -166,6 +192,7 @@ def _start_bulk_run_tracking(model_keys: list[str]) -> None:
     run: dict[str, Any] = {
         "total": len(model_keys),
         "remaining": remaining,
+        "outcomes": {},
         "started_at": now,
         "finished_at": now if not model_keys else None,
     }
@@ -175,28 +202,35 @@ def _start_bulk_run_tracking(model_keys: list[str]) -> None:
         task = _inflight.get(key)
         if task is None or task.done():
             # Finished (or was never actually scheduled) before we could
-            # attach a callback — count it as already done.
+            # attach a callback — count it as already done, outcome unknown.
             remaining.discard(key)
             continue
-        task.add_done_callback(lambda _task, k=key, r=run: _on_bulk_run_job_done(r, k))
+        task.add_done_callback(lambda t, k=key, r=run: _on_bulk_run_job_done(r, k, t))
 
     if not remaining and run["finished_at"] is None:
         run["finished_at"] = datetime.now(UTC).isoformat()
 
 
-def _on_bulk_run_job_done(run: dict[str, Any], model_key: str) -> None:
+def _on_bulk_run_job_done(run: dict[str, Any], model_key: str, task: asyncio.Task[str]) -> None:
     # Guard against a stale callback firing after a newer bulk run replaced
     # this one in `_bulk_run` — only ever mutate the run it was attached to.
     run["remaining"].discard(model_key)
+    if not task.cancelled() and task.exception() is None:
+        run["outcomes"][model_key] = task.result()
+    else:
+        run["outcomes"][model_key] = "error"
     if not run["remaining"] and run["finished_at"] is None:
         run["finished_at"] = datetime.now(UTC).isoformat()
 
 
 def get_asus_bulk_run_status() -> dict[str, Any]:
-    """Real progress for the most recent bulk "Update prices" run, if any
-    has happened this server session. `total`/`completed`/`in_progress`
-    reflect only that specific run's models, not unrelated single-model or
-    scheduled-sweep refreshes that might also be running concurrently."""
+    """Real progress for the most recent bulk "Update prices" (or "Retry
+    failed") run, if any has happened this server session.
+    `total`/`completed`/`in_progress` reflect only that specific run's
+    models, not unrelated single-model or scheduled-sweep refreshes that
+    might also be running concurrently. `failed_model_ids` lists models that
+    finished with anything other than "ok" — the client resolves these to
+    model numbers/names itself from its already-loaded catalogue."""
     run = _bulk_run
     if run is None:
         return {
@@ -205,15 +239,18 @@ def get_asus_bulk_run_status() -> dict[str, Any]:
             "in_progress": 0,
             "started_at": None,
             "finished_at": None,
+            "failed_model_ids": [],
         }
     remaining = len(run["remaining"])
     total = run["total"]
+    failed_model_ids = [key for key, status in run["outcomes"].items() if status != "ok"]
     return {
         "total": total,
         "completed": total - remaining,
         "in_progress": remaining,
         "started_at": run["started_at"],
         "finished_at": run["finished_at"],
+        "failed_model_ids": failed_model_ids,
     }
 
 

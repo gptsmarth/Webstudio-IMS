@@ -149,6 +149,7 @@ class AsusPriceRefreshStatus {
     required this.inProgress,
     required this.startedAt,
     required this.finishedAt,
+    this.failedModelIds = const [],
   });
 
   final int total;
@@ -156,6 +157,7 @@ class AsusPriceRefreshStatus {
   final int inProgress;
   final String? startedAt;
   final String? finishedAt;
+  final List<String> failedModelIds;
 
   factory AsusPriceRefreshStatus.fromJson(Map<String, dynamic> json) => AsusPriceRefreshStatus(
         total: (json['total'] as num?)?.toInt() ?? 0,
@@ -163,6 +165,9 @@ class AsusPriceRefreshStatus {
         inProgress: (json['in_progress'] as num?)?.toInt() ?? 0,
         startedAt: json['started_at'] as String?,
         finishedAt: json['finished_at'] as String?,
+        failedModelIds:
+            (json['failed_model_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+                const [],
       );
 }
 

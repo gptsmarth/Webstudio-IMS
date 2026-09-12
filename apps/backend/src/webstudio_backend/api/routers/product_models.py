@@ -52,6 +52,7 @@ from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentSe
 from webstudio_backend.services.ai.types import AIProviderError
 from webstudio_backend.services.asus_live_price_jobs import (
     get_asus_bulk_run_status,
+    retry_failed_asus_price_refreshes,
     schedule_all_asus_price_refreshes,
     schedule_asus_price_refresh,
 )
@@ -469,6 +470,18 @@ async def refresh_all_asus_live_prices(
     """The "Update prices" button — refreshes every active ASUS model now."""
     _ = current
     scheduled = await schedule_all_asus_price_refreshes()
+    return _envelope(request, {"scheduled": scheduled})
+
+
+@router.post("/refresh-live-prices/retry-failed")
+async def retry_failed_asus_live_prices(
+    request: Request,
+    current: ProductModelsSellingPriceDep,
+) -> dict:
+    """The "Retry failed" button — re-runs only the models that didn't come
+    back "ok" in the most recent bulk run."""
+    _ = current
+    scheduled = await retry_failed_asus_price_refreshes()
     return _envelope(request, {"scheduled": scheduled})
 
 

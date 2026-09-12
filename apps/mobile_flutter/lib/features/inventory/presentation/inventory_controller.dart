@@ -47,6 +47,7 @@ class InventoryWorkspaceState {
     this.asusPriceRunStatus,
     this.asusPriceRunDismissedAt,
     this.asusPriceRunStarting = false,
+    this.asusPriceRunRetrying = false,
     this.productCategoryFilter = ProductCategoryFilter.all,
     this.fromCache = false,
     this.isStale = false,
@@ -76,16 +77,29 @@ class InventoryWorkspaceState {
   final AsusPriceRefreshStatus? asusPriceRunStatus;
   final String? asusPriceRunDismissedAt;
   final bool asusPriceRunStarting;
+  final bool asusPriceRunRetrying;
   final ProductCategoryFilter productCategoryFilter;
+
+  bool get _asusPriceRunFinished {
+    final status = asusPriceRunStatus;
+    return status != null &&
+        status.total > 0 &&
+        status.inProgress == 0 &&
+        status.finishedAt != null;
+  }
 
   /// True only while there's a completed, undismissed bulk run to show —
   /// mirrors desktop's "Done — refreshed N ASUS model(s)." banner + dismiss.
   bool get asusPriceRunShowsDismiss {
-    final status = asusPriceRunStatus;
-    if (status == null || status.total == 0 || status.inProgress > 0) return false;
-    final finishedAt = status.finishedAt;
-    return finishedAt != null && finishedAt != asusPriceRunDismissedAt;
+    if (!_asusPriceRunFinished) return false;
+    return asusPriceRunStatus!.finishedAt != asusPriceRunDismissedAt;
   }
+
+  /// "Retry failed" stays available even after the banner is dismissed —
+  /// dismissing only clears the summary text, not the ability to go fix the
+  /// models that didn't resolve.
+  bool get asusPriceRunShowsRetry =>
+      _asusPriceRunFinished && asusPriceRunStatus!.failedModelIds.isNotEmpty;
 
   String? get asusPriceRunMessage {
     final status = asusPriceRunStatus;
@@ -94,6 +108,11 @@ class InventoryWorkspaceState {
       return 'Refreshing ASUS prices — ${status.completed} of ${status.total} done…';
     }
     if (asusPriceRunShowsDismiss) {
+      final failedCount = status.failedModelIds.length;
+      if (failedCount > 0) {
+        final okCount = status.total - failedCount;
+        return 'Done — $okCount of ${status.total} updated, $failedCount not found.';
+      }
       return 'Done — refreshed ${status.total} ASUS model(s).';
     }
     return null;
@@ -233,6 +252,7 @@ class InventoryWorkspaceState {
     AsusPriceRefreshStatus? asusPriceRunStatus,
     String? asusPriceRunDismissedAt,
     bool? asusPriceRunStarting,
+    bool? asusPriceRunRetrying,
     ProductCategoryFilter? productCategoryFilter,
     bool? fromCache,
     bool? isStale,
@@ -264,6 +284,7 @@ class InventoryWorkspaceState {
       asusPriceRunStatus: asusPriceRunStatus ?? this.asusPriceRunStatus,
       asusPriceRunDismissedAt: asusPriceRunDismissedAt ?? this.asusPriceRunDismissedAt,
       asusPriceRunStarting: asusPriceRunStarting ?? this.asusPriceRunStarting,
+      asusPriceRunRetrying: asusPriceRunRetrying ?? this.asusPriceRunRetrying,
       productCategoryFilter: productCategoryFilter ?? this.productCategoryFilter,
       fromCache: fromCache ?? this.fromCache,
       isStale: isStale ?? this.isStale,
@@ -465,6 +486,22 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     if (status.total > 0 && finishedAt != null && _asusPriceRunRefreshedForFinishedAt != finishedAt) {
       _asusPriceRunRefreshedForFinishedAt = finishedAt;
       unawaited(_refreshItemsInBackground(refreshModels: true));
+    }
+  }
+
+  /// "Retry failed" — re-runs only the models that didn't come back "ok" in
+  /// the most recent run. The server remembers which ones failed, so this
+  /// doesn't need to pass any IDs — it just starts a fresh, smaller-scoped
+  /// bulk run over exactly those models.
+  Future<void> retryFailedAsusLivePrices() async {
+    state = state.copyWith(asusPriceRunRetrying: true, clearError: true);
+    try {
+      await _ref.read(catalogueRepositoryProvider).retryFailedLivePrices();
+      await syncAsusPriceRunStatus();
+    } catch (error) {
+      state = state.copyWith(error: error.toString());
+    } finally {
+      state = state.copyWith(asusPriceRunRetrying: false);
     }
   }
 

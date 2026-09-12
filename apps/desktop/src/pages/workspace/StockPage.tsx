@@ -280,26 +280,60 @@ export function StockPage(): JSX.Element {
     }
   }, [asusRunStatus]);
 
+  const asusFailedIds = asusRunStatus?.failed_model_ids ?? [];
+
+  const asusFailedLabels = useMemo(() => {
+    if (asusFailedIds.length === 0) return [];
+    const byId = new Map(hierarchy.models.map((m) => [m.id, m.model_number]));
+    return asusFailedIds.map((id) => byId.get(id) ?? id);
+  }, [asusFailedIds, hierarchy.models]);
+
+  const asusRunFinished = Boolean(
+    asusRunStatus &&
+    asusRunStatus.total > 0 &&
+    asusRunStatus.in_progress === 0 &&
+    asusRunStatus.finished_at,
+  );
+  const asusRunUnseen = Boolean(
+    asusRunFinished && asusRunStatus!.finished_at !== asusRunDismissedAt,
+  );
+
   const asusRunMessage = useMemo(() => {
     if (!asusRunStatus || asusRunStatus.total === 0) return null;
     if (asusRunStatus.in_progress > 0) {
       return `Refreshing ASUS prices — ${asusRunStatus.completed} of ${asusRunStatus.total} done…`;
     }
-    if (asusRunStatus.finished_at && asusRunStatus.finished_at !== asusRunDismissedAt) {
-      return `Done — refreshed ${asusRunStatus.total} ASUS model(s).`;
+    if (asusRunUnseen) {
+      const okCount = asusRunStatus.total - asusFailedIds.length;
+      return asusFailedIds.length > 0
+        ? `Done — ${okCount} of ${asusRunStatus.total} updated, ${asusFailedIds.length} not found.`
+        : `Done — refreshed ${asusRunStatus.total} ASUS model(s).`;
     }
     return null;
-  }, [asusRunStatus, asusRunDismissedAt]);
+  }, [asusRunStatus, asusRunUnseen, asusFailedIds.length]);
 
-  const asusRunShowDismiss = Boolean(
-    asusRunStatus &&
-    asusRunStatus.total > 0 &&
-    asusRunStatus.in_progress === 0 &&
-    asusRunStatus.finished_at &&
-    asusRunStatus.finished_at !== asusRunDismissedAt,
-  );
+  // The "Retry failed" action stays available even after the banner is
+  // dismissed — dismissing just clears the summary text, not the ability to
+  // go fix the ones that didn't resolve.
+  const asusRunShowDismiss = asusRunUnseen;
+  const asusRunShowRetry = asusRunFinished && asusFailedIds.length > 0;
 
   const asusRunActive = (asusRunStatus?.in_progress ?? 0) > 0;
+  const [asusRetrying, setAsusRetrying] = useState(false);
+
+  const handleRetryFailedAsusPrices = useCallback(async () => {
+    setAsusRetrying(true);
+    setAsusRunError(null);
+    try {
+      await ProductModelService.retryFailedLivePrices();
+      setPollNonce((n) => n + 1);
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setAsusRunError(message.message ?? 'Could not retry the failed ASUS prices.');
+    } finally {
+      setAsusRetrying(false);
+    }
+  }, []);
 
   const handleUpdateModel = useCallback(
     async (patch: Parameters<typeof ProductModelService.updateModel>[1]) => {
@@ -447,6 +481,21 @@ export function StockPage(): JSX.Element {
                     </button>
                   )}
                 </span>
+              )}
+              {asusRunShowRetry && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void handleRetryFailedAsusPrices()}
+                  disabled={asusRetrying || asusRunActive}
+                  title={
+                    asusFailedLabels.length > 0
+                      ? `Not found: ${asusFailedLabels.join(', ')}`
+                      : undefined
+                  }
+                >
+                  {asusRetrying ? 'Retrying…' : `Retry failed (${asusFailedIds.length})`}
+                </button>
               )}
               {asusRunError && (
                 <span className="stock-page__asus-price-notice stock-page__asus-price-notice--error">

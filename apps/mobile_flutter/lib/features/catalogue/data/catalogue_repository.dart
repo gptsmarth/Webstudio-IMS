@@ -225,4 +225,15 @@ class CatalogueRepository {
       parser: (json) => AsusPriceRefreshStatus.fromJson(json! as Map<String, dynamic>),
     );
   }
+
+  /// "Retry failed" — re-runs only the models that didn't come back "ok" in
+  /// the most recent bulk run. Returns how many were newly scheduled.
+  Future<int> retryFailedLivePrices() async {
+    final result = await _api.post(
+      ApiPaths.productModelsRetryFailedLivePrices,
+      data: const {},
+      parser: (json) => Map<String, dynamic>.from(json! as Map),
+    );
+    return (result['scheduled'] as num?)?.toInt() ?? 0;
+  }
 }

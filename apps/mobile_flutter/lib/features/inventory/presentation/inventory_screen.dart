@@ -487,6 +487,10 @@ class _AsusLivePriceBar extends StatelessWidget {
     required this.message,
     required this.showDismiss,
     required this.onDismiss,
+    required this.showRetry,
+    required this.retrying,
+    required this.onRetry,
+    required this.failedCount,
   });
 
   final bool showLivePrice;
@@ -497,6 +501,10 @@ class _AsusLivePriceBar extends StatelessWidget {
   final String? message;
   final bool showDismiss;
   final VoidCallback onDismiss;
+  final bool showRetry;
+  final bool retrying;
+  final VoidCallback onRetry;
+  final int failedCount;
 
   @override
   Widget build(BuildContext context) {
@@ -561,6 +569,24 @@ class _AsusLivePriceBar extends StatelessWidget {
                         onPressed: onDismiss,
                       ),
                   ],
+                ),
+              ),
+            if (showRetry)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: TextButton.icon(
+                    onPressed: retrying || runActive ? null : onRetry,
+                    icon: retrying
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.replay, size: 16),
+                    label: Text(retrying ? 'Retrying…' : 'Retry failed ($failedCount)'),
+                  ),
                 ),
               ),
           ],
@@ -737,6 +763,10 @@ class _InventoryBody extends ConsumerWidget {
           message: workspace.asusPriceRunMessage,
           showDismiss: workspace.asusPriceRunShowsDismiss,
           onDismiss: workspaceController.dismissAsusPriceRun,
+          showRetry: workspace.asusPriceRunShowsRetry,
+          retrying: workspace.asusPriceRunRetrying,
+          onRetry: workspaceController.retryFailedAsusLivePrices,
+          failedCount: workspace.asusPriceRunStatus?.failedModelIds.length ?? 0,
         ),
       _CategoryFilterBar(
         filter: workspace.productCategoryFilter,

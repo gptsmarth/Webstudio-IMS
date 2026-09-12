@@ -43,6 +43,7 @@ abstract final class ApiPaths {
   static String productModelRefreshLivePrice(String id) => '/api/v1/product-models/$id/refresh-live-price';
   static const productModelsRefreshLivePrices = '/api/v1/product-models/refresh-live-prices';
   static const productModelsRefreshLivePricesStatus = '/api/v1/product-models/refresh-live-prices/status';
+  static const productModelsRetryFailedLivePrices = '/api/v1/product-models/refresh-live-prices/retry-failed';
 
   static const tallyConnectionTest = '/api/v1/integrations/tally/connection/test';
   static const tallySyncTrigger = '/api/v1/integrations/tally/sync/trigger';
