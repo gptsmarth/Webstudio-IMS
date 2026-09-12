@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
 from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
-from webstudio_backend.infrastructure.database.enums import InventoryStatus
+from webstudio_backend.infrastructure.database.enums import InventoryStatus, TallyProcessingStatus
 from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.repositories.exceptions import (
     ArchivedInventoryOperationError,
@@ -25,6 +25,12 @@ from webstudio_backend.infrastructure.repositories.inventory_item_repository imp
     InventoryItemRepository,
 )
 from webstudio_backend.infrastructure.repositories.sale_repository import SaleRepository
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_repository import (
+    TallyProcessedInvoiceLineRepository,
+)
+from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
+    TallyProcessedInvoiceRepository,
+)
 from webstudio_backend.services.sale_snapshot import SaleProductSnapshot
 
 
@@ -47,6 +53,8 @@ class SaleService:
         self._inventory = InventoryItemRepository(session)
         self._sales = SaleRepository(session)
         self._recorder = AuditRecorder(session)
+        self._processed_invoices = TallyProcessedInvoiceRepository(session)
+        self._processed_lines = TallyProcessedInvoiceLineRepository(session)
 
     async def reflect_manual_sale(
         self,
@@ -176,6 +184,22 @@ class SaleService:
             restored_serial_number=restored_serial,
             actor=actor,
         )
+
+        # A sale created by Tally sync leaves its invoice line marked
+        # "completed" — that's what makes a later sync/backfill treat the
+        # invoice as already fully processed and skip it forever. Reset the
+        # line (and its parent invoice's terminal status) so the unit can be
+        # correctly re-matched and re-sold if it's still genuinely billed in
+        # Tally. Sales entered manually have no such line to reset.
+        processed_lines = await self._processed_lines.list_by_sale_id(sale.id)
+        reset_invoice_ids: set[int] = set()
+        for line in processed_lines:
+            await self._processed_lines.reset_line_after_sale_cancelled(line)
+            reset_invoice_ids.add(line.tally_processed_invoice_id)
+        for invoice_id in reset_invoice_ids:
+            invoice = await self._processed_invoices.get_by_id(invoice_id)
+            if invoice is not None:
+                await self._processed_invoices.update_status(invoice, TallyProcessingStatus.FAILED)
 
         detail = await self._inventory.get_detail(item.id)
         assert detail is not None

@@ -172,6 +172,40 @@ class TallyProcessedInvoiceLineRepository(SqlAlchemyRepository[TallyProcessedInv
         await self._session.flush()
         return line
 
+    async def list_by_sale_id(self, sale_id: int) -> list[TallyProcessedInvoiceLine]:
+        """Lines that recorded a sale (Case A/B/EAN-pool) linked to this Sale row.
+
+        Used when a sale is cancelled, so the line can be reset to PENDING and
+        a later sync/backfill re-evaluates it instead of treating the invoice
+        as already fully processed forever.
+        """
+        statement = select(TallyProcessedInvoiceLine).where(
+            TallyProcessedInvoiceLine.sale_id == sale_id,
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def reset_line_after_sale_cancelled(
+        self,
+        line: TallyProcessedInvoiceLine,
+    ) -> TallyProcessedInvoiceLine:
+        """Return a line to PENDING after its sale was cancelled — like
+        ``reset_line_for_retry`` but also clears the now-stale sale/inventory
+        links so re-processing starts from a clean slate."""
+        line.line_status = TallyLineStatus.PENDING
+        line.line_outcome = None
+        line.error_message = None
+        line.match_result = None
+        line.decision = None
+        line.decision_reason = None
+        line.is_unmatched_serialized = False
+        line.review_required = False
+        line.completed_at = None
+        line.sale_id = None
+        line.inventory_item_id = None
+        await self._session.flush()
+        return line
+
     async def list_for_invoice(self, invoice_id: int) -> list[TallyProcessedInvoiceLine]:
         statement = (
             select(TallyProcessedInvoiceLine)

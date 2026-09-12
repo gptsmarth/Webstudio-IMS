@@ -411,6 +411,81 @@ async def test_backfill_sales_chunks_wide_ranges_and_survives_one_bad_chunk(
     assert sale_b is not None
 
 
+@pytest.mark.asyncio
+async def test_cancelling_a_tally_sale_lets_backfill_resell_the_unit(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    initialized_system,
+    product_model,
+    location,
+) -> None:
+    """Regression: cancelling a sale that came from Tally sync reverted the
+    unit to available but left its processed-invoice-line marked
+    "completed" — so a later backfill for the same date treated the invoice
+    as already fully handled and never re-sold the unit, even though it was
+    genuinely available again and still billed in Tally."""
+    suffix = uuid.uuid4().hex[:8].upper()
+    company = f"BF-CANCEL-{suffix}"
+    serial = f"BF-CANCEL-SN-{suffix}"
+    guid = f"bf-cancel-guid-{suffix}"
+    await _enable(db_session, company)
+
+    inventory = InventoryItemRepository(db_session)
+    item = await inventory.create(
+        serial_number=serial,
+        product_model_id=product_model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+
+    xml = _envelope(_sale_voucher_xml(guid=guid, serial=serial, invoice=f"BFC/{suffix}"))
+    service = TallySyncService(db_session)
+
+    reachable, build, _ = _patched_connectivity(xml)
+    with reachable, build:
+        first = await service.backfill_sales(
+            from_date=date(2026, 6, 1),
+            correlation_id="bf-cancel-1",
+        )
+    await db_session.commit()
+    assert first["sales_created"] == 1
+
+    await db_session.refresh(item)
+    assert item.status is InventoryStatus.SOLD
+    sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
+    assert sale is not None
+    first_sale_id = sale.id
+
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    cancel_response = await api_client.post(
+        f"/api/v1/sales/{first_sale_id}/cancel",
+        headers=headers,
+        json={"reason": "Data entry correction"},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    await db_session.refresh(item)
+    assert item.status is InventoryStatus.AVAILABLE
+
+    reachable, build, _ = _patched_connectivity(xml)
+    with reachable, build:
+        second = await service.backfill_sales(
+            from_date=date(2026, 6, 1),
+            correlation_id="bf-cancel-2",
+        )
+    await db_session.commit()
+
+    assert second["sales_created"] == 1
+    assert second["skipped"] == 0
+
+    await db_session.refresh(item)
+    assert item.status is InventoryStatus.SOLD
+    new_sale = await SaleRepository(db_session).get_by_inventory_item_id(item.id)
+    assert new_sale is not None
+    assert new_sale.id != first_sale_id
+
+
 @pytest_asyncio.fixture
 async def api_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app = create_app(get_settings())
