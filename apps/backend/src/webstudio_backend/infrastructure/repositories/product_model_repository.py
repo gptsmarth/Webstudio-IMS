@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import Select, func, inspect, select, text
@@ -17,6 +18,7 @@ from webstudio_backend.infrastructure.database.enums import (
     StorageType,
     StorageUnit,
 )
+from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.repositories.base import SqlAlchemyRepository
@@ -252,6 +254,32 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         await self._session.refresh(product_model)
         return product_model
 
+    async def update_live_price(
+        self,
+        product_model: ProductModel,
+        *,
+        status: str,
+        price: Decimal | None = None,
+        source_url: str | None = None,
+    ) -> ProductModel:
+        """Record the outcome of an ASUS live-price refresh attempt.
+
+        Always records the attempt (`live_price_checked_at`). Only updates
+        the price/source/`live_price_updated_at` when `status == "ok"` — a
+        failed or not-found attempt leaves the last successfully known
+        price untouched, so a transient failure never blanks out a still-
+        useful (if slightly stale) price.
+        """
+        now = datetime.now(UTC)
+        product_model.live_price_status = status
+        product_model.live_price_checked_at = now
+        if status == "ok" and price is not None:
+            product_model.live_price = price
+            product_model.live_price_source_url = source_url
+            product_model.live_price_updated_at = now
+        await self._session.flush()
+        return product_model
+
     async def archive(
         self,
         product_model: ProductModel,
@@ -321,6 +349,39 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             )
             .order_by(ProductModel.created_at.asc())
             .limit(max(1, min(limit, 100)))
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def list_ids_needing_asus_price_refresh(
+        self, *, stale_before: datetime, limit: int = 20
+    ) -> list[uuid.UUID]:
+        """Active ASUS models whose live price was never checked, or was last
+        checked before `stale_before` (for the weekly background refresh)."""
+        statement = (
+            select(ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .where(
+                ProductModel.status == ProductModelStatus.ACTIVE,
+                func.upper(Brand.name) == "ASUS",
+                (ProductModel.live_price_checked_at.is_(None))
+                | (ProductModel.live_price_checked_at < stale_before),
+            )
+            .order_by(ProductModel.live_price_checked_at.asc().nullsfirst())
+            .limit(max(1, min(limit, 200)))
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def list_ids_for_asus_brand(self) -> list[uuid.UUID]:
+        """All active ASUS models, for a manual bulk "Update prices" refresh."""
+        statement = (
+            select(ProductModel.id)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .where(
+                ProductModel.status == ProductModelStatus.ACTIVE,
+                func.upper(Brand.name) == "ASUS",
+            )
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -98,3 +99,17 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     selling_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # ASUS-only live price tracking (Gemini search grounding, see
+    # services/asus_live_price_service.py). live_price holds the last
+    # SUCCESSFUL lookup; checked_at (every attempt) is separate from
+    # updated_at (only successful changes) so a failed refresh never erases
+    # a still-useful last-known price.
+    live_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    live_price_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    live_price_source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    live_price_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    live_price_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

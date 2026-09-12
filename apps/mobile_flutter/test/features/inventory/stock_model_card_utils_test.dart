@@ -47,4 +47,59 @@ void main() {
   test('displayScreenHint extracts inch size', () {
     expect(displayScreenHintFromText('15.6 inch FHD'), '15.6"');
   });
+
+  test('formatLivePrice shows NA rather than "Price on request"', () {
+    expect(formatLivePrice(null), 'NA');
+    expect(formatLivePrice(0), 'NA');
+    expect(formatLivePrice(81990), '₹ 81990.00');
+  });
+
+  test('formatRelativeTime buckets recent timestamps into coarse labels', () {
+    final now = DateTime(2026, 9, 12, 12, 0, 0);
+    expect(formatRelativeTime(now.subtract(const Duration(seconds: 30)), now: now), 'just now');
+    expect(formatRelativeTime(now.subtract(const Duration(minutes: 5)), now: now), '5 mins ago');
+    expect(formatRelativeTime(now.subtract(const Duration(hours: 2)), now: now), '2 hours ago');
+    expect(formatRelativeTime(now.subtract(const Duration(days: 3)), now: now), '3 days ago');
+  });
+
+  test('ProductModel.isAsusBrand matches brand name case-insensitively', () {
+    const asus = ProductModel(
+      id: 'm2',
+      brandId: 2,
+      brandName: ' asus ',
+      modelNumber: 'M1605NAQ-MB095WS',
+      modelName: 'Vivobook 16',
+      status: 'active',
+    );
+    const other = ProductModel(
+      id: 'm3',
+      brandId: 3,
+      brandName: 'HP',
+      modelNumber: 'X360',
+      modelName: 'Pavilion',
+      status: 'active',
+    );
+    expect(asus.isAsusBrand, isTrue);
+    expect(other.isAsusBrand, isFalse);
+  });
+
+  test('ProductModel.fromJson parses live price fields', () {
+    final model = ProductModel.fromJson(const {
+      'id': 'm4',
+      'brand_id': 4,
+      'brand_name': 'ASUS',
+      'model_number': 'FA506NCQ-IN080W',
+      'model_name': 'TUF Gaming F15',
+      'status': 'active',
+      'live_price': 92990.0,
+      'live_price_status': 'ok',
+      'live_price_source_url': 'https://in.store.asus.com/example.html',
+      'live_price_checked_at': '2026-09-10T10:00:00Z',
+      'live_price_updated_at': '2026-09-10T10:00:00Z',
+    });
+    expect(model.livePrice, 92990.0);
+    expect(model.livePriceStatus, 'ok');
+    expect(model.livePriceSourceUrl, 'https://in.store.asus.com/example.html');
+    expect(model.livePriceUpdatedAt, isNotNull);
+  });
 }

@@ -14,6 +14,10 @@ export interface SaleListItem {
   payment_mode: string | null;
   sale_amount: number | null;
   sale_amount_excluding_gst: number | null;
+  sale_cgst_amount: number | null;
+  sale_sgst_amount: number | null;
+  sale_igst_amount: number | null;
+  sale_cess_amount: number | null;
   purchase_price: number | null;
   sale_source: string;
   sold_at: string;

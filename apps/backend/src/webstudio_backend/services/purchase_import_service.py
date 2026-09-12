@@ -58,6 +58,7 @@ from webstudio_backend.integrations.tally.purchase_normalization import (
     normalize_model_number,
 )
 from webstudio_backend.integrations.tally.quantity import parse_tally_quantity
+from webstudio_backend.services.asus_live_price_jobs import schedule_asus_price_refresh
 from webstudio_backend.services.inventory_service import InventoryService
 from webstudio_backend.services.product_image_jobs import schedule_product_image_resolve
 
@@ -562,6 +563,8 @@ class PurchaseImportService:
         if newly_created_model:
             # Background image discovery — never blocks the import commit.
             schedule_product_image_resolve(model_id)
+            # ASUS-only live price lookup — no-ops for every other brand.
+            schedule_asus_price_refresh(model_id)
 
         return PurchaseImportResponse(
             product_model_id=model_id,

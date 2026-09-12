@@ -50,6 +50,10 @@ from webstudio_backend.infrastructure.repositories.product_model_repository impo
 )
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
 from webstudio_backend.services.ai.types import AIProviderError
+from webstudio_backend.services.asus_live_price_jobs import (
+    schedule_all_asus_price_refreshes,
+    schedule_asus_price_refresh,
+)
 from webstudio_backend.services.product_image_jobs import (
     is_product_image_job_running,
     schedule_product_image_resolve,
@@ -272,6 +276,8 @@ async def create_product_model(
         # Image discovery is slow and optional — run in background so create stays fast.
         if not pm.product_image_url:
             schedule_product_image_resolve(pm.id)
+        # ASUS-only live price lookup — no-ops for every other brand.
+        schedule_asus_price_refresh(pm.id)
         return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
         await db_session.rollback()
@@ -415,6 +421,39 @@ async def update_product_model_selling_price(
     brand = await brand_repo.get_by_id(updated.brand_id)
     brand_name = brand.name if brand else None
     return _envelope(request, _model_payload(updated, brand_name=brand_name, current=current))
+
+
+@router.post("/{model_id}/refresh-live-price")
+async def refresh_product_model_live_price(
+    request: Request,
+    model_id: uuid.UUID,
+    current: ProductModelsSellingPriceDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> dict:
+    """ASUS-only. Schedules an immediate background refresh — no-ops (but
+    still returns success) for any other brand, matching the scheduler's
+    own no-op behavior rather than surfacing it as an error."""
+    repo = ProductModelRepository(db_session)
+    pm = await repo.get_by_id(model_id)
+    if not pm:
+        raise AppError(
+            "NOT_FOUND",
+            f"Product model with ID {model_id} not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    scheduled = schedule_asus_price_refresh(model_id, force=True)
+    return _envelope(request, {"scheduled": scheduled})
+
+
+@router.post("/refresh-live-prices")
+async def refresh_all_asus_live_prices(
+    request: Request,
+    current: ProductModelsSellingPriceDep,
+) -> dict:
+    """The "Update prices" button — refreshes every active ASUS model now."""
+    _ = current
+    scheduled = await schedule_all_asus_price_refreshes()
+    return _envelope(request, {"scheduled": scheduled})
 
 
 @router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)

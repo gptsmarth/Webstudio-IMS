@@ -46,6 +46,7 @@ SETTING_DEFAULTS: dict[str, tuple[str, SettingValueType]] = {
     "ai_enrichment_enabled": ("true", SettingValueType.BOOLEAN),
     "ai_timeout_seconds": ("90", SettingValueType.INTEGER),
     "ai_retry_count": ("2", SettingValueType.INTEGER),  # total lookup attempts (includes first try)
+    "asus_price_refresh_stale_days": ("7", SettingValueType.INTEGER),
     "groq_api_key": ("", SettingValueType.STRING),
     "groq_model": ("llama-3.3-70b-versatile", SettingValueType.STRING),
     "openrouter_api_key": ("", SettingValueType.STRING),

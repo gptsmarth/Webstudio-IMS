@@ -110,7 +110,7 @@ export function useSalesWorkspace(permissions: string[] = []): SalesWorkspaceSta
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearchState] = useState('');
   const [filters, setFiltersState] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
   const [page, setPage] = useState(1);
   const pageSize = 50;
@@ -130,6 +130,11 @@ export function useSalesWorkspace(permissions: string[] = []): SalesWorkspaceSta
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
   );
+
+  const setSearch = useCallback((value: string) => {
+    setSearchState(value);
+    setPage(1);
+  }, []);
 
   const setFilters = useCallback((patch: Partial<SalesFilters>) => {
     setFiltersState((current) => ({ ...current, ...patch }));

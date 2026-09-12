@@ -9,12 +9,14 @@ import {
   type StockModelSpecLine,
 } from '../../lib/stockModelCard';
 import { useProductImage } from '../../hooks/useProductImage';
+import { formatRelativeTime } from '../../lib/datetime';
 
 const COLLAPSED_SPEC_COUNT = 6;
 
 interface StockModelCardProps {
   row: ModelInventoryRow;
   showPrice?: boolean;
+  showLivePrice?: boolean;
   onSelect: () => void;
 }
 
@@ -47,6 +49,7 @@ function formatCardPrice(val: number | string | null | undefined): string {
 export function StockModelCard({
   row,
   showPrice = false,
+  showLivePrice = false,
   onSelect,
 }: StockModelCardProps): JSX.Element {
   const [specsExpanded, setSpecsExpanded] = useState(false);
@@ -127,6 +130,32 @@ export function StockModelCard({
                 >
                   {formatCardPrice(row.model.selling_price)}
                 </p>
+              </div>
+              <hr className="stock-model-card__divider" />
+            </>
+          )}
+
+          {showLivePrice && row.model.brand_name?.trim().toUpperCase() === 'ASUS' && (
+            <>
+              <div className="stock-model-card__price-block">
+                <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                  Live Price:{' '}
+                  <strong style={{ color: 'var(--color-text-primary)' }}>
+                    {row.model.live_price ? formatCardPrice(row.model.live_price) : 'NA'}
+                  </strong>
+                </p>
+                {row.model.live_price_updated_at && (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--color-text-tertiary)',
+                      margin: '2px 0 0',
+                    }}
+                    title={row.model.live_price_source_url ?? undefined}
+                  >
+                    as of {formatRelativeTime(row.model.live_price_updated_at)}
+                  </p>
+                )}
               </div>
               <hr className="stock-model-card__divider" />
             </>

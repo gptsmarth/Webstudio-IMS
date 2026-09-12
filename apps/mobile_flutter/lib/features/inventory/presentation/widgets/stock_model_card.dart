@@ -14,6 +14,7 @@ class StockModelCard extends ConsumerStatefulWidget {
     this.brandName,
     this.showPrice = false,
     this.showAdminPrices = false,
+    this.showLivePrice = false,
   });
 
   final ModelInventoryRow row;
@@ -21,6 +22,7 @@ class StockModelCard extends ConsumerStatefulWidget {
   final VoidCallback onTap;
   final bool showPrice;
   final bool showAdminPrices;
+  final bool showLivePrice;
 
   @override
   ConsumerState<StockModelCard> createState() => _StockModelCardState();
@@ -169,6 +171,33 @@ class _StockModelCardState extends ConsumerState<StockModelCard> {
                         fontSize: model.sellingPrice == null || model.sellingPrice! <= 0 ? 18 : null,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                    const SizedBox(height: 8),
+                  ],
+                  if (widget.showLivePrice && model.isAsusBrand) ...[
+                    RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                        children: [
+                          const TextSpan(text: 'Live Price: '),
+                          TextSpan(
+                            text: formatLivePrice(model.livePrice),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (model.livePriceUpdatedAt != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'as of ${formatRelativeTime(model.livePriceUpdatedAt!)}',
+                        style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                     const SizedBox(height: 8),

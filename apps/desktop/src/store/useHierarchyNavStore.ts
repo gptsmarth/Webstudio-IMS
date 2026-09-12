@@ -5,10 +5,18 @@ import type { ProductCategoryFilter } from '../lib/productCategory';
 export type HierarchyLevel = 'brands' | 'models' | 'serials';
 
 const STOCK_SHOW_SELLING_PRICE_KEY = 'webstudio_stock_show_selling_price';
+const STOCK_SHOW_LIVE_PRICE_KEY = 'webstudio_stock_show_live_price';
 
 function readShowSellingPrice(): boolean {
   if (typeof window === 'undefined') return true;
   const stored = localStorage.getItem(STOCK_SHOW_SELLING_PRICE_KEY);
+  if (stored === 'false') return false;
+  return true;
+}
+
+function readShowLivePrice(): boolean {
+  if (typeof window === 'undefined') return true;
+  const stored = localStorage.getItem(STOCK_SHOW_LIVE_PRICE_KEY);
   if (stored === 'false') return false;
   return true;
 }
@@ -24,6 +32,7 @@ export interface HierarchyNavState {
   productCategoryFilter: ProductCategoryFilter;
   showZeroStock: boolean;
   showSellingPrice: boolean;
+  showLivePrice: boolean;
   scrollTops: Record<string, number>;
   setScrollTop: (key: string, value: number) => void;
   getScrollTop: (key: string) => number | undefined;
@@ -36,6 +45,7 @@ export interface HierarchyNavState {
   setProductCategoryFilter: (value: ProductCategoryFilter) => void;
   setShowZeroStock: (value: boolean) => void;
   setShowSellingPrice: (value: boolean) => void;
+  setShowLivePrice: (value: boolean) => void;
   reset: () => void;
 }
 
@@ -50,6 +60,7 @@ const INITIAL = {
   productCategoryFilter: 'all' as ProductCategoryFilter,
   showZeroStock: false,
   showSellingPrice: readShowSellingPrice(),
+  showLivePrice: readShowLivePrice(),
   scrollTops: {},
 };
 
@@ -85,6 +96,7 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
         ...initial,
         scrollTops: state.scrollTops,
         showSellingPrice: state.showSellingPrice,
+        showLivePrice: state.showLivePrice,
       })),
     goToModels: () =>
       set((state) => ({
@@ -104,10 +116,15 @@ function createHierarchyNavStore(defaultShowZeroStock = false) {
       localStorage.setItem(STOCK_SHOW_SELLING_PRICE_KEY, String(showSellingPrice));
       set({ showSellingPrice });
     },
+    setShowLivePrice: (showLivePrice) => {
+      localStorage.setItem(STOCK_SHOW_LIVE_PRICE_KEY, String(showLivePrice));
+      set({ showLivePrice });
+    },
     reset: () =>
       set({
         ...initial,
         showSellingPrice: readShowSellingPrice(),
+        showLivePrice: readShowLivePrice(),
       }),
   }));
 }

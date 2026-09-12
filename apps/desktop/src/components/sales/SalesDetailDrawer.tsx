@@ -1,10 +1,12 @@
-import { FileDown, FileText, Printer, X } from 'lucide-react';
+import { useState } from 'react';
+import { Ban, FileDown, FileText, Printer, X } from 'lucide-react';
 import { formatDateTime } from '../../lib/datetime';
 import {
   formatSaleSpecs,
   formatSaleAmount,
   saleSourceLabel,
   tallyInvoiceStatusLabel,
+  canCancelSales,
 } from '../../lib/sales';
 import { canViewPurchasePrice } from '../../lib/inventory';
 import { useAuthStore } from '../../store';
@@ -18,11 +20,19 @@ import type {
 } from '../../services/api/SalesService';
 import { InventoryBrandCell } from '../inventory/InventoryBrandCell';
 import { buildSalesTimelineEvents, SalesTimeline } from './SalesTimeline';
+import { SaleCancelDialog } from './SaleCancelDialog';
 
 interface SalesDetailDrawerProps {
   workspace: Pick<
     SalesWorkspaceState,
-    'selectedId' | 'selectedItem' | 'selectItem' | 'saleDetail' | 'auditLogs' | 'drawerLoading'
+    | 'selectedId'
+    | 'selectedItem'
+    | 'selectItem'
+    | 'saleDetail'
+    | 'auditLogs'
+    | 'drawerLoading'
+    | 'cancelSale'
+    | 'actionLoading'
   >;
 }
 
@@ -194,6 +204,8 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
   const session = useAuthStore((state) => state.session);
   const isMainAdmin = session?.role === 'main_admin';
   const showPurchasePrice = session ? canViewPurchasePrice(session.permissions) : false;
+  const canCancel = session ? canCancelSales(session.permissions) : false;
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const item = workspace.selectedItem;
   const detail = workspace.saleDetail;
 
@@ -207,6 +219,10 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
   const saleAmountExcludingGst =
     detail?.sale_amount_excluding_gst ?? item.sale_amount_excluding_gst ?? null;
   const saleAmountInclusive = detail?.sale_amount ?? item.sale_amount ?? null;
+  const saleCgstAmount = detail?.sale_cgst_amount ?? item.sale_cgst_amount ?? null;
+  const saleSgstAmount = detail?.sale_sgst_amount ?? item.sale_sgst_amount ?? null;
+  const saleIgstAmount = detail?.sale_igst_amount ?? item.sale_igst_amount ?? null;
+  const saleCessAmount = detail?.sale_cess_amount ?? item.sale_cess_amount ?? null;
   const trackedProducts = detail?.tracked_products ?? [];
   const additionalProducts = detail?.additional_products ?? [];
   const unmatchedItems = detail?.unmatched_serialized_items ?? [];
@@ -250,6 +266,17 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
           <FileText size={14} aria-hidden />
           Preview PDF
         </button>
+        {canCancel && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ color: 'var(--color-danger, #c0392b)' }}
+            onClick={() => setConfirmingCancel(true)}
+          >
+            <Ban size={14} aria-hidden />
+            Delete invoice
+          </button>
+        )}
       </div>
 
       <div className="sales-drawer__body">
@@ -315,6 +342,30 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                   <div>
                     <dt>Amount excluding GST</dt>
                     <dd>{formatSaleAmount(saleAmountExcludingGst)}</dd>
+                  </div>
+                )}
+                {saleCgstAmount != null && (
+                  <div>
+                    <dt>CGST</dt>
+                    <dd>{formatSaleAmount(saleCgstAmount)}</dd>
+                  </div>
+                )}
+                {saleSgstAmount != null && (
+                  <div>
+                    <dt>SGST</dt>
+                    <dd>{formatSaleAmount(saleSgstAmount)}</dd>
+                  </div>
+                )}
+                {saleIgstAmount != null && (
+                  <div>
+                    <dt>IGST</dt>
+                    <dd>{formatSaleAmount(saleIgstAmount)}</dd>
+                  </div>
+                )}
+                {saleCessAmount != null && (
+                  <div>
+                    <dt>Cess</dt>
+                    <dd>{formatSaleAmount(saleCessAmount)}</dd>
                   </div>
                 )}
                 {showPurchasePrice && (
@@ -509,6 +560,17 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
           </>
         )}
       </div>
+
+      <SaleCancelDialog
+        open={confirmingCancel}
+        sale={confirmingCancel ? item : null}
+        loading={workspace.actionLoading}
+        onClose={() => setConfirmingCancel(false)}
+        onConfirm={async (reason) => {
+          await workspace.cancelSale(item.id, reason);
+          workspace.selectItem(null);
+        }}
+      />
     </aside>
   );
 }

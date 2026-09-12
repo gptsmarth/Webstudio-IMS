@@ -70,7 +70,11 @@ from webstudio_backend.integrations.tally.constants import (
     PURCHASE_VOUCHER_TYPES,
     VOUCHER_TYPE_STORE_MAP,
 )
-from webstudio_backend.integrations.tally.gst import resolve_line_sale_amounts
+from webstudio_backend.integrations.tally.gst import (
+    LineGstBreakdown,
+    allocate_voucher_gst_to_line,
+    resolve_line_sale_amounts,
+)
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
     STALE_SYNC_IN_PROGRESS_SECONDS,
@@ -1539,6 +1543,11 @@ class TallySyncService:
         sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(line)
         if sale_amount_inclusive is None:
             sale_amount_inclusive = resolve_inventory_line_sale_amount(line, voucher)
+        gst_breakdown: LineGstBreakdown | None = None
+        if sale_amount_excluding_gst is None:
+            gst_breakdown = allocate_voucher_gst_to_line(sale_amount_inclusive, voucher.totals)
+            if gst_breakdown is not None:
+                sale_amount_excluding_gst = gst_breakdown.base_excluding_gst
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -1556,6 +1565,10 @@ class TallySyncService:
             snapshot=snapshot,
             sale_amount=sale_amount_inclusive,
             sale_amount_excluding_gst=sale_amount_excluding_gst,
+            sale_cgst_amount=gst_breakdown.cgst_amount if gst_breakdown else None,
+            sale_sgst_amount=gst_breakdown.sgst_amount if gst_breakdown else None,
+            sale_igst_amount=gst_breakdown.igst_amount if gst_breakdown else None,
+            sale_cess_amount=gst_breakdown.cess_amount if gst_breakdown else None,
             review_required=review_required,
             review_reason=review_reason,
             invoice_model_name=line.stock_item_name,
@@ -1752,6 +1765,13 @@ class TallySyncService:
         divisor = quantity if quantity > 0 else 1
         per_unit_incl = self._split_amount(sale_amount_inclusive, divisor)
         per_unit_excl = self._split_amount(sale_amount_excluding_gst, divisor)
+        per_unit_gst: LineGstBreakdown | None = None
+        if per_unit_excl is None:
+            per_unit_gst = allocate_voucher_gst_to_line(
+                float(per_unit_incl) if per_unit_incl is not None else None, voucher.totals
+            )
+            if per_unit_gst is not None:
+                per_unit_excl = Decimal(str(per_unit_gst.base_excluding_gst))
 
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         actor = AuditActor.system(display_name="Tally Sync", role="system")
@@ -1784,6 +1804,10 @@ class TallySyncService:
                 snapshot=snapshot,
                 sale_amount=per_unit_incl,
                 sale_amount_excluding_gst=per_unit_excl,
+                sale_cgst_amount=per_unit_gst.cgst_amount if per_unit_gst else None,
+                sale_sgst_amount=per_unit_gst.sgst_amount if per_unit_gst else None,
+                sale_igst_amount=per_unit_gst.igst_amount if per_unit_gst else None,
+                sale_cess_amount=per_unit_gst.cess_amount if per_unit_gst else None,
                 review_required=review_required,
                 review_reason=None,
                 invoice_model_name=line.stock_item_name,

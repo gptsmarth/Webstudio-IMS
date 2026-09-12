@@ -748,6 +748,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
     ai_enrichment_enabled: integrations.ai_enrichment_enabled,
     ai_timeout_seconds: integrations.ai_timeout_seconds,
     ai_retry_count: integrations.ai_retry_count,
+    asus_price_refresh_stale_days: integrations.asus_price_refresh_stale_days,
   });
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
@@ -764,6 +765,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
       ai_enrichment_enabled: integrations.ai_enrichment_enabled,
       ai_timeout_seconds: integrations.ai_timeout_seconds,
       ai_retry_count: integrations.ai_retry_count,
+      asus_price_refresh_stale_days: integrations.asus_price_refresh_stale_days,
     });
     setGeminiApiKey('');
     setOpenaiApiKey('');
@@ -830,6 +832,7 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               ai_enrichment_enabled: form.ai_enrichment_enabled,
               ai_timeout_seconds: form.ai_timeout_seconds,
               ai_retry_count: form.ai_retry_count,
+              asus_price_refresh_stale_days: form.asus_price_refresh_stale_days,
             });
           }}
         >
@@ -885,6 +888,25 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               value={form.ai_retry_count}
               disabled={!workspace.canWrite}
               onChange={(e) => setForm({ ...form, ai_retry_count: Number(e.target.value) || 0 })}
+            />
+          </Field>
+          <Field
+            label="ASUS live price refresh (days)"
+            hint="How often ASUS stock prices auto-refresh via Gemini search. Raise this to spend less API quota; a new ASUS model or a manual 'Update prices' click always fetches immediately regardless of this setting."
+          >
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={90}
+              value={form.asus_price_refresh_stale_days}
+              disabled={!workspace.canWrite}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  asus_price_refresh_stale_days: Number(e.target.value) || 7,
+                })
+              }
             />
           </Field>
 

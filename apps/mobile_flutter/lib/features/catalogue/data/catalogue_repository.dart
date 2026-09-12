@@ -193,4 +193,26 @@ class CatalogueRepository {
       parser: (json) => Map<String, dynamic>.from(json! as Map),
     );
   }
+
+  /// Triggers an immediate ASUS-only live price refresh for one model.
+  /// Returns `true` if a background refresh was actually scheduled.
+  Future<bool> refreshLivePrice(String modelId) async {
+    final result = await _api.post(
+      ApiPaths.productModelRefreshLivePrice(modelId),
+      data: const {},
+      parser: (json) => Map<String, dynamic>.from(json! as Map),
+    );
+    return result['scheduled'] as bool? ?? false;
+  }
+
+  /// Bulk "Update prices" trigger for every active ASUS model.
+  /// Returns how many models were scheduled for a background refresh.
+  Future<int> refreshAllLivePrices() async {
+    final result = await _api.post(
+      ApiPaths.productModelsRefreshLivePrices,
+      data: const {},
+      parser: (json) => Map<String, dynamic>.from(json! as Map),
+    );
+    return (result['scheduled'] as num?)?.toInt() ?? 0;
+  }
 }

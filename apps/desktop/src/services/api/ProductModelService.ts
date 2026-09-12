@@ -29,6 +29,11 @@ export interface ProductModel {
   notes: string | null;
   purchase_price?: number | null;
   selling_price?: number | null;
+  live_price?: number | null;
+  live_price_status?: 'ok' | 'not_found' | 'error' | 'not_configured' | 'not_applicable' | null;
+  live_price_source_url?: string | null;
+  live_price_checked_at?: string | null;
+  live_price_updated_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -131,5 +136,18 @@ export class ProductModelService {
   static async deleteModel(id: string): Promise<void> {
     const client = await ApiClientProvider.getClient();
     await client.delete(`/api/v1/product-models/${id}`);
+  }
+
+  static async refreshLivePrice(id: string): Promise<{ scheduled: boolean }> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<{ scheduled: boolean }>(
+      `/api/v1/product-models/${id}/refresh-live-price`,
+      {},
+    );
+  }
+
+  static async refreshAllLivePrices(): Promise<{ scheduled: number }> {
+    const client = await ApiClientProvider.getClient();
+    return client.post<{ scheduled: number }>('/api/v1/product-models/refresh-live-prices', {});
   }
 }

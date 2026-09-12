@@ -261,6 +261,11 @@ class ProductModel extends Equatable {
     this.purchasePrice,
     this.notes,
     this.colorOptions,
+    this.livePrice,
+    this.livePriceStatus,
+    this.livePriceSourceUrl,
+    this.livePriceCheckedAt,
+    this.livePriceUpdatedAt,
   });
 
   final String id;
@@ -284,6 +289,13 @@ class ProductModel extends Equatable {
   final double? purchasePrice;
   final String? notes;
   final String? colorOptions;
+  final double? livePrice;
+  final String? livePriceStatus;
+  final String? livePriceSourceUrl;
+  final DateTime? livePriceCheckedAt;
+  final DateTime? livePriceUpdatedAt;
+
+  bool get isAsusBrand => (brandName ?? '').trim().toUpperCase() == 'ASUS';
 
   bool get isAccessory => isAccessoryModel(category: category);
   bool get isLaptop => isLaptopModel(category: category);
@@ -320,6 +332,15 @@ class ProductModel extends Equatable {
         purchasePrice: (json['purchase_price'] as num?)?.toDouble(),
         notes: json['notes'] as String?,
         colorOptions: json['color_options'] as String?,
+        livePrice: (json['live_price'] as num?)?.toDouble(),
+        livePriceStatus: json['live_price_status'] as String?,
+        livePriceSourceUrl: json['live_price_source_url'] as String?,
+        livePriceCheckedAt: json['live_price_checked_at'] == null
+            ? null
+            : DateTime.tryParse(json['live_price_checked_at'] as String),
+        livePriceUpdatedAt: json['live_price_updated_at'] == null
+            ? null
+            : DateTime.tryParse(json['live_price_updated_at'] as String),
       );
 
   @override

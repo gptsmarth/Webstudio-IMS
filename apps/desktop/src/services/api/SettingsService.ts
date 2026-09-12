@@ -84,6 +84,7 @@ export interface IntegrationsSettings {
   ai_enrichment_enabled: boolean;
   ai_timeout_seconds: number;
   ai_retry_count: number;
+  asus_price_refresh_stale_days: number;
   groq_model: string;
   groq_configured: boolean;
   groq_api_key_hint: string | null;
@@ -105,6 +106,7 @@ export interface IntegrationsSettingsUpdate {
   ai_enrichment_enabled: boolean;
   ai_timeout_seconds: number;
   ai_retry_count: number;
+  asus_price_refresh_stale_days: number;
   groq_model?: string;
   groq_api_key?: string | null;
   clear_groq_api_key?: boolean;

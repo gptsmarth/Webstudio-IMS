@@ -439,6 +439,63 @@ class GeminiProvider(AIProvider):
             )
             return None
 
+    async def lookup_live_price(
+        self,
+        model_number: str,
+        *,
+        brand_name: str | None = None,
+        model_name: str | None = None,
+    ) -> dict[str, Any] | None:
+        """ASUS-only live price lookup via Google Search grounding.
+
+        Returns the parsed {"price", "source_url", "confidence"} dict, or
+        None on ANY failure (not configured, rate limited, malformed
+        response, network error) — callers must treat that identically to
+        "price unavailable right now," never as a hard error. The prompt
+        restricts sourcing to ASUS's own store, but callers must still
+        re-validate source_url themselves before trusting a price — an
+        LLM's compliance with instructions is never guaranteed.
+        """
+        if not self.is_configured():
+            return None
+        query_bits = [part for part in (brand_name, model_name, model_number) if part]
+        product_label = " ".join(query_bits)
+        prompt = (
+            "Search the web and find the CURRENT price in Indian Rupees (INR) of this "
+            f"exact product: {product_label}. ONLY use a price if it is listed on ASUS's "
+            "own official India store website (in.store.asus.com or asus.com/in) — do not "
+            "use Amazon, Flipkart, Croma, or any other retailer or reseller. If the exact "
+            "price is not found specifically on ASUS's own website, respond with a null "
+            "price rather than using another source.\n\n"
+            "Reply with STRICT JSON only, no markdown formatting, no explanation: "
+            '{"price": <number or null>, "source_url": "<string or null>", '
+            '"confidence": "high"|"medium"|"low"}'
+        )
+        try:
+            gemini_model = self._model_chain(max_models=1)[0]
+            payload = _build_payload(prompt, use_grounding=True)
+            AIProviderHealthTracker.record_request("gemini")
+            body = await self._generate(gemini_model, payload)
+            AIProviderHealthTracker.record_success("gemini")
+        except AIProviderError as exc:
+            AIProviderHealthTracker.record_failure("gemini", message=exc.message)
+            logger.info("Gemini live-price lookup failed for {}: {}", model_number, exc.message)
+            return None
+        except Exception:
+            logger.exception(
+                "Unexpected error during Gemini live-price lookup for {}", model_number
+            )
+            return None
+
+        text = _extract_text(body)
+        if not text:
+            return None
+        parsed = parse_json_object(text)
+        if not parsed:
+            logger.warning("Gemini live-price lookup returned non-JSON text: {}", text[:200])
+            return None
+        return parsed
+
     async def test_connection(self) -> ProviderTestResult:
         if not self.is_configured():
             return ProviderTestResult(

@@ -142,6 +142,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     ).whenComplete(() => ref.read(_provider.notifier).selectItem(null));
   }
 
+  Future<void> _updateAsusLivePrices() async {
+    final controller = ref.read(_provider.notifier);
+    final scheduled = await controller.refreshAsusLivePrices();
+    if (!mounted) return;
+    final error = ref.read(_provider).error;
+    final message = error != null
+        ? 'Could not update prices: $error'
+        : scheduled > 0
+            ? 'Fetching live prices for $scheduled model(s)… check back shortly.'
+            : 'No ASUS models needed a price refresh.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _openLookup() async {
     final result = await showWorkspaceLookupSheet(context, ref);
     if (result?.inventoryItem != null && mounted) {
@@ -231,6 +244,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final canCreateModel = inv_perms.canCreateProductModels(permissions);
     final stockOnly = isStockOnlyUser(permissions) || widget.stockBrowseMode;
     final showPrices = stockOnly ? workspace.showSellingPrice : true;
+    final showLivePrice = stockOnly ? workspace.showLivePrice : true;
     final atModelsLevel = workspace.navLevel == InventoryNavLevel.models;
 
     return Scaffold(
@@ -252,6 +266,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               stockOnly: stockOnly,
               showPrices: showPrices,
               showAdminPrices: !stockOnly,
+              showLivePrice: showLivePrice,
               modelSearchExpanded: _modelSearchExpanded,
               onToggleModelSearch: atModelsLevel ? _toggleModelSearch : null,
               onSearchChanged: controller.setSearch,
@@ -274,6 +289,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               },
               onSelectItem: _openDetail,
               onTogglePrices: controller.setShowSellingPrice,
+              onToggleLivePrice: controller.setShowLivePrice,
+              onUpdateLivePrices: _updateAsusLivePrices,
               onToggleZeroStock: controller.setShowZeroStock,
               onCategoryFilter: () => _showCategoryFilterSheet(context, workspace.productCategoryFilter),
             ),
@@ -461,6 +478,57 @@ class _ModelsPriceToggle extends StatelessWidget {
   }
 }
 
+class _AsusLivePriceBar extends StatelessWidget {
+  const _AsusLivePriceBar({
+    required this.showLivePrice,
+    required this.onToggle,
+    required this.updating,
+    required this.onUpdatePrices,
+  });
+
+  final bool showLivePrice;
+  final ValueChanged<bool> onToggle;
+  final bool updating;
+  final VoidCallback onUpdatePrices;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      child: Padding(
+        padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(
+              child: CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: showLivePrice,
+                onChanged: (value) {
+                  if (value != null) onToggle(value);
+                },
+                title: const Text('Show live price on cards'),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: updating ? null : onUpdatePrices,
+              icon: updating
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 18),
+              label: const Text('Update prices'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CategoryFilterBar extends StatelessWidget {
   const _CategoryFilterBar({required this.filter, required this.onTap});
 
@@ -536,6 +604,7 @@ class _InventoryBody extends ConsumerWidget {
     required this.stockOnly,
     required this.showPrices,
     required this.showAdminPrices,
+    required this.showLivePrice,
     required this.modelSearchExpanded,
     required this.onToggleModelSearch,
     required this.onSearchChanged,
@@ -546,6 +615,8 @@ class _InventoryBody extends ConsumerWidget {
     required this.onSearchField,
     required this.onSelectItem,
     required this.onTogglePrices,
+    required this.onToggleLivePrice,
+    required this.onUpdateLivePrices,
     required this.onToggleZeroStock,
     required this.onCategoryFilter,
   });
@@ -555,6 +626,7 @@ class _InventoryBody extends ConsumerWidget {
   final bool stockOnly;
   final bool showPrices;
   final bool showAdminPrices;
+  final bool showLivePrice;
   final bool modelSearchExpanded;
   final VoidCallback? onToggleModelSearch;
   final ValueChanged<String> onSearchChanged;
@@ -565,6 +637,8 @@ class _InventoryBody extends ConsumerWidget {
   final VoidCallback onSearchField;
   final void Function(InventoryItem item) onSelectItem;
   final ValueChanged<bool> onTogglePrices;
+  final ValueChanged<bool> onToggleLivePrice;
+  final VoidCallback onUpdateLivePrices;
   final ValueChanged<bool> onToggleZeroStock;
   final VoidCallback onCategoryFilter;
 
@@ -608,6 +682,13 @@ class _InventoryBody extends ConsumerWidget {
         _ModelsPriceToggle(
           showPrices: showPrices,
           onChanged: onTogglePrices,
+        ),
+      if (stockOnly && (workspace.selectedBrand?.name.trim().toUpperCase() == 'ASUS'))
+        _AsusLivePriceBar(
+          showLivePrice: showLivePrice,
+          onToggle: onToggleLivePrice,
+          updating: workspace.actionInProgress,
+          onUpdatePrices: onUpdateLivePrices,
         ),
       _CategoryFilterBar(
         filter: workspace.productCategoryFilter,
@@ -719,6 +800,7 @@ class _InventoryBody extends ConsumerWidget {
                                         brandName: workspace.selectedBrand?.name,
                                         showPrice: showPrices,
                                         showAdminPrices: showAdminPrices,
+                                        showLivePrice: showLivePrice,
                                         onTap: () => workspaceController.selectModel(row.model.id),
                                       ),
                                     ),

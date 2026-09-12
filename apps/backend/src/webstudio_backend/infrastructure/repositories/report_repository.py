@@ -145,6 +145,10 @@ class SalesExportRow:
     payment_mode: str | None
     sale_amount: float | None
     sale_amount_excluding_gst: float | None
+    sale_cgst_amount: float | None
+    sale_sgst_amount: float | None
+    sale_igst_amount: float | None
+    sale_cess_amount: float | None
     purchase_price: float | None
     sale_source: str
     sold_at: datetime
@@ -173,6 +177,10 @@ class SalesReportRow:
     payment_mode: str | None
     sale_amount: float | None
     sale_amount_excluding_gst: float | None
+    sale_cgst_amount: float | None
+    sale_sgst_amount: float | None
+    sale_igst_amount: float | None
+    sale_cess_amount: float | None
     purchase_price: float | None
     sale_source: str
     sold_at: datetime
@@ -535,6 +543,10 @@ class ReportRepository:
                 Sale.payment_mode,
                 Sale.sale_amount,
                 Sale.sale_amount_excluding_gst,
+                Sale.sale_cgst_amount,
+                Sale.sale_sgst_amount,
+                Sale.sale_igst_amount,
+                Sale.sale_cess_amount,
                 Sale.snapshot_purchase_price,
                 Sale.sale_source,
                 Sale.sold_at,
@@ -564,6 +576,10 @@ class ReportRepository:
             Sale.payment_mode,
             Sale.sale_amount,
             Sale.sale_amount_excluding_gst,
+            Sale.sale_cgst_amount,
+            Sale.sale_sgst_amount,
+            Sale.sale_igst_amount,
+            Sale.sale_cess_amount,
             Sale.snapshot_purchase_price,
             Sale.sale_source,
             Sale.sold_at,
@@ -605,6 +621,10 @@ class ReportRepository:
                 Sale.payment_mode,
                 Sale.sale_amount,
                 Sale.sale_amount_excluding_gst,
+                Sale.sale_cgst_amount,
+                Sale.sale_sgst_amount,
+                Sale.sale_igst_amount,
+                Sale.sale_cess_amount,
                 Sale.snapshot_purchase_price,
                 Sale.sale_source,
                 Sale.sold_at,
@@ -1077,6 +1097,10 @@ class ReportRepository:
             payment_mode,
             sale_amount,
             sale_amount_excluding_gst,
+            sale_cgst_amount,
+            sale_sgst_amount,
+            sale_igst_amount,
+            sale_cess_amount,
             purchase_price,
             sale_source,
             sold_at,
@@ -1098,6 +1122,10 @@ class ReportRepository:
             sale_amount_excluding_gst=(
                 float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
             ),
+            sale_cgst_amount=float(sale_cgst_amount) if sale_cgst_amount is not None else None,
+            sale_sgst_amount=float(sale_sgst_amount) if sale_sgst_amount is not None else None,
+            sale_igst_amount=float(sale_igst_amount) if sale_igst_amount is not None else None,
+            sale_cess_amount=float(sale_cess_amount) if sale_cess_amount is not None else None,
             purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,
@@ -1118,6 +1146,10 @@ class ReportRepository:
             payment_mode,
             sale_amount,
             sale_amount_excluding_gst,
+            sale_cgst_amount,
+            sale_sgst_amount,
+            sale_igst_amount,
+            sale_cess_amount,
             purchase_price,
             sale_source,
             sold_at,
@@ -1144,6 +1176,10 @@ class ReportRepository:
             sale_amount_excluding_gst=(
                 float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
             ),
+            sale_cgst_amount=float(sale_cgst_amount) if sale_cgst_amount is not None else None,
+            sale_sgst_amount=float(sale_sgst_amount) if sale_sgst_amount is not None else None,
+            sale_igst_amount=float(sale_igst_amount) if sale_igst_amount is not None else None,
+            sale_cess_amount=float(sale_cess_amount) if sale_cess_amount is not None else None,
             purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value if hasattr(sale_source, "value") else str(sale_source),
             sold_at=sold_at,
@@ -1176,6 +1212,10 @@ class ReportRepository:
             payment_mode,
             sale_amount,
             sale_amount_excluding_gst,
+            sale_cgst_amount,
+            sale_sgst_amount,
+            sale_igst_amount,
+            sale_cess_amount,
             purchase_price,
             sale_source,
             sold_at,
@@ -1216,6 +1256,10 @@ class ReportRepository:
             sale_amount_excluding_gst=(
                 float(sale_amount_excluding_gst) if sale_amount_excluding_gst is not None else None
             ),
+            sale_cgst_amount=float(sale_cgst_amount) if sale_cgst_amount is not None else None,
+            sale_sgst_amount=float(sale_sgst_amount) if sale_sgst_amount is not None else None,
+            sale_igst_amount=float(sale_igst_amount) if sale_igst_amount is not None else None,
+            sale_cess_amount=float(sale_cess_amount) if sale_cess_amount is not None else None,
             purchase_price=float(purchase_price) if purchase_price is not None else None,
             sale_source=sale_source.value,
             sold_at=sold_at,

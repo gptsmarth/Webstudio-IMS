@@ -196,6 +196,11 @@ class ProductModelResponse(BaseModel):
     notes: str | None
     purchase_price: float | None = None
     selling_price: float | None = None
+    live_price: float | None = None
+    live_price_status: str | None = None
+    live_price_source_url: str | None = None
+    live_price_checked_at: datetime | None = None
+    live_price_updated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -234,6 +239,11 @@ class ProductModelResponse(BaseModel):
                 else None
             ),
             selling_price=float(pm.selling_price) if pm.selling_price is not None else None,
+            live_price=float(pm.live_price) if pm.live_price is not None else None,
+            live_price_status=pm.live_price_status,
+            live_price_source_url=pm.live_price_source_url,
+            live_price_checked_at=pm.live_price_checked_at,
+            live_price_updated_at=pm.live_price_updated_at,
             created_at=pm.created_at,
             updated_at=pm.updated_at,
         )

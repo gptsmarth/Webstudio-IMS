@@ -42,6 +42,7 @@ class InventoryWorkspaceState {
     this.inventoryAdminMode = false,
     this.showZeroStock = false,
     this.showSellingPrice = false,
+    this.showLivePrice = false,
     this.productCategoryFilter = ProductCategoryFilter.all,
     this.fromCache = false,
     this.isStale = false,
@@ -67,6 +68,7 @@ class InventoryWorkspaceState {
   final bool inventoryAdminMode;
   final bool showZeroStock;
   final bool showSellingPrice;
+  final bool showLivePrice;
   final ProductCategoryFilter productCategoryFilter;
   final bool fromCache;
   final bool isStale;
@@ -199,6 +201,7 @@ class InventoryWorkspaceState {
     bool? inventoryAdminMode,
     bool? showZeroStock,
     bool? showSellingPrice,
+    bool? showLivePrice,
     ProductCategoryFilter? productCategoryFilter,
     bool? fromCache,
     bool? isStale,
@@ -226,6 +229,7 @@ class InventoryWorkspaceState {
       inventoryAdminMode: inventoryAdminMode ?? this.inventoryAdminMode,
       showZeroStock: showZeroStock ?? this.showZeroStock,
       showSellingPrice: showSellingPrice ?? this.showSellingPrice,
+      showLivePrice: showLivePrice ?? this.showLivePrice,
       productCategoryFilter: productCategoryFilter ?? this.productCategoryFilter,
       fromCache: fromCache ?? this.fromCache,
       isStale: isStale ?? this.isStale,
@@ -350,12 +354,33 @@ class InventoryWorkspaceController extends StateNotifier<InventoryWorkspaceState
     }
   }
 
+  void setShowLivePrice(bool value) {
+    state = state.copyWith(showLivePrice: value);
+    if (!_inventoryAdminMode) {
+      StockShowPricePreferences.writeShowLivePrice(value);
+    }
+  }
+
   Future<void> _ensurePricePreferenceLoaded() async {
     if (_pricePreferenceLoaded || _inventoryAdminMode) return;
     _pricePreferenceLoaded = true;
     final show = await StockShowPricePreferences.readShowSellingPrice();
-    if (show != state.showSellingPrice) {
-      state = state.copyWith(showSellingPrice: show);
+    final showLive = await StockShowPricePreferences.readShowLivePrice();
+    state = state.copyWith(showSellingPrice: show, showLivePrice: showLive);
+  }
+
+  /// ASUS-only bulk "Update prices" trigger. Returns how many models were
+  /// scheduled for a background refresh; the refreshed values arrive on the
+  /// next reload rather than synchronously.
+  Future<int> refreshAsusLivePrices() async {
+    state = state.copyWith(actionInProgress: true, clearError: true);
+    try {
+      final scheduled = await _ref.read(catalogueRepositoryProvider).refreshAllLivePrices();
+      state = state.copyWith(actionInProgress: false);
+      return scheduled;
+    } catch (error) {
+      state = state.copyWith(actionInProgress: false, error: error.toString());
+      return 0;
     }
   }
 

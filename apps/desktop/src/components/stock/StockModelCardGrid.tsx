@@ -6,6 +6,7 @@ interface StockModelCardGridProps {
   rows: ModelInventoryRow[];
   loading?: boolean;
   showPrice?: boolean;
+  showLivePrice?: boolean;
   onSelect: (modelId: string, label: string) => void;
   /** When true, only models with available units are shown (Stock tab). */
   availableOnly?: boolean;
@@ -13,7 +14,7 @@ interface StockModelCardGridProps {
 
 export const StockModelCardGrid = forwardRef<HTMLDivElement, StockModelCardGridProps>(
   function StockModelCardGrid(
-    { rows, loading, showPrice = false, onSelect, availableOnly = false },
+    { rows, loading, showPrice = false, showLivePrice = false, onSelect, availableOnly = false },
     ref,
   ) {
     const visibleRows = useMemo(
@@ -46,6 +47,7 @@ export const StockModelCardGrid = forwardRef<HTMLDivElement, StockModelCardGridP
           key={row.model.id}
           row={row}
           showPrice={showPrice}
+          showLivePrice={showLivePrice}
           onSelect={() =>
             onSelect(row.model.id, `${row.model.model_number} · ${row.model.model_name}`)
           }

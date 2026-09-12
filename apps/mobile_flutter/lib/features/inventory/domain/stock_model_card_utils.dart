@@ -214,6 +214,42 @@ String? formatDetailPrice(double? value) {
   return '₹ ${value.toStringAsFixed(2)}';
 }
 
+/// ASUS live price display: unlike selling price, a missing/zero value is a
+/// real "not available yet" state rather than "hidden", so it renders as
+/// "NA" rather than the "Price on request" wording used for selling price.
+String formatLivePrice(double? value) {
+  if (value == null || value <= 0) return 'NA';
+  return '₹ ${value.toStringAsFixed(2)}';
+}
+
+/// Coarse relative-time label mirroring the desktop app's `formatRelativeTime`.
+String formatRelativeTime(DateTime timestamp, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final diff = reference.difference(timestamp);
+  final seconds = diff.inSeconds;
+  final abs = seconds.abs();
+
+  if (abs < 60) return 'just now';
+  if (abs < 3600) {
+    final minutes = (seconds / 60).round().abs();
+    return seconds >= 0 ? '$minutes min${minutes == 1 ? '' : 's'} ago' : 'in $minutes min${minutes == 1 ? '' : 's'}';
+  }
+  if (abs < 86400) {
+    final hours = (seconds / 3600).round().abs();
+    return seconds >= 0 ? '$hours hour${hours == 1 ? '' : 's'} ago' : 'in $hours hour${hours == 1 ? '' : 's'}';
+  }
+  if (abs < 604800) {
+    final days = (seconds / 86400).round().abs();
+    return seconds >= 0 ? '$days day${days == 1 ? '' : 's'} ago' : 'in $days day${days == 1 ? '' : 's'}';
+  }
+  final local = timestamp.toLocal();
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[local.month - 1]} ${local.day}';
+}
+
 String modelDescriptionText(String? notes) {
   final split = splitModelNotes(notes);
   if (split.description.isNotEmpty) return split.description;

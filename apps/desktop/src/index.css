@@ -2556,7 +2556,7 @@
   .sales-page {
     display: flex;
     flex-direction: column;
-    min-height: calc(100vh - 56px);
+    height: calc(100vh - 56px);
     padding: 16px 20px 0;
     max-width: none;
     margin: 0;

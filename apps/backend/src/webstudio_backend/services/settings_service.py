@@ -344,6 +344,11 @@ class SettingsService:
         )
         await self._set_int("ai_timeout_seconds", payload.ai_timeout_seconds, actor_id=actor_id)
         await self._set_int("ai_retry_count", payload.ai_retry_count, actor_id=actor_id)
+        await self._set_int(
+            "asus_price_refresh_stale_days",
+            payload.asus_price_refresh_stale_days,
+            actor_id=actor_id,
+        )
 
         await self._set_str("groq_model", payload.groq_model.strip(), actor_id=actor_id)
         if payload.clear_groq_api_key:
@@ -461,6 +466,7 @@ class SettingsService:
 
     async def _integrations_group(self) -> IntegrationsSettings:
         config = await resolve_ai_config(self._session, self._app_settings)
+        asus_price_refresh_stale_days = await self._get_int("asus_price_refresh_stale_days", 7)
         fallback_raw = await self._get_str("ai_fallback_chain")
         try:
             fallback_chain = json.loads(fallback_raw) if fallback_raw else config.fallback_chain
@@ -493,6 +499,7 @@ class SettingsService:
             ai_enrichment_enabled=config.enrichment_enabled,
             ai_timeout_seconds=config.timeout_seconds,
             ai_retry_count=config.retry_count,
+            asus_price_refresh_stale_days=asus_price_refresh_stale_days,
             groq_model=config.groq.model,
             groq_configured=bool(config.groq.api_key),
             groq_api_key_hint=mask_api_key(config.groq.api_key),

@@ -29,6 +29,10 @@ class SaleListItem(BaseModel):
     payment_mode: str | None
     sale_amount: float | None = None
     sale_amount_excluding_gst: float | None = None
+    sale_cgst_amount: float | None = None
+    sale_sgst_amount: float | None = None
+    sale_igst_amount: float | None = None
+    sale_cess_amount: float | None = None
     purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
@@ -50,6 +54,10 @@ class SaleListItem(BaseModel):
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
             sale_amount_excluding_gst=row.sale_amount_excluding_gst,
+            sale_cgst_amount=row.sale_cgst_amount,
+            sale_sgst_amount=row.sale_sgst_amount,
+            sale_igst_amount=row.sale_igst_amount,
+            sale_cess_amount=row.sale_cess_amount,
             purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,
@@ -135,6 +143,10 @@ class SaleDetailResponse(BaseModel):
     payment_mode: str | None
     sale_amount: float | None = None
     sale_amount_excluding_gst: float | None = None
+    sale_cgst_amount: float | None = None
+    sale_sgst_amount: float | None = None
+    sale_igst_amount: float | None = None
+    sale_cess_amount: float | None = None
     purchase_price: float | None = None
     sale_source: str
     sold_at: datetime
@@ -200,6 +212,10 @@ class SaleDetailResponse(BaseModel):
             payment_mode=row.payment_mode,
             sale_amount=row.sale_amount,
             sale_amount_excluding_gst=row.sale_amount_excluding_gst,
+            sale_cgst_amount=row.sale_cgst_amount,
+            sale_sgst_amount=row.sale_sgst_amount,
+            sale_igst_amount=row.sale_igst_amount,
+            sale_cess_amount=row.sale_cess_amount,
             purchase_price=row.purchase_price if include_purchase_price else None,
             sale_source=row.sale_source,
             sold_at=row.sold_at,

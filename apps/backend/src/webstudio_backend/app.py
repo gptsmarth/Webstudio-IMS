@@ -95,6 +95,7 @@ _tally_connectivity_probe_task: asyncio.Task | None = None
 _release_sync_task: asyncio.Task | None = None
 _cloud_backup_sync_task: asyncio.Task | None = None
 _product_image_backfill_task: asyncio.Task | None = None
+_asus_live_price_backfill_task: asyncio.Task | None = None
 _scheduler_persist_task: asyncio.Task | None = None
 _mdns_service: MdnsAdvertisementService | None = None
 
@@ -175,6 +176,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _notification_scheduler_task, _maintenance_scheduler_task, _scheduler_persist_task
     global _tally_connectivity_probe_task
     global _release_sync_task, _product_image_backfill_task
+    global _asus_live_price_backfill_task
     global _cloud_backup_sync_task
     global _mdns_service
 
@@ -274,6 +276,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(schedule_missing_product_image_backfill())
         _product_image_backfill_task = asyncio.create_task(product_image_backfill_loop())
     if not settings.is_test:
+        from webstudio_backend.services.asus_live_price_jobs import (
+            asus_live_price_backfill_loop,
+        )
+
+        _asus_live_price_backfill_task = asyncio.create_task(asus_live_price_backfill_loop())
+    if not settings.is_test:
         _scheduler_persist_task = asyncio.create_task(_persist_scheduler_state_loop(settings))
 
     yield
@@ -298,6 +306,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _release_sync_task = None
     await _cancel_task(_product_image_backfill_task)
     _product_image_backfill_task = None
+    await _cancel_task(_asus_live_price_backfill_task)
+    _asus_live_price_backfill_task = None
     await _cancel_task(_notification_scheduler_task)
     _notification_scheduler_task = None
     await _cancel_task(_audit_retention_task)

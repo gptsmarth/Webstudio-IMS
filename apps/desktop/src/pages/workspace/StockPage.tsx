@@ -85,6 +85,8 @@ export function StockPage(): JSX.Element {
   const debouncedSearch = useDebouncedHierarchySearch(nav.search);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [livePriceRefreshing, setLivePriceRefreshing] = useState(false);
+  const [livePriceNotice, setLivePriceNotice] = useState<string | null>(null);
   const [priceModelId, setPriceModelId] = useState<string | null>(null);
   const [editModelId, setEditModelId] = useState<string | null>(null);
 
@@ -174,6 +176,25 @@ export function StockPage(): JSX.Element {
     },
     [hierarchy, priceModelId],
   );
+
+  const handleUpdateAsusLivePrices = useCallback(async () => {
+    setLivePriceRefreshing(true);
+    setLivePriceNotice(null);
+    setActionError(null);
+    try {
+      const result = await ProductModelService.refreshAllLivePrices();
+      setLivePriceNotice(
+        result.scheduled > 0
+          ? `Refreshing live prices for ${result.scheduled} ASUS model(s)…`
+          : 'No ASUS models to refresh.',
+      );
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setActionError(message.message ?? 'Could not start the live price refresh.');
+    } finally {
+      setLivePriceRefreshing(false);
+    }
+  }, []);
 
   const handleUpdateModel = useCallback(
     async (patch: Parameters<typeof ProductModelService.updateModel>[1]) => {
@@ -289,6 +310,31 @@ export function StockPage(): JSX.Element {
             />
             <span>Show selling prices on cards</span>
           </label>
+          {nav.brandName?.trim().toUpperCase() === 'ASUS' && (
+            <>
+              <label className="stock-page__price-toggle">
+                <input
+                  type="checkbox"
+                  checked={nav.showLivePrice}
+                  onChange={(event) => nav.setShowLivePrice(event.target.checked)}
+                />
+                <span>Show live price on cards</span>
+              </label>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void handleUpdateAsusLivePrices()}
+                disabled={livePriceRefreshing}
+              >
+                {livePriceRefreshing ? 'Starting…' : 'Update prices'}
+              </button>
+              {livePriceNotice && (
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+                  {livePriceNotice}
+                </span>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -336,6 +382,7 @@ export function StockPage(): JSX.Element {
               rows={modelRows}
               loading={hierarchy.loading}
               showPrice={nav.showSellingPrice}
+              showLivePrice={nav.showLivePrice}
               onSelect={(modelId, label) => {
                 saveModelsScroll();
                 saveMainScroll();
