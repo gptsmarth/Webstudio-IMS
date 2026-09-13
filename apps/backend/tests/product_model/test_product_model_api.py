@@ -206,3 +206,42 @@ async def test_create_product_model_normalizes_optional_payload_fields(
     assert image_url != long_image_url
     if image_url is not None:
         assert image_url.startswith("/assets/product-images/")
+
+
+@pytest.mark.asyncio
+async def test_manual_model_creation_seeds_price_with_the_general_gemini_key(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    admin_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A brand-new ASUS laptop model created directly (not via Tally import)
+    also has its first price fetch reuse the general Gemini key, not the
+    dedicated ASUS-price key."""
+    import webstudio_backend.api.routers.product_models as product_models_module
+
+    brand_repo = BrandRepository(db_session)
+    brand = await brand_repo.create("ASUS")
+    await db_session.commit()
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        product_models_module,
+        "schedule_asus_price_refresh",
+        lambda model_id, **kwargs: calls.append({"model_id": str(model_id), **kwargs}),
+    )
+
+    payload = {
+        "brand_id": brand.id,
+        "model_number": "M1605NAQ-MB095WS",
+        "model_name": "Vivobook 16",
+        "cpu": "Intel Core i5",
+        "ram_gb": 16,
+        "storage_value": 512,
+        "storage_unit": "GB",
+        "storage_type": "SSD",
+    }
+    resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
+    assert resp.status_code == 201
+    assert len(calls) == 1
+    assert calls[0]["use_general_key"] is True

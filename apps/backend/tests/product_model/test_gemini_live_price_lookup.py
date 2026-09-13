@@ -23,11 +23,19 @@ def _config(api_key: str = "fake-key") -> AIProviderConfig:
 
 
 def _body_for(
-    price: object, confidence: str, source_url: str | None = "https://in.store.asus.com/x.html"
+    price: object,
+    confidence: str,
+    source_url: str | None = "https://in.store.asus.com/x.html",
+    condition: str = "new",
 ) -> dict:
     import json
 
-    payload = {"price": price, "source_url": source_url, "confidence": confidence}
+    payload = {
+        "price": price,
+        "source_url": source_url,
+        "confidence": confidence,
+        "condition": condition,
+    }
     return {"candidates": [{"content": {"parts": [{"text": json.dumps(payload)}]}}]}
 
 
@@ -79,6 +87,30 @@ async def test_low_confidence_result_is_not_final_if_a_later_model_succeeds(
     assert result is not None
     assert result["price"] == 81990
     assert result["confidence"] == "high"
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_refurbished_condition_is_not_final_if_a_later_model_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A high-confidence price for a refurbished/renewed listing is treated
+    the same as low confidence — never accepted as final while another model
+    in the chain might find the genuine brand-new price."""
+    provider = GeminiProvider(_config())
+    calls: list[str] = []
+
+    async def fake_generate(self, gemini_model, payload):
+        calls.append(gemini_model)
+        if len(calls) == 1:
+            return _body_for(41990, "high", condition="refurbished")
+        return _body_for(81990, "high", condition="new")
+
+    monkeypatch.setattr(GeminiProvider, "_generate", fake_generate)
+    result = await provider.lookup_live_price("M1605NAQ-MB095WS")
+    assert result is not None
+    assert result["price"] == 81990
+    assert result["condition"] == "new"
     assert len(calls) == 2
 
 

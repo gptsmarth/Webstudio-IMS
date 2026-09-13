@@ -122,6 +122,13 @@ export interface IntegrationsSettingsUpdate {
   clear_openai_api_key?: boolean;
 }
 
+export interface AsusPriceImportResult {
+  updated: number;
+  cleared: number;
+  not_matched: string[];
+  invalid_rows: string[];
+}
+
 export interface AIProviderTestResponse {
   provider: string;
   success: boolean;
@@ -525,6 +532,23 @@ export class SettingsService {
     return client.post<AIProviderTestResponse>('/api/v1/settings/integrations/ai/test', {
       provider,
     });
+  }
+
+  /** In-stock ASUS laptops + their current price, for manual pricing from the ASUS website. */
+  static async downloadAsusPriceTemplate(): Promise<Blob> {
+    const client = await ApiClientProvider.getClient();
+    return client.getBlob('/api/v1/settings/integrations/asus-price-template');
+  }
+
+  /** Applies prices from a filled-in copy of the template above. */
+  static async importAsusPriceSheet(file: File): Promise<AsusPriceImportResult> {
+    const client = await ApiClientProvider.getClient();
+    const formData = new FormData();
+    formData.append('file', file);
+    return client.postForm<AsusPriceImportResult>(
+      '/api/v1/settings/integrations/asus-price-import',
+      formData,
+    );
   }
 
   static async updateExcel(payload: ExcelSettings): Promise<ExcelSettings> {

@@ -101,12 +101,23 @@ def _is_asus_brand(brand_name: str | None) -> bool:
     return bool(brand_name) and brand_name.strip().upper() == "ASUS"
 
 
-async def refresh_asus_live_price(session: AsyncSession, model_id: uuid.UUID) -> str:
+async def refresh_asus_live_price(
+    session: AsyncSession, model_id: uuid.UUID, *, use_general_key: bool = False
+) -> str:
     """Refresh one model's live price. Returns the resulting status string.
 
     No-ops with status "not_applicable" if the model is missing, archived,
     not an ASUS model, or not a laptop (accessories are explicitly out of
     scope) — callers do not need to check brand/category themselves.
+
+    ``use_general_key`` is set only for the one-time seed fetch that runs
+    right after a brand-new ASUS laptop model is created: it fetches the
+    price using the same general-purpose Gemini key already spent on that
+    model's spec lookup, instead of drawing on the dedicated ASUS-price key
+    a second time for the exact same "new model just appeared" event. Every
+    other caller (the periodic staleness sweep, the manual/bulk "Update
+    prices" trigger, and the restock-from-zero-stock trigger) leaves this
+    False and uses the dedicated key as usual.
     """
     repo = ProductModelRepository(session)
     pm = await repo.get_by_id(model_id)
@@ -123,17 +134,22 @@ async def refresh_asus_live_price(session: AsyncSession, model_id: uuid.UUID) ->
 
     settings = get_settings()
     ai_config = await resolve_ai_config(session, settings)
-    asus_price_api_key = await resolve_asus_price_gemini_api_key(session)
-    if not asus_price_api_key:
+    if use_general_key:
+        price_api_key = ai_config.gemini.api_key.strip()
+    else:
+        price_api_key = await resolve_asus_price_gemini_api_key(session)
+    if not price_api_key:
         await repo.update_live_price(pm, status="not_configured")
         return "not_configured"
 
     # A dedicated API key just for price lookups, kept separate from the
-    # general spec/image/enrichment key — same model, different credential.
+    # general spec/image/enrichment key — same model, different credential
+    # (except for the one-time new-model seed fetch above, which reuses the
+    # general key on purpose).
     price_lookup_config = replace(
         ai_config,
         gemini=ProviderCredentials(
-            provider="gemini", api_key=asus_price_api_key, model=ai_config.gemini.model
+            provider="gemini", api_key=price_api_key, model=ai_config.gemini.model
         ),
     )
     provider = GeminiProvider(price_lookup_config)
@@ -152,10 +168,22 @@ async def refresh_asus_live_price(session: AsyncSession, model_id: uuid.UUID) ->
         return "error"
 
     confidence = str(result.get("confidence") or "").lower()
+    condition = str(result.get("condition") or "").lower()
     raw_price = result.get("price")
     source_url = result.get("source_url")
 
     if confidence == "low" or raw_price is None:
+        await repo.update_live_price(pm, status="not_found")
+        return "not_found"
+
+    # Defense-in-depth: never trust the prompt's "brand new only" instruction alone —
+    # a refurbished/renewed listing's price is explicitly out of scope, even if the
+    # model reports high confidence and a valid in.store.asus.com source for it.
+    if condition == "refurbished":
+        logger.info(
+            "ASUS live price for {} rejected — Gemini reported a refurbished/renewed listing",
+            pm.model_number,
+        )
         await repo.update_live_price(pm, status="not_found")
         return "not_found"
 

@@ -309,6 +309,56 @@ async def test_import_new_model_creates_model_and_units(
     assert items[0].inventory_source == InventorySource.TALLY_PURCHASE
 
 
+async def test_import_new_model_seeds_price_with_the_general_gemini_key(
+    db_session: AsyncSession,
+    api_client: AsyncClient,
+    main_admin_headers: dict[str, str],
+    brand: Brand,
+    location: Location,
+    purchase_voucher: TallyPurchaseVoucher,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A brand-new ASUS laptop's first price fetch reuses the general Gemini
+    key (already spent on this model's spec) rather than drawing on the
+    dedicated ASUS-price key a second time for the same "new model" event."""
+    import webstudio_backend.services.purchase_import_service as purchase_import_module
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        purchase_import_module,
+        "schedule_asus_price_refresh",
+        lambda model_id, **kwargs: calls.append({"model_id": str(model_id), **kwargs}),
+    )
+
+    response = await api_client.post(
+        "/api/v1/purchase/import",
+        headers=main_admin_headers,
+        json={
+            "voucher_id": purchase_voucher.id,
+            "group_key": "ASUS Carry Case",
+            "brand_id": brand.id,
+            "mode": "new",
+            "new_product_model": {
+                "brand_id": brand.id,
+                "model_number": "NEW-LAPTOP-01",
+                "model_name": "ASUS New Laptop",
+                "cpu": "Intel Core i5",
+                "ram_gb": 16,
+                "storage_value": 512,
+                "storage_unit": "GB",
+                "storage_type": "SSD",
+            },
+            "serial_numbers": ["NEWLAP001"],
+            "color": "Black",
+            "current_location_id": location.id,
+            "status": "available",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1
+    assert calls[0]["use_general_key"] is True
+
+
 async def test_duplicate_serial_is_rejected_with_no_partial_creation(
     db_session: AsyncSession,
     api_client: AsyncClient,

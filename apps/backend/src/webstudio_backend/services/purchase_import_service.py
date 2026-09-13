@@ -570,8 +570,10 @@ class PurchaseImportService:
         if newly_created_model:
             # Background image discovery — never blocks the import commit.
             schedule_product_image_resolve(model_id)
-            # ASUS-only live price lookup — no-ops for every other brand.
-            schedule_asus_price_refresh(model_id)
+            # ASUS-only live price lookup — no-ops for every other brand. Reuses the
+            # general Gemini key for this one-time new-model fetch (see
+            # refresh_asus_live_price's docstring), not the dedicated ASUS-price key.
+            schedule_asus_price_refresh(model_id, use_general_key=True)
         elif restocked_from_zero and imported > 0:
             # An existing model that had zero available units is being
             # restocked — fetch its price immediately rather than waiting

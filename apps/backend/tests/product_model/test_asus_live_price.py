@@ -179,6 +179,57 @@ async def test_dedicated_price_key_is_used_even_without_general_key(
 
 
 @pytest.mark.asyncio
+async def test_use_general_key_reads_the_general_gemini_key_not_the_dedicated_one(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The one-time new-model seed fetch (use_general_key=True) draws on
+    `gemini_api_key`, not `asus_price_gemini_api_key` — the two must never
+    be conflated."""
+    model = await _make_model(db_session, brand.id, "ASUS-016")
+    await SystemSettingRepository(db_session).set_value(
+        "gemini_api_key", "general-key-for-test", value_type=SettingValueType.STRING
+    )
+    await db_session.commit()
+    # No dedicated asus_price_gemini_api_key is configured — proves this path
+    # never falls back to (or requires) it.
+
+    seen_api_keys: list[str] = []
+
+    async def fake_success(self, model_number, *, brand_name=None, model_name=None):
+        seen_api_keys.append(self._api_key)
+        return {
+            "price": 71990,
+            "source_url": "https://in.store.asus.com/some-model.html",
+            "confidence": "high",
+            "condition": "new",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_success)
+
+    status = await refresh_asus_live_price(db_session, model.id, use_general_key=True)
+    assert status == "ok"
+    assert seen_api_keys == ["general-key-for-test"]
+
+
+@pytest.mark.asyncio
+async def test_use_general_key_reports_not_configured_without_falling_back(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """use_general_key=True never falls back to the dedicated ASUS-price key
+    even if that one happens to be configured."""
+    model = await _make_model(db_session, brand.id, "ASUS-017")
+    await _configure_gemini(db_session)  # sets asus_price_gemini_api_key only
+
+    async def fail_if_called(self, *args, **kwargs):
+        raise AssertionError("Gemini should never be called when the general key is unset")
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fail_if_called)
+
+    status = await refresh_asus_live_price(db_session, model.id, use_general_key=True)
+    assert status == "not_configured"
+
+
+@pytest.mark.asyncio
 async def test_provider_failure_maps_to_error(
     db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -232,6 +283,33 @@ async def test_non_asus_source_domain_rejected_even_if_high_confidence(
         }
 
     monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_retailer_source)
+
+    status = await refresh_asus_live_price(db_session, model.id)
+    assert status == "not_found"
+    await db_session.refresh(model)
+    assert model.live_price is None
+
+
+@pytest.mark.asyncio
+async def test_refurbished_condition_rejected_even_from_the_in_store_domain(
+    db_session: AsyncSession, test_settings, brand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Defense-in-depth: a refurbished/renewed listing's price is rejected
+    even when it's high-confidence and hosted on in.store.asus.com — the
+    real defect this session's user report flagged (wrong prices pulled
+    from ASUS's own renewed-unit listings)."""
+    model = await _make_model(db_session, brand.id, "ASUS-015")
+    await _configure_gemini(db_session)
+
+    async def fake_refurbished(self, model_number, *, brand_name=None, model_name=None):
+        return {
+            "price": 41990,
+            "source_url": "https://in.store.asus.com/renewed/some-model.html",
+            "confidence": "high",
+            "condition": "refurbished",
+        }
+
+    monkeypatch.setattr(gemini_module.GeminiProvider, "lookup_live_price", fake_refurbished)
 
     status = await refresh_asus_live_price(db_session, model.id)
     assert status == "not_found"
@@ -619,7 +697,7 @@ async def test_bulk_run_tracks_live_progress_and_completion(
 
     release = asyncio.Event()
 
-    async def blocked_refresh(session, model_id):
+    async def blocked_refresh(session, model_id, **kwargs):
         await release.wait()
         return "ok"
 
@@ -659,7 +737,7 @@ async def test_bulk_run_lists_failed_model_ids_for_retry(
     await _add_available_unit(db_session, good.id)
     await _add_available_unit(db_session, bad.id)
 
-    async def fake_refresh(session, model_id):
+    async def fake_refresh(session, model_id, **kwargs):
         return "ok" if model_id == good.id else "not_found"
 
     monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", fake_refresh)
@@ -685,7 +763,7 @@ async def test_retry_failed_reschedules_only_the_failed_models(
 
     calls: list[uuid.UUID] = []
 
-    async def fake_refresh(session, model_id):
+    async def fake_refresh(session, model_id, **kwargs):
         calls.append(model_id)
         return "ok" if model_id == good.id else "not_found"
 
@@ -713,7 +791,7 @@ async def test_retry_failed_with_nothing_failed_returns_zero(
     model = await _make_model(db_session, brand.id, "ASUS-ALL-GOOD")
     await _add_available_unit(db_session, model.id)
 
-    async def fake_refresh(session, model_id):
+    async def fake_refresh(session, model_id, **kwargs):
         return "ok"
 
     monkeypatch.setattr(asus_jobs_module, "refresh_asus_live_price", fake_refresh)
@@ -885,3 +963,41 @@ async def test_manual_live_price_can_be_cleared(
     await db_session.refresh(model)
     assert model.live_price is None
     assert model.live_price_status == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_manual_live_price_of_zero_is_treated_as_na(
+    db_session: AsyncSession, test_settings, brand
+) -> None:
+    """An explicit 0 means the same as a blank/None price — NA on the
+    software, never a stored zero."""
+    model = await _make_model(db_session, brand.id, "ASUS-MANUAL-004")
+    repo = ProductModelRepository(db_session)
+    await repo.set_manual_live_price(model, price=Decimal("41999"))
+    await db_session.commit()
+
+    await repo.set_manual_live_price(model, price=Decimal("0"))
+    await db_session.commit()
+    await db_session.refresh(model)
+    assert model.live_price is None
+    assert model.live_price_status == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_manual_live_price_endpoint_treats_zero_as_na(
+    api_client: AsyncClient,
+    db_session: AsyncSession,
+    salesperson_headers: dict[str, str],
+    brand,
+) -> None:
+    model = await _make_model(db_session, brand.id, "ASUS-MANUAL-005")
+
+    resp = await api_client.patch(
+        f"/api/v1/product-models/{model.id}/live-price",
+        json={"live_price": 0},
+        headers=salesperson_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["live_price"] is None
+    assert data["live_price_status"] == "not_found"

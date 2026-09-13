@@ -293,10 +293,15 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         the next successful automatic refresh (scheduled or "Update prices")
         overwrites it exactly like any other price, so a manual entry is a
         stopgap, not a permanent override.
+
+        A blank/`None` or non-positive price (0, or negative) is treated the
+        same — both mean "no price / NA" — so the UI shows NA either way
+        rather than a stored zero.
         """
+        cleaned_price = price if price is not None and price > 0 else None
         now = datetime.now(UTC)
-        product_model.live_price = price
-        product_model.live_price_status = "manual" if price is not None else "not_found"
+        product_model.live_price = cleaned_price
+        product_model.live_price_status = "manual" if cleaned_price is not None else "not_found"
         product_model.live_price_source_url = None
         product_model.live_price_checked_at = now
         product_model.live_price_updated_at = now
@@ -448,6 +453,41 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         )
         result = await self._session.execute(statement)
         return list(result.scalars().all())
+
+    async def list_asus_laptops_with_stock(self) -> list[ProductModel]:
+        """Full rows (not just ids) of active, in-stock ASUS laptops, ordered
+        by model number — used to build the manual price-entry spreadsheet
+        (only models someone could actually buy right now get a row)."""
+        statement = (
+            select(ProductModel)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .where(
+                ProductModel.status == ProductModelStatus.ACTIVE,
+                ProductModel.category == ProductCategory.LAPTOP,
+                func.upper(Brand.name) == "ASUS",
+                self._has_available_stock_clause(),
+            )
+            .order_by(ProductModel.model_number.asc())
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def map_active_asus_laptops_by_model_number(self) -> dict[str, ProductModel]:
+        """All active ASUS laptops (regardless of current stock — a model may
+        have sold out between downloading and re-uploading the price
+        spreadsheet, but the price is still worth recording), keyed by a
+        normalized (trimmed, upper-cased) model number for exact matching."""
+        statement = (
+            select(ProductModel)
+            .join(Brand, ProductModel.brand_id == Brand.id)
+            .where(
+                ProductModel.status == ProductModelStatus.ACTIVE,
+                ProductModel.category == ProductCategory.LAPTOP,
+                func.upper(Brand.name) == "ASUS",
+            )
+        )
+        result = await self._session.execute(statement)
+        return {pm.model_number.strip().upper(): pm for pm in result.scalars().all()}
 
     async def archive_all_active_for_brand(
         self,

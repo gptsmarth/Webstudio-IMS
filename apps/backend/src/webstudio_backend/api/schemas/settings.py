@@ -141,6 +141,13 @@ class IntegrationsSettingsUpdate(BaseModel):
     clear_openai_api_key: bool = False
 
 
+class AsusPriceImportResponse(BaseModel):
+    updated: int = 0
+    cleared: int = 0
+    not_matched: list[str] = Field(default_factory=list)
+    invalid_rows: list[str] = Field(default_factory=list)
+
+
 class AIProviderTestRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
 

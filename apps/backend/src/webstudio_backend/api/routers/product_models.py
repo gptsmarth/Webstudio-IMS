@@ -280,8 +280,10 @@ async def create_product_model(
         # Image discovery is slow and optional — run in background so create stays fast.
         if not pm.product_image_url:
             schedule_product_image_resolve(pm.id)
-        # ASUS-only live price lookup — no-ops for every other brand.
-        schedule_asus_price_refresh(pm.id)
+        # ASUS-only live price lookup — no-ops for every other brand. A brand-new
+        # model's first price fetch reuses the general Gemini key (already spent on
+        # this model's spec lookup) rather than the dedicated ASUS-price key.
+        schedule_asus_price_refresh(pm.id, use_general_key=True)
         return _envelope(request, _model_payload(pm, brand_name=brand.name, current=current))
     except DuplicateModelNumberError as err:
         await db_session.rollback()

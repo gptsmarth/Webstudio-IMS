@@ -471,11 +471,21 @@ class GeminiProvider(AIProvider):
             "product page, not just a category or homepage. ONLY use a price if it is "
             "actually listed on ASUS's own official India store website, "
             "https://in.store.asus.com — do not use Amazon, Flipkart, Croma, "
-            "asus.com's general marketing/spec pages, or any other site. Only respond "
-            "with a null price if you are confident this exact laptop is genuinely not "
-            "sold on in.store.asus.com.\n\n"
+            "asus.com's general marketing/spec pages, or any other site.\n\n"
+            "The price MUST be the standard MRP/selling price of a BRAND NEW unit only. "
+            "Never return the price of a Renewed, Refurbished, Refurb, Renewed-Grade, "
+            "Open Box, Pre-Owned, Certified Pre-Owned, used, or exchange-offer listing — "
+            "even if that is the only listing you find for this model on the site. Never "
+            "return an EMI-only price, a bundle/accessory-inclusive price, or a price "
+            "after a coupon/cashback/instant discount is applied; use the base listed "
+            "price before any such discount. If in.store.asus.com only carries this exact "
+            "model as renewed/refurbished, or does not carry it at all as a new unit, "
+            "respond with a null price rather than that renewed/refurbished price. Only "
+            "respond with a null price if you are confident this exact laptop, as a "
+            "brand-new unit, is genuinely not sold on in.store.asus.com.\n\n"
             "Reply with STRICT JSON only, no markdown formatting, no explanation: "
             '{"price": <number or null>, "source_url": "<string or null>", '
+            '"condition": "new"|"refurbished"|"unknown", '
             '"confidence": "high"|"medium"|"low"}'
         )
         best_result: dict[str, Any] | None = None
@@ -517,7 +527,12 @@ class GeminiProvider(AIProvider):
                 continue
 
             confidence = str(parsed.get("confidence") or "").lower()
-            if parsed.get("price") is not None and confidence != "low":
+            condition = str(parsed.get("condition") or "").lower()
+            if (
+                parsed.get("price") is not None
+                and confidence != "low"
+                and condition != "refurbished"
+            ):
                 return parsed
             best_result = best_result or parsed
 

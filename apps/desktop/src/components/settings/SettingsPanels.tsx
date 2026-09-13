@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Cloud, Database, Download, RefreshCw, Shield } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  Cloud,
+  Database,
+  Download,
+  FileSpreadsheet,
+  RefreshCw,
+  Shield,
+  Upload,
+} from 'lucide-react';
 import { formatDateTime, formatRelativeTime } from '../../lib/datetime';
 import { auditSeverityBadgeClass, auditSeverityLabel } from '../../lib/audit';
 import { formatBytes } from '../../lib/settings';
@@ -28,6 +37,7 @@ import type {
   SettingsWorkspace,
   BackupSettingsUpdate,
   CloudBackupStatus,
+  AsusPriceImportResult,
 } from '../../services/api/SettingsService';
 import { SettingsService } from '../../services/api/SettingsService';
 import {
@@ -722,6 +732,15 @@ const AI_PROVIDERS = [
   { id: 'openai', label: 'OpenAI ChatGPT (knowledge + fallback)' },
 ] as const;
 
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function providerStatusLabel(status: string): string {
   switch (status) {
     case 'healthy':
@@ -758,6 +777,43 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
   const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [asusPriceDownloading, setAsusPriceDownloading] = useState(false);
+  const [asusPriceUploading, setAsusPriceUploading] = useState(false);
+  const [asusPriceImportResult, setAsusPriceImportResult] = useState<AsusPriceImportResult | null>(
+    null,
+  );
+  const [asusPriceImportError, setAsusPriceImportError] = useState<string | null>(null);
+  const asusPriceFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadAsusPriceTemplate = async () => {
+    setAsusPriceDownloading(true);
+    setAsusPriceImportError(null);
+    try {
+      const blob = await SettingsService.downloadAsusPriceTemplate();
+      downloadBlob(blob, 'asus-live-price-template.xlsx');
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setAsusPriceImportError(message.message ?? 'Could not download the price template.');
+    } finally {
+      setAsusPriceDownloading(false);
+    }
+  };
+
+  const handleAsusPriceFileSelected = async (file: File) => {
+    setAsusPriceUploading(true);
+    setAsusPriceImportError(null);
+    setAsusPriceImportResult(null);
+    try {
+      const result = await SettingsService.importAsusPriceSheet(file);
+      setAsusPriceImportResult(result);
+      await workspace.refresh();
+    } catch (err: unknown) {
+      const message = err as { message?: string };
+      setAsusPriceImportError(message.message ?? 'Could not import the price sheet.');
+    } finally {
+      setAsusPriceUploading(false);
+    }
+  };
 
   useEffect(() => {
     setForm({
@@ -1023,6 +1079,67 @@ export function IntegrationsPanel({ workspace, data }: PanelProps): JSX.Element 
               />
               Remove stored ASUS price lookup API key
             </label>
+          )}
+
+          <h4 className="stg-subheading" style={{ fontSize: '13px' }}>
+            Manual price spreadsheet
+          </h4>
+          <p className="stg-section__lead">
+            The automatic search can sometimes pull the wrong price (e.g. a renewed/refurbished
+            listing). Download a spreadsheet of every in-stock ASUS laptop, look each one up on the
+            ASUS website by hand, fill in the price column, and re-upload it to apply those prices
+            in bulk.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={asusPriceDownloading}
+              onClick={() => void handleDownloadAsusPriceTemplate()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Download size={14} aria-hidden />
+              {asusPriceDownloading ? 'Downloading…' : 'Download price template'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!workspace.canWrite || asusPriceUploading}
+              onClick={() => asusPriceFileInputRef.current?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Upload size={14} aria-hidden />
+              {asusPriceUploading ? 'Uploading…' : 'Upload filled sheet'}
+            </button>
+            <input
+              ref={asusPriceFileInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void handleAsusPriceFileSelected(file);
+              }}
+            />
+          </div>
+          {asusPriceImportResult && (
+            <p className="stg-muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileSpreadsheet size={14} aria-hidden />
+              Updated {asusPriceImportResult.updated} price
+              {asusPriceImportResult.updated === 1 ? '' : 's'}.
+              {asusPriceImportResult.cleared > 0 &&
+                ` Cleared ${asusPriceImportResult.cleared} to NA (blank or 0 in the sheet).`}
+              {asusPriceImportResult.not_matched.length > 0 &&
+                ` ${asusPriceImportResult.not_matched.length} model number(s) not found: ${asusPriceImportResult.not_matched.join(', ')}.`}
+              {asusPriceImportResult.invalid_rows.length > 0 &&
+                ` ${asusPriceImportResult.invalid_rows.length} invalid price value(s): ${asusPriceImportResult.invalid_rows.join(', ')}.`}
+            </p>
+          )}
+          {asusPriceImportError && (
+            <p className="stg-muted" style={{ color: 'var(--color-danger, #dc2626)' }}>
+              {asusPriceImportError}
+            </p>
           )}
 
           <h3 className="stg-subheading">OpenAI API (ChatGPT)</h3>

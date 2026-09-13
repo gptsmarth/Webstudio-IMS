@@ -64,6 +64,7 @@ def schedule_asus_price_refresh(
     model_id: uuid.UUID | str,
     *,
     force: bool = False,  # noqa: ARG001 — kept for call-site parity/future use; see module docstring
+    use_general_key: bool = False,
 ) -> bool:
     """Start a background live-price refresh if not already running.
 
@@ -72,6 +73,10 @@ def schedule_asus_price_refresh(
     the image-resolve scheduler, there's no failure cooldown to bypass here
     (see module docstring), so `force` currently has no behavioral effect —
     it's kept so call sites read the same way as `schedule_product_image_resolve`.
+
+    ``use_general_key`` is only for the one-time seed fetch right after a
+    brand-new ASUS laptop model is created — see
+    ``refresh_asus_live_price``'s docstring for why.
     """
     key = str(model_id)
     existing = _inflight.get(key)
@@ -79,7 +84,8 @@ def schedule_asus_price_refresh(
         return False
 
     task: asyncio.Task[str] = asyncio.create_task(
-        _run_asus_price_refresh(uuid.UUID(str(model_id))), name=f"asus-live-price:{key}"
+        _run_asus_price_refresh(uuid.UUID(str(model_id)), use_general_key=use_general_key),
+        name=f"asus-live-price:{key}",
     )
     _inflight[key] = task
 
@@ -92,7 +98,7 @@ def schedule_asus_price_refresh(
     return True
 
 
-async def _run_asus_price_refresh(model_id: uuid.UUID) -> str:
+async def _run_asus_price_refresh(model_id: uuid.UUID, *, use_general_key: bool = False) -> str:
     """Returns the resulting status string ("ok", "not_found", "error", ...)
     so a bulk run can track per-model outcomes for a later "retry failed"."""
     key = str(model_id)
@@ -100,7 +106,9 @@ async def _run_asus_price_refresh(model_id: uuid.UUID) -> str:
         async with _concurrency_limiter:
             factory = get_session_factory()
             async with factory() as session:
-                status = await refresh_asus_live_price(session, model_id)
+                status = await refresh_asus_live_price(
+                    session, model_id, use_general_key=use_general_key
+                )
                 await session.commit()
                 logger.debug("ASUS live price refresh for {} finished: {}", model_id, status)
                 return status

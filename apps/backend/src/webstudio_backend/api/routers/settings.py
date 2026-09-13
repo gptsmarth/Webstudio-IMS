@@ -25,6 +25,7 @@ from webstudio_backend.api.schemas.responses import Envelope, ResponseMeta, utc_
 from webstudio_backend.api.schemas.settings import (
     AIProviderTestRequest,
     AIProviderTestResponse,
+    AsusPriceImportResponse,
     BackupAdminDashboard,
     BackupCreateRequest,
     BackupCreateResponse,
@@ -71,6 +72,12 @@ from webstudio_backend.infrastructure.database.repositories.pagination import Pa
 from webstudio_backend.infrastructure.repositories.backup_run_filters import BackupHistoryFilters
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.services.ai.enrichment_service import ProductEnrichmentService
+from webstudio_backend.services.asus_price_excel_service import (
+    TEMPLATE_FILENAME,
+    TEMPLATE_MEDIA_TYPE,
+    build_asus_price_template,
+    import_asus_price_sheet,
+)
 from webstudio_backend.services.backup_admin_service import BackupAdminService
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.backup_production_validation_service import (
@@ -280,6 +287,48 @@ async def test_ai_provider_connection(
         latency_ms=result.latency_ms,
     )
     return _envelope(request, response.model_dump())
+
+
+@router.get("/integrations/asus-price-template")
+async def download_asus_price_template(
+    current: SettingsReadDep,
+    db_session: AsyncSession = DbSessionDep,
+) -> Response:
+    """One row per in-stock ASUS laptop (model number + current price) to
+    fill in by hand from the ASUS website and re-upload via the import
+    endpoint below — a reliable fallback for when the automatic Gemini
+    search pulls a wrong (e.g. refurbished) price."""
+    _ = current
+    content = await build_asus_price_template(db_session)
+    return Response(
+        content=content,
+        media_type=TEMPLATE_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{TEMPLATE_FILENAME}"'},
+    )
+
+
+@router.post("/integrations/asus-price-import")
+async def import_asus_price_sheet_endpoint(
+    request: Request,
+    current: SettingsWriteDep,
+    db_session: AsyncSession = DbSessionDep,
+    file: UploadFile = File(...),
+) -> dict:
+    _ = current
+    content = await file.read()
+    try:
+        result = await import_asus_price_sheet(db_session, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _envelope(
+        request,
+        AsusPriceImportResponse(
+            updated=result.updated,
+            cleared=result.cleared,
+            not_matched=result.not_matched,
+            invalid_rows=result.invalid_rows,
+        ).model_dump(),
+    )
 
 
 @router.patch("/excel")
