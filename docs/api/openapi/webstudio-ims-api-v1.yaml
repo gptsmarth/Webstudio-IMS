@@ -1,8 +1,88 @@
 # WEBSTUDIO IMS API v1 — OpenAPI Specification
-# Canonical API contract — to be defined during API design phase
+# Canonical API contract
 openapi: 3.1.0
 info:
   title: WEBSTUDIO IMS API
   version: 1.0.0
-  description: Placeholder — API specification to be authored
-paths: {}
+  description: WEBSTUDIO IMS version 1 API
+paths:
+  /api/v1/reports/asus-weekly:
+    get:
+      summary: Download the ASUS weekly sell-out workbook
+      description: Requires reports:export. Dates are inclusive and use the India business calendar.
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: products
+          in: query
+          schema: { type: string, enum: [laptops, accessories, both], default: laptops }
+      responses:
+        '200':
+          description: XLSX with the eight ASUS sell-out columns and one row per recorded unit.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '403':
+          description: Report export permission required.
+        '422':
+          description: Invalid date range or selected sales that lack verified export values.
+  /api/v1/sales/{sale_id}:
+    get:
+      summary: Read an inventory sale and its Tally invoice
+      parameters:
+        - name: sale_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Sale detail with per-unit sale amounts and, when available, the full Tally invoice.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      sale_amount:
+                        type: [number, 'null']
+                        description: Amount for the inventory unit represented by this sale.
+                      invoice_totals:
+                        type: [object, 'null']
+                        properties:
+                          grand_total:
+                            type: [number, string, 'null']
+                            description: Full Tally bill total, including all billed products.
+                      invoice_items:
+                        type: array
+                        description: All billed items in Tally order, including items without a separate IMS sale.
+                        items:
+                          $ref: '#/components/schemas/SaleInvoiceItem'
+        '404':
+          description: Sale not found.
+components:
+  schemas:
+    SaleInvoiceItem:
+      type: object
+      required: [line_index, product_name, quantity, tracking]
+      properties:
+        line_index: { type: integer }
+        product_name: { type: string }
+        quantity: { type: [string, 'null'] }
+        tracking: { type: string, enum: [tracked, additional, unmatched, unclassified] }
+        amount_excluding_gst: { type: [string, 'null'] }
+        cgst_amount: { type: [string, 'null'] }
+        sgst_amount: { type: [string, 'null'] }
+        igst_amount: { type: [string, 'null'] }
+        cess_amount: { type: [string, 'null'] }
+        amount_including_gst: { type: [string, 'null'] }
+        gst_allocated:
+          type: boolean
+          description: Item GST was calculated from Tally's rate or apportioned from the invoice ledger.

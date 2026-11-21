@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-21
+
+### Added
+
+- Desktop ASUS Weekly Report exports a date range of ASUS laptop and accessory sales in the ASUS sell-out workbook format.
+
+### Changed
+
+- Desktop and mobile use clearer navigation, form styles, and purchase review layouts.
+
+### Fixed
+
+- Tally purchase sync collects serials across export fields and preserves a fuller list when a repeat fetch returns fewer serials.
+- Tally sales show the full invoice and each item's GST breakdown, including products without their own inventory sale.
+
 ## [1.7.6] - 2026-07-16
 
 ### Added

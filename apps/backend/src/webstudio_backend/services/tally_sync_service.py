@@ -6,7 +6,7 @@ import asyncio
 import gzip
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
@@ -71,9 +71,10 @@ from webstudio_backend.integrations.tally.constants import (
     VOUCHER_TYPE_STORE_MAP,
 )
 from webstudio_backend.integrations.tally.gst import (
-    LineGstBreakdown,
-    allocate_voucher_gst_to_line,
+    GST_FIELDS,
+    line_gst_breakdown,
     resolve_line_sale_amounts,
+    split_inventory_line,
 )
 from webstudio_backend.integrations.tally.incremental_sync import (
     REPEATED_FAILURE_NOTIFICATION_THRESHOLD,
@@ -341,6 +342,29 @@ class TallySyncService:
             (voucher for voucher in vouchers if voucher.guid == header.tally_voucher_guid),
             None,
         )
+        if tally_voucher is None or any(
+            len(line.batch_allocations) < parse_tally_quantity(line.quantity)
+            for line in tally_voucher.inventory_lines
+        ):
+            # A well-formed Register response can omit serial detail. Try the
+            # other existing export for this single day before refreshing the queue.
+            try:
+                day_book = await client.export_day_book(
+                    company_name=company_name, from_date=voucher_date, to_date=voucher_date
+                )
+            except TallyConnectionError:
+                pass
+            else:
+                matching = [
+                    voucher
+                    for voucher in parse_vouchers_xml(day_book)
+                    if voucher.guid == header.tally_voucher_guid
+                    and voucher.voucher_date == voucher_date
+                    and voucher.voucher_type in PURCHASE_VOUCHER_TYPES
+                ]
+                if tally_voucher is not None:
+                    matching.insert(0, tally_voucher)
+                tally_voucher = next(iter(merge_vouchers_by_guid(matching)), None)
         if tally_voucher is None:
             raise AppError(
                 "NOT_FOUND",
@@ -1540,14 +1564,14 @@ class TallySyncService:
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         idempotency_key = f"{voucher.guid}:{inventory_item.id}"
         snapshot = SaleProductSnapshot.from_detail(detail) if detail is not None else None
-        sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(line)
-        if sale_amount_inclusive is None:
+        unit_line = split_inventory_line(line, self._parse_line_quantity(line.quantity), limit=1)[0]
+        voucher_has_gst = any(getattr(voucher.totals, field) for field in GST_FIELDS)
+        sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(
+            unit_line, voucher_totals=voucher.totals
+        )
+        if sale_amount_inclusive is None and not voucher_has_gst:
             sale_amount_inclusive = resolve_inventory_line_sale_amount(line, voucher)
-        gst_breakdown: LineGstBreakdown | None = None
-        if sale_amount_excluding_gst is None:
-            gst_breakdown = allocate_voucher_gst_to_line(sale_amount_inclusive, voucher.totals)
-            if gst_breakdown is not None:
-                sale_amount_excluding_gst = gst_breakdown.base_excluding_gst
+        gst_breakdown = line_gst_breakdown(unit_line) if sale_amount_inclusive is not None else None
         sale = await self._sales.create_tally(
             inventory_item_id=inventory_item.id,
             sold_at=sold_at,
@@ -1758,27 +1782,24 @@ class TallySyncService:
         )
         review_required = model_mismatch or shortfall > 0
 
-        # Per-unit sale amounts = line total split across the BILLED quantity.
-        sale_amount_excluding_gst, sale_amount_inclusive = resolve_line_sale_amounts(line)
-        if sale_amount_inclusive is None:
-            sale_amount_inclusive = resolve_inventory_line_sale_amount(line, voucher)
-        divisor = quantity if quantity > 0 else 1
-        per_unit_incl = self._split_amount(sale_amount_inclusive, divisor)
-        per_unit_excl = self._split_amount(sale_amount_excluding_gst, divisor)
-        per_unit_gst: LineGstBreakdown | None = None
-        if per_unit_excl is None:
-            per_unit_gst = allocate_voucher_gst_to_line(
-                float(per_unit_incl) if per_unit_incl is not None else None, voucher.totals
-            )
-            if per_unit_gst is not None:
-                per_unit_excl = Decimal(str(per_unit_gst.base_excluding_gst))
+        # Allocate across all billed units, including any shortfall in the IMS pool.
+        voucher_has_gst = any(getattr(voucher.totals, field) for field in GST_FIELDS)
+        if not voucher_has_gst and resolve_line_sale_amounts(line) == (None, None):
+            fallback = resolve_inventory_line_sale_amount(line, voucher)
+            if fallback is not None:
+                line = replace(line, line_total=str(fallback))
+        unit_lines = split_inventory_line(line, quantity, limit=len(units))
 
         sold_at = datetime.combine(voucher.voucher_date, time.min, tzinfo=UTC)
         actor = AuditActor.system(display_name="Tally Sync", role="system")
         sold_ids: list[uuid.UUID] = []
         last_sale_id: int | None = None
 
-        for unit in units:
+        for unit, unit_line in zip(units, unit_lines, strict=True):
+            per_unit_excl, per_unit_incl = resolve_line_sale_amounts(
+                unit_line, voucher_totals=voucher.totals
+            )
+            per_unit_gst = line_gst_breakdown(unit_line) if per_unit_incl is not None else None
             detail = await self._inventory.get_detail(unit.id)
             old_status = unit.status
             unit.status = InventoryStatus.SOLD
@@ -1909,12 +1930,6 @@ class TallySyncService:
         stats["sales"] += len(units)
         counters.sales_created += len(units)
         return outcome
-
-    @staticmethod
-    def _split_amount(total: Decimal | float | None, divisor: int) -> Decimal | None:
-        if total is None or divisor <= 0:
-            return None if total is None else Decimal(str(total))
-        return (Decimal(str(total)) / Decimal(divisor)).quantize(Decimal("0.01"))
 
     async def _complete_additional_product(
         self,
@@ -2132,9 +2147,7 @@ class TallySyncService:
         header.last_seen_at = now
         if voucher.raw_xml:
             header.raw_xml_gzip = gzip.compress(voucher.raw_xml.encode("utf-8"))
-        header.lines.clear()
-        for line in self._purchase_lines_from_voucher(voucher):
-            header.lines.append(line)
+        header.lines[:] = self._purchase_lines_from_voucher(voucher, previous=header.lines)
 
     def _refresh_non_imported_purchase_lines(
         self,
@@ -2171,27 +2184,46 @@ class TallySyncService:
 
         imported_group_keys = {line.group_key for line in header.lines if line.imported}
         kept_lines = [line for line in header.lines if line.imported]
-        for line in self._purchase_lines_from_voucher(voucher):
+        for line in self._purchase_lines_from_voucher(voucher, previous=header.lines):
             if line.group_key not in imported_group_keys:
                 kept_lines.append(line)
         header.lines.clear()
         for line in kept_lines:
             header.lines.append(line)
 
-    def _purchase_lines_from_voucher(self, voucher: TallyVoucher) -> list[TallyPurchaseLine]:
+    def _purchase_lines_from_voucher(
+        self, voucher: TallyVoucher, *, previous: list[TallyPurchaseLine] | None = None
+    ) -> list[TallyPurchaseLine]:
+        previous_by_index = {line.line_index: line for line in (previous or [])}
         lines: list[TallyPurchaseLine] = []
         for idx, line in enumerate(voucher.inventory_lines):
             serials = list(line.batch_allocations)
             if not serials and line.serial_number:
                 serials = [line.serial_number]
+            group_key = _collapse(line.stock_item_name or "")
+            serial_source = line.serial_source
+            prior = previous_by_index.get(idx)
+            quantity = parse_tally_quantity(line.quantity)
+            if (
+                prior is not None
+                and not prior.imported
+                and prior.group_key == group_key
+                and quantity > 0
+                and quantity == parse_tally_quantity(prior.quantity)
+                and {serial.upper() for serial in serials}
+                < {serial.upper() for serial in prior.serial_numbers}
+            ):
+                # A sparser export of the same line must not erase known serials.
+                serials = prior.serial_numbers
+                serial_source = prior.serial_source
             lines.append(
                 TallyPurchaseLine(
                     line_index=idx,
                     stock_item_name=line.stock_item_name or "",
-                    group_key=_collapse(line.stock_item_name or ""),
+                    group_key=group_key,
                     quantity=line.quantity,
                     serials_json=json.dumps(serials),
-                    serial_source=line.serial_source,
+                    serial_source=serial_source,
                     rate=self._purchase_decimal(line.rate),
                     amount=self._purchase_decimal(line.amount),
                     taxable_amount=self._purchase_decimal(line.taxable_amount),

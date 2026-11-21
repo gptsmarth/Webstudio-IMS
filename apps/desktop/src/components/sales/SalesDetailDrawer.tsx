@@ -15,6 +15,7 @@ import type { AuditLogEntry } from '../../services/api/AuditService';
 import type {
   AdditionalInvoiceProduct,
   InvoiceTotals,
+  SaleInvoiceItem,
   TrackedInvoiceProduct,
   UnmatchedSerializedItem,
 } from '../../services/api/SalesService';
@@ -50,15 +51,76 @@ function AuditRow({ log }: { log: AuditLogEntry }): JSX.Element {
 }
 
 function LineAmount({ value }: { value: string | number | null | undefined }): JSX.Element {
-  return <>{formatSaleAmount(value)}</>;
+  const amount = value == null || value === '' ? NaN : Number(value);
+  return <>{Number.isFinite(amount) ? invoiceCurrency.format(amount) : '—'}</>;
+}
+
+const invoiceCurrency = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function InvoiceItemsList({ items }: { items: SaleInvoiceItem[] }): JSX.Element {
+  return (
+    <>
+      {items.some((item) => item.gst_allocated) && (
+        <p className="sales-drawer__muted">
+          GST uses Tally’s item rates where available and is otherwise apportioned from the invoice.
+        </p>
+      )}
+      <ul className="sales-line-list">
+        {items.map((item) => (
+          <li key={item.line_index} className="sales-line-list__item">
+            <div className="sales-line-list__title">{item.product_name || 'Invoice item'}</div>
+            <p className="sales-drawer__muted">
+              {[
+                item.quantity,
+                {
+                  tracked: 'Tracked in IMS',
+                  additional: 'Additional product',
+                  unmatched: 'Unmatched serial',
+                  unclassified: null,
+                }[item.tracking],
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            <dl className="sales-detail-grid">
+              {[
+                { label: 'Before GST', value: item.amount_excluding_gst },
+                ...[
+                  { label: 'CGST', value: item.cgst_amount },
+                  { label: 'SGST', value: item.sgst_amount },
+                  { label: 'IGST', value: item.igst_amount },
+                  { label: 'Cess', value: item.cess_amount },
+                ].filter(({ value }) => value != null && Number(value) !== 0),
+                { label: 'Including GST', value: item.amount_including_gst },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>
+                    <LineAmount value={value} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 function TrackedProductsList({
   products,
   isMainAdmin,
+  showAmounts,
 }: {
   products: TrackedInvoiceProduct[];
   isMainAdmin: boolean;
+  showAmounts: boolean;
 }): JSX.Element {
   return (
     <ul className="sales-line-list">
@@ -75,12 +137,14 @@ function TrackedProductsList({
               <dt>Serial</dt>
               <dd className="col-mono">{line.serial_number ?? '—'}</dd>
             </div>
-            <div>
-              <dt>Amount</dt>
-              <dd>
-                <LineAmount value={line.line_total ?? line.rate} />
-              </dd>
-            </div>
+            {showAmounts && (
+              <div>
+                <dt>Amount</dt>
+                <dd>
+                  <LineAmount value={line.line_total ?? line.rate} />
+                </dd>
+              </div>
+            )}
             {isMainAdmin && line.serial_source_label ? (
               <div>
                 <dt>Serial source</dt>
@@ -96,8 +160,10 @@ function TrackedProductsList({
 
 function AdditionalProductsList({
   products,
+  showAmounts,
 }: {
   products: AdditionalInvoiceProduct[];
+  showAmounts: boolean;
 }): JSX.Element {
   return (
     <ul className="sales-line-list">
@@ -111,12 +177,14 @@ function AdditionalProductsList({
               <dt>Qty</dt>
               <dd>{line.quantity ?? '—'}</dd>
             </div>
-            <div>
-              <dt>Amount</dt>
-              <dd>
-                <LineAmount value={line.line_total ?? line.taxable_amount ?? line.rate} />
-              </dd>
-            </div>
+            {showAmounts && (
+              <div>
+                <dt>Amount</dt>
+                <dd>
+                  <LineAmount value={line.line_total ?? line.taxable_amount ?? line.rate} />
+                </dd>
+              </div>
+            )}
             {line.decision_reason ? (
               <div>
                 <dt>Note</dt>
@@ -133,9 +201,11 @@ function AdditionalProductsList({
 function UnmatchedItemsList({
   items,
   isMainAdmin,
+  showAmounts,
 }: {
   items: UnmatchedSerializedItem[];
   isMainAdmin: boolean;
+  showAmounts: boolean;
 }): JSX.Element {
   return (
     <ul className="sales-line-list">
@@ -147,12 +217,14 @@ function UnmatchedItemsList({
               <dt>Serial</dt>
               <dd className="col-mono">{line.serial_number ?? '—'}</dd>
             </div>
-            <div>
-              <dt>Amount</dt>
-              <dd>
-                <LineAmount value={line.invoice_amount} />
-              </dd>
-            </div>
+            {showAmounts && (
+              <div>
+                <dt>Amount</dt>
+                <dd>
+                  <LineAmount value={line.invoice_amount} />
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Reason</dt>
               <dd>{line.reason}</dd>
@@ -225,6 +297,9 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
   const saleCessAmount = detail?.sale_cess_amount ?? item.sale_cess_amount ?? null;
   const trackedProducts = detail?.tracked_products ?? [];
   const additionalProducts = detail?.additional_products ?? [];
+  const invoiceItems = detail?.invoice_items ?? [];
+  const invoiceTotal = detail?.invoice_totals?.grand_total;
+  const hasItemBreakdown = invoiceItems.length > 0;
   const unmatchedItems = detail?.unmatched_serialized_items ?? [];
   const hasInvoiceComposition =
     trackedProducts.length > 0 || additionalProducts.length > 0 || unmatchedItems.length > 0;
@@ -334,35 +409,39 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
                   <dt>Payment mode</dt>
                   <dd>{detail?.payment_mode ?? item.payment_mode ?? '—'}</dd>
                 </div>
-                <div>
-                  <dt>Sale amount (incl. GST)</dt>
-                  <dd>{formatSaleAmount(saleAmountInclusive)}</dd>
+                <div
+                  className={invoiceTotal != null ? 'sales-detail-grid__invoice-total' : undefined}
+                >
+                  <dt>{invoiceTotal != null ? 'Invoice total (incl. GST)' : 'Sale amount'}</dt>
+                  <dd>
+                    <LineAmount value={invoiceTotal ?? saleAmountInclusive} />
+                  </dd>
                 </div>
-                {saleAmountExcludingGst != null && (
+                {!hasItemBreakdown && saleAmountExcludingGst != null && (
                   <div>
                     <dt>Amount excluding GST</dt>
                     <dd>{formatSaleAmount(saleAmountExcludingGst)}</dd>
                   </div>
                 )}
-                {saleCgstAmount != null && (
+                {!hasItemBreakdown && saleCgstAmount != null && (
                   <div>
                     <dt>CGST</dt>
                     <dd>{formatSaleAmount(saleCgstAmount)}</dd>
                   </div>
                 )}
-                {saleSgstAmount != null && (
+                {!hasItemBreakdown && saleSgstAmount != null && (
                   <div>
                     <dt>SGST</dt>
                     <dd>{formatSaleAmount(saleSgstAmount)}</dd>
                   </div>
                 )}
-                {saleIgstAmount != null && (
+                {!hasItemBreakdown && saleIgstAmount != null && (
                   <div>
                     <dt>IGST</dt>
                     <dd>{formatSaleAmount(saleIgstAmount)}</dd>
                   </div>
                 )}
-                {saleCessAmount != null && (
+                {!hasItemBreakdown && saleCessAmount != null && (
                   <div>
                     <dt>Cess</dt>
                     <dd>{formatSaleAmount(saleCessAmount)}</dd>
@@ -450,24 +529,42 @@ export function SalesDetailDrawer({ workspace }: SalesDetailDrawerProps): JSX.El
               </dl>
             </section>
 
+            {hasItemBreakdown && (
+              <section className="sales-drawer__section">
+                <h3 className="sales-drawer__section-title">Invoice items</h3>
+                <InvoiceItemsList items={invoiceItems} />
+              </section>
+            )}
+
             {hasInvoiceComposition ? (
               <>
                 {trackedProducts.length > 0 ? (
                   <section className="sales-drawer__section">
                     <h3 className="sales-drawer__section-title">Tracked products</h3>
-                    <TrackedProductsList products={trackedProducts} isMainAdmin={isMainAdmin} />
+                    <TrackedProductsList
+                      products={trackedProducts}
+                      isMainAdmin={isMainAdmin}
+                      showAmounts={!hasItemBreakdown}
+                    />
                   </section>
                 ) : null}
                 {additionalProducts.length > 0 ? (
                   <section className="sales-drawer__section">
                     <h3 className="sales-drawer__section-title">Additional products</h3>
-                    <AdditionalProductsList products={additionalProducts} />
+                    <AdditionalProductsList
+                      products={additionalProducts}
+                      showAmounts={!hasItemBreakdown}
+                    />
                   </section>
                 ) : null}
                 {unmatchedItems.length > 0 ? (
                   <section className="sales-drawer__section">
                     <h3 className="sales-drawer__section-title">Unmatched serialized items</h3>
-                    <UnmatchedItemsList items={unmatchedItems} isMainAdmin={isMainAdmin} />
+                    <UnmatchedItemsList
+                      items={unmatchedItems}
+                      isMainAdmin={isMainAdmin}
+                      showAmounts={!hasItemBreakdown}
+                    />
                   </section>
                 ) : null}
               </>

@@ -11,9 +11,11 @@ Related Documents: docs/README.md
 
 ## Overview
 
+Desktop and mobile share the WEBSTUDIO navy accent, Lato typography, light and dark surfaces, and color cues for operational status.
 
 ## Purpose
 
+Use the shared shell, buttons, fields, and status styles for new screens. Keep page titles and primary actions easy to find, make labels readable in both themes, and use color to reinforce labeled states. Desktop tables can remain dense for scanning. On mobile, let card details wrap and keep the native navigation and touch targets.
 
 ## Scope
 

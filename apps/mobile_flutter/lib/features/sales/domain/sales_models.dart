@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:intl/intl.dart';
 
 enum SalesSortField {
   soldAt,
@@ -75,7 +76,8 @@ class SaleListItem extends Equatable {
         customerName: json['customer_name'] as String?,
         paymentMode: json['payment_mode'] as String?,
         saleAmount: (json['sale_amount'] as num?)?.toDouble(),
-        saleAmountExcludingGst: (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
+        saleAmountExcludingGst:
+            (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
         saleSource: json['sale_source'] as String,
         soldAt: json['sold_at'] as String,
         recordedByUserId: json['recorded_by_user_id'] as int?,
@@ -128,6 +130,7 @@ class SaleDetail extends Equatable {
     this.additionalProducts = const [],
     this.unmatchedSerializedItems = const [],
     this.invoiceTotals,
+    this.invoiceItems = const [],
     this.importedAt,
     required this.createdAt,
   });
@@ -172,6 +175,7 @@ class SaleDetail extends Equatable {
   final List<Map<String, dynamic>> additionalProducts;
   final List<Map<String, dynamic>> unmatchedSerializedItems;
   final Map<String, dynamic>? invoiceTotals;
+  final List<Map<String, dynamic>> invoiceItems;
   final String? importedAt;
   final String createdAt;
 
@@ -201,7 +205,8 @@ class SaleDetail extends Equatable {
         customerName: json['customer_name'] as String?,
         paymentMode: json['payment_mode'] as String?,
         saleAmount: (json['sale_amount'] as num?)?.toDouble(),
-        saleAmountExcludingGst: (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
+        saleAmountExcludingGst:
+            (json['sale_amount_excluding_gst'] as num?)?.toDouble(),
         saleSource: json['sale_source'] as String,
         soldAt: json['sold_at'] as String,
         recordedByUserId: json['recorded_by_user_id'] as int?,
@@ -217,16 +222,22 @@ class SaleDetail extends Equatable {
         reviewReason: json['review_reason'] as String?,
         invoiceStatus: json['invoice_status'] as String?,
         serialSourceLabel: json['serial_source_label'] as String?,
-        trackedProducts: (json['tracked_products'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        additionalProducts: (json['additional_products'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        unmatchedSerializedItems: (json['unmatched_serialized_items'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
+        trackedProducts:
+            (json['tracked_products'] as List<dynamic>? ?? const [])
+                .whereType<Map<String, dynamic>>()
+                .toList(),
+        additionalProducts:
+            (json['additional_products'] as List<dynamic>? ?? const [])
+                .whereType<Map<String, dynamic>>()
+                .toList(),
+        unmatchedSerializedItems:
+            (json['unmatched_serialized_items'] as List<dynamic>? ?? const [])
+                .whereType<Map<String, dynamic>>()
+                .toList(),
         invoiceTotals: json['invoice_totals'] as Map<String, dynamic>?,
+        invoiceItems: (json['invoice_items'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
         importedAt: json['imported_at'] as String?,
         createdAt: json['created_at'] as String,
       );
@@ -274,7 +285,8 @@ class SalesListFilters extends Equatable {
       if (brandId != null) 'brand_id': brandId,
       if (locationId != null) 'location_id': locationId,
       if (userId != null) 'user_id': userId,
-      if (invoiceNumber.trim().isNotEmpty) 'invoice_number': invoiceNumber.trim(),
+      if (invoiceNumber.trim().isNotEmpty)
+        'invoice_number': invoiceNumber.trim(),
       if (customerName.trim().isNotEmpty) 'customer_name': customerName.trim(),
       if (paymentMode.trim().isNotEmpty) 'payment_mode': paymentMode.trim(),
       if (saleSource.isNotEmpty) 'sale_source': saleSource,
@@ -311,12 +323,32 @@ class SalesListFilters extends Equatable {
   }
 
   @override
-  List<Object?> get props => [brandId, locationId, userId, invoiceNumber, customerName, paymentMode, saleSource, dateFrom, dateTo];
+  List<Object?> get props => [
+        brandId,
+        locationId,
+        userId,
+        invoiceNumber,
+        customerName,
+        paymentMode,
+        saleSource,
+        dateFrom,
+        dateTo
+      ];
 }
 
 String formatSaleAmount(double? amount) {
   if (amount == null) return '—';
   return '₹${amount.round()}';
+}
+
+final _invoiceCurrency =
+    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+
+String formatInvoiceAmount(Object? value) {
+  final amount = value is num ? value : num.tryParse(value?.toString() ?? '');
+  return amount == null || !amount.isFinite
+      ? '—'
+      : _invoiceCurrency.format(amount);
 }
 
 String saleSourceLabel(String source) => switch (source) {

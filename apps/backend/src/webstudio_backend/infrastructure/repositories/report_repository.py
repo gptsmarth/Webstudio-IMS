@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webstudio_backend.infrastructure.database.enums import (
     InventoryStatus,
     NotificationStatus,
+    ProductCategory,
 )
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.brand import Brand
@@ -164,6 +165,15 @@ class SalesExportRow:
 
 
 @dataclass(frozen=True, slots=True)
+class AsusWeeklySaleRow:
+    sale: Sale
+    category: ProductCategory | None
+    model_number: str | None
+    part_number: str | None
+    serial_number: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SalesReportRow:
     id: int
     inventory_item_id: uuid.UUID | None
@@ -262,6 +272,36 @@ class ReportSummary:
 class ReportRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def list_asus_weekly_sales(
+        self, start: datetime, end: datetime
+    ) -> list[AsusWeeklySaleRow]:
+        statement = (
+            select(
+                Sale,
+                ProductModel.category,
+                func.coalesce(Sale.snapshot_model_number, ProductModel.model_number),
+                ProductModel.part_number,
+                func.coalesce(Sale.snapshot_serial_number, InventoryItem.serial_number),
+            )
+            .select_from(Sale)
+            .outerjoin(InventoryItem, InventoryItem.id == Sale.inventory_item_id)
+            .outerjoin(
+                ProductModel,
+                ProductModel.id
+                == func.coalesce(Sale.snapshot_product_model_id, InventoryItem.product_model_id),
+            )
+            .outerjoin(Brand, Brand.id == ProductModel.brand_id)
+            .where(
+                func.upper(func.trim(func.coalesce(Sale.snapshot_brand_name, Brand.name)))
+                == "ASUS",
+                Sale.cancelled_at.is_(None),
+                Sale.sold_at.between(start, end),
+            )
+            .order_by(Sale.sold_at, Sale.id)
+        )
+        result = await self._session.execute(statement)
+        return [AsusWeeklySaleRow(*row) for row in result]
 
     async def count_inventory(self, filters: ReportFilters) -> int:
         statement = select(func.count()).select_from(

@@ -119,16 +119,20 @@ export function PageContainer({ children }: PageContainerProps): JSX.Element {
 
 interface PageHeaderProps {
   title: string;
-  description: string;
+  description?: ReactNode;
+  back?: ReactNode;
   actions?: ReactNode;
 }
 
-export function PageHeader({ title, description, actions }: PageHeaderProps): JSX.Element {
+export function PageHeader({ title, description, back, actions }: PageHeaderProps): JSX.Element {
   return (
     <header className="app-page-header">
-      <div className="app-page-header-text">
-        <h1 className="app-page-title">{title}</h1>
-        <p className="app-page-description">{description}</p>
+      <div className="app-page-header-main">
+        {back}
+        <div className="app-page-header-text">
+          <h1 className="app-page-title">{title}</h1>
+          {description && <div className="app-page-description">{description}</div>}
+        </div>
       </div>
       {actions && <div className="app-page-header-actions">{actions}</div>}
     </header>

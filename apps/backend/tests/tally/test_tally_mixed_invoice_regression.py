@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import uuid
+from decimal import Decimal
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,11 +55,13 @@ def _mixed_xml(*, guid: str, laptop_serial: str, mouse_serial: str) -> str:
   <REFERENCE>MIX/0001/26-27</REFERENCE>
   <DATE>20260710</DATE>
   <PARTYLEDGERNAME>Mixed Buyer</PARTYLEDGERNAME>
-  <LEDGERENTRIES.LIST><AMOUNT>-77500.00</AMOUNT></LEDGERENTRIES.LIST>
+  <LEDGERENTRIES.LIST><LEDGERNAME>Mixed Buyer</LEDGERNAME><AMOUNT>-68000.00</AMOUNT></LEDGERENTRIES.LIST>
+  <LEDGERENTRIES.LIST><LEDGERNAME>Output CGST</LEDGERNAME><AMOUNT>5186.44</AMOUNT></LEDGERENTRIES.LIST>
+  <LEDGERENTRIES.LIST><LEDGERNAME>Output SGST</LEDGERNAME><AMOUNT>5186.44</AMOUNT></LEDGERENTRIES.LIST>
   <ALLINVENTORYENTRIES.LIST>
     <STOCKITEMNAME>ASUS Vivobook 15 X1502ZA-EJ541WS</STOCKITEMNAME>
     <ACTUALQTY>1 Nos</ACTUALQTY>
-    <AMOUNT>75000.00</AMOUNT>
+    <AMOUNT>56779.67</AMOUNT>
     <BASICUSERDESCRIPTION.LIST>
       <BASICUSERDESCRIPTION>{laptop_serial}</BASICUSERDESCRIPTION>
       <BASICUSERDESCRIPTION>Warranty by ASUS</BASICUSERDESCRIPTION>
@@ -67,12 +70,12 @@ def _mixed_xml(*, guid: str, laptop_serial: str, mouse_serial: str) -> str:
   <ALLINVENTORYENTRIES.LIST>
     <STOCKITEMNAME>CARRY CASE ASUS BACKPACK</STOCKITEMNAME>
     <ACTUALQTY>1 Nos</ACTUALQTY>
-    <AMOUNT>1000.00</AMOUNT>
+    <AMOUNT>846.60</AMOUNT>
   </ALLINVENTORYENTRIES.LIST>
   <ALLINVENTORYENTRIES.LIST>
     <STOCKITEMNAME>ASUS MD100 Silent Wireless Mouse</STOCKITEMNAME>
     <ACTUALQTY>1 Nos</ACTUALQTY>
-    <AMOUNT>1500.00</AMOUNT>
+    <AMOUNT>0.85</AMOUNT>
     <BASICUSERDESCRIPTION.LIST>
       <BASICUSERDESCRIPTION>{mouse_serial}</BASICUSERDESCRIPTION>
     </BASICUSERDESCRIPTION.LIST>
@@ -159,8 +162,10 @@ async def test_mixed_laptop_backpack_mouse_invoice(
     assert mouse_sale is not None
     assert laptop_sale.tally_voucher_guid == guid
     assert mouse_sale.tally_voucher_guid == guid
-    assert laptop_sale.sale_amount == 75000.0
-    assert mouse_sale.sale_amount == 1500.0
+    assert Decimal(str(laptop_sale.sale_amount)) == Decimal("67000.01")
+    assert Decimal(str(laptop_sale.sale_amount_excluding_gst)) == Decimal("56779.67")
+    assert Decimal(str(mouse_sale.sale_amount)) == Decimal("1.01")
+    assert Decimal(str(mouse_sale.sale_amount_excluding_gst)) == Decimal("0.85")
     assert laptop_sale.review_required is False
     assert mouse_sale.review_required is False
     assert laptop_sale.serial_source == "basicuserdescription"
@@ -172,13 +177,15 @@ async def test_mixed_laptop_backpack_mouse_invoice(
     assert tally_invoice_status_label(invoice.processing_status) == "processed"
     assert invoice.raw_xml_gzip is not None
     assert gzip.decompress(invoice.raw_xml_gzip).decode("utf-8").find(guid) >= 0
-    assert invoice.grand_total is not None
+    assert invoice.grand_total == Decimal("68000.00")
 
     lines = await TallyProcessedInvoiceLineRepository(db_session).list_for_invoice(invoice.id)
     assert len(lines) == 3
     assert lines[0].line_outcome is TallyLineOutcome.SALE_APPLIED
     assert lines[1].line_outcome is TallyLineOutcome.ADDITIONAL_PRODUCT
     assert lines[1].is_additional_product is True
+    assert lines[1].taxable_amount == Decimal("846.60")
+    assert lines[1].line_total == Decimal("998.98")
     assert lines[2].line_outcome is TallyLineOutcome.SALE_APPLIED
 
 

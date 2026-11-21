@@ -80,8 +80,7 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       appBarTheme: AppBarTheme(
         elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: scheme.shadow,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         toolbarHeight: AppSpacing.toolbarHeight,
@@ -136,7 +135,7 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: scheme.surfaceContainerHighest,
+        fillColor: scheme.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -144,7 +143,7 @@ abstract final class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: BorderSide(color: border),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -194,12 +193,12 @@ abstract final class AppTheme {
         elevation: 0,
         height: AppSpacing.bottomNavHeight,
         backgroundColor: scheme.surface,
-        indicatorColor: scheme.primary.withValues(alpha: 0.14),
+        indicatorColor: scheme.primaryContainer,
         surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
-            fontSize: 11,
+            fontSize: 12,
             height: 1.0,
             letterSpacing: -0.1,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -209,7 +208,7 @@ abstract final class AppTheme {
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: scheme.surface,
-        indicatorColor: scheme.primary.withValues(alpha: 0.14),
+        indicatorColor: scheme.primaryContainer,
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: IconThemeData(color: textSecondary),
         labelType: NavigationRailLabelType.all,

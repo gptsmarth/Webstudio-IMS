@@ -24,6 +24,8 @@ class TallyInventoryLine:
     line_total: str | None = None
     serial_source: str | None = None
     normalized_serial: str | None = None
+    gst_allocated: bool = False
+    gst_rates: dict[str, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

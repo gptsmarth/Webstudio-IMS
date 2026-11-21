@@ -15,14 +15,14 @@ abstract final class AppTypography {
       bodySmall: base.bodySmall?.copyWith(fontSize: 12, height: 1.5, color: color),
       titleLarge: base.titleLarge?.copyWith(
         fontSize: 20,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.01,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.3,
         color: color,
       ),
       titleMedium: base.titleMedium?.copyWith(
         fontSize: 16,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.01,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.15,
         color: color,
       ),
       titleSmall: base.titleSmall?.copyWith(

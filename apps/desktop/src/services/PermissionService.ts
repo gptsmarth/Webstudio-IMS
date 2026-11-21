@@ -157,6 +157,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   catalogue: P.brands.view,
   notifications: P.notifications.view,
   reports: P.reports.view,
+  'asus-weekly-report': P.reports.export,
   users: P.users.view,
   audit: P.audit.view,
   settings: P.settings.view,

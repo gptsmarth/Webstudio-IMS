@@ -45,8 +45,10 @@ class _VoucherBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
-    final canIgnore = canImportPurchase(permissions) && detail.status != 'imported';
+    final permissions =
+        effectivePermissions(ref.watch(authControllerProvider).user);
+    final canIgnore =
+        canImportPurchase(permissions) && detail.status != 'imported';
     return WorkspaceBody(
       alignTop: true,
       child: ListView(
@@ -55,7 +57,8 @@ class _VoucherBody extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: Text('Purchase ${detail.voucherNumber}', style: theme.textTheme.titleMedium),
+                child: Text('Purchase ${detail.voucherNumber}',
+                    style: theme.textTheme.titleMedium),
               ),
               PurchaseStatusChip(status: detail.status),
               if (canIgnore)
@@ -118,7 +121,8 @@ class _VoucherBody extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 110, child: Text(label, style: theme.textTheme.bodySmall)),
+          SizedBox(
+              width: 110, child: Text(label, style: theme.textTheme.bodySmall)),
           Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
         ],
       ),
@@ -140,8 +144,15 @@ class _GroupCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
+    final permissions =
+        effectivePermissions(ref.watch(authControllerProvider).user);
     final canImport = canImportPurchase(permissions);
+    final receivedSerials = group.serials
+        .where((cell) => cell.serialNumber.trim().isNotEmpty)
+        .toList();
+    final hasSerialData =
+        receivedSerials.isNotEmpty || group.serialSource != null;
+    final missing = group.quantity - receivedSerials.length;
     return WorkspaceCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -154,10 +165,12 @@ class _GroupCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(group.stockItemName, style: theme.textTheme.titleSmall),
+                    Text(group.stockItemName,
+                        style: theme.textTheme.titleSmall),
                     const SizedBox(height: 2),
                     Text(
-                      'Quantity ${group.quantity} · ${group.serials.length} serial(s)'
+                      'Quantity ${group.quantity} · ${receivedSerials.length} '
+                      '${receivedSerials.length == 1 ? 'serial' : 'serials'} received'
                       '${group.duplicateCount > 0 ? ' · ${group.duplicateCount} already added' : ''}',
                       style: theme.textTheme.bodySmall,
                     ),
@@ -175,7 +188,7 @@ class _GroupCard extends ConsumerWidget {
                     group: group,
                     onImported: onImported,
                   ),
-                  child: const Text('Import'),
+                  child: const Text('Import stock'),
                 )
               else
                 const Chip(
@@ -184,13 +197,13 @@ class _GroupCard extends ConsumerWidget {
                 ),
             ],
           ),
-          if (group.serials.isNotEmpty) ...[
+          if (receivedSerials.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.xs,
               runSpacing: AppSpacing.xs,
               children: [
-                for (final cell in group.serials)
+                for (final cell in receivedSerials)
                   Chip(
                     label: Text(cell.serialNumber),
                     backgroundColor: cell.isDuplicate
@@ -199,6 +212,15 @@ class _GroupCard extends ConsumerWidget {
                     visualDensity: VisualDensity.compact,
                   ),
               ],
+            ),
+          ],
+          if (hasSerialData && missing > 0 && !group.imported) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '$missing missing. Verify the invoice and enter the missing serials during import.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ],

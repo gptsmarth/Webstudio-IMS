@@ -44,6 +44,12 @@ from webstudio_backend.infrastructure.repositories.report_filters import (
     ReportFilters,
     ReportType,
 )
+from webstudio_backend.services.asus_weekly_report_service import (
+    ASUS_WORKBOOK_FILENAME,
+    ASUS_WORKBOOK_MEDIA_TYPE,
+    AsusWeeklyProducts,
+    AsusWeeklyReportService,
+)
 from webstudio_backend.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
@@ -332,6 +338,24 @@ async def notifications_report(
     )
     meta = page_meta(rows)
     return _envelope(request, response.model_dump(), _page_meta(**meta))
+
+
+@router.get("/asus-weekly")
+async def export_asus_weekly_report(
+    current: ReportsExportDep,
+    db_session: AsyncSession = DbSessionDep,
+    *,
+    date_from: date,
+    date_to: date,
+    products: AsusWeeklyProducts = "laptops",
+) -> Response:
+    del current
+    content = await AsusWeeklyReportService(db_session).export(date_from, date_to, products)
+    return Response(
+        content=content,
+        media_type=ASUS_WORKBOOK_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{ASUS_WORKBOOK_FILENAME}"'},
+    )
 
 
 @router.get("/export")

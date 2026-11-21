@@ -74,6 +74,20 @@ export interface InvoiceTotals {
   grand_total: string | number | null;
 }
 
+export interface SaleInvoiceItem {
+  line_index: number;
+  product_name: string;
+  quantity: string | null;
+  tracking: 'tracked' | 'additional' | 'unmatched' | 'unclassified';
+  amount_excluding_gst: string | null;
+  cgst_amount: string | null;
+  sgst_amount: string | null;
+  igst_amount: string | null;
+  cess_amount: string | null;
+  amount_including_gst: string | null;
+  gst_allocated: boolean;
+}
+
 export interface SaleDetail extends SaleListItem {
   brand_id: number | null;
   product_model_id: string | null;
@@ -102,6 +116,7 @@ export interface SaleDetail extends SaleListItem {
   additional_products?: AdditionalInvoiceProduct[];
   unmatched_serialized_items?: UnmatchedSerializedItem[];
   invoice_totals?: InvoiceTotals | null;
+  invoice_items?: SaleInvoiceItem[];
   original_xml_available?: boolean;
   imported_at?: string | null;
   created_at: string;

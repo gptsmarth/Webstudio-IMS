@@ -8,7 +8,7 @@ abstract final class AppColors {
   static const brandCoral = Color(0xFFE8684A);
 
   // Light surfaces
-  static const lightBgApp = Color(0xFFEEF1F6);
+  static const lightBgApp = Color(0xFFF2F5F9);
   static const lightBgSurface = Color(0xFFFFFFFF);
   static const lightBgRaised = Color(0xFFF7F8FB);
   static const lightBgHover = Color(0xFFEEF2F8);
@@ -19,7 +19,7 @@ abstract final class AppColors {
 
   static const lightTextPrimary = Color(0xFF1A2332);
   static const lightTextSecondary = Color(0xFF5A6578);
-  static const lightTextTertiary = Color(0xFF8B95A8);
+  static const lightTextTertiary = Color(0xFF626E82);
   static const lightTextDisabled = Color(0xFFB4BCC9);
 
   static const lightPrimary500 = Color(0xFF2B4C7E);
@@ -45,7 +45,7 @@ abstract final class AppColors {
 
   static const darkTextPrimary = Color(0xFFE6EDF3);
   static const darkTextSecondary = Color(0xFF9BA4B0);
-  static const darkTextTertiary = Color(0xFF6E7681);
+  static const darkTextTertiary = Color(0xFF8793A3);
   static const darkTextDisabled = Color(0xFF484F58);
 
   static const darkPrimary500 = Color(0xFF5B8FCE);

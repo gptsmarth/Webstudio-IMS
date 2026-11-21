@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -121,6 +122,20 @@ class InvoiceTotals(BaseModel):
     grand_total: Decimal | None = None
 
 
+class SaleInvoiceItem(BaseModel):
+    line_index: int
+    product_name: str
+    quantity: str | None = None
+    tracking: Literal["tracked", "additional", "unmatched", "unclassified"]
+    amount_excluding_gst: Decimal | None = None
+    cgst_amount: Decimal | None = None
+    sgst_amount: Decimal | None = None
+    igst_amount: Decimal | None = None
+    cess_amount: Decimal | None = None
+    amount_including_gst: Decimal | None = None
+    gst_allocated: bool = False
+
+
 class SaleDetailResponse(BaseModel):
     id: int
     inventory_item_id: uuid.UUID | None
@@ -170,6 +185,7 @@ class SaleDetailResponse(BaseModel):
     additional_products: list[AdditionalInvoiceProduct] = Field(default_factory=list)
     unmatched_serialized_items: list[UnmatchedSerializedItem] = Field(default_factory=list)
     invoice_totals: InvoiceTotals | None = None
+    invoice_items: list[SaleInvoiceItem] = Field(default_factory=list)
     original_xml_available: bool = False
     imported_at: datetime | None = None
     created_at: datetime
@@ -185,6 +201,7 @@ class SaleDetailResponse(BaseModel):
         additional_products: list[AdditionalInvoiceProduct] | None = None,
         unmatched_serialized_items: list[UnmatchedSerializedItem] | None = None,
         invoice_totals: InvoiceTotals | None = None,
+        invoice_items: list[SaleInvoiceItem] | None = None,
         invoice_status: str | None = None,
         original_xml_available: bool = False,
         imported_at: datetime | None = None,
@@ -241,6 +258,7 @@ class SaleDetailResponse(BaseModel):
             additional_products=additional_products or [],
             unmatched_serialized_items=unmatched_serialized_items or [],
             invoice_totals=invoice_totals,
+            invoice_items=invoice_items or [],
             original_xml_available=original_xml_available,
             imported_at=imported_at,
             created_at=row.created_at,

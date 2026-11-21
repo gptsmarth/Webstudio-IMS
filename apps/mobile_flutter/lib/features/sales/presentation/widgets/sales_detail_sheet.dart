@@ -33,8 +33,15 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
     if (detail == null || detail.inventoryItemId == null) return;
     setState(() => _auditLoading = true);
     try {
-      final entries = await ref.read(auditRepositoryProvider).listForInventoryItem(detail.inventoryItemId!);
-      if (mounted) setState(() { _auditEntries = entries; _auditLoading = false; });
+      final entries = await ref
+          .read(auditRepositoryProvider)
+          .listForInventoryItem(detail.inventoryItemId!);
+      if (mounted) {
+        setState(() {
+          _auditEntries = entries;
+          _auditLoading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _auditLoading = false);
     }
@@ -73,9 +80,11 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
     final detail = workspace.selectedDetail;
     if (detail == null) return const SizedBox.shrink();
 
-    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
+    final permissions =
+        effectivePermissions(ref.watch(authControllerProvider).user);
     final canDelete = canDeleteSale(permissions, detail.inventoryItemId);
-    final isMainAdmin = ref.watch(authControllerProvider).user?.role == 'main_admin';
+    final isMainAdmin =
+        ref.watch(authControllerProvider).user?.role == 'main_admin';
     final invoiceStatusLabel = switch (detail.invoiceStatus) {
       'processed' => 'Processed',
       'processed_with_warnings' => 'Processed With Warnings',
@@ -92,7 +101,8 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
       expand: false,
       builder: (context, scrollController) {
         return Material(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppSpacing.radiusXl)),
           child: workspace.detailLoading
               ? const Center(child: CircularProgressIndicator())
               : ListView(
@@ -112,18 +122,24 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     const SizedBox(height: AppSpacing.lg),
                     Row(
                       children: [
-                        Expanded(child: Text(detail.invoiceNumber, style: Theme.of(context).textTheme.titleLarge)),
+                        Expanded(
+                            child: Text(detail.invoiceNumber,
+                                style: Theme.of(context).textTheme.titleLarge)),
                         Chip(label: Text(saleSourceLabel(detail.saleSource))),
                       ],
                     ),
                     if (detail.reviewRequired) ...[
                       const SizedBox(height: AppSpacing.md),
                       Card(
-                        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.35),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withValues(alpha: 0.35),
                         child: ListTile(
                           dense: true,
                           title: const Text('Review required'),
-                          subtitle: Text(detail.reviewReason ?? 'This Tally invoice needs operator review.'),
+                          subtitle: Text(detail.reviewReason ??
+                              'This Tally invoice needs operator review.'),
                         ),
                       ),
                     ],
@@ -132,32 +148,50 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: OutlinedButton.icon(
-                          onPressed: workspace.actionInProgress ? null : () => _confirmDelete(detail),
+                          onPressed: workspace.actionInProgress
+                              ? null
+                              : () => _confirmDelete(detail),
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: const Text('Delete invoice'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Theme.of(context).colorScheme.error,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.error,
                           ),
                         ),
                       ),
                     ],
-                    Text(detail.soldAt.split('T').first, style: Theme.of(context).textTheme.bodySmall),
+                    Text(detail.soldAt.split('T').first,
+                        style: Theme.of(context).textTheme.bodySmall),
                     const Divider(height: 32),
                     const _SectionTitle('Timeline'),
-                    _TimelineTile(label: 'Sale recorded', date: detail.createdAt),
+                    _TimelineTile(
+                        label: 'Sale recorded', date: detail.createdAt),
                     _TimelineTile(label: 'Sold on', date: detail.soldAt),
                     const Divider(height: 32),
                     const _SectionTitle('Invoice'),
                     if (invoiceStatusLabel != null)
-                      _InfoRow(label: 'Invoice status', value: invoiceStatusLabel),
-                    _InfoRow(label: 'Payment', value: detail.paymentMode ?? '—'),
-                    _InfoRow(label: 'Amount (incl. GST)', value: formatSaleAmount(detail.saleAmount)),
-                    if (detail.saleAmountExcludingGst != null)
+                      _InfoRow(
+                          label: 'Invoice status', value: invoiceStatusLabel),
+                    _InfoRow(
+                        label: 'Payment', value: detail.paymentMode ?? '—'),
+                    _InfoRow(
+                      emphasize: detail.invoiceTotals?['grand_total'] != null,
+                      label: detail.invoiceTotals?['grand_total'] != null
+                          ? 'Invoice total (incl. GST)'
+                          : 'Sale amount',
+                      value: formatInvoiceAmount(
+                          detail.invoiceTotals?['grand_total'] ??
+                              detail.saleAmount),
+                    ),
+                    if (detail.invoiceItems.isEmpty &&
+                        detail.saleAmountExcludingGst != null)
                       _InfoRow(
                         label: 'Amount excluding GST',
                         value: formatSaleAmount(detail.saleAmountExcludingGst),
                       ),
-                    _InfoRow(label: 'Sold by', value: detail.recordedByDisplayName ?? '—'),
+                    _InfoRow(
+                        label: 'Sold by',
+                        value: detail.recordedByDisplayName ?? '—'),
                     const SizedBox(height: AppSpacing.md),
                     const _SectionTitle('Customer'),
                     _InfoRow(label: 'Name', value: detail.customerName ?? '—'),
@@ -167,12 +201,45 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     const _SectionTitle('Laptop'),
                     _InfoRow(label: 'Serial', value: detail.serialNumber),
                     _InfoRow(label: 'Brand', value: detail.brandName),
-                    _InfoRow(label: 'Model', value: '${detail.modelNumber} · ${detail.modelName}'),
+                    _InfoRow(
+                        label: 'Model',
+                        value: '${detail.modelNumber} · ${detail.modelName}'),
                     _InfoRow(label: 'Store', value: detail.locationName),
                     _InfoRow(label: 'Color', value: detail.color),
                     _InfoRow(label: 'Specs', value: detail.specsLabel),
                     if (isMainAdmin && detail.serialSourceLabel != null)
-                      _InfoRow(label: 'Serial source', value: detail.serialSourceLabel!),
+                      _InfoRow(
+                          label: 'Serial source',
+                          value: detail.serialSourceLabel!),
+                    if (detail.invoiceItems.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const _SectionTitle('Invoice items'),
+                      if (detail.invoiceItems
+                          .any((item) => item['gst_allocated'] == true))
+                        const Text(
+                            'GST uses Tally’s item rates where available and is otherwise apportioned from the invoice.'),
+                      for (final line in detail.invoiceItems)
+                        _InvoiceItem(line: line),
+                    ],
+                    if (detail.invoiceTotals != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      const _SectionTitle('Invoice totals'),
+                      for (final entry in const {
+                        'subtotal': 'Subtotal',
+                        'discount_amount': 'Discount',
+                        'cgst_amount': 'CGST',
+                        'sgst_amount': 'SGST',
+                        'igst_amount': 'IGST',
+                        'cess_amount': 'Cess',
+                        'round_off': 'Round off',
+                      }.entries)
+                        if (detail.invoiceTotals![entry.key] != null)
+                          _InfoRow(
+                            label: entry.value,
+                            value: formatInvoiceAmount(
+                                detail.invoiceTotals![entry.key]),
+                          ),
+                    ],
                     if (detail.trackedProducts.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
                       const _SectionTitle('Tracked products'),
@@ -203,28 +270,42 @@ class _SalesDetailSheetState extends ConsumerState<SalesDetailSheet> {
                     if (detail.saleSource == 'tally') ...[
                       const SizedBox(height: AppSpacing.md),
                       const _SectionTitle('Tally'),
-                      _InfoRow(label: 'Company', value: detail.tallyCompanyName ?? '—'),
-                      _InfoRow(label: 'Voucher', value: detail.tallyVoucherNumber ?? '—'),
-                      _InfoRow(label: 'Printed invoice', value: detail.printedInvoiceNumber ?? '—'),
+                      _InfoRow(
+                          label: 'Company',
+                          value: detail.tallyCompanyName ?? '—'),
+                      _InfoRow(
+                          label: 'Voucher',
+                          value: detail.tallyVoucherNumber ?? '—'),
+                      _InfoRow(
+                          label: 'Printed invoice',
+                          value: detail.printedInvoiceNumber ?? '—'),
                       if (invoiceStatusLabel != null)
-                        _InfoRow(label: 'Invoice status', value: invoiceStatusLabel),
+                        _InfoRow(
+                            label: 'Invoice status', value: invoiceStatusLabel),
                       if (isMainAdmin && detail.tallyVoucherGuid != null)
-                        _InfoRow(label: 'Voucher GUID', value: detail.tallyVoucherGuid!),
+                        _InfoRow(
+                            label: 'Voucher GUID',
+                            value: detail.tallyVoucherGuid!),
                       if (isMainAdmin && detail.tallyMasterId != null)
-                        _InfoRow(label: 'Master ID', value: detail.tallyMasterId!),
+                        _InfoRow(
+                            label: 'Master ID', value: detail.tallyMasterId!),
                     ],
                     const Divider(height: 32),
                     const _SectionTitle('Audit'),
-                    if (_auditLoading) const LinearProgressIndicator(minHeight: 2),
-                    if (!_auditLoading && (_auditEntries == null || _auditEntries!.isEmpty))
+                    if (_auditLoading)
+                      const LinearProgressIndicator(minHeight: 2),
+                    if (!_auditLoading &&
+                        (_auditEntries == null || _auditEntries!.isEmpty))
                       const Text('No audit entries for this sale item'),
-                    for (final entry in _auditEntries ?? const <AuditLogEntry>[])
+                    for (final entry
+                        in _auditEntries ?? const <AuditLogEntry>[])
                       ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.history, size: 18),
                         title: Text(entry.description),
-                        subtitle: Text('${entry.operation} · ${entry.createdAt.split('T').first}'),
+                        subtitle: Text(
+                            '${entry.operation} · ${entry.createdAt.split('T').first}'),
                       ),
                   ],
                 ),
@@ -247,7 +328,54 @@ class _TimelineTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.circle, size: 10),
       title: Text(label),
-      trailing: Text(date.split('T').first, style: Theme.of(context).textTheme.labelSmall),
+      trailing: Text(date.split('T').first,
+          style: Theme.of(context).textTheme.labelSmall),
+    );
+  }
+}
+
+class _InvoiceItem extends StatelessWidget {
+  const _InvoiceItem({required this.line});
+
+  final Map<String, dynamic> line;
+
+  @override
+  Widget build(BuildContext context) {
+    final tracking = switch (line['tracking']) {
+      'tracked' => 'Tracked in IMS',
+      'additional' => 'Additional product',
+      'unmatched' => 'Unmatched serial',
+      _ => null,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            (line['product_name'] as String?) ?? 'Invoice item',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          if (line['quantity'] != null || tracking != null)
+            Text([line['quantity'], tracking].whereType<String>().join(' · ')),
+          _InfoRow(
+              label: 'Before GST',
+              value: formatInvoiceAmount(line['amount_excluding_gst'])),
+          for (final entry in const {
+            'cgst_amount': 'CGST',
+            'sgst_amount': 'SGST',
+            'igst_amount': 'IGST',
+            'cess_amount': 'Cess',
+          }.entries)
+            if ((num.tryParse(line[entry.key]?.toString() ?? '') ?? 0) != 0)
+              _InfoRow(
+                  label: entry.value,
+                  value: formatInvoiceAmount(line[entry.key])),
+          _InfoRow(
+              label: 'Including GST',
+              value: formatInvoiceAmount(line['amount_including_gst'])),
+        ],
+      ),
     );
   }
 }
@@ -265,9 +393,11 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow(
+      {required this.label, required this.value, this.emphasize = false});
   final String label;
   final String value;
+  final bool emphasize;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -275,8 +405,14 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 110, child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
-          Expanded(child: Text(value)),
+          SizedBox(
+              width: 110,
+              child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
+          Expanded(
+            child: Text(value,
+                style:
+                    emphasize ? Theme.of(context).textTheme.titleLarge : null),
+          ),
         ],
       ),
     );

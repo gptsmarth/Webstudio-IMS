@@ -24,6 +24,7 @@ const MAIN_ADMIN_PERMS = [
   'dashboard:view',
   'brands:view',
   'reports:view',
+  'reports:export',
   'audit:view',
   'notifications:view',
   'settings:view',
@@ -77,5 +78,10 @@ describe('navigation config', () => {
     expect(isRouteAllowedForPermissions('stock', SALESPERSON_PERMS)).toBe(true);
     expect(isRouteAllowedForPermissions('inventory', SALESPERSON_PERMS)).toBe(false);
     expect(isRouteAllowedForPermissions('users', SALESPERSON_PERMS)).toBe(false);
+  });
+
+  it('requires report export access for the ASUS weekly report', () => {
+    expect(isRouteAllowedForPermissions('asus-weekly-report', ['reports:view'])).toBe(false);
+    expect(isRouteAllowedForPermissions('asus-weekly-report', ['reports:export'])).toBe(true);
   });
 });

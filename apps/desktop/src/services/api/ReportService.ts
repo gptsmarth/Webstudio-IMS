@@ -1,10 +1,12 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
 import { triggerBlobDownload } from '../../lib/downloadBlob';
+import { parseApiError } from '../../lib/apiError';
 
 export type BuilderReportType = 'inventory' | 'sales' | 'audit' | 'tally';
 export type ExportFormat = 'xlsx' | 'pdf';
 export type ExportReportType = 'inventory' | 'sales' | 'audit' | 'notification';
+export type AsusWeeklyProducts = 'laptops' | 'accessories' | 'both';
 
 export interface ReportQueryParams {
   page?: number;
@@ -117,6 +119,30 @@ function exportReportType(reportType: BuilderReportType): ExportReportType {
 }
 
 export class ReportService {
+  static async downloadAsusWeeklyReport(params: {
+    date_from: string;
+    date_to: string;
+    products: AsusWeeklyProducts;
+  }): Promise<void> {
+    const client = await ApiClientProvider.getClient();
+    try {
+      const blob = await client.getBlob('/api/v1/reports/asus-weekly', params);
+      triggerBlobDownload(blob, 'ASUS_ALP_SellOut_Weekly.xlsx');
+    } catch (error) {
+      const data = (error as { response?: { data?: unknown } })?.response?.data;
+      if (data instanceof Blob) {
+        const body: unknown = await data
+          .text()
+          .then(JSON.parse)
+          .catch(() => null);
+        if (body) {
+          throw new Error(parseApiError({ response: { data: body } }, 'Report download failed.'));
+        }
+      }
+      throw error;
+    }
+  }
+
   static async preview<T>(
     reportType: BuilderReportType,
     params: ReportQueryParams,

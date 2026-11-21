@@ -91,6 +91,16 @@ If you have access to **Settings → Tally** or dashboard widgets:
 
 **You do not need to fix sync** — notify admin if Health stays Offline during business hours.
 
+### Reviewing purchases
+
+Open **Purchase** to review Tally purchase vouchers. On desktop, use **Fetch recent from Tally** for the last 14 days, **Fetch older purchases** for a date range, or **Refresh queue** to reload vouchers already in IMS. Filter by status, then select a voucher number to see its invoice summary and import progress. Use **Import stock** on an item group to review the model, serials, and receiving location before confirming.
+
+### Downloading the ASUS weekly report
+
+On desktop, open **Administration → ASUS Weekly Report** with report export access. The date range defaults to the last completed Tuesday through Monday in India. Either date can be changed. Choose **Laptops only**, **Accessories only**, or **Laptops and accessories**, then select **Download Excel**. Upload the downloaded workbook to ASUS as part of your weekly process.
+
+The workbook has one row per recorded ASUS unit, including tracked accessories under the same invoice number when selected. For example, `AES/0482/26-27` becomes `482`, a laptop model such as `X1504VAP-IN011WS` becomes part number `X1504VAP`, and accessories use the configured catalogue part number. The unit price includes the item's GST. The workbook uses the sales date, customer, serial, quantity of one, and `ASUSENDUSER1234` on each row. Resolve any missing product or price details listed by the app before retrying the export.
+
 ---
 
 ## 7. Notifications

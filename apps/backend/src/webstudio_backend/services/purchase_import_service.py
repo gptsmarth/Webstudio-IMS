@@ -7,7 +7,6 @@ failure rolls everything back (no partial inventory).
 
 from __future__ import annotations
 
-import json
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,18 +64,6 @@ from webstudio_backend.services.product_image_jobs import schedule_product_image
 
 def _parse_quantity(raw: str | None) -> int:
     return parse_tally_quantity(raw, default=0)
-
-
-def _decode_serials(raw: str | None) -> list[str]:
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except (ValueError, TypeError):
-        return []
-    if not isinstance(data, list):
-        return []
-    return [str(item).strip() for item in data if str(item).strip()]
 
 
 class PurchaseImportService:
@@ -163,7 +150,7 @@ class PurchaseImportService:
             ordered = sorted(lines, key=lambda line: line.line_index)
             serials: list[str] = []
             for line in ordered:
-                serials.extend(_decode_serials(line.serials_json))
+                serials.extend(line.serial_numbers)
             quantity = sum(_parse_quantity(line.quantity) for line in ordered)
             if quantity == 0:
                 quantity = len(serials)

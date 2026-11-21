@@ -192,6 +192,18 @@ From test fixture `tests/tally/fixtures/sample_vouchers.py`:
 
 Parser: `integrations/tally/xml_parser.py`
 
+### Purchase serials
+
+For `Purchase` and `NEW PURCHASE` vouchers, the parser reads explicit batch and line serials, then fills gaps from serial-shaped descriptions when the combined list fits the billed quantity. Serial fields may contain repeated XML elements or comma-, semicolon-, or newline-separated values. Matching is case-insensitive when removing duplicate values within a line.
+
+A repeat fetch preserves a fuller serial list when the voucher line, model, and quantity match and the new export contains a strict subset. **Refresh from Tally** tries the same-date Day Book when the historical export lacks serials. The queue shows how many serials were supplied so staff can verify gaps against Tally before importing.
+
+### Sales invoice amounts
+
+Sales detail shows the full bill from Tally's party ledger and a breakdown for every item, including additional products without a separate IMS sale. The backend reconciles item prices with the invoice tax ledgers, prefers recorded item taxes and rates, and apportions any remaining invoice-level tax in paise. Already-inclusive prices are not taxed again. Invoice discounts and signed round-off are separate from the product rows.
+
+The sales list and reports continue to use the amount for each inventory unit so a multi-item invoice is counted only once per recorded unit. Existing Sales detail recalculates from its archived voucher when available. This read does not rewrite historical sale records or inventory. Missing item tax details stay blank when the available figures cannot be reconciled.
+
 ---
 
 ## 5. Incremental behaviour (developer)

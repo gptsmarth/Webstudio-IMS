@@ -7,6 +7,7 @@ resolved ``product_model_id`` and is flagged ``imported``.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -66,3 +67,15 @@ class TallyPurchaseLine(Base, PrimaryKeyMixin, TimestampMixin):
         "TallyPurchaseVoucher",
         back_populates="lines",
     )
+
+    @property
+    def serial_numbers(self) -> list[str]:
+        if not self.serials_json:
+            return []
+        try:
+            data = json.loads(self.serials_json)
+        except (ValueError, TypeError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [str(item).strip() for item in data if str(item).strip()]

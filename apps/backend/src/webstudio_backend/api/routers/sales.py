@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +27,7 @@ from webstudio_backend.api.schemas.sales import (
     CancelSaleResponse,
     InvoiceTotals,
     SaleDetailResponse,
+    SaleInvoiceItem,
     SaleListItem,
     TrackedInvoiceProduct,
     UnmatchedSerializedItem,
@@ -38,6 +40,12 @@ from webstudio_backend.infrastructure.database.enums import (
     UserRole,
     tally_invoice_status_label,
 )
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice import (
+    TallyProcessedInvoice,
+)
+from webstudio_backend.infrastructure.database.models.tally_processed_invoice_line import (
+    TallyProcessedInvoiceLine,
+)
 from webstudio_backend.infrastructure.database.repositories.pagination import PageParams
 from webstudio_backend.infrastructure.repositories.report_filters import ReportFilters
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_repository import (
@@ -46,7 +54,16 @@ from webstudio_backend.infrastructure.repositories.tally_processed_invoice_line_
 from webstudio_backend.infrastructure.repositories.tally_processed_invoice_repository import (
     TallyProcessedInvoiceRepository,
 )
-from webstudio_backend.integrations.tally.xml_parser import format_serial_source_label
+from webstudio_backend.integrations.tally.gst import (
+    GST_FIELDS,
+    line_gst_breakdown,
+    reconcile_invoice_lines,
+)
+from webstudio_backend.integrations.tally.types import TallyInventoryLine, TallyVoucherTotals
+from webstudio_backend.integrations.tally.xml_parser import (
+    format_serial_source_label,
+    read_archived_voucher,
+)
 from webstudio_backend.services.report_service import ReportService
 from webstudio_backend.services.sale_service import SaleService
 
@@ -90,6 +107,90 @@ def _sale_list_payload(row, *, current: AuthenticatedUser) -> dict:
     return response.model_dump(exclude=exclude)
 
 
+def _invoice_item(
+    line: TallyInventoryLine, linked: list[TallyProcessedInvoiceLine], *, totals: InvoiceTotals
+) -> SaleInvoiceItem:
+    if any(record.sale_id is not None for record in linked):
+        tracking = "tracked"
+    elif any(record.is_additional_product for record in linked):
+        tracking = "additional"
+    elif any(record.is_unmatched_serialized for record in linked):
+        tracking = "unmatched"
+    else:
+        tracking = "unclassified"
+    breakdown = line_gst_breakdown(line)
+    voucher_has_gst = any(getattr(totals, field) for field in GST_FIELDS)
+    untaxed_amount = (
+        Decimal(line.line_total) if line.line_total is not None and not voucher_has_gst else None
+    )
+    inclusive_amount = untaxed_amount
+    if breakdown is not None and all(
+        getattr(line, field) is not None for field in GST_FIELDS if getattr(totals, field)
+    ):
+        inclusive_amount = breakdown.amount_including_gst
+    return SaleInvoiceItem(
+        line_index=line.line_index,
+        product_name=line.stock_item_name,
+        quantity=line.quantity,
+        tracking=tracking,
+        amount_excluding_gst=(
+            breakdown.base_excluding_gst
+            if breakdown is not None
+            else untaxed_amount if totals.subtotal is not None else None
+        ),
+        amount_including_gst=inclusive_amount,
+        gst_allocated=line.gst_allocated,
+        **{
+            field: Decimal(value) if (value := getattr(line, field)) is not None else None
+            for field in GST_FIELDS
+        },
+    )
+
+
+def _present_invoice_amounts(
+    invoice: TallyProcessedInvoice, records: list[TallyProcessedInvoiceLine]
+) -> tuple[InvoiceTotals, list[SaleInvoiceItem]]:
+    totals = InvoiceTotals.model_validate(invoice, from_attributes=True)
+    parsed = read_archived_voucher(invoice.raw_xml_gzip, invoice.tally_voucher_guid)
+    items: list[SaleInvoiceItem] = []
+    if parsed is not None and parsed.inventory_lines:
+        totals = InvoiceTotals.model_validate(parsed.totals, from_attributes=True)
+        stored = {record.line_index: record for record in records}
+        index = 0
+        for line in parsed.inventory_lines:
+            count = max(1, len(line.batch_allocations))
+            matched = [stored[pos] for pos in range(index, index + count) if pos in stored]
+            index += count
+            items.append(_invoice_item(line, matched, totals=totals))
+    else:
+        lines = [
+            TallyInventoryLine(
+                line_index=record.line_index,
+                stock_item_name=record.stock_item_name or "",
+                quantity=record.quantity or "",
+                serial_number=record.serial_number,
+                taxable_amount=(
+                    str(record.taxable_amount) if record.taxable_amount is not None else None
+                ),
+                line_total=str(record.line_total) if record.line_total is not None else None,
+                amount=str(record.line_total) if record.line_total is not None else None,
+                **{
+                    field: str(value) if (value := getattr(record, field)) is not None else None
+                    for field in GST_FIELDS
+                },
+            )
+            for record in records
+        ]
+        if totals.grand_total is not None:
+            lines, reconciled = reconcile_invoice_lines(
+                lines, TallyVoucherTotals(**totals.model_dump())
+            )
+            totals = InvoiceTotals.model_validate(reconciled, from_attributes=True)
+        for line, record in zip(lines, records, strict=True):
+            items.append(_invoice_item(line, [record], totals=totals))
+    return totals, items
+
+
 async def _sale_detail_payload(
     row,
     *,
@@ -102,6 +203,7 @@ async def _sale_detail_payload(
     unmatched_serialized_items: list[UnmatchedSerializedItem] = []
     tracked_products: list[TrackedInvoiceProduct] = []
     invoice_totals: InvoiceTotals | None = None
+    invoice_items: list[SaleInvoiceItem] = []
     invoice_status: str | None = None
     original_xml_available = False
     imported_at = None
@@ -115,16 +217,8 @@ async def _sale_detail_payload(
             original_xml_available = invoice.raw_xml_gzip is not None
             imported_at = invoice.imported_at
             invoice_status = tally_invoice_status_label(invoice.processing_status)
-            invoice_totals = InvoiceTotals(
-                subtotal=invoice.subtotal,
-                discount_amount=invoice.discount_amount,
-                round_off=invoice.round_off,
-                cgst_amount=invoice.cgst_amount,
-                sgst_amount=invoice.sgst_amount,
-                igst_amount=invoice.igst_amount,
-                cess_amount=invoice.cess_amount,
-                grand_total=invoice.grand_total,
-            )
+            records = await line_repo.list_for_invoice(invoice.id)
+            invoice_totals, invoice_items = _present_invoice_amounts(invoice, records)
             additional_products = [
                 AdditionalInvoiceProduct(
                     line_index=line.line_index,
@@ -190,6 +284,7 @@ async def _sale_detail_payload(
         additional_products=additional_products,
         unmatched_serialized_items=unmatched_serialized_items,
         invoice_totals=invoice_totals,
+        invoice_items=invoice_items,
         invoice_status=invoice_status,
         original_xml_available=original_xml_available,
         imported_at=imported_at,
@@ -197,7 +292,9 @@ async def _sale_detail_payload(
     exclude = set() if include_purchase else {"purchase_price"}
     if not include_serial_source:
         exclude |= {"serial_source", "serial_source_label"}
-    return response.model_dump(exclude=exclude)
+    payload = response.model_dump(exclude=exclude)
+    payload["invoice_items"] = [item.model_dump(mode="json") for item in invoice_items]
+    return payload
 
 
 def _parse_legacy_sort(sort: str | None) -> tuple[str | None, str | None]:

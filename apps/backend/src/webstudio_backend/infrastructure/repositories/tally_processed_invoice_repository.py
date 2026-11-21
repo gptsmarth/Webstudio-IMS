@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.infrastructure.database.enums import TallyProcessingStatus
+from webstudio_backend.infrastructure.database.models.tally_company_sync import TallyCompanySync
 from webstudio_backend.infrastructure.database.models.tally_processed_invoice import (
     TallyProcessedInvoice,
 )
@@ -31,14 +32,20 @@ class TallyProcessedInvoiceRepository(SqlAlchemyRepository[TallyProcessedInvoice
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def find_latest_by_guid(self, guid: str) -> TallyProcessedInvoice | None:
-        """Lookup by voucher GUID alone (sale detail enrichment)."""
+    async def find_latest_by_guid(
+        self, guid: str, *, company_name: str | None = None
+    ) -> TallyProcessedInvoice | None:
+        """Lookup an invoice by GUID, scoped to the company when available."""
         statement = (
             select(TallyProcessedInvoice)
             .where(TallyProcessedInvoice.tally_voucher_guid == guid)
             .order_by(TallyProcessedInvoice.id.desc())
             .limit(1)
         )
+        if company_name:
+            statement = statement.join(
+                TallyCompanySync, TallyCompanySync.id == TallyProcessedInvoice.tally_company_sync_id
+            ).where(TallyCompanySync.company_name == company_name)
         result = await self._session.execute(statement)
         return result.scalars().first()
 

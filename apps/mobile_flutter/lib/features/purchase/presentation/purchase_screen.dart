@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/rbac/mobile_navigation.dart';
 import '../../../core/rbac/role_permissions.dart';
 import '../../../core/routing/app_routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/placeholders.dart';
 import '../../../shared/widgets/workspace_layout.dart';
@@ -15,6 +16,7 @@ import '../domain/purchase_models.dart';
 String purchaseStatusLabel(String status) => switch (status) {
       'imported' => 'Imported',
       'partially_imported' => 'Partially imported',
+      'ignored' => 'Ignored',
       _ => 'Pending',
     };
 
@@ -79,22 +81,29 @@ class PurchaseStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = switch (status) {
-      'imported' => scheme.primary,
-      'partially_imported' => scheme.tertiary,
-      _ => scheme.outline,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final (foreground, background) = switch (status) {
+      'imported' => isDark
+          ? (AppColors.darkSuccess, AppColors.darkSuccessBg)
+          : (AppColors.lightSuccess, AppColors.lightSuccessBg),
+      'partially_imported' => isDark
+          ? (AppColors.darkWarning, AppColors.darkWarningBg)
+          : (AppColors.lightWarning, AppColors.lightWarningBg),
+      'ignored' => (scheme.onSurfaceVariant, scheme.surfaceContainerHighest),
+      _ => (scheme.onPrimaryContainer, scheme.primaryContainer),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: background,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         purchaseStatusLabel(status),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+        style: theme.textTheme.labelMedium?.copyWith(color: foreground),
       ),
     );
   }
@@ -128,8 +137,9 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _backfilling = true);
     try {
-      final result =
-          await ref.read(purchaseRepositoryProvider).backfill(fromDate: fromDate);
+      final result = await ref
+          .read(purchaseRepositoryProvider)
+          .backfill(fromDate: fromDate);
       ref.invalidate(purchaseQueueProvider);
       messenger.showSnackBar(
         SnackBar(
@@ -151,7 +161,8 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   @override
   Widget build(BuildContext context) {
     final queue = ref.watch(purchaseQueueProvider(_statusFilter));
-    final permissions = effectivePermissions(ref.watch(authControllerProvider).user);
+    final permissions =
+        effectivePermissions(ref.watch(authControllerProvider).user);
     final canView = canViewPurchaseModule(permissions);
     final canImport = canImportPurchase(permissions);
 
@@ -161,9 +172,9 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const WorkspaceSectionHeader(
-            title: 'Purchase import queue',
+            title: 'Purchase queue',
             subtitle:
-                'Tally purchase vouchers awaiting review. Nothing enters inventory automatically.',
+                'Review Tally purchase vouchers and import stock into inventory.',
           ),
           if (canView) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -172,7 +183,8 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
               child: OutlinedButton.icon(
                 onPressed: _backfilling ? null : _fetchOlder,
                 icon: const Icon(Icons.history, size: 18),
-                label: Text(_backfilling ? 'Fetching…' : 'Fetch older purchases'),
+                label:
+                    Text(_backfilling ? 'Fetching…' : 'Fetch older purchases'),
               ),
             ),
           ],
@@ -183,7 +195,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
               for (final entry in const [
                 (null, 'All'),
                 ('pending', 'Pending'),
-                ('partially_imported', 'Partial'),
+                ('partially_imported', 'Partially imported'),
                 ('imported', 'Imported'),
               ])
                 ChoiceChip(
@@ -199,23 +211,29 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
               loading: () => const WorkspaceLoadingList(),
               error: (error, _) => ErrorBanner(
                 message: error.toString(),
-                onRetry: () => ref.invalidate(purchaseQueueProvider(_statusFilter)),
+                onRetry: () =>
+                    ref.invalidate(purchaseQueueProvider(_statusFilter)),
               ),
               data: (items) {
                 if (items.isEmpty) {
-                  return const EmptyStateView(
+                  return EmptyStateView(
                     icon: Icons.shopping_cart_outlined,
-                    title: 'No purchase vouchers',
-                    message:
-                        'Purchase vouchers appear here automatically after a Tally Day Book sync.',
+                    title: _statusFilter == null
+                        ? 'No purchase vouchers yet'
+                        : 'No matching purchase vouchers',
+                    message: _statusFilter == null
+                        ? 'Vouchers appear here after a Tally sync.'
+                        : 'Choose another status to see more vouchers.',
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(purchaseQueueProvider(_statusFilter)),
+                  onRefresh: () async =>
+                      ref.invalidate(purchaseQueueProvider(_statusFilter)),
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) =>
                         _QueueCard(item: items[index], canImport: canImport),
                   ),
@@ -251,7 +269,6 @@ class _QueueCard extends ConsumerWidget {
                 child: Text(item.supplierName ?? 'Unknown supplier',
                     style: theme.textTheme.titleSmall),
               ),
-              PurchaseStatusChip(status: item.status),
               if (canIgnore)
                 IconButton(
                   icon: const Icon(Icons.block_outlined, size: 18),
@@ -274,14 +291,18 @@ class _QueueCard extends ConsumerWidget {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
-          Row(
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: Text('Total ${formatMoney(item.grandTotal)}',
-                    style: theme.textTheme.bodyMedium),
-              ),
-              Text('${item.importedGroupCount}/${item.groupCount} imported',
-                  style: theme.textTheme.bodySmall),
+              PurchaseStatusChip(status: item.status),
+              Text('Total ${formatMoney(item.grandTotal)}',
+                  style: theme.textTheme.labelLarge),
+              Text('${item.importedGroupCount} of ${item.groupCount} imported',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
             ],
           ),
         ],

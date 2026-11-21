@@ -9,6 +9,7 @@ import {
   ScrollText,
   Bell,
   FileSpreadsheet,
+  CalendarDays,
   Settings,
   Boxes,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ export type WorkspaceRoute =
   | 'catalogue'
   | 'notifications'
   | 'reports'
+  | 'asus-weekly-report'
   | 'users'
   | 'audit'
   | 'settings';
@@ -103,6 +105,14 @@ export const NAV_ITEMS: NavItemConfig[] = [
     group: 'administration',
     permission: ROUTE_PERMISSIONS.reports,
     description: 'Inventory, sales, audit exports and report previews.',
+  },
+  {
+    id: 'asus-weekly-report',
+    label: 'ASUS Weekly Report',
+    icon: CalendarDays,
+    group: 'administration',
+    permission: ROUTE_PERMISSIONS['asus-weekly-report'],
+    description: 'Download the ASUS weekly sell-out spreadsheet.',
   },
   {
     id: 'users',

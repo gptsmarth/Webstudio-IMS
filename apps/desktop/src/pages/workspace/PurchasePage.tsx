@@ -9,6 +9,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import { PageHeader } from '../../components/shell/TopToolbar';
 import { WorkspacePageBack } from '../../components/shell/WorkspacePageBack';
 import { PurchaseImportDialog } from '../../components/purchase/PurchaseImportDialog';
 import { parseApiError } from '../../lib/apiError';
@@ -46,7 +47,7 @@ function StatusBadge({ status }: { status: string }): JSX.Element {
         ? 'badge badge-warning'
         : status === 'ignored'
           ? 'badge badge-neutral'
-          : 'badge';
+          : 'badge badge-primary';
   return <span className={cls}>{STATUS_LABELS[status] ?? status}</span>;
 }
 
@@ -56,7 +57,7 @@ function defaultBackfillFrom(): string {
   return start.toISOString().slice(0, 10);
 }
 
-/** Recent window for Purchase "Sync now" — Register-first backfill, not Day Book-only. */
+/** Recent purchase fetch uses the Register-first backfill path. */
 function recentPurchaseSyncFrom(): string {
   const start = new Date();
   start.setDate(start.getDate() - 14);
@@ -482,159 +483,181 @@ export function PurchasePage(): JSX.Element {
   // ---- Voucher detail view ----
   if (detail) {
     return (
-      <div className="animate-fade-in" style={{ padding: 24, display: 'grid', gap: 16 }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDetail(null)}>
-            <ArrowLeft size={14} aria-hidden /> Back to queue
-          </button>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ margin: 0 }}>Purchase {detail.voucher_number}</h1>
-            <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              Supplier {detail.supplier_name ?? '—'} · Invoice {detail.invoice_number ?? '—'} ·{' '}
-              {detail.voucher_date ?? '—'} · <StatusBadge status={detail.status} />
-            </p>
-            {detail.status === 'ignored' && (
-              <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 12 }}>
-                Ignored invoices stay hidden from the queue. To bring this one back, fetch older
-                purchases from Tally for its date.
-              </p>
-            )}
-          </div>
-          {canImport && detail.status !== 'imported' && detail.status !== 'ignored' && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() =>
-                setCloseTarget({
-                  id: detail.id,
-                  label: detail.voucher_number,
-                  skipped: detail.groups.filter((g) => !g.imported).length,
-                  total: detail.groups.length,
-                })
-              }
-            >
-              Mark as imported
+      <div className="purchase-page animate-fade-in">
+        <PageHeader
+          title={`Purchase ${detail.voucher_number}`}
+          back={
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDetail(null)}>
+              <ArrowLeft size={14} aria-hidden /> Back to queue
             </button>
-          )}
-          {canImport && detail.status !== 'imported' && detail.status !== 'ignored' && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ color: 'var(--color-danger, #c0392b)' }}
-              onClick={() => setIgnoreTarget({ id: detail.id, label: detail.voucher_number })}
-            >
-              <Ban size={14} aria-hidden /> Ignore invoice
-            </button>
-          )}
-          {canView && detail.status !== 'imported' && detail.status !== 'ignored' && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => void refreshFromTally()}
-              disabled={refreshingVoucher}
-              title="Re-read this invoice from Tally to fix quantity or serials before import"
-            >
-              <RefreshCw
-                size={14}
-                aria-hidden
-                className={refreshingVoucher ? 'stg-spin' : undefined}
-              />{' '}
-              {refreshingVoucher ? 'Refreshing…' : 'Refresh from Tally'}
-            </button>
-          )}
-        </header>
+          }
+          description={
+            <div className="purchase-page__voucher-meta">
+              <span>{detail.supplier_name ?? 'Unknown supplier'}</span>
+              <span>Invoice {detail.invoice_number ?? '—'}</span>
+              <span>{detail.voucher_date ?? '—'}</span>
+              <StatusBadge status={detail.status} />
+            </div>
+          }
+          actions={
+            detail.status !== 'imported' &&
+            detail.status !== 'ignored' && (
+              <>
+                {canView && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void refreshFromTally()}
+                    disabled={refreshingVoucher}
+                    title="Re-read this invoice from Tally to update quantity or serials"
+                  >
+                    <RefreshCw
+                      size={14}
+                      aria-hidden
+                      className={refreshingVoucher ? 'stg-spin' : undefined}
+                    />
+                    {refreshingVoucher ? 'Refreshing…' : 'Refresh from Tally'}
+                  </button>
+                )}
+                {canImport && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() =>
+                        setCloseTarget({
+                          id: detail.id,
+                          label: detail.voucher_number,
+                          skipped: detail.groups.filter((g) => !g.imported).length,
+                          total: detail.groups.length,
+                        })
+                      }
+                    >
+                      Mark as imported
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm purchase-page__danger-action"
+                      onClick={() =>
+                        setIgnoreTarget({ id: detail.id, label: detail.voucher_number })
+                      }
+                    >
+                      <Ban size={14} aria-hidden /> Ignore invoice
+                    </button>
+                  </>
+                )}
+              </>
+            )
+          }
+        />
 
-        <div className="card">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-              gap: 12,
-            }}
-          >
+        {detail.status === 'ignored' && (
+          <div className="alert alert-info">
+            Fetch older purchases from Tally for this invoice’s date to return it to the queue.
+          </div>
+        )}
+
+        <section className="card purchase-page__summary" aria-labelledby="purchase-summary-title">
+          <h2 className="purchase-page__section-title" id="purchase-summary-title">
+            Invoice summary
+          </h2>
+          <dl className="purchase-page__metrics">
+            <Metric label="Invoice total" value={money(detail.grand_total)} />
             <Metric label="Reference no." value={detail.reference_number ?? '—'} />
-            <Metric label="Voucher GUID" value={detail.voucher_guid} mono />
             <Metric label="CGST" value={money(detail.taxes.cgst_amount)} />
             <Metric label="SGST" value={money(detail.taxes.sgst_amount)} />
             <Metric label="IGST" value={money(detail.taxes.igst_amount)} />
             <Metric label="Cess" value={money(detail.taxes.cess_amount)} />
-            <Metric label="Invoice total" value={money(detail.grand_total)} />
-          </div>
-        </div>
+            <Metric label="Voucher GUID" value={detail.voucher_guid} mono />
+          </dl>
+        </section>
 
         {error && (
-          <div className="alert alert-danger">
+          <div className="alert alert-danger" role="alert">
             <AlertCircle size={14} aria-hidden />
             <span>{error}</span>
           </div>
         )}
 
         {notice && (
-          <div className="alert alert-success">
+          <div className="alert alert-success" role="status">
             <span>{notice}</span>
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          {detail.groups.map((group) => (
-            <div key={group.group_key} className="card">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0 }}>{group.stock_item_name}</h3>
-                  <p style={{ margin: '4px 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-                    Quantity {group.quantity} · {group.serials.length} serial(s)
-                    {group.duplicate_count > 0 ? ` · ${group.duplicate_count} already added` : ''}
-                  </p>
+        <section className="purchase-page__groups" aria-labelledby="purchase-items-title">
+          <h2 className="purchase-page__section-title" id="purchase-items-title">
+            Voucher items
+          </h2>
+          {detail.groups.map((group) => {
+            const receivedSerials = group.serials.filter((cell) => cell.serial_number.trim());
+            const hasSerialData = receivedSerials.length > 0 || Boolean(group.serial_source);
+            const missing = hasSerialData
+              ? Math.max(0, group.quantity - receivedSerials.length)
+              : 0;
+            return (
+              <div key={group.group_key} className="card">
+                <div className="purchase-page__group-header">
+                  <div>
+                    <h3>{group.stock_item_name}</h3>
+                    <p className="purchase-page__group-meta">
+                      Quantity {group.quantity} · {receivedSerials.length}{' '}
+                      {receivedSerials.length === 1 ? 'serial' : 'serials'} received
+                      {missing > 0 && (
+                        <span className="badge badge-warning purchase-page__missing-serials">
+                          {missing} missing
+                        </span>
+                      )}
+                      {group.duplicate_count > 0 ? ` · ${group.duplicate_count} already added` : ''}
+                    </p>
+                  </div>
+                  {group.imported ? (
+                    <span className="badge badge-success">Imported</span>
+                  ) : canImport ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setImportGroup(group)}
+                    >
+                      Import stock
+                    </button>
+                  ) : (
+                    <span className="badge" title="Requires the “Import to inventory” permission">
+                      View only
+                    </span>
+                  )}
                 </div>
-                {group.imported ? (
-                  <span className="badge badge-success">Imported</span>
-                ) : canImport ? (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setImportGroup(group)}
-                  >
-                    Import
-                  </button>
-                ) : (
-                  <span className="badge" title="Requires the “Import to inventory” permission">
-                    View only
-                  </span>
+                {receivedSerials.length > 0 && (
+                  <div className="purchase-page__serials">
+                    {receivedSerials.map((cell, index) => (
+                      <span
+                        key={`${index}-${cell.serial_number}`}
+                        className={cell.is_duplicate ? 'badge badge-warning' : 'badge'}
+                        title={
+                          cell.is_duplicate
+                            ? `Already added in IMS (${cell.existing_status ?? 'exists'}) — will be skipped on import`
+                            : undefined
+                        }
+                      >
+                        {cell.serial_number}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {missing > 0 && !group.imported && (
+                  <p className="purchase-page__group-meta">
+                    Refresh from Tally or verify and enter the missing serials during import.
+                  </p>
+                )}
+                {!hasSerialData && (
+                  <p className="purchase-page__group-meta">
+                    Tally supplied no serials for this item.
+                  </p>
                 )}
               </div>
-              {group.serials.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {group.serials.map((cell) => (
-                    <span
-                      key={cell.serial_number}
-                      className={cell.is_duplicate ? 'badge badge-warning' : 'badge'}
-                      title={
-                        cell.is_duplicate
-                          ? `Already added in IMS (${cell.existing_status ?? 'exists'}) — will be skipped on import`
-                          : undefined
-                      }
-                      style={{ fontFamily: 'var(--font-mono)' }}
-                    >
-                      {cell.serial_number}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {group.serials.length === 0 && (
-                <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13, marginTop: 8 }}>
-                  No serials on the invoice line — add them during import.
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
+            );
+          })}
+        </section>
 
         {importGroup && (
           <PurchaseImportDialog
@@ -656,55 +679,55 @@ export function PurchasePage(): JSX.Element {
 
   // ---- Queue list view ----
   return (
-    <div className="animate-fade-in" style={{ padding: 24, display: 'grid', gap: 16 }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <WorkspacePageBack />
-        <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0 }}>Purchase</h1>
-          <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-            Tally purchase vouchers awaiting review. Import stock into inventory after approval —
-            nothing is added automatically.
-          </p>
-        </div>
-        {canView && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setBackfillOpen((open) => !open)}
-          >
-            <CalendarClock size={14} aria-hidden /> Fetch older purchases
-          </button>
-        )}
-        {canView && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => void runSyncNow()}
-            disabled={syncing}
-            title="Pull recent purchase invoices from Tally (last 14 days)"
-          >
-            <RefreshCw size={14} aria-hidden className={syncing ? 'stg-spin' : undefined} />{' '}
-            {syncing ? 'Syncing…' : 'Sync now'}
-          </button>
-        )}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadQueue()}>
-          <RefreshCw size={14} aria-hidden /> Refresh
-        </button>
-      </header>
+    <div className="purchase-page animate-fade-in">
+      <PageHeader
+        title="Purchase"
+        description="Review Tally purchase vouchers and import stock into inventory."
+        back={<WorkspacePageBack />}
+        actions={
+          <>
+            {canView && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void runSyncNow()}
+                  disabled={syncing}
+                  title="Fetch purchase vouchers from the last 14 days"
+                >
+                  <RefreshCw size={14} aria-hidden className={syncing ? 'stg-spin' : undefined} />
+                  {syncing ? 'Fetching…' : 'Fetch recent from Tally'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-expanded={backfillOpen}
+                  aria-controls={backfillOpen ? 'purchase-backfill' : undefined}
+                  onClick={() => setBackfillOpen((open) => !open)}
+                >
+                  <CalendarClock size={14} aria-hidden /> Fetch older purchases
+                </button>
+              </>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void loadQueue()}>
+              <RefreshCw size={14} aria-hidden /> Refresh queue
+            </button>
+          </>
+        }
+      />
 
       {backfillOpen && (
-        <div className="card" style={{ display: 'grid', gap: 10 }}>
+        <section className="card purchase-page__backfill" id="purchase-backfill">
           <div>
-            <h3 style={{ margin: 0, fontSize: 15 }}>Fetch older purchase invoices</h3>
-            <p style={{ margin: '4px 0 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              Read-only. Pulls Purchase invoices from Tally in the date range you pick (to date
-              defaults to today) into this queue. Nothing is imported automatically and Tally is
-              never modified.
+            <h2 className="purchase-page__section-title">Fetch older purchase invoices</h2>
+            <p className="purchase-page__group-meta">
+              Choose a date range to add Tally vouchers to the review queue. The end date defaults
+              to today.
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-              <span style={{ color: 'var(--color-text-tertiary)' }}>From date</span>
+          <div className="purchase-page__backfill-fields">
+            <label>
+              <span>From date</span>
               <input
                 type="date"
                 className="input"
@@ -714,8 +737,8 @@ export function PurchasePage(): JSX.Element {
                 disabled={backfilling}
               />
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-              <span style={{ color: 'var(--color-text-tertiary)' }}>To date (optional)</span>
+            <label>
+              <span>To date (optional)</span>
               <input
                 type="date"
                 className="input"
@@ -743,21 +766,22 @@ export function PurchasePage(): JSX.Element {
               Cancel
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       {notice && (
-        <div className="alert alert-success">
+        <div className="alert alert-success" role="status">
           <span>{notice}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="purchase-page__filters" role="group" aria-label="Filter purchases by status">
         {(['', 'pending', 'partially_imported', 'imported', 'ignored'] as StatusFilter[]).map(
           (value) => (
             <button
               key={value || 'all'}
               type="button"
+              aria-pressed={statusFilter === value}
               className={
                 statusFilter === value ? 'btn btn-secondary btn-sm' : 'btn btn-ghost btn-sm'
               }
@@ -770,23 +794,15 @@ export function PurchasePage(): JSX.Element {
       </div>
 
       {error && (
-        <div className="alert alert-danger">
+        <div className="alert alert-danger" role="alert">
           <AlertCircle size={14} aria-hidden />
           <span>{error}</span>
         </div>
       )}
 
       {canImport && selectedIds.size > 0 && (
-        <div
-          className="card"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 16px',
-          }}
-        >
-          <span style={{ fontSize: 13 }}>{selectedIds.size} selected</span>
+        <div className="card purchase-page__selection">
+          <strong>{selectedIds.size} selected</strong>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -796,8 +812,7 @@ export function PurchasePage(): JSX.Element {
           </button>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
-            style={{ color: 'var(--color-danger, #c0392b)' }}
+            className="btn btn-ghost btn-sm purchase-page__danger-action"
             onClick={() => setBulkConfirm('ignore')}
           >
             Ignore
@@ -812,12 +827,18 @@ export function PurchasePage(): JSX.Element {
         </div>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="table-root">
+      <div
+        className="card purchase-page__table-scroll"
+        role="region"
+        aria-label="Purchase queue"
+        aria-busy={loading}
+        tabIndex={0}
+      >
+        <table className="table-root purchase-page__table">
           <thead>
             <tr>
               {canImport && (
-                <th style={{ width: 32 }}>
+                <th className="purchase-page__checkbox">
                   <input
                     type="checkbox"
                     aria-label="Select all actionable purchases"
@@ -850,7 +871,7 @@ export function PurchasePage(): JSX.Element {
               <th>Reference</th>
               <th className="col-amount">Total</th>
               <th className="col-amount">Tax (C/S/I)</th>
-              <th>Groups</th>
+              <th>Import progress</th>
               <th>Status</th>
               <th aria-label="Actions" />
             </tr>
@@ -858,16 +879,17 @@ export function PurchasePage(): JSX.Element {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={canImport ? 11 : 10} style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={canImport ? 11 : 10} className="purchase-page__table-message">
                   Loading purchase queue…
                 </td>
               </tr>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && !error && items.length === 0 && (
               <tr>
-                <td colSpan={canImport ? 11 : 10} style={{ textAlign: 'center', padding: 24 }}>
-                  No purchase vouchers in the queue yet. They appear automatically after a Tally
-                  sync.
+                <td colSpan={canImport ? 11 : 10} className="purchase-page__table-message">
+                  {statusFilter
+                    ? 'No purchase vouchers match this status.'
+                    : 'No purchase vouchers yet. Fetch purchases from Tally to review them here.'}
                 </td>
               </tr>
             )}
@@ -876,10 +898,10 @@ export function PurchasePage(): JSX.Element {
                 <tr
                   key={item.id}
                   onClick={() => void openDetail(item.id)}
-                  style={{ cursor: 'pointer' }}
+                  className={selectedIds.has(item.id) ? 'selected' : undefined}
                 >
                   {canImport && (
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="purchase-page__checkbox" onClick={(e) => e.stopPropagation()}>
                       {(item.status === 'pending' || item.status === 'partially_imported') && (
                         <input
                           type="checkbox"
@@ -897,9 +919,21 @@ export function PurchasePage(): JSX.Element {
                       )}
                     </td>
                   )}
-                  <td>{item.supplier_name ?? '—'}</td>
-                  <td>{item.voucher_date ?? '—'}</td>
-                  <td className="col-mono">{item.voucher_number}</td>
+                  <td className="purchase-page__supplier">{item.supplier_name ?? '—'}</td>
+                  <td className="purchase-page__date">{item.voucher_date ?? '—'}</td>
+                  <td className="col-mono">
+                    <button
+                      type="button"
+                      className="purchase-page__voucher-link"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void openDetail(item.id);
+                      }}
+                      aria-label={`Open purchase ${item.voucher_number}`}
+                    >
+                      {item.voucher_number}
+                    </button>
+                  </td>
                   <td className="col-mono">{item.invoice_number ?? '—'}</td>
                   <td className="col-mono">{item.reference_number ?? '—'}</td>
                   <td className="col-amount">{money(item.grand_total)}</td>
@@ -907,13 +941,13 @@ export function PurchasePage(): JSX.Element {
                     {money(item.taxes.cgst_amount)} / {money(item.taxes.sgst_amount)} /{' '}
                     {money(item.taxes.igst_amount)}
                   </td>
-                  <td>
-                    {item.imported_group_count}/{item.group_count}
+                  <td className="purchase-page__progress">
+                    {item.imported_group_count} of {item.group_count} imported
                   </td>
                   <td>
                     <StatusBadge status={item.status} />
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td className="purchase-page__row-actions">
                     {canImport && item.status !== 'imported' && item.status !== 'ignored' && (
                       <button
                         type="button"
@@ -954,7 +988,11 @@ export function PurchasePage(): JSX.Element {
         </table>
       </div>
 
-      {detailLoading && <p style={{ color: 'var(--color-text-tertiary)' }}>Opening voucher…</p>}
+      {detailLoading && (
+        <p className="purchase-page__group-meta" role="status">
+          Opening voucher…
+        </p>
+      )}
       {ignoreDialog}
       {closeDialog}
       {bulkDialog}
@@ -972,19 +1010,13 @@ function Metric({
   mono?: boolean;
 }): JSX.Element {
   return (
-    <div>
-      <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-tertiary)' }}>{label}</p>
-      <p
-        style={{
-          margin: 0,
-          fontSize: 13,
-          fontWeight: 500,
-          fontFamily: mono ? 'var(--font-mono)' : undefined,
-          wordBreak: mono ? 'break-all' : undefined,
-        }}
-      >
-        {value}
-      </p>
+    <div
+      className={
+        mono ? 'purchase-page__metric purchase-page__metric--mono' : 'purchase-page__metric'
+      }
+    >
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
