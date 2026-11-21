@@ -10,7 +10,7 @@ inputs:
     required: false
     default: "true"
   install-flutter:
-    description: Install Flutter stable
+    description: Install the Flutter version tested with the project's Android toolchain
     required: false
     default: "false"
 runs:
@@ -38,4 +38,5 @@ runs:
       uses: subosito/flutter-action@v2
       with:
         channel: stable
+        flutter-version: "3.44.4"
         cache: true

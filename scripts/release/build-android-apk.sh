@@ -9,7 +9,7 @@ RELEASE_DIR="$ROOT/release/mobile"
 bash "$ROOT/scripts/release/sync-branding-assets.sh"
 
 cd "$FLUTTER_DIR"
-flutter pub get
+flutter pub get --enforce-lockfile
 dart run flutter_launcher_icons
 dart run flutter_native_splash:create
 
@@ -21,9 +21,9 @@ if [[ -n "${WEBSTUDIO_DEFAULT_API_URL:-}" ]]; then
   echo "[release] Default API URL: ${WEBSTUDIO_DEFAULT_API_URL}"
 fi
 if (( ${#DART_DEFINES[@]} )); then
-  flutter build apk --release "${DART_DEFINES[@]}"
+  flutter build apk --release --no-pub "${DART_DEFINES[@]}"
 else
-  flutter build apk --release
+  flutter build apk --release --no-pub
 fi
 
 mkdir -p "$RELEASE_DIR"

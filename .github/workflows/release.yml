@@ -105,20 +105,21 @@ jobs:
       - name: Validate branding icons
         run: bash scripts/release/validate-branding-icons.sh
 
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/setup-build-env
         with:
-          channel: stable
-          cache: true
+          install-python: "false"
+          install-node: "false"
+          install-flutter: "true"
 
       - name: Flutter analyze
         working-directory: apps/mobile_flutter
         run: |
-          flutter pub get
-          flutter analyze --no-fatal-infos
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub --no-fatal-infos
 
       - name: Flutter tests
         working-directory: apps/mobile_flutter
-        run: flutter test
+        run: flutter test --no-pub
 
   backend-package:
     name: Build Backend Package
@@ -195,10 +196,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/setup-build-env
         with:
-          channel: stable
-          cache: true
+          install-python: "false"
+          install-node: "false"
+          install-flutter: "true"
       - run: bash scripts/release/validate-branding-icons.sh
       - run: bash scripts/release/build-android-apk.sh
       - uses: actions/upload-artifact@v4
@@ -213,10 +215,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/setup-build-env
         with:
-          channel: stable
-          cache: true
+          install-python: "false"
+          install-node: "false"
+          install-flutter: "true"
       - run: bash scripts/release/validate-branding-icons.sh
       - run: bash scripts/release/build-ios-ipa.sh
       - name: Zip iOS archive for distribution

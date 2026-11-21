@@ -24,7 +24,7 @@ jobs:
           install-flutter: "true"
       - working-directory: apps/mobile_flutter
         run: |
-          flutter pub get
-          flutter analyze --no-fatal-infos
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub --no-fatal-infos
       - working-directory: apps/mobile_flutter
-        run: flutter test
+        run: flutter test --no-pub

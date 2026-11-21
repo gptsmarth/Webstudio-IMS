@@ -21,7 +21,7 @@ cd "$FLUTTER_DIR"
 # Project pubspec disables SPM; reinforce for the CI Flutter install.
 flutter config --no-enable-swift-package-manager >/dev/null
 
-flutter pub get
+flutter pub get --enforce-lockfile
 dart run flutter_launcher_icons
 dart run flutter_native_splash:create
 
@@ -34,7 +34,7 @@ mkdir -p "$RELEASE_DIR"
 export_options="${WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST:-}"
 if [[ -n "$export_options" ]]; then
   plutil -lint "$export_options"
-  flutter build ipa --release --export-options-plist "$export_options"
+  flutter build ipa --release --no-pub --export-options-plist "$export_options"
   shopt -s nullglob
   ipas=(build/ios/ipa/*.ipa)
   if [[ "${#ipas[@]}" -ne 1 ]]; then
@@ -44,7 +44,7 @@ if [[ -n "$export_options" ]]; then
   cp "${ipas[0]}" "$RELEASE_DIR/../WEBSTUDIO IMS.ipa"
   echo "[release] Signed IPA exported. Use the distribution channel in ExportOptions.plist."
 else
-  flutter build ipa --release --no-codesign
+  flutter build ipa --release --no-pub --no-codesign
   ditto build/ios/archive/Runner.xcarchive "$RELEASE_DIR/WEBSTUDIO-IMS-unsigned.xcarchive"
   echo "[release] Unsigned build validation archive. Device installation requires a signed IPA."
 fi

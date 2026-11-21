@@ -99,12 +99,20 @@ Actions secrets. Locally, electron-builder reads the certificate from `CSC_LINK`
 and its password from `CSC_KEY_PASSWORD`.
 
 Without signing credentials, the output is `WEBSTUDIO Desktop-dev.dmg` for
-build validation. For the signed installer, drag WEBSTUDIO Desktop to Applications
+build validation. The packaging script clears the empty certificate settings
+GitHub Actions provides when its signing secrets are absent. For the signed
+installer, drag WEBSTUDIO Desktop to Applications
 and launch it with Gatekeeper enabled.
 
 ---
 
 ## 3. Android — `WEBSTUDIO IMS.apk`
+
+Use Flutter **3.44.4**, which supports the repository's Gradle **9.1.0**
+and Android Gradle Plugin **9.0.1**. The shared CI setup pins this Flutter
+version for checks and mobile packaging. Release scripts use the committed
+`apps/mobile_flutter/pubspec.lock`. Update the toolchain and lockfile together
+when upgrading Flutter.
 
 ### Signing setup (one time)
 

@@ -18,6 +18,9 @@ if [[ -n "${CSC_LINK:-}${APPLE_ID:-}${APPLE_APP_SPECIFIC_PASSWORD:-}${APPLE_TEAM
   artifact="WEBSTUDIO Desktop.dmg"
   signing+=("-c.forceCodeSigning=true")
 else
+  # GitHub Actions exports missing secrets as empty strings. Electron Builder
+  # treats an empty CSC_LINK as a certificate path relative to the app.
+  unset CSC_LINK CSC_KEY_PASSWORD
   export CSC_IDENTITY_AUTO_DISCOVERY=false
   signing+=("-c.mac.notarize=false")
   echo "[release] macOS signing is unavailable. Building a development DMG."
