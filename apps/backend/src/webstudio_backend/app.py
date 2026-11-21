@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from webstudio_backend.api.middleware.correlation_id import CorrelationIdMiddleware
+from webstudio_backend.api.middleware.rate_limit import RateLimitMiddleware
 from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddleware
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
 from webstudio_backend.api.routers import (
@@ -332,20 +333,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=settings.app_version,
         docs_url="/docs" if settings.is_development else None,
         redoc_url="/redoc" if settings.is_development else None,
+        openapi_url="/openapi.json" if settings.is_development else None,
         lifespan=lifespan,
     )
 
     app.state.settings = settings
 
+    if settings.rate_limit_enabled:
+        app.add_middleware(
+            RateLimitMiddleware,
+            requests_per_minute=settings.rate_limit_per_minute,
+            auth_requests_per_minute=settings.auth_rate_limit_per_minute,
+        )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        # Packaged Electron loads the UI from app:// — allow that origin for LAN API calls.
-        allow_origin_regex=r"app://.*",
+        allow_origins=[*settings.cors_origins, "app://."],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID", "X-Correlation-ID", "API-Version"],
+        expose_headers=["X-Request-ID", "X-Correlation-ID", "API-Version", "Retry-After"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestLoggingMiddleware)

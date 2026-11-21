@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build macOS DMG artifacts sequentially (avoids hdiutil volume name collisions on CI).
+# Build one macOS DMG for both Apple silicon and Intel.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -7,42 +7,32 @@ DESKTOP="$ROOT/apps/desktop"
 OUT="$DESKTOP/release/desktop"
 
 cd "$DESKTOP"
-pnpm build
 
-mkdir -p "$OUT"
-
-# One architecture per electron-builder invocation — unique DMG mount titles.
-pnpm exec electron-builder --mac dmg --x64 --config electron-builder.yml \
-  -c.dmg.title="WEBSTUDIO Desktop x64"
-
-detach_dmg() {
-  local vol="$1"
-  if [[ -d "/Volumes/$vol" ]]; then
-    hdiutil detach "/Volumes/$vol" -force -quiet 2>/dev/null || \
-      hdiutil detach "/Volumes/$vol" -quiet 2>/dev/null || true
-    sleep 2
-  fi
-}
-
-detach_dmg "WEBSTUDIO Desktop x64"
-
-pnpm exec electron-builder --mac dmg --arm64 --config electron-builder.yml \
-  -c.dmg.title="WEBSTUDIO Desktop arm64"
-
-detach_dmg "WEBSTUDIO Desktop arm64"
-
-ARM64_DMG="$OUT/WEBSTUDIO Desktop-arm64.dmg"
-CANONICAL_DMG="$OUT/WEBSTUDIO Desktop.dmg"
-
-if [[ -f "$ARM64_DMG" ]]; then
-  cp "$ARM64_DMG" "$CANONICAL_DMG"
-  echo "[release] Canonical DMG (arm64): $CANONICAL_DMG"
-elif [[ -f "$OUT/WEBSTUDIO Desktop-x64.dmg" ]]; then
-  cp "$OUT/WEBSTUDIO Desktop-x64.dmg" "$CANONICAL_DMG"
-  echo "[release] Canonical DMG (x64 fallback): $CANONICAL_DMG"
+artifact="WEBSTUDIO Desktop-dev.dmg"
+signing=()
+if [[ -n "${CSC_LINK:-}${APPLE_ID:-}${APPLE_APP_SPECIFIC_PASSWORD:-}${APPLE_TEAM_ID:-}" ]]; then
+  : "${CSC_LINK:?Developer ID Application certificate required}"
+  : "${APPLE_ID:?Apple notarization account required}"
+  : "${APPLE_APP_SPECIFIC_PASSWORD:?Apple notarization password required}"
+  : "${APPLE_TEAM_ID:?Apple notarization team required}"
+  artifact="WEBSTUDIO Desktop.dmg"
+  signing+=("-c.forceCodeSigning=true")
 else
-  echo "No macOS DMG produced under $OUT" >&2
-  exit 1
+  export CSC_IDENTITY_AUTO_DISCOVERY=false
+  signing+=("-c.mac.notarize=false")
+  echo "[release] macOS signing is unavailable. Building a development DMG."
 fi
 
-ls -la "$OUT"/*.dmg
+pnpm build
+pnpm exec electron-builder --mac dmg --universal --publish never --config electron-builder.yml \
+  "-c.mac.artifactName=$artifact" "${signing[@]}"
+
+app="$OUT/mac-universal/WEBSTUDIO Desktop.app"
+lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/WEBSTUDIO Desktop"
+if [[ "$artifact" == "WEBSTUDIO Desktop.dmg" ]]; then
+  codesign --verify --deep --strict "$app"
+  xcrun stapler validate "$app"
+  spctl --assess --type execute "$app"
+fi
+test -f "$OUT/$artifact"
+echo "[release] Installer: $OUT/$artifact"

@@ -13,6 +13,17 @@ void main() {
     );
   });
 
+  test('normalizeServerUrl preserves HTTPS and its standard or custom port', () {
+    expect(
+      normalizeServerUrl('HTTPS://IMS.EXAMPLE.COM:443/'),
+      'https://ims.example.com',
+    );
+    expect(
+      normalizeServerUrl('https://ims.example.com:8443'),
+      'https://ims.example.com:8443',
+    );
+  });
+
   test('resolveServerHost skips DNS lookup for IPv4 literals', () async {
     final result = await resolveServerHost('192.168.29.100');
     expect(result.success, isTrue);

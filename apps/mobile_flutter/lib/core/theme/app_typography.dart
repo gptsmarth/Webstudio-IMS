@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// Typography aligned with desktop (Lato 13px body, 600 headings).
+/// Typography aligned with desktop spacing and weights.
 abstract final class AppTypography {
   static TextTheme textTheme(Brightness brightness) {
-    final base = GoogleFonts.latoTextTheme();
+    final base = ThemeData(brightness: brightness, useMaterial3: true).textTheme;
     final color = brightness == Brightness.dark
         ? const Color(0xFFE6EDF3)
         : const Color(0xFF1A2332);

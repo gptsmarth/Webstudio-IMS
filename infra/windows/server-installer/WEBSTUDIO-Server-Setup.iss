@@ -33,8 +33,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\..\..\apps\desktop\public\assets\webstudio\icon.ico"; DestDir: "{#InstallRoot}\assets\webstudio"; Flags: ignoreversion
 Source: "..\..\..\VERSION.json"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
 Source: "..\..\..\VERSION"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
-Source: "..\..\..\apps\backend\*"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.pytest_cache\*"
-Source: "..\..\..\database\*"; DestDir: "{#InstallRoot}\database"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\..\apps\backend\pyproject.toml"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion
+Source: "..\..\..\apps\backend\README.md"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion
+Source: "..\..\..\apps\backend\src\*"; DestDir: "{#InstallRoot}\apps\backend\src"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
+Source: "..\..\..\database\migrations\*"; DestDir: "{#InstallRoot}\database\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
 Source: "..\..\..\config\env\.env.production.template"; DestDir: "{#InstallRoot}\config\env"; DestName: ".env.production.template"; Flags: ignoreversion
 Source: "..\*.ps1"; DestDir: "{#InstallRoot}\infra\windows"; Flags: ignoreversion
 Source: "server-install-post.ps1"; DestDir: "{#InstallRoot}\infra\windows\server-installer"; Flags: ignoreversion

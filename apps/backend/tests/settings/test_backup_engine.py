@@ -268,3 +268,15 @@ COPY webstudio.users (id, username) FROM stdin;
     assert "alembic_version" not in filtered
     assert "COPY webstudio.brands" in filtered
     assert "COPY webstudio.users" in filtered
+
+
+def test_prepare_data_only_restore_changes_timeout_setting_without_changing_copy_data() -> None:
+    from webstudio_backend.services.backup_completeness import prepare_data_only_restore_sql
+
+    payload = "COPY webstudio.brands (name) FROM stdin;\nSET transaction_timeout = 0;\n\\.\n"
+    sql = "-- PostgreSQL database dump\nSET transaction_timeout = 0;\n" + payload
+    prepared = prepare_data_only_restore_sql(sql)
+
+    assert "pg_catalog.set_config('transaction_timeout', '0', false)" in prepared
+    assert "pg_catalog.current_setting('server_version_num')::integer >= 170000" in prepared
+    assert prepared.endswith(payload)

@@ -47,9 +47,24 @@ apps/mobile_flutter/android/key.properties
 apps/mobile_flutter/android/keystores/
 *.keystore
 *.jks
+*.p12
+*.pfx
+*.p8
+*.key
+*.pem
+*.mobileprovision
 
 # Logs
 *.log
 
 # Local build scratch (iOS release TMPDIR, etc.)
 .tmp/
+
+# Office and validation data stays on the machine where it was generated.
+/tools/uat/*
+/SERVER_MIGRATION_GUIDE.md
+/apps/backend/updates/
+/apps/backend/webstudio-data/
+/apps/desktop/public/assets/product-images/*
+!/apps/desktop/public/assets/product-images/.gitkeep
+!/apps/desktop/public/assets/product-images/README.md

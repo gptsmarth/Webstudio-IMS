@@ -15,6 +15,7 @@ class DiscoveryTxtKey(StrEnum):
     BACKEND_VERSION = "backend_version"
     API_VERSION = "api_version"
     BACKEND_PORT = "backend_port"
+    SCHEME = "scheme"
     ENVIRONMENT = "environment"
     BUILD_VERSION = "build_version"
     PROTOCOL_VERSION = "protocol_version"

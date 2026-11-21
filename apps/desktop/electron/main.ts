@@ -1,4 +1,4 @@
-import { app, BrowserWindow, crashReporter, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, crashReporter, ipcMain, safeStorage, screen, shell } from 'electron';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
@@ -75,6 +75,8 @@ if (!gotTheLock) {
   const getStoragePath = (): string => path.join(app.getPath('userData'), 'webstudio_storage.json');
   const getWindowStatePath = (): string =>
     path.join(app.getPath('userData'), 'webstudio_window_state.json');
+  const authTokenKeys = new Set(['webstudio_access_token', 'webstudio_refresh_token']);
+  const inMemoryTokens = new Map<string, string>();
 
   const readJson = (filePath: string): Record<string, unknown> => {
     try {
@@ -93,6 +95,34 @@ if (!gotTheLock) {
     } catch {
       // Ignore write errors
     }
+  };
+
+  const protectToken = (storage: Record<string, unknown>, key: string, value: string): void => {
+    delete storage[key];
+    inMemoryTokens.set(key, value);
+    try {
+      if (
+        safeStorage.isEncryptionAvailable() &&
+        (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text')
+      ) {
+        storage[key] = { encryptedToken: safeStorage.encryptString(value).toString('base64') };
+      }
+    } catch {
+      // Keep the token for this app session if the OS key store is unavailable.
+    }
+  };
+
+  const migrateSavedTokens = (): void => {
+    const storage = readJson(getStoragePath());
+    let migrated = false;
+    for (const key of authTokenKeys) {
+      const value = storage[key];
+      if (typeof value === 'string') {
+        protectToken(storage, key, value);
+        migrated = true;
+      }
+    }
+    if (migrated) writeJson(getStoragePath(), storage);
   };
 
   // --- Window State Persistence ---
@@ -415,17 +445,35 @@ if (!gotTheLock) {
 
   ipcMain.handle('storage:getItem', (_event, key: string) => {
     const storage = readJson(getStoragePath());
-    return storage[key];
+    const value = storage[key];
+    if (!authTokenKeys.has(key)) return value;
+    if (inMemoryTokens.has(key)) return inMemoryTokens.get(key);
+    if (value && typeof value === 'object' && 'encryptedToken' in value) {
+      try {
+        if (typeof value.encryptedToken === 'string') {
+          return safeStorage.decryptString(Buffer.from(value.encryptedToken, 'base64'));
+        }
+      } catch {
+        // The current OS user may have to sign in again after a key store change.
+      }
+    }
+    return undefined;
   });
 
   ipcMain.handle('storage:setItem', (_event, key: string, value: unknown) => {
     const storage = readJson(getStoragePath());
-    storage[key] = value;
+    if (authTokenKeys.has(key)) {
+      if (typeof value !== 'string') throw new TypeError('Expected a session token string.');
+      protectToken(storage, key, value);
+    } else {
+      storage[key] = value;
+    }
     writeJson(getStoragePath(), storage);
   });
 
   ipcMain.handle('storage:removeItem', (_event, key: string) => {
     const storage = readJson(getStoragePath());
+    inMemoryTokens.delete(key);
     delete storage[key];
     writeJson(getStoragePath(), storage);
   });
@@ -664,6 +712,7 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    migrateSavedTokens();
     registerAppProtocol();
     configureApplicationMenu({
       zoomIn: () => {

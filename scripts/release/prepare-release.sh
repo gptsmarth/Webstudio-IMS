@@ -7,11 +7,9 @@ VERSION="$(cat "$ROOT/VERSION")"
 RELEASE_DIR="$ROOT/release/v${VERSION}"
 
 echo "[release] Preparing WEBSTUDIO IMS v${VERSION} → ${RELEASE_DIR}"
+python3 "$ROOT/scripts/release/check-private-files.py"
 
 mkdir -p "$RELEASE_DIR/artifacts" "$RELEASE_DIR/env" "$RELEASE_DIR/logging" "$RELEASE_DIR/migrations"
-
-# Version manifest
-python3 "$ROOT/scripts/release/lib/generate_manifest.py" "$ROOT" "$RELEASE_DIR"
 
 # Database migrations
 bash "$ROOT/scripts/release/package-migrations.sh" "$RELEASE_DIR/migrations"
@@ -49,7 +47,6 @@ copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" "$RELE
 copy_if_exists "$ROOT/release/mobile/WEBSTUDIO IMS.apk" "$RELEASE_DIR/artifacts/WEBSTUDIO-IMS.apk"
 copy_if_exists "$ROOT/release/server/WEBSTUDIO Server Setup.exe" "$RELEASE_DIR/artifacts/WEBSTUDIO-Server-Setup.exe"
 copy_if_exists "$ROOT/release/backend/webstudio-backend-${VERSION}.tar.gz" "$RELEASE_DIR/artifacts/webstudio-backend-${VERSION}.tar.gz"
-copy_if_exists "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip" "$RELEASE_DIR/artifacts/WEBSTUDIO-IMS.xcarchive.zip"
 
 # Manifest-aligned artifact names at bundle root (M13 enterprise sync)
 copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe" "$RELEASE_DIR/WEBSTUDIO Desktop Setup.exe"
@@ -57,10 +54,12 @@ copy_if_exists "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" "$RELE
 copy_if_exists "$ROOT/release/mobile/WEBSTUDIO IMS.apk" "$RELEASE_DIR/WEBSTUDIO IMS.apk"
 copy_if_exists "$ROOT/release/server/WEBSTUDIO Server Setup.exe" "$RELEASE_DIR/WEBSTUDIO Server Setup.exe"
 copy_if_exists "$ROOT/release/backend/webstudio-backend-${VERSION}.tar.gz" "$RELEASE_DIR/webstudio-backend-${VERSION}.tar.gz"
-copy_if_exists "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip" "$RELEASE_DIR/WEBSTUDIO-IMS.xcarchive.zip"
 
 # Folder structure doc
 cp "$ROOT/release/STRUCTURE.md" "$RELEASE_DIR/STRUCTURE.md" 2>/dev/null || true
+
+# Version manifest reflects the artifacts included in the bundle.
+python3 "$ROOT/scripts/release/lib/generate_manifest.py" "$ROOT" "$RELEASE_DIR"
 
 # Checksums (entire bundle)
 bash "$ROOT/scripts/release/generate-checksums.sh" "$RELEASE_DIR"

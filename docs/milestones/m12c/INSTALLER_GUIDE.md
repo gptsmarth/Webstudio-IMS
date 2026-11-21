@@ -91,13 +91,16 @@ pnpm install
 pnpm desktop:package:mac
 ```
 
-**Output:** `apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg`
+The universal installer supports Intel and Apple silicon Macs. GitHub Actions publishes
+`WEBSTUDIO Desktop.dmg` after verifying its Developer ID signature and notarization.
+Set `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` in the authorized release repository's
+Actions secrets. Locally, electron-builder reads the certificate from `CSC_LINK`
+and its password from `CSC_KEY_PASSWORD`.
 
-### Notes
-
-- Universal build targets x64 + arm64  
-- Code signing/notarization: set `CSC_LINK` / `APPLE_*` env vars before build when certificates are available  
-- Drag-to-Applications DMG layout  
+Without signing credentials, the output is `WEBSTUDIO Desktop-dev.dmg` for
+build validation. For the signed installer, drag WEBSTUDIO Desktop to Applications
+and launch it with Gatekeeper enabled.
 
 ---
 
@@ -140,24 +143,22 @@ pnpm release:android
 
 Bundle ID: `com.webstudio.webstudio_ims` (aligned with Android)
 
-### Build
+### Build a signed IPA
 
 ```bash
-pnpm release:sync-branding
-bash scripts/release/build-ios-ipa.sh
+WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST=/absolute/path/to/ExportOptions.plist \
+  bash scripts/release/build-ios-ipa.sh
 ```
 
-The release script uses **CocoaPods** (Swift Package Manager is disabled in
-`apps/mobile_flutter/pubspec.yaml`). This avoids intermittent GitHub Actions
-failures where Xcode cannot write `manifest.swift` under `TemporaryDirectory.*`.
+Use Xcode on a Mac with the signing identity and provisioning for the intended
+distribution method. The output is `release/mobile/WEBSTUDIO IMS.ipa`. An Ad Hoc
+IPA installs on registered devices. For TestFlight, distribute the signed build
+through App Store Connect.
 
-### Archive / IPA (Xcode)
-
-1. Product → Archive (Release configuration)  
-2. Distribute App → Custom → `ios/ExportOptions.plist`  
-3. Output IPA for enterprise / ad-hoc distribution  
-
-**No App Store Connect assets** in this milestone.
+The release script uses CocoaPods. With no export options, GitHub Actions keeps
+an unsigned archive for compile validation. The release bundle contains
+staff-installable assets. On first launch, allow Local Network access and use
+the office server's HTTPS address for the connection test.
 
 ---
 

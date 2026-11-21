@@ -2,12 +2,21 @@ const ACCESS_TOKEN_KEY = 'webstudio_access_token';
 const REFRESH_TOKEN_KEY = 'webstudio_refresh_token';
 const ACCESS_EXPIRES_AT_KEY = 'webstudio_access_expires_at';
 const SESSION_ID_KEY = 'webstudio_session_id';
+const browserSessionTokens = new Map<string, string>();
+
+function isSessionToken(key: string): boolean {
+  return key === ACCESS_TOKEN_KEY || key === REFRESH_TOKEN_KEY;
+}
 
 async function readItem(key: string): Promise<string | null> {
   try {
     if (window.storage?.getItem) {
       const value = await window.storage.getItem(key);
       return typeof value === 'string' ? value : null;
+    }
+    if (isSessionToken(key)) {
+      localStorage.removeItem(key);
+      return browserSessionTokens.get(key) ?? null;
     }
     return localStorage.getItem(key);
   } catch {
@@ -20,6 +29,11 @@ async function writeItem(key: string, value: string): Promise<void> {
     await window.storage.setItem(key, value);
     return;
   }
+  if (isSessionToken(key)) {
+    localStorage.removeItem(key);
+    browserSessionTokens.set(key, value);
+    return;
+  }
   localStorage.setItem(key, value);
 }
 
@@ -28,6 +42,7 @@ async function removeItem(key: string): Promise<void> {
     await window.storage.removeItem(key);
     return;
   }
+  browserSessionTokens.delete(key);
   localStorage.removeItem(key);
 }
 

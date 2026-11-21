@@ -35,7 +35,7 @@ from webstudio_backend.services.backup_completeness import (
     DATABASE_DUMP_MODE_DATA_ONLY,
     DATABASE_DUMP_MODE_FULL,
     count_local_asset_files,
-    filter_alembic_version_copy_blocks,
+    prepare_data_only_restore_sql,
     use_real_database_dump,
 )
 from webstudio_backend.services.backup_encryption import get_backup_encryption_provider
@@ -518,7 +518,7 @@ class BackupEngine:
         self._psql_restore_from_file(path, on_error_stop=False)
 
     def _restore_data_only_sql_file(self, path: Path) -> None:
-        sql = filter_alembic_version_copy_blocks(path.read_text(encoding="utf-8"))
+        sql = prepare_data_only_restore_sql(path.read_text(encoding="utf-8"))
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",

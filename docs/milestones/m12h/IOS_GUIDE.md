@@ -17,7 +17,7 @@ Milestone: 12H
 
 | Item | Detail |
 |------|--------|
-| iOS | 14.0 or newer |
+| iOS | 15.5 or newer |
 | Network | Same LAN as server |
 | Distribution | TestFlight, Ad Hoc IPA, or Enterprise (when configured) |
 
@@ -28,12 +28,12 @@ Milestone: 12H
 ## 2. Build (IT)
 
 ```bash
-bash scripts/release/build-ios-ipa.sh
+WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST=/absolute/path/to/ExportOptions.plist \
+  bash scripts/release/build-ios-ipa.sh
 ```
 
-Requires Xcode, signing certificates, `ExportOptions.plist`. CI builds an
-unsigned archive (`CODE_SIGNING_ALLOWED=NO`) with CocoaPods (SwiftPM disabled
-in the Flutter app to avoid CI package-resolve failures). See
+Requires Xcode, an Apple signing identity, and a provisioning profile.
+CI keeps an unsigned archive for compile validation. See
 [M12C Installer Guide](../m12c/INSTALLER_GUIDE.md).
 
 ---
@@ -52,7 +52,7 @@ in the Flutter app to avoid CI package-resolve failures). See
 
 1. Open **WEBSTUDIO IMS**
 2. Allow local network access when prompted (iOS 14+)
-3. Discover server or enter `http://{server-ip}:8000`
+3. Enter the office server's trusted HTTPS address or select it from local discovery
 4. Log in
 
 ---
@@ -85,7 +85,7 @@ Install new build via TestFlight or MDM push. Match server minimum version after
 
 | Issue | Action |
 |-------|--------|
-| Untrusted developer | Settings → General → VPN & Device Management → Trust |
+| Signing or provisioning error | Confirm the build is installed through its configured TestFlight, Ad Hoc, or MDM distribution channel |
 | Cannot connect | Local Network permission; verify LAN |
 | App won't open | Reinstall; check iOS version |
 

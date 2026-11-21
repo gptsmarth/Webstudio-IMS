@@ -18,4 +18,9 @@ describe('network discovery helpers', () => {
       'http://webstudio-server.local:8000',
     );
   });
+
+  it('preserves HTTPS and its standard or custom port', () => {
+    expect(normalizeServerUrl('HTTPS://IMS.EXAMPLE.COM:443/')).toBe('https://ims.example.com');
+    expect(normalizeServerUrl('https://ims.example.com:8443')).toBe('https://ims.example.com:8443');
+  });
 });

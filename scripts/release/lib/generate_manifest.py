@@ -136,7 +136,6 @@ def build_manifest(root: Path, *, channel: str = "stable", build_number: int | N
             {"id": "desktop_windows", "os": "windows", "artifact_key": "desktop_windows"},
             {"id": "desktop_macos", "os": "macos", "artifact_key": "desktop_macos"},
             {"id": "mobile_android", "os": "android", "artifact_key": "mobile_android"},
-            {"id": "mobile_ios", "os": "ios", "artifact_key": "mobile_ios"},
             {"id": "server_windows", "os": "windows", "artifact_key": "server_windows"},
             {"id": "backend_package", "os": "linux", "artifact_key": "backend_package"},
         ],
@@ -154,7 +153,6 @@ def build_manifest(root: Path, *, channel: str = "stable", build_number: int | N
             "desktop_windows": "WEBSTUDIO Desktop Setup.exe",
             "desktop_macos": "WEBSTUDIO Desktop.dmg",
             "mobile_android": "WEBSTUDIO IMS.apk",
-            "mobile_ios": "WEBSTUDIO-IMS.xcarchive.zip",
             "server_windows": "WEBSTUDIO Server Setup.exe",
             "backend_package": f"webstudio-backend-{version}.tar.gz",
         },
@@ -179,6 +177,11 @@ def main() -> int:
     out_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "release" / f"v{_read_version(root)}"
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = build_manifest(root)
+    if not (out_dir / "WEBSTUDIO Desktop.dmg").is_file():
+        del manifest["artifacts"]["desktop_macos"]
+        manifest["supported_platforms"] = [
+            platform for platform in manifest["supported_platforms"] if platform["id"] != "desktop_macos"
+        ]
     out_path = out_dir / "version-manifest.json"
     out_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {out_path}")

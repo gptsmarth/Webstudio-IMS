@@ -85,6 +85,9 @@ export function normalizeServerUrl(raw: string, defaultPort = DEFAULT_BACKEND_PO
 
   const parsed = new URL(candidate);
   const host = normalizeServerHost(parsed.hostname);
+  if (parsed.protocol === 'https:') {
+    return `https://${host}${parsed.port ? `:${parsed.port}` : ''}`;
+  }
   const port = parsed.port ? Number(parsed.port) : defaultPort;
   return `http://${host}:${port}`.replace(/\/+$/, '');
 }

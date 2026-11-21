@@ -1,5 +1,4 @@
 import {
-  buildServerUrl,
   extractHostnameFromUrl,
   normalizeServerUrl,
   type SavedServerRecord,
@@ -44,12 +43,11 @@ export class SavedServerStore {
     const servers = await this.list();
     const urls: string[] = [];
     for (const server of servers) {
-      const parsedPort = Number(new URL(server.url).port || 8000);
       if (server.hostname && window.network?.resolveHost) {
         try {
           const resolved = await window.network.resolveHost(server.hostname);
           if (resolved.resolved && resolved.resolvedIp) {
-            const refreshed = buildServerUrl(server.hostname, parsedPort);
+            const refreshed = normalizeServerUrl(server.url);
             await this.save({
               ...server,
               url: refreshed,

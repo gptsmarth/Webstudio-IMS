@@ -8,7 +8,6 @@ ARTIFACTS_ROOT="${1:-$ROOT/artifacts}"
 mkdir -p \
   "$ROOT/apps/desktop/release/desktop" \
   "$ROOT/release/mobile" \
-  "$ROOT/release/mobile/ios" \
   "$ROOT/release/server" \
   "$ROOT/release/backend"
 
@@ -25,17 +24,8 @@ copy_first() {
 
 copy_first "*/WEBSTUDIO Desktop Setup.exe" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop Setup.exe"
 copy_first "*/WEBSTUDIO Desktop.dmg" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg"
-if [[ ! -f "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg" ]]; then
-  copy_first "*/WEBSTUDIO Desktop-arm64.dmg" "$ROOT/apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg"
-fi
 copy_first "*/WEBSTUDIO IMS.apk" "$ROOT/release/mobile/WEBSTUDIO IMS.apk"
 copy_first "*/WEBSTUDIO Server Setup.exe" "$ROOT/release/server/WEBSTUDIO Server Setup.exe"
 copy_first "*/webstudio-backend-*.tar.gz" "$ROOT/release/backend/"
-copy_first "*/WEBSTUDIO-IMS.xcarchive.zip" "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip"
-
-if [[ -d "$ARTIFACTS_ROOT/mobile-ios-archive/WEBSTUDIO-IMS.xcarchive" ]]; then
-  (cd "$ARTIFACTS_ROOT/mobile-ios-archive" && zip -qr "$ROOT/release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip" WEBSTUDIO-IMS.xcarchive)
-  echo "[stage] Zipped iOS xcarchive"
-fi
 
 echo "[stage] Artifact staging complete"

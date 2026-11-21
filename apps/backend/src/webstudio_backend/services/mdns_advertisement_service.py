@@ -93,6 +93,9 @@ class MdnsAdvertisementService:
                     DiscoveryTxtKey.BACKEND_VERSION.value: self._settings.app_version,
                     DiscoveryTxtKey.API_VERSION.value: self._settings.api_version,
                     DiscoveryTxtKey.BACKEND_PORT.value: str(port),
+                    DiscoveryTxtKey.SCHEME.value: (
+                        "https" if self._settings.tls_cert_path else "http"
+                    ),
                     DiscoveryTxtKey.ENVIRONMENT.value: self._settings.app_env,
                     DiscoveryTxtKey.BUILD_VERSION.value: resolve_build_version(self._settings),
                     DiscoveryTxtKey.PROTOCOL_VERSION.value: DISCOVERY_PROTOCOL_VERSION,

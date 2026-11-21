@@ -86,6 +86,10 @@ class ServerRepository {
     String? preferredUrl,
     bool includeMdns = true,
   }) async {
+    if (preferredUrl != null && Uri.tryParse(preferredUrl.trim())?.scheme == 'https') {
+      return discoverServer([preferredUrl]);
+    }
+
     if (includeMdns) {
       try {
         final mdnsServers = await discoverMdnsServers();

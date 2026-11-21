@@ -62,3 +62,9 @@ shasum -a 256 -c checksums.sha256
 ## CI
 
 Tag `v*.*.*` triggers `.github/workflows/release.yml` — artifacts uploaded to GitHub Actions, then `release-bundle` job assembles manifest and checksums.
+
+To rebuild the same version after a quality-gate failure, push the fix with
+the same version metadata and manually run **Enterprise Release** on that
+branch. Download the resulting `release-bundle` from the new Actions run.
+The original tag still identifies the original commit. The workflow publishes
+GitHub Release assets on tag-triggered runs.

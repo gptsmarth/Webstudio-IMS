@@ -41,12 +41,15 @@ String normalizeServerUrl(String raw, {int defaultPort = 8000}) {
   }
 
   var candidate = trimmed;
-  if (!candidate.startsWith('http://') && !candidate.startsWith('https://')) {
+  if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(candidate)) {
     candidate = 'http://$candidate';
   }
 
   final uri = Uri.parse(candidate);
   final host = normalizeServerHost(uri.host);
+  if (uri.scheme == 'https') {
+    return Uri(scheme: 'https', host: host, port: uri.port).toString();
+  }
   final port = uri.hasPort ? uri.port : defaultPort;
   return Uri(scheme: 'http', host: host, port: port).toString().replaceAll(RegExp(r'/+$'), '');
 }

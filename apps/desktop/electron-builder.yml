@@ -14,6 +14,7 @@ files:
   - dist-electron/**/*
   - package.json
   - "!**/*.map"
+  - "!dist/assets/product-images/**"
 
 extraResources:
   - from: public/assets/webstudio
@@ -62,19 +63,21 @@ nsis:
   deleteAppDataOnUninstall: false
 
 mac:
-  # Build one arch per CLI invocation (see scripts/release/package-desktop-mac.sh).
   target:
     - dmg
   icon: public/assets/webstudio/icon.icns
-  artifactName: WEBSTUDIO Desktop-${arch}.${ext}
+  artifactName: WEBSTUDIO Desktop.${ext}
   category: public.app-category.business
+  extendInfo:
+    NSLocalNetworkUsageDescription: WEBSTUDIO Desktop connects to your office WEBSTUDIO server.
+    NSBonjourServices:
+      - _webstudio-ims._tcp
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 
 dmg:
-  # Overridden per arch in package-desktop-mac.sh to avoid duplicate /Volumes names on CI.
   title: WEBSTUDIO Desktop ${version}
   icon: public/assets/webstudio/icon.icns
   window:

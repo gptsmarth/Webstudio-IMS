@@ -60,7 +60,14 @@ if (-not (Test-Path $envFile)) {
         throw "Missing .env.production.template under $InstallRoot\config\env\"
     }
     Copy-Item $template $envFile -Force
-    $jwt = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }) -as [byte[]])
+    $secretBytes = New-Object byte[] 48
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($secretBytes)
+        $jwt = [Convert]::ToBase64String($secretBytes)
+    } finally {
+        $rng.Dispose()
+    }
     (Get-Content $envFile) `
         -replace 'JWT_SECRET=GENERATED_BY_INSTALLER', "JWT_SECRET=$jwt" `
         -replace 'API_PORT=8443', 'API_PORT=8000' `

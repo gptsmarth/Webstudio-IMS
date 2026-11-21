@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -182,11 +183,27 @@ async def test_disaster_recovery_clean_database_restore(
     test_settings: Settings,
     initialized_system,
     disaster_recovery_backup_dir,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await _seed_representative_business_data(db_session)
     settings_repo = SystemSettingRepository(db_session)
     before = await collect_business_snapshot(db_session, settings_repo)
 
+    dump_database = BackupEngine._dump_database
+
+    def dump_with_newer_client_header(engine: BackupEngine, output_path: Path) -> None:
+        dump_database(engine, output_path)
+        sql = output_path.read_text(encoding="utf-8")
+        timeout = "SET transaction_timeout = 0;\n"
+        if timeout not in sql:
+            statement_timeout = "SET statement_timeout = 0;\n"
+            assert statement_timeout in sql
+            output_path.write_text(
+                sql.replace(statement_timeout, statement_timeout + timeout, 1),
+                encoding="utf-8",
+            )
+
+    monkeypatch.setattr(BackupEngine, "_dump_database", dump_with_newer_client_header)
     backup_engine = BackupEngine(
         db_session,
         test_settings,

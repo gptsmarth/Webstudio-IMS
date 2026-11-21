@@ -95,10 +95,10 @@ See [M12D Troubleshooting](../m12d/TROUBLESHOOTING_GUIDE.md).
 
 ## 7. Security
 
-- Keep PostgreSQL on localhost only
-- Do not port-forward API to internet without VPN
-- Use HTTPS with internal CA if required (DEPLOY-001 §5)
-- Segment guest Wi‑Fi from inventory LAN
+- Keep PostgreSQL on localhost and restrict the IMS API to staff networks and the approved VPN subnet.
+- Use the server's trusted HTTPS address on every staff device. Keep the API and Tally ports closed to inbound public internet traffic. Use an office VPN for approved remote access.
+- Segment guest Wi‑Fi from the inventory LAN. Keep the Tally connection on loopback where practical or on a restricted internal segment.
+- Review outbound access separately. Permit Google Drive backup, AI lookups, external product lookups, and GitHub release sync only as approved by the office administrator.
 
 ---
 

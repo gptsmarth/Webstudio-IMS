@@ -31,6 +31,7 @@ class ApiClient {
   final SecureTokenStorage _tokenStorage;
   final TokenRefreshCallback? _onRefreshToken;
   final Dio _dio;
+  static const _connectionProbe = 'connectionProbe';
 
   Dio get dio => _dio;
 
@@ -69,6 +70,13 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          if (options.uri.scheme == 'https') {
+            options.followRedirects = false;
+          }
+          if (options.extra[_connectionProbe] == true) {
+            options.headers.remove('Authorization');
+            return handler.next(options);
+          }
           final token = await _tokenStorage.getAccessToken();
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -80,7 +88,10 @@ class ApiClient {
           final path = error.requestOptions.path;
           final isAuthRoute = path.contains('/auth/login') || path.contains('/auth/refresh');
 
-          if (response?.statusCode == 401 && !isAuthRoute && _onRefreshToken != null) {
+          if (response?.statusCode == 401 &&
+              !isAuthRoute &&
+              error.requestOptions.extra[_connectionProbe] != true &&
+              _onRefreshToken != null) {
             final renewed = await _onRefreshToken();
             if (renewed) {
               final token = await _tokenStorage.getAccessToken();
@@ -231,10 +242,11 @@ class ApiClient {
       final response = await _dio.get<dynamic>(
         '$baseUrl${ApiPaths.healthLive}',
         options: Options(
-        connectTimeout: const Duration(seconds: 4),
-        sendTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 4),
-      ),
+          extra: {_connectionProbe: true},
+          connectTimeout: const Duration(seconds: 4),
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
       );
       return response.statusCode == 200;
     } on DioException {
@@ -253,6 +265,7 @@ class ApiClient {
         '$baseUrl$path',
         queryParameters: queryParameters,
         options: Options(
+          extra: {_connectionProbe: true},
           connectTimeout: const Duration(seconds: 8),
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),

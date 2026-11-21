@@ -25,9 +25,12 @@ export async function discoverBestServer(options?: {
 }): Promise<ConnectionDiagnosticsResult | null> {
   const includeMdns = options?.includeMdns !== false;
   const resolvedUrls = await SavedServerStore.resolveSavedUrls();
-  const preferred = options?.preferredUrl?.trim()
-    ? [normalizeServerUrl(options.preferredUrl.trim())]
-    : [];
+  const preferredUrl = options?.preferredUrl?.trim();
+  const preferred = preferredUrl ? [normalizeServerUrl(preferredUrl)] : [];
+  if (preferred[0]?.startsWith('https://')) {
+    const result = await ConnectionDiagnosticsService.testConnection(preferred[0]);
+    return result.success ? result : null;
+  }
 
   const earlyCandidates = [...new Set([...preferred, ...resolvedUrls])].filter(Boolean);
   for (const url of earlyCandidates) {

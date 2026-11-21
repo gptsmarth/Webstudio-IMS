@@ -38,6 +38,7 @@ def _add_file_sinks(settings: Settings) -> None:
             rotation="10 MB",
             retention=5,
             enqueue=True,
+            diagnose=False,
             serialize=settings.log_json or settings.is_production,
         )
 
@@ -51,6 +52,7 @@ def _add_file_sinks(settings: Settings) -> None:
             rotation="5 MB",
             retention=10,
             enqueue=True,
+            diagnose=False,
             serialize=settings.log_json or settings.is_production,
         )
 
@@ -58,11 +60,12 @@ def _add_file_sinks(settings: Settings) -> None:
 def configure_logging(settings: Settings) -> None:
     logger.remove()
     if settings.log_json or settings.is_production:
-        logger.add(_json_sink, level=settings.log_level)
+        logger.add(_json_sink, level=settings.log_level, diagnose=False)
     else:
         logger.add(
             sys.stderr,
             level=settings.log_level,
+            diagnose=False,
             format=(
                 "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
                 "<level>{level: <8}</level> | "

@@ -10,6 +10,7 @@ const TXT_KEYS = {
   buildVersion: 'build_version',
   environment: 'environment',
   backendPort: 'backend_port',
+  scheme: 'scheme',
 } as const;
 
 function readTxt(service: Service, key: string): string {
@@ -21,7 +22,11 @@ function readTxt(service: Service, key: string): string {
 }
 
 function toDiscoveredServer(service: Service): DiscoveredServer | null {
-  const host = service.addresses?.find((address) => address.includes('.')) ?? service.host;
+  const scheme = readTxt(service, TXT_KEYS.scheme) === 'https' ? 'https' : 'http';
+  const host =
+    scheme === 'https'
+      ? service.host?.replace(/\.$/, '')
+      : (service.addresses?.find((address) => address.includes('.')) ?? service.host);
   if (!host) {
     return null;
   }
@@ -39,7 +44,7 @@ function toDiscoveredServer(service: Service): DiscoveredServer | null {
     environment: readTxt(service, TXT_KEYS.environment) || 'production',
     port,
     host,
-    url: `http://${host}:${port}`,
+    url: `${scheme}://${host}:${port}`,
     lastSeen: new Date().toISOString(),
     status: 'online',
   };

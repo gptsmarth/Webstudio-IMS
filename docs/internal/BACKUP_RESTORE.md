@@ -18,7 +18,7 @@ config/settings-registry.json
 config/asset-manifest.json
 ```
 
-The PostgreSQL dump uses `--schema=webstudio --data-only` so archives restore onto a migrated schema (portable disaster recovery). Legacy archives without `database_dump_mode` are treated as full dumps.
+The PostgreSQL dump uses `--schema=webstudio --data-only` so archives restore onto a migrated schema (portable disaster recovery). For data-only restores, IMS applies the `transaction_timeout` reset emitted by PostgreSQL 17 and later clients only when the destination supports it. Legacy archives without `database_dump_mode` are treated as full dumps.
 
 Legacy `.sql` dumps remain supported for restore but lack manifest metadata.
 

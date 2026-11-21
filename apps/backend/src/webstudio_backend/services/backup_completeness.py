@@ -86,6 +86,23 @@ def filter_alembic_version_copy_blocks(sql: str) -> str:
     return "".join(out)
 
 
+def prepare_data_only_restore_sql(sql: str) -> str:
+    """Keep the dump's timeout reset on server versions that support it."""
+    lines = sql.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        statement = line.strip()
+        if not statement or statement.startswith(("--", "\\restrict ", "SET ")):
+            if statement == "SET transaction_timeout = 0;":
+                # pg_dump 17+ emits this even when it connects to PostgreSQL 16.
+                lines[index] = (
+                    "SELECT pg_catalog.set_config('transaction_timeout', '0', false) "
+                    "WHERE pg_catalog.current_setting('server_version_num')::integer >= 170000;\n"
+                )
+            continue
+        break
+    return filter_alembic_version_copy_blocks("".join(lines))
+
+
 def use_real_database_dump() -> bool:
     return os.environ.get("WEBSTUDIO_BACKUP_REAL_DUMP", "").lower() in {"1", "true", "yes"}
 

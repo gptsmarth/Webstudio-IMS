@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     database_url: str = Field(
         default="postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_dev",
+        repr=False,
     )
     database_pool_size: int = 10
     database_echo: bool = False
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:5173"],
     )
 
-    jwt_secret: str = Field(default="change-me-in-production")
+    jwt_secret: str = Field(default="change-me-in-production", repr=False)
     jwt_issuer: str = "webstudio-ims"
     jwt_audience: str = "webstudio-ims-api"
     access_token_ttl_minutes: int = 15
@@ -56,16 +57,18 @@ class Settings(BaseSettings):
     tls_cert_path: str = ""
     tls_key_path: str = ""
     tls_ca_path: str = ""
+    tls_required: bool = False
 
     rate_limit_enabled: bool = False
     rate_limit_per_minute: int = 100
+    auth_rate_limit_per_minute: int = 10
     slow_request_threshold_ms: int = 750
 
-    gemini_api_key: str = ""
+    gemini_api_key: str = Field(default="", repr=False)
     gemini_model: str = "gemini-2.5-flash-lite"
-    openai_api_key: str = ""
+    openai_api_key: str = Field(default="", repr=False)
     openai_model: str = "gpt-4o-mini"
-    groq_api_key: str = ""
+    groq_api_key: str = Field(default="", repr=False)
     groq_model: str = "llama-3.3-70b-versatile"
 
     webstudio_data_root: str = Field(default="", validation_alias="WEBSTUDIO_DATA_ROOT")
@@ -122,7 +125,7 @@ class Settings(BaseSettings):
 
     google_drive_client_id: str = Field(default="", validation_alias="GOOGLE_DRIVE_CLIENT_ID")
     google_drive_client_secret: str = Field(
-        default="", validation_alias="GOOGLE_DRIVE_CLIENT_SECRET"
+        default="", validation_alias="GOOGLE_DRIVE_CLIENT_SECRET", repr=False
     )
 
     @field_validator(

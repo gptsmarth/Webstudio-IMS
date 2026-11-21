@@ -9,7 +9,8 @@
 #>
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",
-    [switch]$PromptForDatabasePassword
+    [switch]$PromptForDatabasePassword,
+    [string]$ApiBaseUrl = "http://127.0.0.1:8000"
 )
 
 $ErrorActionPreference = "Stop"
@@ -86,10 +87,11 @@ if ($service) {
 }
 
 Write-Step "Health check..."
+$ApiBaseUrl = $ApiBaseUrl.TrimEnd("/")
 try {
-    $live = Invoke-WebRequest -Uri "http://127.0.0.1:8000/health/live" -UseBasicParsing -TimeoutSec 15
+    $live = Invoke-WebRequest -Uri "$ApiBaseUrl/health/live" -UseBasicParsing -TimeoutSec 15
     Write-Host "  /health/live  -> $($live.StatusCode)" -ForegroundColor Green
-    $ready = Invoke-WebRequest -Uri "http://127.0.0.1:8000/health/ready" -UseBasicParsing -TimeoutSec 15
+    $ready = Invoke-WebRequest -Uri "$ApiBaseUrl/health/ready" -UseBasicParsing -TimeoutSec 15
     Write-Host "  /health/ready -> $($ready.StatusCode)" -ForegroundColor Green
 } catch {
     Write-Host "  Health check warning: $($_.Exception.Message)" -ForegroundColor Yellow

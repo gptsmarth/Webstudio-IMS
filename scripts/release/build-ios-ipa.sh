@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure Flutter iOS project and build Release IPA (no App Store assets).
+# Build a signed IPA when export options are provided on a provisioned Mac.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -30,31 +30,21 @@ cd ios
 pod install --repo-update
 cd ..
 
-echo "[release] Building iOS Release (no codesign)..."
-flutter build ios --release --no-codesign
-
 mkdir -p "$RELEASE_DIR"
-
-if command -v xcodebuild >/dev/null 2>&1; then
-  echo "[release] Archive with Xcode (requires DEVELOPMENT_TEAM in ios/Release.xcconfig or env)..."
-  cd ios
-  xcodebuild \
-    -workspace Runner.xcworkspace \
-    -scheme Runner \
-    -configuration Release \
-    -archivePath "$RELEASE_DIR/WEBSTUDIO-IMS.xcarchive" \
-    archive \
-    CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
-  if [[ -f ExportOptions.plist ]] && [[ "${CODE_SIGNING_ALLOWED:-NO}" == "YES" ]]; then
-    xcodebuild \
-      -exportArchive \
-      -archivePath "$RELEASE_DIR/WEBSTUDIO-IMS.xcarchive" \
-      -exportPath "$RELEASE_DIR" \
-      -exportOptionsPlist ExportOptions.plist
+export_options="${WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST:-}"
+if [[ -n "$export_options" ]]; then
+  plutil -lint "$export_options"
+  flutter build ipa --release --export-options-plist "$export_options"
+  shopt -s nullglob
+  ipas=(build/ios/ipa/*.ipa)
+  if [[ "${#ipas[@]}" -ne 1 ]]; then
+    echo "[release] Expected one signed IPA in build/ios/ipa." >&2
+    exit 1
   fi
-  echo "[release] iOS archive: $RELEASE_DIR/WEBSTUDIO-IMS.xcarchive"
+  cp "${ipas[0]}" "$RELEASE_DIR/../WEBSTUDIO IMS.ipa"
+  echo "[release] Signed IPA exported. Use the distribution channel in ExportOptions.plist."
 else
-  echo "[release] xcodebuild not available — open ios/Runner.xcworkspace in Xcode to Archive."
+  flutter build ipa --release --no-codesign
+  ditto build/ios/archive/Runner.xcarchive "$RELEASE_DIR/WEBSTUDIO-IMS-unsigned.xcarchive"
+  echo "[release] Unsigned build validation archive. Device installation requires a signed IPA."
 fi
-
-echo "[release] See docs/milestones/m12c/INSTALLER_GUIDE.md for IPA export steps."

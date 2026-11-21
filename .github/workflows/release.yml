@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: enterprise-release-${{ github.ref }}
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   quality-gate:
     name: Quality Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       APP_ENV: test
       DATABASE_URL: postgresql+asyncpg://webstudio_app:webstudio_app@localhost:5432/webstudio_test
@@ -49,10 +49,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check release checkout for private files
+        run: python scripts/release/check-private-files.py
+
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e "apps/backend[dev]"
+
+      - name: Use PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
 
       - name: Verify alembic and database migrations
         run: |
@@ -166,7 +175,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: bash scripts/release/validate-branding-icons.sh
-      - run: pnpm desktop:package:mac
+      - name: Package universal macOS installer
+        run: pnpm desktop:package:mac
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos-dmg
@@ -192,7 +208,7 @@ jobs:
           if-no-files-found: error
 
   mobile-ios:
-    name: Build iOS Archive
+    name: Validate iOS Archive (Unsigned)
     needs: quality-gate
     runs-on: macos-latest
     steps:
@@ -205,17 +221,13 @@ jobs:
       - run: bash scripts/release/build-ios-ipa.sh
       - name: Zip iOS archive for distribution
         run: |
-          if [[ -d release/mobile/ios/WEBSTUDIO-IMS.xcarchive ]]; then
-            cd release/mobile/ios
-            zip -qr WEBSTUDIO-IMS.xcarchive.zip WEBSTUDIO-IMS.xcarchive
-          fi
+          cd release/mobile/ios
+          ditto -c -k --keepParent WEBSTUDIO-IMS-unsigned.xcarchive WEBSTUDIO-IMS-unsigned.xcarchive.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: mobile-ios-archive
-          path: |
-            release/mobile/ios/WEBSTUDIO-IMS.xcarchive.zip
-            release/mobile/ios/WEBSTUDIO-IMS.xcarchive
-          if-no-files-found: warn
+          name: mobile-ios-unsigned-build
+          path: release/mobile/ios/WEBSTUDIO-IMS-unsigned.xcarchive.zip
+          if-no-files-found: error
 
   server-windows:
     name: Build Server Windows Setup
@@ -293,6 +305,8 @@ jobs:
     needs: release-bundle
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -314,7 +328,6 @@ jobs:
           cp "$BUNDLE/WEBSTUDIO IMS.apk" release-assets/ 2>/dev/null || true
           cp "$BUNDLE/WEBSTUDIO Server Setup.exe" release-assets/ 2>/dev/null || true
           cp "$BUNDLE/webstudio-backend-${VERSION}.tar.gz" release-assets/ 2>/dev/null || true
-          cp "$BUNDLE/WEBSTUDIO-IMS.xcarchive.zip" release-assets/ 2>/dev/null || true
           cp "release/webstudio-ims-v${VERSION}-bundle.zip" release-assets/ 2>/dev/null || true
           ls -la release-assets/
 

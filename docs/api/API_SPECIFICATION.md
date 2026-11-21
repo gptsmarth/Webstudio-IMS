@@ -178,7 +178,7 @@ Inventory items may be deleted only when not **Sold** and no movement, sale, or 
 | `404` | Resource not found |
 | `409` | Conflict — duplicate, invalid state transition, idempotent replay |
 | `422` | Semantic validation failure |
-| `429` | Rate limited (login endpoint) |
+| `429` | Per-client request limit exceeded. Retry after the number of seconds in `Retry-After`. |
 | `500` | Unexpected server error — generic message only |
 | `503` | Service unavailable — readiness failure |
 
@@ -3080,7 +3080,7 @@ Standard `error.code` values for Version 1.
 | `SOLD_ITEM_CANNOT_MOVE` | 422 | LC-04 |
 | `USE_MOVEMENT_ENDPOINT` | 422 | Location change via PATCH rejected |
 | `ALREADY_SOLD` | 409 | Sale idempotency / duplicate |
-| `RATE_LIMITED` | 429 | Login throttled |
+| `RATE_LIMITED` | 429 | Request throttled. Login, refresh, and administrator recovery share a lower per-client limit. |
 | `INVALID_REFRESH_TOKEN` | 401 | |
 | `REFRESH_TOKEN_REUSE` | 401 | Token rotation attack |
 | `WEAK_PASSWORD` | 422 | Password policy |

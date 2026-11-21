@@ -54,9 +54,12 @@ class MdnsDiscoveryService {
   }
 
   DiscoveredServer? _mapService(BonsoirService service) {
-    final host = service is ResolvedBonsoirService ? service.host : null;
+    final host = service is ResolvedBonsoirService
+        ? service.host?.replaceFirst(RegExp(r'\.$'), '')
+        : null;
     if (host == null || host.isEmpty) return null;
     final attributes = service.attributes;
+    final scheme = attributes['scheme'] == 'https' ? 'https' : 'http';
     final port = service.port;
     final serverName = attributes['server_name'] ?? service.name.split('.').first;
     final companyName = attributes['company_name'] ?? 'WEBSTUDIO';
@@ -71,7 +74,7 @@ class MdnsDiscoveryService {
       environment: attributes['environment'] ?? 'production',
       port: port,
       host: host,
-      url: 'http://$host:$port',
+      url: Uri(scheme: scheme, host: host, port: port).toString(),
       lastSeen: DateTime.now(),
       status: 'online',
     );

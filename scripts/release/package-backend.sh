@@ -14,8 +14,13 @@ trap 'rm -rf "$STAGING"' EXIT
 PKG_ROOT="$STAGING/webstudio-backend-${VERSION}"
 mkdir -p "$PKG_ROOT"
 
-cp -R "$ROOT/apps/backend" "$PKG_ROOT/apps-backend"
-cp -R "$ROOT/database/migrations" "$PKG_ROOT/migrations"
+mkdir -p "$PKG_ROOT/apps-backend"
+cp "$ROOT/apps/backend/pyproject.toml" "$ROOT/apps/backend/README.md" "$PKG_ROOT/apps-backend/"
+excludes=(--exclude='__pycache__' --exclude='*.pyc' --exclude='.env*' --exclude='*.key' --exclude='*.pem')
+tar "${excludes[@]}" -cf - -C "$ROOT/apps/backend" src |
+  tar -xf - -C "$PKG_ROOT/apps-backend"
+tar "${excludes[@]}" -cf - -C "$ROOT/database" migrations |
+  tar -xf - -C "$PKG_ROOT"
 cp "$ROOT/VERSION" "$PKG_ROOT/VERSION"
 if [[ -f "$ROOT/config/env/.env.example" ]]; then
   mkdir -p "$PKG_ROOT/config/env"

@@ -57,6 +57,10 @@
 		<string>WEBSTUDIO IMS sends operational alerts such as sync failures and inventory notifications.</string>
 		<key>NSLocalNetworkUsageDescription</key>
 		<string>WEBSTUDIO IMS connects to your local WEBSTUDIO server on the same network.</string>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_webstudio-ims._tcp</string>
+		</array>
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsLocalNetworking</key>

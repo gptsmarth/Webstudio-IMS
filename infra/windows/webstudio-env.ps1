@@ -97,8 +97,8 @@ function Repair-ProductionEnvFile {
             continue
         }
         $path = $vars[$tlsKey]
-        if ($path -and -not (Test-Path $path)) {
-            Set-DotEnvValue -Path $EnvFile -Key $tlsKey -Value ""
+        if ($path -and -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Configured $tlsKey file is missing. Restore the file or correct its path."
         }
     }
 
@@ -222,6 +222,10 @@ function Get-NssmEnvironmentPairs {
         "WEBSTUDIO_DISCOVERY_CANDIDATES",
         "TLS_CERT_PATH",
         "TLS_KEY_PATH",
+        "TLS_REQUIRED",
+        "RATE_LIMIT_ENABLED",
+        "RATE_LIMIT_PER_MINUTE",
+        "AUTH_RATE_LIMIT_PER_MINUTE",
         "WEBSTUDIO_TALLY_SCHEDULER",
         "WEBSTUDIO_BACKUP_SCHEDULER",
         "WEBSTUDIO_NOTIFICATION_SCHEDULER",

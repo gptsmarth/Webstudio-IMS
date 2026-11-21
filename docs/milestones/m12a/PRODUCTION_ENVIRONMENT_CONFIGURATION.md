@@ -41,7 +41,7 @@ Milestone: 12A
 | Variable | Purpose | Production gate |
 |----------|---------|-----------------|
 | `APP_ENV` | `development` / `production` | Set `production` |
-| `JWT_SECRET` | Token signing | **≥32 bytes** when production |
+| `JWT_SECRET` | Token signing | Unique, cryptographically random secret of at least 32 bytes |
 | `DATABASE_URL` | Async PostgreSQL URL | Required |
 | `WEBSTUDIO_SECRET_ENCRYPTION_KEY` | Encrypt sensitive settings | Required for Tally credentials |
 
@@ -49,20 +49,35 @@ Milestone: 12A
 
 | Variable | Purpose | Default / notes |
 |----------|---------|-----------------|
-| `HOST` | Bind address | `0.0.0.0` for LAN server |
-| `PORT` | HTTP port | `8000` |
-| `WEBSTUDIO_SSL_ENABLED` | Enable HTTPS | `false` dev |
-| `WEBSTUDIO_SSL_CERTFILE` | TLS cert path | When SSL enabled |
-| `WEBSTUDIO_SSL_KEYFILE` | TLS key path | When SSL enabled |
+| `API_HOST` | Bind address | Restrict access with the server firewall |
+| `API_PORT` | API listener port | `8000` |
+| `TLS_CERT_PATH` | Full-chain server certificate | Set alongside `TLS_KEY_PATH` |
+| `TLS_KEY_PATH` | Server private key | Store outside the repository and restrict it to the service account and administrators |
+| `TLS_REQUIRED` | Require direct TLS configuration | Set `true` during secure commissioning after provisioning the certificate and key |
 
-**Audit note:** DEPLOYMENT_GUIDE may use alternate names — reconcile in M12 docs pass.
+Give staff the HTTPS URL whose hostname matches the certificate. The client
+devices must trust its issuer. Use that URL with the Windows
+`finalize-server-setup.ps1 -ApiBaseUrl` health check and the client connection
+test before enabling it for staff. Existing isolated HTTP installations can
+continue during the certificate rollout.
 
 ### CORS & security
 
 | Variable | Purpose |
 |----------|---------|
 | `CORS_ORIGINS` | Comma-separated allowed origins |
-| `WEBSTUDIO_TRUSTED_HOSTS` | Host header validation |
+| `RATE_LIMIT_ENABLED` | Enable per-client IP request limits |
+| `RATE_LIMIT_PER_MINUTE` | General per-minute budget per client IP |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | Lower combined budget for login, refresh, and administrator recovery |
+
+Keep the live `.env`, keys, backup files, Tally captures, and deployment snapshots
+in restricted local directories. The GitHub release gate runs
+`python3 scripts/release/check-private-files.py` before packaging. The committed
+environment files are templates. If an earlier shared JWT secret was used on an
+office server, rotate it during a maintenance window. Staff must sign in again.
+The current server also encrypts saved integration keys and the Drive refresh
+token using this secret. Plan to re-enter those keys and reconnect Drive after
+rotation, if those integrations are in use.
 
 ### Logging
 
@@ -97,7 +112,7 @@ JSON logging auto-enables when `APP_ENV=production` even if `LOG_JSON` unset.
 |------|---------|
 | JWT secret length | `APP_ENV=production` → fail fast if weak |
 | System initialized | API returns setup routes until wizard completes |
-| TLS optional | Operator choice — LAN HTTP acceptable per DEPLOY-001 with network isolation |
+| TLS enforcement | `TLS_REQUIRED=true` requires both TLS paths at startup |
 
 ---
 
