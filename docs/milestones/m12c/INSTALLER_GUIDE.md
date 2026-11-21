@@ -91,7 +91,8 @@ pnpm install
 pnpm desktop:package:mac
 ```
 
-The universal installer supports Intel and Apple silicon Macs. GitHub Actions publishes
+The packaging script verifies that the universal app contains both the Intel
+(`x86_64`) and Apple silicon (`arm64`) executable slices. GitHub Actions publishes
 `WEBSTUDIO Desktop.dmg` after verifying its Developer ID signature and notarization.
 Set `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`,
 `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` in the authorized release repository's
@@ -109,10 +110,13 @@ and launch it with Gatekeeper enabled.
 ## 3. Android — `WEBSTUDIO IMS.apk`
 
 Use Flutter **3.44.4**, which supports the repository's Gradle **9.1.0**
-and Android Gradle Plugin **9.0.1**. The shared CI setup pins this Flutter
-version for checks and mobile packaging. Release scripts use the committed
+and Android Gradle Plugin **9.0.1**. The Android release job uses **JDK 17**.
+The shared CI setup pins Flutter for checks and mobile packaging. Release scripts use the committed
 `apps/mobile_flutter/pubspec.lock`. Update the toolchain and lockfile together
 when upgrading Flutter.
+
+The Android build adds AndroidX Concurrent Futures to the CameraX plugin's
+compile classpath. CameraX already supplies it at runtime.
 
 ### Signing setup (one time)
 

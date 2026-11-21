@@ -196,13 +196,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - uses: ./.github/actions/setup-build-env
         with:
           install-python: "false"
           install-node: "false"
           install-flutter: "true"
       - run: bash scripts/release/validate-branding-icons.sh
-      - run: bash scripts/release/build-android-apk.sh
+      - name: Build release APK with JDK 17
+        run: |
+          flutter config --jdk-dir="$JAVA_HOME"
+          bash scripts/release/build-android-apk.sh
       - uses: actions/upload-artifact@v4
         with:
           name: mobile-android-apk

@@ -31,7 +31,11 @@ pnpm exec electron-builder --mac dmg --universal --publish never --config electr
   "-c.mac.artifactName=$artifact" "${signing[@]}"
 
 app="$OUT/mac-universal/WEBSTUDIO Desktop.app"
-lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/WEBSTUDIO Desktop"
+architectures="$(lipo "$app/Contents/MacOS/WEBSTUDIO Desktop" -archs)"
+if [[ " $architectures " != *" arm64 "* || " $architectures " != *" x86_64 "* ]]; then
+  echo "[release] Expected arm64 and x86_64 in the Mac app, found: $architectures" >&2
+  exit 1
+fi
 if [[ "$artifact" == "WEBSTUDIO Desktop.dmg" ]]; then
   codesign --verify --deep --strict "$app"
   xcrun stapler validate "$app"
