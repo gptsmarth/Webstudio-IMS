@@ -118,6 +118,10 @@ when upgrading Flutter.
 The Android build adds AndroidX Concurrent Futures to the CameraX plugin's
 compile classpath. CameraX already supplies it at runtime.
 
+The APK script validates the committed lockfile before building. The release
+build runs Flutter's normal plugin registration so development-only plugins such
+as `integration_test` stay out of the APK.
+
 ### Signing setup (one time)
 
 ```bash

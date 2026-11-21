@@ -20,10 +20,12 @@ if [[ -n "${WEBSTUDIO_DEFAULT_API_URL:-}" ]]; then
   DART_DEFINES+=(--dart-define="WEBSTUDIO_DEFAULT_API_URL=${WEBSTUDIO_DEFAULT_API_URL}")
   echo "[release] Default API URL: ${WEBSTUDIO_DEFAULT_API_URL}"
 fi
+# Flutter regenerates Android's plugin registrant in release mode only when
+# pub handling is enabled. This excludes dev-only plugins such as integration_test.
 if (( ${#DART_DEFINES[@]} )); then
-  flutter build apk --release --no-pub "${DART_DEFINES[@]}"
+  flutter build apk --release "${DART_DEFINES[@]}"
 else
-  flutter build apk --release --no-pub
+  flutter build apk --release
 fi
 
 mkdir -p "$RELEASE_DIR"
