@@ -5,6 +5,7 @@ export { PurchasePage } from './PurchasePage';
 export { SalesPage } from './SalesPage';
 export { CataloguePage } from './CataloguePage';
 export { ReportsPage } from './ReportsPage';
+export { AsusActivationPage } from './AsusActivationPage';
 export { AsusWeeklyReportPage } from './AsusWeeklyReportPage';
 export { ComparisonPage } from './ComparisonPage';
 export { NotificationsPage } from './NotificationsPage';

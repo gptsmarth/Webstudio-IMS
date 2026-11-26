@@ -157,8 +157,7 @@ class AsusWeeklyReportService:
             "accessories": ProductCategory.ACCESSORY,
             "both": None,
         }[products]
-        invoices: dict[tuple[str | None, str], AsusInvoice | None] = {}
-        positions: defaultdict[tuple[str | None, str, str], int] = defaultdict(int)
+        prices = AsusSaleUnitPrices(self._invoices)
         rows: list[WorkbookRow] = []
         issues: list[str] = []
         for record in sales:
@@ -179,20 +178,8 @@ class AsusWeeklyReportService:
                 missing = "serial number" if not serial_number else "part number"
                 issues.append(f"{invoice_number}: {missing} is missing")
                 continue
-            price = None
             sold_on = sale.sold_at.astimezone(INDIA_TIME).date()
-            if sale.tally_voucher_guid:
-                key = (sale.tally_company_name, sale.tally_voucher_guid)
-                if key not in invoices:
-                    invoices[key] = await self._load_invoice(*key)
-                invoice = invoices[key]
-                serial = normalize_serial(serial_number)
-                if invoice is not None and serial is not None:
-                    position_key = (*key, serial)
-                    price = _archived_unit_price(invoice, serial, positions[position_key])
-                    positions[position_key] += 1
-            if price is None:
-                price = _recorded_unit_price(sale)
+            price = await prices.resolve(sale, serial_number)
             if price is None:
                 issues.append(
                     f"{invoice_number} ({serial_number}): GST-inclusive unit price is unavailable"
@@ -219,6 +206,30 @@ class AsusWeeklyReportService:
                 422,
             )
         return await asyncio.to_thread(_build_workbook, rows)
+
+
+class AsusSaleUnitPrices:
+    """Resolve GST-inclusive per-unit prices from saved sales and archived Tally lines."""
+
+    def __init__(self, invoices: TallyProcessedInvoiceRepository) -> None:
+        self._invoices = invoices
+        self._cache: dict[tuple[str | None, str], AsusInvoice | None] = {}
+        self._positions: defaultdict[tuple[str | None, str, str], int] = defaultdict(int)
+
+    async def resolve(self, sale: Sale, serial_number: str) -> Decimal | None:
+        if sale.tally_voucher_guid:
+            key = (sale.tally_company_name, sale.tally_voucher_guid)
+            if key not in self._cache:
+                self._cache[key] = await self._load_invoice(*key)
+            invoice = self._cache[key]
+            serial = normalize_serial(serial_number)
+            if invoice is not None and serial is not None:
+                position_key = (*key, serial)
+                price = _archived_unit_price(invoice, serial, self._positions[position_key])
+                self._positions[position_key] += 1
+                if price is not None:
+                    return price
+        return _recorded_unit_price(sale)
 
     async def _load_invoice(self, company: str | None, guid: str) -> AsusInvoice | None:
         record = await self._invoices.find_latest_by_guid(guid, company_name=company)

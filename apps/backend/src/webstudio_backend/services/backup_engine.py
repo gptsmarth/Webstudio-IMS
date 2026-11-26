@@ -474,6 +474,7 @@ class BackupEngine:
             "--disable-triggers",
             f"--exclude-table-data={DATABASE_SCHEMA}.alembic_version",
             f"--exclude-table-data={DATABASE_SCHEMA}.laptop_comparison_cache",
+            f"--exclude-table-data={DATABASE_SCHEMA}.asus_activation_workbooks",
         ]
         user, _password, _host, _port, db_name = self._postgres_connection()
         try:

@@ -17,6 +17,7 @@ from webstudio_backend.api.middleware.request_logging import RequestLoggingMiddl
 from webstudio_backend.api.middleware.security_headers import SecurityHeadersMiddleware
 from webstudio_backend.api.routers import (
     access_roles,
+    asus_activation,
     audit_logs,
     auth,
     brands,
@@ -384,6 +385,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(product_images.router)
     app.include_router(inventory.router)
     app.include_router(comparison.router)
+    app.include_router(asus_activation.router)
     app.include_router(purchase.router)
     app.include_router(sales.router)
     app.include_router(dashboard.router)

@@ -6,6 +6,7 @@ import shutil
 
 from webstudio_backend.core.config import get_settings
 from webstudio_backend.infrastructure.database.session import session_scope
+from webstudio_backend.services.asus_activation import purge_activation_workbooks
 from webstudio_backend.services.laptop_comparison import purge_expired_research
 from webstudio_backend.services.scheduler_runtime_service import (
     SchedulerRuntimeService,
@@ -22,6 +23,7 @@ async def maybe_run_maintenance_checks() -> None:
     storage = await verify_storage(settings)
     async with session_scope() as session:
         await purge_expired_research(session)
+        await purge_activation_workbooks(session)
         runtime = SchedulerRuntimeService(session)
         path = _storage_path(settings)
         usage = shutil.disk_usage(str(path))

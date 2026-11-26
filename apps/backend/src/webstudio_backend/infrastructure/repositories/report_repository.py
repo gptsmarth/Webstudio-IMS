@@ -274,7 +274,12 @@ class ReportRepository:
         self._session = session
 
     async def list_asus_weekly_sales(
-        self, start: datetime, end: datetime
+        self,
+        start: datetime,
+        end: datetime,
+        *,
+        serials: set[str] | None = None,
+        include_cancelled: bool = False,
     ) -> list[AsusWeeklySaleRow]:
         statement = (
             select(
@@ -295,11 +300,15 @@ class ReportRepository:
             .where(
                 func.upper(func.trim(func.coalesce(Sale.snapshot_brand_name, Brand.name)))
                 == "ASUS",
-                Sale.cancelled_at.is_(None),
                 Sale.sold_at.between(start, end),
             )
             .order_by(Sale.sold_at, Sale.id)
         )
+        if not include_cancelled:
+            statement = statement.where(Sale.cancelled_at.is_(None))
+        if serials is not None:
+            serial = func.coalesce(Sale.snapshot_serial_number, InventoryItem.serial_number)
+            statement = statement.where(func.upper(func.trim(serial)).in_(serials))
         result = await self._session.execute(statement)
         return [AsusWeeklySaleRow(*row) for row in result]
 

@@ -6,6 +6,7 @@ import {
 } from '../config/navigation';
 import { useAuthStore, useNavigationStore } from '../store';
 import {
+  AsusActivationPage,
   AsusWeeklyReportPage,
   ComparisonPage,
   AuditPage,
@@ -34,6 +35,7 @@ const ROUTE_COMPONENTS: Record<WorkspaceRoute, () => JSX.Element> = {
   notifications: NotificationsPage,
   reports: ReportsPage,
   'asus-weekly-report': AsusWeeklyReportPage,
+  'asus-activation': AsusActivationPage,
   settings: SettingsPage,
 };
 

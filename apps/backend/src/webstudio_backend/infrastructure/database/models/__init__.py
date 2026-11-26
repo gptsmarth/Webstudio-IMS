@@ -1,5 +1,10 @@
 """SQLAlchemy ORM models."""
 
+from webstudio_backend.infrastructure.database.models.asus_activation import (
+    AsusActivationReceipt,
+    AsusActivationScheme,
+    AsusActivationWorkbook,
+)
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.backup_run import BackupRun
 from webstudio_backend.infrastructure.database.models.brand import Brand
@@ -61,6 +66,9 @@ from webstudio_backend.infrastructure.database.models.tally_sync_log import Tall
 from webstudio_backend.infrastructure.database.models.user import User
 
 __all__ = [
+    "AsusActivationReceipt",
+    "AsusActivationScheme",
+    "AsusActivationWorkbook",
     "AuditLog",
     "BackupRun",
     "Brand",

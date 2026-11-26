@@ -10,6 +10,7 @@ import {
   Bell,
   FileSpreadsheet,
   CalendarDays,
+  ReceiptIndianRupee,
   Settings,
   Boxes,
   Columns3,
@@ -29,6 +30,7 @@ export type WorkspaceRoute =
   | 'notifications'
   | 'reports'
   | 'asus-weekly-report'
+  | 'asus-activation'
   | 'users'
   | 'audit'
   | 'settings';
@@ -123,6 +125,14 @@ export const NAV_ITEMS: NavItemConfig[] = [
     group: 'administration',
     permission: ROUTE_PERMISSIONS['asus-weekly-report'],
     description: 'Download the ASUS weekly sell-out spreadsheet.',
+  },
+  {
+    id: 'asus-activation',
+    label: 'Asus Activation',
+    icon: ReceiptIndianRupee,
+    group: 'administration',
+    permission: ROUTE_PERMISSIONS['asus-activation'],
+    description: 'Track ASUS activation schemes and credit-note receipts.',
   },
   {
     id: 'users',

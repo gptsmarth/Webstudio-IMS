@@ -6,6 +6,119 @@ info:
   version: 1.0.0
   description: WEBSTUDIO IMS version 1 API
 paths:
+  /api/v1/asus-activation:
+    get:
+      summary: List ASUS activation claims for a sale month
+      description: Requires reports:export. Includes uploaded periods and claim totals.
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+      responses:
+        '200':
+          description: Activation dashboard in the standard data envelope.
+  /api/v1/asus-activation/schemes:
+    post:
+      summary: Import an ASUS activation workbook for an inclusive sale date range
+      description: Requires reports:export and settings:modify. Workbook dates are reference information.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, date_from, date_to]
+              properties:
+                file: { type: string, format: binary }
+                date_from: { type: string, format: date }
+                date_to: { type: string, format: date }
+      responses:
+        '200':
+          description: Scheme identifier, imported rate count and matching sales already recorded for the selected dates.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [id, date_from, date_to, filename, rule_count, matched_sale_count]
+                    properties:
+                      id: { type: string, format: uuid }
+                      date_from: { type: string, format: date }
+                      date_to: { type: string, format: date }
+                      filename: { type: string }
+                      rule_count: { type: integer }
+                      matched_sale_count: { type: integer }
+        '409':
+          description: An uploaded period overlaps the requested dates.
+        '422':
+          description: Invalid range, workbook, or conflicting model rates.
+  /api/v1/asus-activation/receipts:
+    post:
+      summary: Preview or confirm an ASUS credit-note workbook
+      description: Requires reports:export and settings:modify. Resubmit the same workbook with the preview identifier to apply.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                preview_id: { type: string, minLength: 64, maxLength: 64 }
+      responses:
+        '200':
+          description: Receipt rows, amounts and outcomes in the standard data envelope.
+        '409':
+          description: Claims changed since preview. Review the workbook again.
+        '422':
+          description: Invalid receipt workbook or invalid confirmation.
+  /api/v1/asus-activation/claims/{sale_id}/receipt:
+    post:
+      summary: Record a manual ASUS credit receipt or resolve its variance
+      description: Requires reports:export and settings:modify. Manual amounts are before GST.
+      parameters:
+        - name: sale_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [record, resolve] }
+                amount: { type: [string, 'null'] }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        '200':
+          description: Updated claim in the standard data envelope.
+        '409':
+          description: A receipt is already recorded or the claim has no unresolved variance.
+        '422':
+          description: Invalid amount or missing resolution note.
+  /api/v1/asus-activation/export:
+    get:
+      summary: Download activation claims and receipt details in Excel
+      description: Requires reports:export. Omit month to include all sale months.
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, discrepancy, received, all], default: all }
+      responses:
+        '200':
+          description: Workbook with claims for the selected sale month and status.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
   /api/v1/comparison/inventory:
     get:
       summary: Search available inventory laptops for comparison
