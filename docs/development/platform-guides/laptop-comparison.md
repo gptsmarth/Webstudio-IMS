@@ -39,6 +39,9 @@ grounding. Inventory comparison remains available independently of Gemini.
 
 - Desktop workspace, selection controls, grouped rows, and presentation mode.
   [Comparison page](../../../apps/desktop/src/pages/workspace/ComparisonPage.tsx) · [Comparison components](../../../apps/desktop/src/components/comparison/) · [Component grouping](../../../apps/desktop/src/lib/laptopComparison.ts)
+- The Desktop comparison service preserves page metadata for inventory searches
+  and reads the researched laptop from the client's unwrapped POST result.
+  [Desktop comparison service](../../../apps/desktop/src/services/api/ComparisonService.ts)
 - Inventory query, Gemini lookup, validation, and cache expiry.
   [Comparison API](../../../apps/backend/src/webstudio_backend/api/routers/comparison.py) · [Comparison service](../../../apps/backend/src/webstudio_backend/services/laptop_comparison.py) · [Gemini provider](../../../apps/backend/src/webstudio_backend/services/ai/providers/gemini.py)
 - Persistent cache and API payloads.

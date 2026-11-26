@@ -1,5 +1,6 @@
+import { createApiClient } from '@webstudio/api-client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComparisonTable } from '../src/components/comparison/ComparisonTable';
 import { navItemsForPermissions } from '../src/config/navigation';
 import {
@@ -9,7 +10,9 @@ import {
   removeComparisonSlot,
   setComparisonLaptop,
 } from '../src/lib/laptopComparison';
-import type { ComparisonLaptop } from '../src/services/api/ComparisonService';
+import { ApiClientProvider } from '../src/services/api/ApiClientProvider';
+import { RetryingApiClient } from '../src/services/api/client';
+import { ComparisonService, type ComparisonLaptop } from '../src/services/api/ComparisonService';
 
 const savedRam =
   '16 GB DDR5 4800 MHz, dual channel, two replaceable modules. Maximum supported capacity 64 GB.';
@@ -41,6 +44,59 @@ function fixture(source: 'inventory' | 'external'): ComparisonLaptop {
     ],
   };
 }
+
+describe('comparison API responses', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function mockTransport() {
+    const transport = createApiClient({ baseUrl: 'http://localhost:8000' });
+    vi.spyOn(ApiClientProvider, 'getClient').mockResolvedValue(new RetryingApiClient(transport));
+    return transport;
+  }
+
+  it('keeps the inventory page and its pagination when opening the picker', async () => {
+    const laptop = fixture('inventory');
+    const meta = { has_next: true, has_previous: false };
+    const request = vi.spyOn(mockTransport(), 'get').mockResolvedValue({
+      data: [laptop],
+      meta,
+      request_id: 'inventory-request',
+    });
+
+    const result = await ComparisonService.inventory('X1504VAP', 1);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toEqual(laptop);
+    expect(result.meta).toEqual(meta);
+    expect(request).toHaveBeenCalledWith('/api/v1/comparison/inventory', {
+      search: 'X1504VAP',
+      page: 1,
+      page_size: 8,
+    });
+  });
+
+  it('returns the researched laptop after the client unwraps the response', async () => {
+    const laptop = fixture('external');
+    vi.spyOn(mockTransport(), 'post').mockResolvedValue({
+      data: laptop,
+      request_id: 'research-request',
+    });
+
+    await expect(ComparisonService.research(laptop.brand, laptop.model_number)).resolves.toEqual(
+      laptop,
+    );
+  });
+
+  it('rejects a malformed page so the picker can show its local error message', async () => {
+    vi.spyOn(mockTransport(), 'get').mockResolvedValue({
+      data: null,
+      request_id: 'inventory-request',
+    });
+
+    await expect(ComparisonService.inventory('', 1)).rejects.toThrow(
+      'The server returned an invalid inventory response.',
+    );
+  });
+});
 
 describe('laptop comparison', () => {
   it('starts with two columns and lets inventory staff see the tab', () => {
