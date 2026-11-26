@@ -23,6 +23,7 @@ export interface FetchedProductSpec {
   product_image_url: string | null;
   description: string | null;
   notes: string | null;
+  detailed_specifications?: ProductModel['detailed_specifications'];
   source: 'database' | 'gemini' | 'manual';
 }
 
@@ -129,6 +130,7 @@ export async function fetchProductSpecFromInternet(
       product_image_url: result.product_image_url,
       description: result.description,
       notes: result.notes,
+      detailed_specifications: result.detailed_specifications,
       source: 'gemini',
     };
   })();
@@ -160,6 +162,7 @@ export function modelToFetchedSpec(model: ProductModel): FetchedProductSpec {
     product_image_url: model.product_image_url,
     description: description || null,
     notes: specNotes || null,
+    detailed_specifications: model.detailed_specifications,
     source: 'database',
   };
 }

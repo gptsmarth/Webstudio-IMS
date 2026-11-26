@@ -259,7 +259,9 @@ async def test_external_retry_checks_exact_variant_and_reads_final_grounded_answ
 
     async def generate(self, model, payload):
         models.append(model)
-        if model == fallback:
+        prompt = payload["contents"][0]["parts"][0]["text"]
+        assert prompt.startswith("First search for the quoted complete SKU") == (len(models) > 1)
+        if len(models) == 3:
             chunks[0]["web"]["uri"] = chunks[0]["web"]["uri"].replace("su362ws", "su463ws")
         return body
 
@@ -274,7 +276,7 @@ async def test_external_retry_checks_exact_variant_and_reads_final_grounded_answ
         lookup.model_number,
         verify=lambda entry, grounding: _verified_payload(lookup, entry, grounding) is not None,
     )
-    assert models == ["gemini-fixture", fallback]
+    assert models == ["gemini-fixture", fallback, "gemini-fixture"]
     assert result is not None
     laptop = _verified_payload(lookup, *result)
     assert laptop is not None
@@ -480,3 +482,102 @@ async def test_cache_persists_coalesces_concurrent_request_and_refreshes_after_e
     await db_session.commit()
     assert (await lookup_on_new_session(lookup)).model_number == sku_a
     assert calls == [sku_a, sku_b, sku_a, sku_a]
+
+
+@pytest.mark.asyncio
+async def test_inventory_selection_saves_verified_exact_model_specs_only_once(
+    api_client, db_session, initialized_system, monkeypatch
+):
+    brand = await BrandRepository(db_session).create("Comparison ASUS")
+    sku = "E1504GA-FIXTURE"
+    model = await ProductModelRepository(db_session).create(
+        brand_id=brand.id,
+        model_number=sku,
+        model_name="Saved Vivobook",
+        cpu="Intel Core i3-N305",
+        ram_gb=8,
+        storage_value=Decimal("512"),
+        storage_type=StorageType.SSD,
+        storage_unit=StorageUnit.GB,
+        notes="Memory type: DDR4",
+    )
+    location = await LocationRepository(db_session).create(
+        "Comparison lab", location_type=LocationType.WAREHOUSE
+    )
+    await InventoryItemRepository(db_session).create(
+        serial_number="SYNTHETIC-N305",
+        product_model_id=model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    calls = []
+
+    async def research(self, manufacturer, number, *, verify):
+        calls.append(number)
+        raw, body = grounded_fixture(manufacturer, number)
+        raw["specifications"] = {
+            "Processor": "Intel Core i3-N305",
+            "RAM": "8 GB",
+            "Storage interface": "PCIe 3.0",
+            "Display brightness": "300 nits",
+            "Display gamut": "Not specified (assumed OLED gamut)",
+            "Supplier details": "this must stay out of public model facts",
+        }
+        assert verify(raw, body)
+        return raw, body
+
+    async def research_cpu(self, processor, *, verify):
+        calls.append(processor)
+        assert processor == "intel core i3-n305"
+        raw = {
+            "processor": "Intel Core i3-N305",
+            "specifications": {
+                "CPU cores": "8",
+                "CPU threads": "8",
+                "CPU cache": "6 MB",
+                "CPU max turbo": "3.80 GHz",
+            },
+        }
+        _, body = grounded_fixture("", "")
+        body["candidates"][0]["groundingMetadata"]["groundingChunks"][0]["web"] = {
+            "title": "Intel® Core™ i3-N305 Processor",
+            "uri": "https://intel.com/specification",
+        }
+        assert verify(raw, body)
+        return raw, body
+
+    monkeypatch.setattr(GeminiProvider, "research_laptop_comparison", research)
+    monkeypatch.setattr(GeminiProvider, "research_comparison_processor", research_cpu)
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    url = f"{STOCK}/{model.id}/specifications"
+    initial = await api_client.get(STOCK, params={"search": sku}, headers=headers)
+    assert initial.json()["data"][0]["specifications_pending"] is True
+    assert not calls
+    assert (await api_client.post(url)).status_code == 401
+
+    result = await api_client.post(url, headers=headers)
+    assert result.status_code == 200, result.text
+    selected = result.json()["data"]
+    assert selected["specifications_pending"] is False
+    assert selected["saved_notes"] == "Memory type: DDR4"
+    detail = {item["component"]: item["detail"] for item in selected["specifications"]}
+    assert detail["CPU cores"] == "8"
+    assert detail["CPU threads"] == "8"
+    assert detail["CPU cache"] == "6 MB"
+    assert detail["Display brightness"] == "300 nits"
+    assert detail["Storage interface"] == "PCIe 3.0"
+    assert "Supplier details" not in detail
+    assert "Display gamut" not in detail
+    assert (await api_client.post(url, headers=headers)).json()["data"] == selected
+    assert calls == [sku, "intel core i3-n305"]
+
+    product = await api_client.get(f"/api/v1/product-models/{model.id}", headers=headers)
+    assert product.status_code == 200, product.text
+    assert {"component": "CPU cores", "detail": "8"} in product.json()["data"][
+        "detailed_specifications"
+    ]
+    assert product.json()["data"]["cpu"] == "Intel Core i3-N305"
+    await ProductModelRepository(db_session).update(model, ram_gb=16)
+    assert model.detailed_specifications == []
+    assert model.specifications_researched_at is None

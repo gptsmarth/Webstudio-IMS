@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric, String
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from webstudio_backend.infrastructure.database.base import Base
@@ -97,6 +98,11 @@ class ProductModel(Base, UuidPrimaryKeyMixin, TimestampMixin):
     product_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     search_aliases: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    detailed_specifications: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), nullable=False
+    )
+    specifications_researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    specifications_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     selling_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     # ASUS-only live price tracking (Gemini search grounding, see

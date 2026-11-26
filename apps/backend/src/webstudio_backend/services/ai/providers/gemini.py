@@ -320,16 +320,25 @@ class GeminiProvider(AIProvider):
         *,
         use_grounding: bool,
         models: list[str] | None = None,
+        attempt_timeout: float | None = None,
+        alternate_prompt: str | None = None,
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, AIProviderError | None]:
         last_error: AIProviderError | None = None
         rate_limited = False
 
-        for gemini_model in models or self._model_chain():
+        for attempt, gemini_model in enumerate(models or self._model_chain()):
             started = time.perf_counter()
             AIProviderHealthTracker.record_request("gemini")
             try:
-                payload = _build_payload(prompt, use_grounding=use_grounding)
-                body = await self._generate(gemini_model, payload)
+                query = alternate_prompt if attempt and alternate_prompt else prompt
+                payload = _build_payload(query, use_grounding=use_grounding)
+                try:
+                    async with asyncio.timeout(attempt_timeout):
+                        body = await self._generate(gemini_model, payload)
+                except TimeoutError as exc:
+                    raise AIProviderError(
+                        "TIMEOUT", "Gemini lookup attempt timed out.", provider="gemini"
+                    ) from exc
                 parsed = parse(body)
                 if not parsed:
                     continue
@@ -493,7 +502,18 @@ class GeminiProvider(AIProvider):
             "layout, CPU max turbo and CPU cache labels when known. Cite the exact SKU alongside "
             "the configuration and omit unsupported fields."
         )
-        return await self._research_grounded_json(model_number, prompt, verify)
+        alternate_prompt = (
+            f'First search for the quoted complete SKU "{model_number}" and {brand}. '
+            "Find the exact regional listing, then search the official store or specification "
+            "sheet for its configuration. Use a different source from generic family pages. "
+            "Return the confirmed facts even if some fields are missing.\n" + prompt
+        )
+        return await self._research_grounded_json(
+            model_number,
+            prompt,
+            verify,
+            alternate_prompt=alternate_prompt,
+        )
 
     async def research_comparison_processor(
         self,
@@ -518,6 +538,8 @@ class GeminiProvider(AIProvider):
         label: str,
         prompt: str,
         verify: Callable[[dict[str, Any], dict[str, Any]], bool],
+        *,
+        alternate_prompt: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
         if not self.is_configured():
             raise AIProviderError("NOT_CONFIGURED", "Gemini is not configured.", provider="gemini")
@@ -527,7 +549,16 @@ class GeminiProvider(AIProvider):
             parsed = parse_json_object(response) if response else None
             return parsed if parsed is not None and verify(parsed, body) else None
 
-        parsed, body, error = await self._try_lookup(label, prompt, parse, use_grounding=True)
+        models = [*self._model_chain(), self._model] if alternate_prompt else None
+        parsed, body, error = await self._try_lookup(
+            label,
+            prompt,
+            parse,
+            use_grounding=True,
+            models=models,
+            attempt_timeout=18 if alternate_prompt else None,
+            alternate_prompt=alternate_prompt,
+        )
         if parsed is not None and body is not None:
             return parsed, body
         if error is not None:
@@ -768,7 +799,9 @@ def _parse_lookup_body(
     if not parsed:
         logger.warning("Gemini returned non-JSON text: {}", text[:200])
         return None
-    normalized = normalize_spec(parsed, fallback_name=fallback_name, source="gemini")
+    normalized = normalize_spec(
+        parsed, fallback_name=fallback_name, source="gemini", model_number=model_number
+    )
     provider_key = "groq" if strict_validation else "gemini"
     if not validate_enrichment_payload(
         normalized,
@@ -837,6 +870,7 @@ def _to_enrichment_result(
         product_image_url=None,
         description=parsed.get("description"),
         notes=parsed.get("notes"),
+        detailed_specifications=parsed.get("detailed_specifications", []),
         source="gemini",
         provider=provider,  # type: ignore[arg-type]
         confidence_score=float(parsed.get("confidence_score") or 0.85),

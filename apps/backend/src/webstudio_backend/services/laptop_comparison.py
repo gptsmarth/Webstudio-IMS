@@ -22,7 +22,14 @@ from webstudio_backend.api.schemas.comparison import (
     ComparisonSpec,
     ExternalLaptopRequest,
 )
+from webstudio_backend.api.schemas.laptop_specification import (
+    MAX_DETAILED_SPECIFICATIONS,
+    detailed_specifications,
+    documented_detail,
+)
 from webstudio_backend.core.config import Settings
+from webstudio_backend.infrastructure.audit.audit_actor import AuditActor
+from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 from webstudio_backend.infrastructure.database.enums import (
     InventoryStatus,
     ProductCategory,
@@ -39,6 +46,7 @@ from webstudio_backend.services.ai.providers.gemini import GeminiProvider
 from webstudio_backend.services.ai.types import AIProviderError
 from webstudio_backend.services.comparison_processor import (
     exact_chip,
+    has_cpu_details,
     has_cpu_totals,
     processor_facts,
     processor_text,
@@ -47,6 +55,7 @@ from webstudio_backend.services.comparison_processor import (
 from webstudio_backend.services.product_image_service import is_safe_public_https_url
 
 CACHE_LIFETIME = timedelta(days=30)
+INVENTORY_RESEARCH_RETRY = timedelta(days=1)
 PROCESSOR_CACHE_NAMESPACE = ":cpu:"
 PROCESSOR_SPECS = TypeAdapter(list[ComparisonSpec])
 MAIN_HARDWARE = re.compile(
@@ -136,6 +145,12 @@ def _stock_payload(model: ProductModel, brand: str, quantity: int) -> Comparison
     )
     image = model.product_image_url
     managed = bool(image and image.startswith("/assets/"))
+    note_labels = {
+        label.strip().casefold()
+        for line in (model.notes or "").split("\n---\n", 1)[0].splitlines()
+        for label, separator, value in [line.partition(":")]
+        if separator and value.strip()
+    }
     return ComparisonLaptop(
         source="inventory",
         model_id=model.id,
@@ -147,13 +162,25 @@ def _stock_payload(model: ProductModel, brand: str, quantity: int) -> Comparison
         available_units=quantity,
         selling_price=str(model.selling_price) if model.selling_price is not None else None,
         saved_notes=model.notes,
+        specifications_pending=_needs_inventory_research(model),
         specifications=with_processor_facts(
             [
                 ComparisonSpec(component=component, detail=detail)
                 for component, detail in specifications
                 if detail and detail.strip()
             ]
+            + [
+                ComparisonSpec.model_validate(spec)
+                for spec in (model.detailed_specifications or [])
+                if spec["component"].casefold() not in note_labels
+            ]
         ),
+    )
+
+
+def _needs_inventory_research(model: ProductModel) -> bool:
+    return model.specifications_researched_at is None and (
+        model.specifications_retry_at is None or model.specifications_retry_at <= datetime.now(UTC)
     )
 
 
@@ -164,20 +191,24 @@ async def purge_expired_research(session: AsyncSession) -> None:
 
 
 async def research_external(
-    session: AsyncSession, settings: Settings, lookup: ExternalLaptopRequest
+    session: AsyncSession,
+    settings: Settings,
+    lookup: ExternalLaptopRequest,
+    *,
+    refresh_sparse: bool = False,
 ) -> ComparisonLaptop:
     key = (_normalize(lookup.brand), _normalize(lookup.model_number))
     match = (
         LaptopComparisonCache.normalized_brand == key[0],
         LaptopComparisonCache.normalized_model == key[1],
     )
-    cached = await _cached_result(session, match)
+    cached = await _cached_result(session, match, refresh_sparse=refresh_sparse)
     if cached is not None:
         return cached
 
     # Recheck after locking: another request or worker may have just filled the cache.
     await session.execute(select(func.pg_advisory_xact_lock(_lock_id(key))))
-    cached = await _cached_result(session, match)
+    cached = await _cached_result(session, match, refresh_sparse=refresh_sparse)
     if cached is not None:
         return cached
 
@@ -196,7 +227,7 @@ async def research_external(
         raise AIProviderError("NOT_FOUND", UNVERIFIED_MODEL, provider="gemini")
 
     chip = exact_chip(processor_text(result.specifications))
-    if chip and not has_cpu_totals(processor_facts(result.specifications)):
+    if chip and not has_cpu_details(processor_facts(result.specifications)):
         extra = await _research_processor(session, provider, chip)
         result.specifications = _supplement_processor(result.specifications, extra)
     await _save_research(session, key, result.model_dump(mode="json"))
@@ -238,7 +269,9 @@ async def _cached_payload(session: AsyncSession, *match) -> Any:
     )
 
 
-async def _cached_result(session: AsyncSession, match: tuple) -> ComparisonLaptop | None:
+async def _cached_result(
+    session: AsyncSession, match: tuple, *, refresh_sparse: bool = False
+) -> ComparisonLaptop | None:
     payload = await _cached_payload(session, *match)
     if payload is None:
         return None
@@ -248,6 +281,10 @@ async def _cached_result(session: AsyncSession, match: tuple) -> ComparisonLapto
         return None
     if result.source != "external" or not _has_hardware(result.specifications):
         return None
+    if refresh_sparse:
+        supplemental = _inventory_facts(result.specifications, None, "", None)
+        if not detailed_specifications({spec.component: spec.detail for spec in supplemental}):
+            return None
     result.specifications = with_processor_facts(result.specifications)
     return result
 
@@ -297,6 +334,142 @@ async def inventory_processor(
             ],
         ),
     ]
+
+
+def _inventory_configuration(model: ProductModel) -> tuple:
+    return (
+        model.brand_id,
+        model.model_number,
+        model.cpu,
+        model.gpu,
+        model.ram_gb,
+        model.storage_value,
+        model.storage_type,
+        model.storage_unit,
+        model.display,
+    )
+
+
+async def inventory_specifications(
+    session: AsyncSession, settings: Settings, model_id: UUID
+) -> ComparisonLaptop | None:
+    count = available_count()
+    query = (
+        select(ProductModel, Brand.name, count)
+        .join(Brand)
+        .where(ProductModel.id == model_id, *stock_laptop_filters(count))
+        .execution_options(populate_existing=True)
+    )
+    row = (await session.execute(query)).one_or_none()
+    if row is None:
+        return None
+    model, brand, quantity = row
+    if not _needs_inventory_research(model):
+        return _stock_payload(model, brand, quantity)
+    await session.execute(
+        select(func.pg_advisory_xact_lock(_lock_id((":inventory:", str(model_id)))))
+    )
+    row = (await session.execute(query)).one_or_none()
+    if row is None:
+        return None
+    model, brand, quantity = row
+    if not _needs_inventory_research(model):
+        return _stock_payload(model, brand, quantity)
+
+    configuration = _inventory_configuration(model)
+    saved_cpu = model.cpu or ""
+    saved_chip = exact_chip(saved_cpu)
+    researched = None
+    specs = []
+    try:
+        lookup = ExternalLaptopRequest(brand=brand, model_number=model.model_number)
+        researched = await research_external(session, settings, lookup, refresh_sparse=True)
+        specs = researched.specifications
+    except (ValidationError, AIProviderError, TimeoutError):
+        pass
+
+    researched_cpu = processor_text(specs)
+    researched_chip = exact_chip(researched_cpu)
+    supplemental = _inventory_facts(specs, saved_chip, researched_cpu, researched_chip)
+    if saved_chip and not has_cpu_details(processor_facts(supplemental)):
+        config = await resolve_ai_config(session, settings)
+        if config.enrichment_enabled:
+            chip_specs = await _research_processor(session, GeminiProvider(config), saved_chip)
+            supplemental = _supplement_processor(supplemental, chip_specs)
+
+    # The lookup may take several seconds. Check for a concurrent hardware edit
+    # before attaching facts and serialize the short write with other updates.
+    latest = (await session.execute(query.with_for_update(of=ProductModel))).one_or_none()
+    if latest is None:
+        return None
+    model, brand, quantity = latest
+    if _inventory_configuration(model) == configuration:
+        previous = model.detailed_specifications or []
+        facts = {spec["component"].casefold(): spec for spec in previous}
+        for spec in detailed_specifications(
+            {entry.component: entry.detail for entry in supplemental}
+        ):
+            facts.setdefault(spec.component.casefold(), spec.model_dump())
+        now = datetime.now(UTC)
+        combined = list(facts.values())[:MAX_DETAILED_SPECIFICATIONS]
+        if combined != previous:
+            model.detailed_specifications = combined
+            await AuditRecorder(session).record_product_model_field_update(
+                model,
+                field_name="detailed_specifications",
+                old_value={"count": len(previous)},
+                new_value={"count": len(combined)},
+                actor=AuditActor.system(),
+            )
+        if researched is not None and supplemental:
+            model.specifications_researched_at = now
+            model.specifications_retry_at = None
+        else:
+            model.specifications_retry_at = now + INVENTORY_RESEARCH_RETRY
+        await session.flush()
+    return _stock_payload(model, brand, quantity)
+
+
+def _inventory_facts(
+    specs: list[ComparisonSpec],
+    saved_chip: str | None,
+    researched_cpu: str,
+    researched_chip: str | None,
+) -> list[ComparisonSpec]:
+    primary = {
+        "processor",
+        "cpu",
+        "ram",
+        "ram capacity",
+        "memory",
+        "memory capacity",
+        "storage",
+        "storage capacity",
+        "storage drives",
+        "graphics",
+        "gpu",
+        "graphics gpu",
+        "display",
+        "screen",
+        "physical design",
+        "colors",
+        "colour",
+    }
+    cpu_matches = not saved_chip or saved_chip == researched_chip
+    useful = [
+        spec
+        for spec in specs
+        if spec.component.casefold() not in primary
+        and (
+            cpu_matches
+            or not spec.component.casefold().startswith(
+                ("cpu", "processor", "cores", "threads", "cache")
+            )
+        )
+    ]
+    if not saved_chip and researched_cpu:
+        useful.insert(0, ComparisonSpec(component="Processor model", detail=researched_cpu))
+    return with_processor_facts(useful)
 
 
 def _supplement_processor(
@@ -479,20 +652,25 @@ def _specifications(facts: Any) -> list[ComparisonSpec]:
     specifications = []
     for component, detail in facts.items():
         label, value = _text(component), _text(detail)
-        if not label or _normalize(value) in {
-            "",
-            "not available",
-            "could not be verified",
-            "unknown",
-            "n/a",
-            "null",
-            "not published",
-            "not specified",
-            "unverified",
-            "unavailable",
-            "-",
-            "—",
-        }:
+        if (
+            not label
+            or not documented_detail(value)
+            or _normalize(value)
+            in {
+                "",
+                "not available",
+                "could not be verified",
+                "unknown",
+                "n/a",
+                "null",
+                "not published",
+                "not specified",
+                "unverified",
+                "unavailable",
+                "-",
+                "—",
+            }
+        ):
             continue
         try:
             specifications.append(ComparisonSpec(component=label, detail=value))

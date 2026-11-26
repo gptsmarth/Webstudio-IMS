@@ -69,7 +69,9 @@ class GroqProvider(AIProvider):
                 raise AIProviderError(
                     "NOT_FOUND", "Groq returned an unreadable response.", provider="groq"
                 )
-            normalized = normalize_spec(parsed_raw, fallback_name=model_name or sku, source="groq")
+            normalized = normalize_spec(
+                parsed_raw, fallback_name=model_name or sku, source="groq", model_number=sku
+            )
             if not validate_enrichment_payload(
                 normalized,
                 model_number=sku,
@@ -102,6 +104,7 @@ class GroqProvider(AIProvider):
                 product_image_url=None,
                 description=normalized.get("description"),
                 notes=normalized.get("notes"),
+                detailed_specifications=normalized.get("detailed_specifications", []),
                 source="groq",
                 provider="groq",
                 confidence_score=float(normalized.get("confidence_score") or 0.65),

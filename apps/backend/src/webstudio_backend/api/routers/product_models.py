@@ -272,6 +272,7 @@ async def create_product_model(
             product_image_url=body.product_image_url,
             search_aliases=body.search_aliases,
             notes=body.notes,
+            detailed_specifications=[spec.model_dump() for spec in body.detailed_specifications],
             purchase_price=body.purchase_price,
             selling_price=body.selling_price,
             actor=_actor(current),
@@ -395,6 +396,9 @@ async def update_product_model(
             # directly, let's assign and record it!
             old_brand_id = updated.brand_id
             updated.brand_id = body.brand_id
+            updated.detailed_specifications = []
+            updated.specifications_researched_at = None
+            updated.specifications_retry_at = None
             from webstudio_backend.infrastructure.audit.audit_recorder import AuditRecorder
 
             await AuditRecorder(db_session).record_product_model_field_update(
@@ -610,6 +614,7 @@ async def lookup_product_model_spec(
         product_image_url=result.get("product_image_url"),
         description=result.get("description"),
         notes=result.get("notes"),
+        detailed_specifications=result.get("detailed_specifications") or [],
         source=result.get("source", "gemini"),
         provider=result.get("provider"),
         confidence_score=result.get("confidence_score"),

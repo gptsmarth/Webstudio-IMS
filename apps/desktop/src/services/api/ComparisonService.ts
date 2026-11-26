@@ -16,6 +16,7 @@ export interface ComparisonLaptop {
   available_units: number | null;
   selling_price: string | null;
   saved_notes: string | null;
+  specifications_pending?: boolean;
   specifications: ComparisonSpec[];
 }
 
@@ -58,13 +59,16 @@ export class ComparisonService {
     return client.getBlob('/api/v1/comparison/inventory/' + encodeURIComponent(modelId) + '/image');
   }
 
-  static async processor(modelId: string): Promise<ComparisonSpec[]> {
+  static async refreshSpecifications(modelId: string): Promise<ComparisonLaptop> {
     const client = await ApiClientProvider.getClient();
-    const specs = await client.post<ComparisonSpec[]>(
-      '/api/v1/comparison/inventory/' + encodeURIComponent(modelId) + '/processor',
+    const laptop = await client.post<ComparisonLaptop>(
+      '/api/v1/comparison/inventory/' + encodeURIComponent(modelId) + '/specifications',
       undefined,
-      { timeoutMs: 85000 },
+      { timeoutMs: 95000 },
     );
-    return Array.isArray(specs) ? specs : [];
+    if (!Array.isArray(laptop?.specifications)) {
+      throw new Error('The server returned invalid inventory specifications.');
+    }
+    return laptop;
   }
 }

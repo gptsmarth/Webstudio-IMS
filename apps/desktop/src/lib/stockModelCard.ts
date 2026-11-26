@@ -69,7 +69,13 @@ export function buildStockModelSpecLines(model: ProductModel): StockModelSpecLin
 
   pushIfPresent(lines, 'Colors', model.color_options);
 
-  const noteLines = parseNotesSpecLines(model.notes);
+  const noteLines = [
+    ...parseNotesSpecLines(model.notes),
+    ...(model.detailed_specifications ?? []).map(({ component, detail }) => ({
+      label: component,
+      value: detail,
+    })),
+  ];
   const seen = new Set(lines.map((line) => line.label.toLowerCase()));
   for (const line of noteLines) {
     const key = line.label.toLowerCase();
@@ -106,6 +112,12 @@ const RETAILER_SPEC_ORDER = [
   'operating system',
   'os',
   'processor',
+  'processor model',
+  'cpu cores',
+  'cpu threads',
+  'cpu core layout',
+  'cpu max turbo',
+  'cpu cache',
   'graphics',
   'memory',
   'memory type',

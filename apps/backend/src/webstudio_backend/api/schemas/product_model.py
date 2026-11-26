@@ -9,6 +9,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from webstudio_backend.api.schemas.laptop_specification import (
+    MAX_DETAILED_SPECIFICATIONS,
+    LaptopSpecification,
+)
 from webstudio_backend.infrastructure.database.enums import (
     AccessoryKind,
     ProductCategory,
@@ -37,6 +41,9 @@ class CreateProductModelRequest(BaseModel):
     product_image_url: str | None = Field(default=None, min_length=1, max_length=512)
     search_aliases: str | None = Field(default=None, min_length=1, max_length=1024)
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
+    detailed_specifications: list[LaptopSpecification] = Field(
+        default_factory=list, max_length=MAX_DETAILED_SPECIFICATIONS
+    )
     purchase_price: Decimal | None = Field(default=None, ge=0)
     selling_price: Decimal | None = Field(default=None, ge=0)
 
@@ -151,6 +158,7 @@ class ProductModelSpecLookupResponse(BaseModel):
     product_image_url: str | None
     description: str | None = None
     notes: str | None = None
+    detailed_specifications: list[LaptopSpecification] = Field(default_factory=list)
     source: str = "gemini"
     provider: str | None = None
     confidence_score: float | None = None
@@ -198,6 +206,7 @@ class ProductModelResponse(BaseModel):
     product_image_url: str | None
     search_aliases: str | None
     notes: str | None
+    detailed_specifications: list[LaptopSpecification] = Field(default_factory=list)
     purchase_price: float | None = None
     selling_price: float | None = None
     live_price: float | None = None
@@ -237,6 +246,7 @@ class ProductModelResponse(BaseModel):
             product_image_url=pm.product_image_url,
             search_aliases=pm.search_aliases,
             notes=pm.notes,
+            detailed_specifications=pm.detailed_specifications or [],
             purchase_price=(
                 float(pm.purchase_price)
                 if include_purchase_price and pm.purchase_price is not None

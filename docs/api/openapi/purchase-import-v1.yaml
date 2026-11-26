@@ -35,7 +35,7 @@ paths:
           name: page_size
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
       responses:
-        "200":
+        '200':
           description: Queue items (Supplier, Purchase Date, Voucher/Invoice/Reference
             numbers, Voucher GUID, Invoice Total, Tax Breakdown, Status).
   /api/v1/purchase/queue/{voucher_id}:
@@ -49,10 +49,10 @@ paths:
           required: true
           schema: { type: integer }
       responses:
-        "200":
+        '200':
           description: Voucher header + model groups (quantity, serials with
             per-serial duplicate flags, import state).
-        "404": { description: Voucher not found }
+        '404': { description: Voucher not found }
   /api/v1/purchase/match-model:
     post:
       tags: [purchase]
@@ -69,7 +69,7 @@ paths:
                 brand_id: { type: integer, minimum: 1 }
                 model_number: { type: string, minLength: 1, maxLength: 512 }
       responses:
-        "200":
+        '200':
           description: Normalized model number, exact matches inside the brand, and
             an auto_selected_model_id when exactly one active model matches.
   /api/v1/purchase/match-accessory:
@@ -99,7 +99,7 @@ paths:
                   maxLength: 512
                   description: Tally stock item name and/or operator-typed part/model number.
       responses:
-        "200":
+        '200':
           description: >
             normalized_query, ranked accessory matches (each with a 0..1 score),
             and an auto_selected_model_id when the best active candidate is
@@ -126,19 +126,26 @@ paths:
                   type: object
                   nullable: true
                   description: CreateProductModelRequest payload (Add Model wizard reuse).
+                  properties:
+                    detailed_specifications:
+                      type: array
+                      maxItems: 48
+                      items:
+                        $ref: './webstudio-ims-api-v1.yaml#/components/schemas/LaptopSpecification'
                 serial_numbers:
                   type: array
                   items: { type: string }
                 color: { type: string, minLength: 1, maxLength: 64 }
                 current_location_id: { type: integer, minimum: 1 }
-                status: { type: string, enum: [received, available, reserved, sold], default: available }
+                status:
+                  { type: string, enum: [received, available, reserved, sold], default: available }
                 purchase_price: { type: number, nullable: true, minimum: 0 }
       responses:
-        "200":
+        '200':
           description: Import committed (product_model_id, imported_count, voucher_status).
-        "409":
+        '409':
           description: Duplicate serial(s) in IMS or group already imported.
-        "422":
+        '422':
           description: Validation failed (quantity != serial count, missing serials, etc.).
   /api/v1/purchase/queue/{voucher_id}/ignore:
     post:
@@ -156,10 +163,10 @@ paths:
           required: true
           schema: { type: integer }
       responses:
-        "200":
+        '200':
           description: Voucher tombstoned (voucher_id, status=ignored).
-        "404": { description: Voucher not found }
-        "409": { description: Voucher is already fully imported and cannot be ignored. }
+        '404': { description: Voucher not found }
+        '409': { description: Voucher is already fully imported and cannot be ignored. }
   /api/v1/purchase/backfill:
     post:
       tags: [purchase]
@@ -185,12 +192,12 @@ paths:
                   nullable: true
                   description: Inclusive end date. Defaults to today when omitted.
       responses:
-        "200":
+        '200':
           description: >
             Backfill projected (fetched = purchase vouchers seen in range,
             new = previously-unseen vouchers added to the queue).
-        "409": { description: Tally integration is disabled. }
-        "502": { description: Tally workstation unreachable. }
+        '409': { description: Tally integration is disabled. }
+        '502': { description: Tally workstation unreachable. }
 components:
   securitySchemes:
     bearerAuth:

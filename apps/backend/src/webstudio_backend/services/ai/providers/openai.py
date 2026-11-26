@@ -75,7 +75,7 @@ class OpenAIProvider(AIProvider):
                     provider="openai",
                 )
             normalized = normalize_spec(
-                parsed_raw, fallback_name=model_name or sku, source="openai"
+                parsed_raw, fallback_name=model_name or sku, source="openai", model_number=sku
             )
             if not validate_enrichment_payload(
                 normalized,
@@ -110,6 +110,7 @@ class OpenAIProvider(AIProvider):
                 product_image_url=None,
                 description=normalized.get("description"),
                 notes=normalized.get("notes"),
+                detailed_specifications=normalized.get("detailed_specifications", []),
                 source="openai",
                 provider="openai",
                 confidence_score=float(normalized.get("confidence_score") or 0.65),

@@ -114,7 +114,7 @@ class ProductEnrichmentService:
             await cache.delete(sku, brand_name=brand_name)
         else:
             cached = await cache.get(sku, brand_name=brand_name)
-            if cached and cached.get("cpu"):
+            if cached and cached.get("cpu") and "detailed_specifications" in cached:
                 provider = str(cached.get("provider") or config.primary_provider)
                 if validate_enrichment_payload(
                     cached,

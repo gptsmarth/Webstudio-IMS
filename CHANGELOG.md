@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.0] - 2026-11-27
 
+- Save exact-model laptop specifications from Comparison and Add Laptop, show them in Stock and Inventory, and retain them in business backups.
+- Retry outside-inventory lookups with a more targeted exact-SKU search and add Intel N-series processor details.
+- Move ASUS Activation history to a side panel, make the claims table scroll in both directions, and increase the Sales table height.
 - Add workbook pricing columns, claim search, expected CN corrections, and editable six-month scheme history to Asus Activation.
 - Preview workbook rate conflicts and recalculate expected CN and variances while preserving recorded payments.
 - Improve exact-model external Comparison searches and show detailed processor specifications.

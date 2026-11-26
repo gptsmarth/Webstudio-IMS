@@ -200,7 +200,11 @@ function ClaimTable({
   selectClaim: (value: ClaimDialog) => void;
 }) {
   return (
-    <div className="activation__table-wrap" tabIndex={0} aria-label="ASUS activation claims">
+    <div
+      className="activation__table-wrap activation__claims-scroll"
+      tabIndex={0}
+      aria-label="Scrollable ASUS activation claims"
+    >
       <table className="activation__table">
         <thead>
           <tr>
@@ -461,6 +465,7 @@ export function AsusActivationPage(): JSX.Element {
   const [preview, setPreview] = useState<ReceiptPreview>();
   const [selected, setSelected] = useState<ClaimDialog>();
   const [editedScheme, setEditedScheme] = useState<ActivationScheme>();
+  const [schemeHistoryOpen, setSchemeHistoryOpen] = useState(false);
   const schemeInput = useRef<HTMLInputElement>(null);
   const receiptInput = useRef<HTMLInputElement>(null);
   const requestSequence = useRef(0);
@@ -574,6 +579,16 @@ export function AsusActivationPage(): JSX.Element {
         <PageHeader
           title="Asus Activation"
           description="Track expected ASUS credit notes, reconcile receipts, and export by invoice month."
+          actions={
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!dashboard}
+              onClick={() => setSchemeHistoryOpen(true)}
+            >
+              {canWrite ? 'Manage schemes' : 'Scheme history'}
+            </button>
+          }
         />
         {data &&
           (data.active_scheme ? (
@@ -937,20 +952,27 @@ export function AsusActivationPage(): JSX.Element {
             ))}
           <Pager page={currentPage} size={filtered.length} onChange={setPage} />
         </section>
-        {data && (
-          <ActivationHistory
-            schemes={data.schemes}
-            activeId={data.active_scheme?.id}
-            onManage={
-              canWrite
-                ? (scheme) => {
-                    setError('');
-                    setMessage('');
-                    setEditedScheme(scheme);
-                  }
-                : undefined
-            }
-          />
+        {dashboard && schemeHistoryOpen && !editedScheme && (
+          <ActivationDialog
+            title="Activation scheme history"
+            onClose={() => setSchemeHistoryOpen(false)}
+            busy={false}
+            side
+          >
+            <ActivationHistory
+              schemes={dashboard.schemes}
+              activeId={dashboard.active_scheme?.id}
+              onManage={
+                canWrite
+                  ? (scheme) => {
+                      setError('');
+                      setMessage('');
+                      setEditedScheme(scheme);
+                    }
+                  : undefined
+              }
+            />
+          </ActivationDialog>
         )}
       </div>
     </PageContainer>

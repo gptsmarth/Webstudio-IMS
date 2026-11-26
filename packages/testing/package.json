@@ -11,9 +11,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "webstudio": {
-    "buildNumber": 11,
+    "buildNumber": 12,
     "releaseChannel": "stable",
-    "releaseDate": "2026-11-26",
+    "releaseDate": "2026-11-27",
     "gitCommit": "",
     "gitShort": ""
   }

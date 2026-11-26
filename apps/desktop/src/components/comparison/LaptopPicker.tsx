@@ -24,7 +24,7 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
   const [brand, setBrand] = useState(laptop?.source === 'external' ? laptop.brand : '');
   const [model, setModel] = useState(laptop?.source === 'external' ? laptop.model_number : '');
   const [researching, setResearching] = useState(false);
-  const [checkingProcessor, setCheckingProcessor] = useState(false);
+  const [checkingSpecifications, setCheckingSpecifications] = useState(false);
   const [researchError, setResearchError] = useState('');
   const researchSequence = useRef(0);
 
@@ -72,7 +72,7 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
     setMode(next);
     setSearchOpen(false);
     setResearching(false);
-    setCheckingProcessor(false);
+    setCheckingSpecifications(false);
     setResearchError('');
   }
 
@@ -99,37 +99,22 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
     onSelect(item);
     setSearch('');
     setSearchOpen(false);
-    setCheckingProcessor(false);
-    if (
-      !item.model_id ||
-      ['CPU cores', 'CPU threads'].every((label) =>
-        item.specifications.some((spec) => spec.component === label),
-      )
-    ) {
-      return;
-    }
-    setCheckingProcessor(true);
+    setCheckingSpecifications(false);
+    if (!item.model_id || !item.specifications_pending) return;
+    setCheckingSpecifications(true);
     try {
-      const extra = await ComparisonService.processor(item.model_id);
-      if (sequence !== researchSequence.current || !extra.length) return;
-      const labels = new Set(extra.map((spec) => spec.component));
-      onSelect({
-        ...item,
-        specifications: [
-          ...item.specifications.filter((spec) => !labels.has(spec.component)),
-          ...extra,
-        ],
-      });
+      const enriched = await ComparisonService.refreshSpecifications(item.model_id);
+      if (sequence === researchSequence.current) onSelect(enriched);
     } catch {
-      // The inventory selection remains usable when external CPU research is unavailable.
+      // Show the saved model if the background lookup is unavailable.
     } finally {
-      if (sequence === researchSequence.current) setCheckingProcessor(false);
+      if (sequence === researchSequence.current) setCheckingSpecifications(false);
     }
   }
 
   function clear() {
     researchSequence.current += 1;
-    setCheckingProcessor(false);
+    setCheckingSpecifications(false);
     setResearching(false);
     setResearchError('');
     onSelect(null);
@@ -272,9 +257,9 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
           )}
         </form>
       )}
-      {checkingProcessor && (
+      {checkingSpecifications && (
         <p className="comparison-picker__status" role="status">
-          Looking up processor details…
+          Looking up and saving missing specifications…
         </p>
       )}
       {laptop && (

@@ -10,15 +10,17 @@ selection and loading state.
   with pagination. The comparison shows saved configuration and grouped
   spec notes, the saved product image when available, and the stock count.
   The sales price follows the same inventory permission and begins with
-  the current Stock display preference. Selecting a laptop with incomplete CPU
-  details can start a background lookup. The saved comparison remains visible,
-  and the lookup makes no changes to the product record.
+  the current Stock display preference. Selecting a laptop that has not had an
+  exact-model lookup can start background research for missing hardware facts.
+  The saved comparison remains visible during the lookup. Verified details are
+  added to the product model and appear in Stock and Inventory. Existing
+  configuration and manually written notes take precedence.
 - **Outside Inventory** accepts the manufacturer and complete model number,
   including its variant. Gemini must return a grounded exact match before
   the comparison can use the result. It uses the same search queries and Gemini
-  model fallback as the specification lookup in Add Product. Missing component
-  information remains
-  unavailable. An image appears when an official image URL identifies the
+  model fallback as the specification lookup in Add Product. It tries a more
+  targeted exact-SKU query when the first attempt falls short. An image appears
+  when an official image URL identifies the
   exact variant. Other results display the standard laptop placeholder.
 - **Customer View** opens when two or more laptops have been selected. It
   shows the selected laptops and grouped specifications with differences
@@ -30,6 +32,9 @@ speed, and cache in separate rows where available. If counts are missing,
 the server can look up the exact processor through a cited chip manufacturer
 source. If the saved processor only names a family, it first looks up the
 exact laptop model. Available stock and saved images load independently.
+The Add Laptop lookup requests the same detailed hardware facts. It saves them
+with the configuration when the model is created, including through Purchase
+Import.
 
 External research uses the server's existing Gemini configuration and sends
 only the submitted manufacturer and model identifier. If Google Search
@@ -39,7 +44,11 @@ restarts. The maintenance scheduler removes expired entries. When maintenance
 is disabled, expired results are still ineligible and are replaced upon a
 successful new lookup.
 
-Apply migration `0058_laptop_comparison_cache` before deploying the updated
+The saved inventory facts travel with the PostgreSQL backup. A failed lookup
+can retry the next day. A completed exact-model lookup is reused from the model
+record. Edits to the brand, SKU or main hardware allow a fresh lookup.
+
+Apply migration `0061_product_model_specs` before deploying the updated
 backend and desktop. New backup archives omit the transient cache rows.
 Outside Inventory requires Gemini and a configured model with Google Search
 grounding. Inventory comparison remains available independently of Gemini.

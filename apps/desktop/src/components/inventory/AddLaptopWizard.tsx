@@ -134,6 +134,11 @@ export function AddLaptopWizard({
   const [colorOptions, setColorOptions] = useState('');
   const [description, setDescription] = useState('');
   const [specNotes, setSpecNotes] = useState('');
+  const [researched, setResearched] = useState<{
+    sku: string;
+    brand: string | undefined;
+    spec: FetchedProductSpec;
+  }>();
   const [specTab, setSpecTab] = useState<SpecTab>('configuration');
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
@@ -188,6 +193,7 @@ export function AddLaptopWizard({
     setColorOptions('');
     setDescription('');
     setSpecNotes('');
+    setResearched(undefined);
     setSpecTab('configuration');
     setProductImageUrl(null);
     setProductImagePreview(null);
@@ -233,6 +239,18 @@ export function AddLaptopWizard({
     setUnits((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
     setUnitCount((count) => Math.max(1, count - 1));
   }, []);
+
+  const hardwareDetails =
+    researched?.sku.toUpperCase() === modelNumber.trim().toUpperCase() &&
+    researched.brand === brandName &&
+    researched.spec.cpu.trim() === cpu.trim() &&
+    (researched.spec.gpu ?? '').trim() === gpu.trim() &&
+    researched.spec.ram_gb === Number(ramGb) &&
+    Number(researched.spec.storage_value) === Number(storageValue) &&
+    researched.spec.storage_unit === storageUnit &&
+    researched.spec.storage_type === storageType
+      ? researched.spec.detailed_specifications
+      : undefined;
 
   const applyModel = useCallback((model: ProductModel) => {
     setMode('existing');
@@ -293,6 +311,7 @@ export function AddLaptopWizard({
         });
         if (internet) {
           applyInternetSpec(internet);
+          setResearched({ sku: lookupModelNumber, brand: brandName, spec: internet });
           const sourceNote = internet.notes?.includes('\n---\n')
             ? internet.notes.split('\n---\n').pop()?.trim()
             : null;
@@ -512,6 +531,7 @@ export function AddLaptopWizard({
               color_options: colorOptions.trim() || null,
               product_image_url: productImageUrl,
               notes: composeModelNotes(description, specNotes),
+              detailed_specifications: hardwareDetails,
             })
           : undefined,
     };
@@ -786,6 +806,19 @@ export function AddLaptopWizard({
                         placeholder="OS, battery, weight, connectivity, warranty… (auto-filled when available)"
                       />
                     </label>
+                    {!!hardwareDetails?.length && (
+                      <details className="add-laptop-wizard__field-full">
+                        <summary>Additional hardware details ({hardwareDetails.length})</summary>
+                        <dl className="stock-detail__spec-grid">
+                          {hardwareDetails.map(({ component, detail }) => (
+                            <div className="stock-detail__spec-row" key={component}>
+                              <dt>{component}</dt>
+                              <dd>{detail}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
+                    )}
                   </div>
                 ) : (
                   <div className="add-laptop-wizard__description-panel" role="tabpanel">

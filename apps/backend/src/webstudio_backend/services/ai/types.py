@@ -61,6 +61,7 @@ class EnrichmentResult:
     grounding_body: dict[str, Any] | None = None
     cached: bool = False
     partial: bool = False
+    detailed_specifications: list[dict[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -82,6 +83,7 @@ class EnrichmentResult:
             "image_search_query": self.image_search_query,
             "cached": self.cached,
             "partial": self.partial,
+            "detailed_specifications": self.detailed_specifications,
         }
 
 

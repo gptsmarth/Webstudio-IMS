@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.repositories.brand_repository import BrandRepository
 
 
@@ -54,6 +55,13 @@ async def test_product_model_rbac_and_crud(
         "product_image_url": "http://img.com/asus.png",
         "search_aliases": "Vivobook, Asus 15",
         "notes": "Premium laptop",
+        "detailed_specifications": [
+            {"component": "RAM type", "detail": "DDR4"},
+            {"component": "CPU cores", "detail": "4"},
+            {"component": "CPU threads", "detail": "8"},
+            {"component": "Storage interface", "detail": "PCIe"},
+            {"component": "Display brightness", "detail": "300 nits"},
+        ],
     }
 
     # Salesperson forbidden
@@ -71,6 +79,8 @@ async def test_product_model_rbac_and_crud(
     assert pm_data["color_options"] == "Quiet Blue"
     assert pm_data["brand_name"] == "ASUS"
     pm_id = pm_data["id"]
+    saved = await db_session.get(ProductModel, uuid.UUID(pm_id))
+    assert saved.specifications_researched_at is not None
 
     # 4. Prevent duplicate model number under same brand
     resp = await api_client.post("/api/v1/product-models", json=payload, headers=admin_headers)
@@ -89,6 +99,7 @@ async def test_product_model_rbac_and_crud(
     detail = resp.json()["data"]
     assert detail["model_name"] == "Vivobook 15"
     assert detail["brand_name"] == "ASUS"
+    assert detail["detailed_specifications"] == payload["detailed_specifications"]
 
     # GET detail not found
     resp = await api_client.get(

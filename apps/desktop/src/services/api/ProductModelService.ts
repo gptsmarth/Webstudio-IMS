@@ -6,6 +6,11 @@ import type { AccessoryKind, ProductCategory } from '../../lib/productCategory';
 
 export type ProductModelStatus = 'active' | 'archived';
 
+export interface LaptopSpecification {
+  component: string;
+  detail: string;
+}
+
 export interface ProductModel {
   id: string;
   brand_id: number;
@@ -27,6 +32,7 @@ export interface ProductModel {
   product_image_url: string | null;
   search_aliases: string | null;
   notes: string | null;
+  detailed_specifications?: LaptopSpecification[];
   purchase_price?: number | null;
   selling_price?: number | null;
   live_price?: number | null;
@@ -64,6 +70,7 @@ export interface CreateProductModelRequest {
   product_image_url?: string | null;
   search_aliases?: string | null;
   notes?: string | null;
+  detailed_specifications?: LaptopSpecification[];
   purchase_price?: number | null;
   selling_price?: number | null;
 }

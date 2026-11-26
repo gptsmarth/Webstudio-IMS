@@ -52,11 +52,17 @@ Important rules:
 13. description: 2–5 sentences for retail staff — product positioning, key selling points, and ideal use case. Plain text only.
 14. confidence_score: float 0.0–1.0 for how confident you are the specs match this EXACT SKU (use <0.5 if unsure).
 15. Do NOT return product_image_url — images are resolved separately (saves tokens / latency).
+16. For an exact match include matched_model_number and detailed_specifications. This object maps
+    component labels to plain-text facts, for example CPU cores, CPU threads, CPU core layout,
+    CPU max turbo, CPU cache, RAM type, RAM slots, RAM upgrade limit, Storage interface,
+    Storage slots, Graphics VRAM, Display brightness, Display gamut, Display touch,
+    Display response time, Battery capacity, Charging, Ports, and Weight. Use one field
+    per documented fact and omit unknown values. Skip this object for a similar variant.
 
 Respond with ONLY valid JSON (no markdown fences) using exactly these keys:
 model_name, cpu, gpu, ram_gb, storage_value, storage_unit, storage_type, display, color_options,
 operating_system, battery, weight, connectivity, keyboard, memory_type, warranty, webcam, audio, charger,
-description, notes, confidence_score
+description, notes, confidence_score, matched_model_number, detailed_specifications
 
 notes: brief source or caveat only (e.g. "Matched official Lenovo PSREF for 15IAX9")."""
 

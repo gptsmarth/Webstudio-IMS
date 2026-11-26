@@ -522,6 +522,9 @@ class PurchaseImportService:
                     product_image_url=body.product_image_url,
                     search_aliases=body.search_aliases,
                     notes=body.notes,
+                    detailed_specifications=[
+                        spec.model_dump() for spec in body.detailed_specifications
+                    ],
                     purchase_price=body.purchase_price,
                     selling_price=body.selling_price,
                     actor=actor,

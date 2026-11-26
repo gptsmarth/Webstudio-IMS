@@ -74,7 +74,7 @@ class OpenRouterProvider(AIProvider):
                     provider="openrouter",
                 )
             normalized = normalize_spec(
-                parsed_raw, fallback_name=model_name or sku, source="openrouter"
+                parsed_raw, fallback_name=model_name or sku, source="openrouter", model_number=sku
             )
             if not validate_enrichment_payload(
                 normalized,
@@ -108,6 +108,7 @@ class OpenRouterProvider(AIProvider):
                 product_image_url=None,
                 description=normalized.get("description"),
                 notes=normalized.get("notes"),
+                detailed_specifications=normalized.get("detailed_specifications", []),
                 source="openrouter",
                 provider="openrouter",
                 confidence_score=float(normalized.get("confidence_score") or 0.6),

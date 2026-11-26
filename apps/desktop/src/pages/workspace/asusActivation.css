@@ -89,6 +89,19 @@
   overflow-x: auto;
   max-width: 100%;
 }
+.activation__claims-scroll {
+  max-height: clamp(360px, 65dvh, 820px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.activation__claims-scroll table {
+  min-width: 1220px;
+}
+.activation__claims-scroll th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 .activation__table {
   border-collapse: collapse;
   width: 100%;
@@ -206,6 +219,22 @@
 }
 .activation__dialog--wide {
   width: min(820px, calc(100vw - 32px));
+}
+.activation__dialog--side {
+  inset: 0 0 0 auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  width: min(600px, 100vw);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.activation__drawer-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 .activation__dialog::backdrop {
   background: rgb(5 14 25 / 55%);

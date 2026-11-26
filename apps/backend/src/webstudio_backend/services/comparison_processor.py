@@ -7,7 +7,7 @@ from webstudio_backend.api.schemas.comparison import ComparisonSpec
 
 CHIP_MODELS = (
     r"Intel\s+(?:Core\s+)?Ultra\s+[3579]\s+(?:Processor\s+)?\d{3}[A-Z]{0,2}",
-    r"Intel\s+Core\s+i[3579]-\d{4,5}[A-Z]{0,2}",
+    r"Intel\s+Core\s+i[3579]-(?:N\d{3}|\d{4,5}[A-Z]{0,2})",
     r"Intel\s+Core\s+[3579]\s+(?:Processor\s+)?\d{3}[A-Z]{0,2}",
     r"Intel\s+(?:Processor\s+)?N\d{2,3}",
     r"AMD\s+Ryzen\s+(?:AI\s+)?(?:[3579]|Max\+?)(?:\s+PRO)?\s+(?:HX\s+)?\d{3,4}[A-Z]{0,3}",
@@ -94,3 +94,7 @@ def with_processor_facts(specifications: list[ComparisonSpec]) -> list[Compariso
 
 def has_cpu_totals(facts: dict[str, str]) -> bool:
     return all(label in facts for label in CPU_TOTALS)
+
+
+def has_cpu_details(facts: dict[str, str]) -> bool:
+    return has_cpu_totals(facts) and all(label in facts for label in INLINE_CPU_FACTS)

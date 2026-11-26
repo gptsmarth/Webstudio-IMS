@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from webstudio_backend.api.schemas.laptop_specification import detailed_specifications
+
 
 def normalize_cpu(cpu: str) -> str:
     cleaned = cpu.replace("®", "").replace("™", "").strip()
@@ -186,7 +188,7 @@ def validate_enrichment_payload(
 
 
 def normalize_spec(
-    data: dict[str, Any], fallback_name: str, *, source: str = "gemini"
+    data: dict[str, Any], fallback_name: str, *, source: str = "gemini", model_number: str = ""
 ) -> dict[str, Any]:
     storage_unit = str(data.get("storage_unit", "GB")).upper()
     if storage_unit not in {"GB", "TB"}:
@@ -251,6 +253,12 @@ def normalize_spec(
         confidence_score = 0.75
     confidence_score = max(0.0, min(1.0, confidence_score))
 
+    matched = str(data.get("matched_model_number") or "")
+    details = (
+        detailed_specifications(data.get("detailed_specifications"))
+        if model_number and normalize_model_number(matched) == normalize_model_number(model_number)
+        else []
+    )
     return {
         "model_name": str(data.get("model_name") or fallback_name).strip(),
         "cpu": normalize_cpu(str(data.get("cpu") or "")),
@@ -266,6 +274,7 @@ def normalize_spec(
         "notes": notes_str,
         "source": source,
         "confidence_score": confidence_score,
+        "detailed_specifications": [spec.model_dump() for spec in details],
     }
 
 

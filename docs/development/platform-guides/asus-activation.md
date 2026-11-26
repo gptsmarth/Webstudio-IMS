@@ -33,8 +33,10 @@ original workbook is uploaded through **Replace the workbook**.
 
 ## Manage active and previous schemes
 
-Open **Manage active scheme** or select **Manage scheme** in **Activation scheme
-history**. A scheme remains editable for six calendar months after its end date.
+Open **Manage schemes** to see scheme history in the side panel. Select
+**Manage scheme** to edit a period and **Close** or Escape to return to claims.
+The claims table scrolls vertically and horizontally with the headers pinned.
+A scheme remains editable for six calendar months after its end date.
 The history keeps the filenames, date changes, and rate decisions.
 
 - **Edit dates** changes which invoices qualify. The updated period must fit

@@ -69,6 +69,22 @@ def test_normalize_spec_does_not_invent_ram_or_storage() -> None:
     assert result["storage_value"] == ""
 
 
+def test_detailed_lookup_keeps_only_documented_facts_for_exact_sku() -> None:
+    sku = "E1504GA-FIXTURE"
+    raw = {
+        "matched_model_number": sku,
+        "detailed_specifications": {
+            "CPU cores": "8",
+            "Display gamut": "Not specified (guessed)",
+            "Supplier notes": "Private data",
+        },
+    }
+    result = _normalize_spec(raw, fallback_name=sku, model_number=sku)
+    assert result["detailed_specifications"] == [{"component": "CPU cores", "detail": "8"}]
+    result = _normalize_spec(raw, fallback_name=sku, model_number=sku + "-OTHER")
+    assert result["detailed_specifications"] == []
+
+
 def test_response_anchors_model_number() -> None:
     from webstudio_backend.services.gemini_spec_service import _response_anchors_model_number
 

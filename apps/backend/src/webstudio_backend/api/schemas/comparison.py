@@ -41,4 +41,5 @@ class ComparisonLaptop(BaseModel):
     available_units: int | None = None
     selling_price: str | None = None
     saved_notes: str | None = None
+    specifications_pending: bool = False
     specifications: list[ComparisonSpec] = Field(max_length=60)

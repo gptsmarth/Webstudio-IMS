@@ -1,6 +1,7 @@
 import { ApiClientProvider } from './ApiClientProvider';
 import { LoggingService } from '../LoggingService';
 import type { StorageType, StorageUnit } from './InventoryService';
+import type { LaptopSpecification } from './ProductModelService';
 import type { AccessoryKind, AccessoryIdentifierType } from '../../lib/productCategory';
 
 export interface ProductSpecLookupResult {
@@ -16,6 +17,7 @@ export interface ProductSpecLookupResult {
   product_image_url: string | null;
   description: string | null;
   notes: string | null;
+  detailed_specifications?: LaptopSpecification[];
   source: string;
 }
 
@@ -91,6 +93,7 @@ export class ProductSpecService {
       return await client.post<ProductSpecLookupResult>(
         '/api/v1/product-models/spec-lookup',
         input,
+        { timeoutMs: 90000 },
       );
     } catch (err: unknown) {
       const api = err as { code?: string; message?: string };

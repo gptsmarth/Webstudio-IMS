@@ -6,6 +6,40 @@ info:
   version: 1.0.0
   description: WEBSTUDIO IMS version 1 API
 paths:
+  /api/v1/product-models:
+    post:
+      summary: Create a product model with its configuration
+      description: The optional detailed_specifications field stores supplemental hardware facts with a laptop model.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                detailed_specifications:
+                  type: array
+                  maxItems: 48
+                  items: { $ref: '#/components/schemas/LaptopSpecification' }
+      responses:
+        '201':
+          description: Created product model, including detailed_specifications.
+  /api/v1/product-models/spec-lookup:
+    post:
+      summary: Find a laptop configuration before creating the product model
+      responses:
+        '200':
+          description: Configuration in the standard data envelope. Supplemental details are returned when the lookup identifies the exact model.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      detailed_specifications:
+                        type: array
+                        items: { $ref: '#/components/schemas/LaptopSpecification' }
   /api/v1/asus-activation:
     get:
       summary: List ASUS activation claims for a sale month
@@ -229,6 +263,26 @@ paths:
           description: Managed image.
         '404':
           description: No saved image file for the model.
+  /api/v1/comparison/inventory/{model_id}/specifications:
+    post:
+      summary: Look up and save missing specifications for a selected inventory laptop
+      description: Requires inventory:view. Uses the saved manufacturer and exact model number. Saves supplemental hardware details and returns the refreshed comparison laptop.
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Refreshed laptop in the data envelope, including saved details.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ComparisonLaptop' }
+        '404':
+          description: Laptop unavailable.
   /api/v1/comparison/inventory/{model_id}/processor:
     post:
       summary: Find additional processor facts for a selected in-stock laptop
@@ -353,6 +407,12 @@ paths:
           description: Sale not found.
 components:
   schemas:
+    LaptopSpecification:
+      type: object
+      required: [component, detail]
+      properties:
+        component: { type: string, maxLength: 90 }
+        detail: { type: string, maxLength: 1000 }
     ComparisonLaptop:
       type: object
       required: [source, brand, model_number, specifications]
@@ -367,6 +427,9 @@ components:
         available_units: { type: [integer, 'null'] }
         selling_price: { type: [string, 'null'] }
         saved_notes: { type: [string, 'null'] }
+        specifications_pending:
+          type: boolean
+          description: Selection can look up and save missing exact-model details.
         specifications:
           type: array
           items:

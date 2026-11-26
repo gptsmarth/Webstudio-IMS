@@ -19,6 +19,7 @@ from webstudio_backend.services.laptop_comparison import (
     UNVERIFIED_MODEL,
     available_count,
     inventory_processor,
+    inventory_specifications,
     list_stock_laptops,
     research_external,
     stock_laptop_filters,
@@ -73,6 +74,20 @@ async def inventory_comparison_image(
                 path, media_type=content_type, headers={"X-Content-Type-Options": "nosniff"}
             )
     raise AppError("NOT_FOUND", "Saved product image is not available.", status_code=404)
+
+
+@router.post("/inventory/{model_id}/specifications")
+async def refresh_inventory_specifications(
+    request: Request,
+    model_id: UUID,
+    current: InventoryViewDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings=AppSettingsDep,
+) -> dict:
+    result = await inventory_specifications(db_session, app_settings, model_id)
+    if result is None:
+        raise AppError("NOT_FOUND", "This laptop is no longer in stock.", status_code=404)
+    return build_envelope(request, result.model_dump(mode="json"))
 
 
 @router.post("/inventory/{model_id}/processor")

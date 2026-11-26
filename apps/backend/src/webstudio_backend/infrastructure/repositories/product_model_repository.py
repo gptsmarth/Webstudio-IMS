@@ -88,6 +88,7 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
         product_image_url: str | None = None,
         search_aliases: str | None = None,
         notes: str | None = None,
+        detailed_specifications: list[dict[str, str]] | None = None,
         purchase_price: Decimal | None = None,
         selling_price: Decimal | None = None,
         actor: AuditActor | None = None,
@@ -107,6 +108,12 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
             storage_type=storage_type,
             status=status,
         )
+        specs = (detailed_specifications or []) if category == ProductCategory.LAPTOP else []
+        labels = {spec["component"].strip().casefold() for spec in specs}
+        has_detailed_lookup = {"cpu cores", "cpu threads"}.issubset(labels) and all(
+            any(label.startswith(prefix) for label in labels)
+            for prefix in ("ram ", "storage ", "display ")
+        )
         payload.update(
             {
                 "display": display.strip() if display else None,
@@ -114,6 +121,8 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
                 "product_image_url": product_image_url.strip() if product_image_url else None,
                 "search_aliases": search_aliases.strip() if search_aliases else None,
                 "notes": notes.strip() if notes else None,
+                "detailed_specifications": specs,
+                "specifications_researched_at": datetime.now(UTC) if has_detailed_lookup else None,
                 "purchase_price": purchase_price,
                 "selling_price": selling_price,
             }
@@ -152,6 +161,17 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
     ) -> ProductModel:
         audit_actor = actor or AuditActor.system()
         recorder = AuditRecorder(self._session)
+        hardware_fields = (
+            "model_number",
+            "cpu",
+            "gpu",
+            "ram_gb",
+            "storage_value",
+            "storage_unit",
+            "storage_type",
+            "display",
+        )
+        previous_hardware = tuple(getattr(product_model, field) for field in hardware_fields)
         next_model_number = (
             validate_model_number(model_number)
             if model_number is not None
@@ -215,6 +235,11 @@ class ProductModelRepository(SqlAlchemyRepository[ProductModel]):
                         new_value={field: normalized},
                         actor=audit_actor,
                     )
+
+        if previous_hardware != tuple(getattr(product_model, field) for field in hardware_fields):
+            product_model.detailed_specifications = []
+            product_model.specifications_researched_at = None
+            product_model.specifications_retry_at = None
 
         if set_purchase_price:
             old_val = product_model.purchase_price

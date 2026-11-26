@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import shutil
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
@@ -21,6 +22,7 @@ from webstudio_backend.infrastructure.database.enums import (
     StorageType,
     StorageUnit,
 )
+from webstudio_backend.infrastructure.database.models.asus_activation import AsusActivationScheme
 from webstudio_backend.infrastructure.repositories import (
     BrandRepository,
     InventoryItemRepository,
@@ -89,10 +91,16 @@ async def test_failed_data_only_restore_preserves_existing_rows(
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def disaster_recovery_isolated_db(db_session: AsyncSession) -> None:
+async def disaster_recovery_isolated_db(db_session: AsyncSession):
     """Each DR test starts from an empty webstudio schema (shared CI database)."""
     await truncate_webstudio_data(db_session)
     db_session.expire_all()
+    yield
+    await db_session.rollback()
+    await db_session.execute(
+        delete(AsusActivationScheme).where(AsusActivationScheme.filename == "dr-synthetic.xlsx")
+    )
+    await db_session.commit()
 
 
 @pytest_asyncio.fixture
@@ -137,6 +145,7 @@ async def _seed_representative_business_data(db_session: AsyncSession) -> AuditA
         storage_unit=StorageUnit.GB,
         storage_type=StorageType.SSD,
         product_image_url="https://example.com/laptop.jpg",
+        detailed_specifications=[{"component": "CPU cores", "detail": "4"}],
     )
     inventory_repo = InventoryItemRepository(db_session)
     item = await inventory_repo.create(
@@ -149,6 +158,25 @@ async def _seed_representative_business_data(db_session: AsyncSession) -> AuditA
     )
     main_admin = await UserRepository(db_session).get_main_admin()
     assert main_admin is not None
+    db_session.add(
+        AsusActivationScheme(
+            id=uuid4(),
+            date_from=date(2024, 6, 1),
+            date_to=date(2024, 6, 15),
+            filename="dr-synthetic.xlsx",
+            digest="0" * 64,
+            rules={"DR-ASUS": {"cn": "25.00"}},
+            created_by=main_admin.id,
+            created_at=datetime.now(UTC),
+            revision=1,
+            rate_overrides={
+                "DR-ASUS": [
+                    {"date_from": "2024-06-03", "date_to": "2024-06-05", "rate": {"cn": "30.00"}}
+                ]
+            },
+            history=[{"mode": "supplement", "filename": "dr-synthetic-addition.xlsx"}],
+        )
+    )
     actor = AuditActor(
         user_id=main_admin.id,
         display_name=main_admin.display_name,
@@ -228,6 +256,11 @@ async def test_disaster_recovery_full_business_state(
     after = await collect_business_snapshot(db_session, settings_repo)
     mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Business state mismatch after restore: {mismatches}"
+    assert await db_session.scalar(
+        text(
+            "SELECT detailed_specifications FROM webstudio.product_models WHERE model_number = 'DR-7420'"
+        )
+    ) == [{"component": "CPU cores", "detail": "4"}]
     assert (
         await db_session.scalar(
             text("SELECT custom_access_role_id FROM webstudio.users WHERE id = :id"),
@@ -323,4 +356,14 @@ async def test_disaster_recovery_clean_database_restore(
     after = await collect_business_snapshot(db_session, settings_repo)
     mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Clean-database restore mismatch: {mismatches}"
+    assert await db_session.scalar(
+        text(
+            "SELECT detailed_specifications FROM webstudio.product_models WHERE model_number = 'DR-7420'"
+        )
+    ) == [{"component": "CPU cores", "detail": "4"}]
+    scheme = await db_session.scalar(
+        select(AsusActivationScheme).where(AsusActivationScheme.filename == "dr-synthetic.xlsx")
+    )
+    assert scheme.history == [{"mode": "supplement", "filename": "dr-synthetic-addition.xlsx"}]
+    assert scheme.rate_overrides["DR-ASUS"][0]["rate"]["cn"] == "30.00"
     assert (await BrandRepository(db_session).create("After restored sequence")).id == 401

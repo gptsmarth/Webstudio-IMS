@@ -24,12 +24,14 @@ export function ActivationDialog({
   busy,
   onClose,
   wide = false,
+  side = false,
 }: {
   title: string;
   children: ReactNode;
   busy: boolean;
   onClose: () => void;
   wide?: boolean;
+  side?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -44,13 +46,23 @@ export function ActivationDialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className={'card activation__dialog' + (wide ? ' activation__dialog--wide' : '')}
+      className={
+        'card activation__dialog' +
+        (side ? ' activation__dialog--side' : wide ? ' activation__dialog--wide' : '')
+      }
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onClose();
       }}
     >
-      <h2 id={titleId}>{title}</h2>
+      <div className={side ? 'activation__drawer-header' : undefined}>
+        <h2 id={titleId}>{title}</h2>
+        {side && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>
+            Close
+          </button>
+        )}
+      </div>
       {children}
     </dialog>
   );
@@ -66,8 +78,7 @@ export function ActivationHistory({
   onManage?: (scheme: ActivationScheme) => void;
 }) {
   return (
-    <section className="card activation__panel" aria-label="Activation scheme history">
-      <h2>Activation scheme history</h2>
+    <section className="activation__panel" aria-label="Activation scheme history">
       {!schemes.length && <p>Uploaded schemes will appear here.</p>}
       {[...schemes].reverse().map((scheme) => (
         <div className="activation__history-row" key={scheme.id}>
