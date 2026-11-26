@@ -1,6 +1,7 @@
 """Activation matching and credit reconciliation through the normal API."""
 
 import io
+import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -9,6 +10,7 @@ from sqlalchemy import delete, func, select
 
 from webstudio_backend.infrastructure.database.enums import SaleSource
 from webstudio_backend.infrastructure.database.models.asus_activation import (
+    AsusActivationCNOverride,
     AsusActivationReceipt,
     AsusActivationScheme,
     AsusActivationWorkbook,
@@ -38,8 +40,16 @@ def _scheme_book() -> bytes:
         {
             "Gaming Price List": [
                 ["Version", "16th November"],
-                ["Model Name", "Supported SRP", "CN/Unit", "(NR261149) 18–30 November"],
-                [MODEL, 102990, 12949.152542372874, "18–30 November"],
+                [
+                    "Model Name",
+                    "Supported SRP",
+                    "CN/Unit",
+                    "(NR261149) 18–30 November",
+                    "NOV T2 DBP",
+                    "Supported DBP",
+                    "Support on SRP",
+                ],
+                [MODEL, 102990, 12949.152542372874, "18–30 November", 95000, 82050.85, 13000],
             ],
             "Gaming T3": [
                 ["Model Name", "Supported SRP", "CN/Unit"],
@@ -104,6 +114,9 @@ def test_activation_scheme_prefers_gaming_price_list_and_keeps_full_model_number
     rules = parse_scheme(_scheme_book())
     assert rules[MODEL]["cn"] == "12949.15"
     assert rules[MODEL]["scheme_code"] == "NR261149"
+    assert rules[MODEL]["dbp"] == "95000.00"
+    assert rules[MODEL]["supported_dbp"] == "82050.85"
+    assert rules[MODEL]["support_on_srp"] == "13000.00"
     assert rules[AIO]["srp"] == "59990.00"
 
 
@@ -199,7 +212,9 @@ async def test_activation_workflow(api_client, main_admin_headers, salesperson_h
         sheet = load_workbook(io.BytesIO(workbook.content)).active
         assert sheet.max_row == 4
         assert sheet["C2"].data_type == "s"
-        assert sheet["N2"].data_type == "n"
+        column = [cell.value for cell in sheet[1]].index("CN/Unit (expected)") + 1
+        assert sheet.cell(2, column).data_type == "n"
+        assert sheet.cell(2, column).fill.fgColor.rgb == "00E2F3EC"
         assert sheet["A2"].data_type == "d"
 
         december_sale = _sale(AIO, "DECEMBER-AIO", 5)
@@ -277,6 +292,13 @@ async def test_upload_expired_scheme_finds_saved_sales_by_invoice_date(
         imported = await api_client.post(API + "/schemes", headers=headers, files=file, data=dates)
         assert imported.status_code == 200, imported.text
         scheme = imported.json()["data"]
+        assert not scheme["editable"]
+        edit = await api_client.post(
+            API + f"/schemes/{scheme['id']}/edit",
+            headers=headers,
+            data={**dates, "mode": "dates"},
+        )
+        assert edit.status_code == 409
         assert scheme["matched_sale_count"] == 2
         again = await api_client.post(API + "/schemes", headers=headers, files=file, data=dates)
         assert again.json()["data"] == scheme
@@ -298,5 +320,220 @@ async def test_upload_expired_scheme_finds_saved_sales_by_invoice_date(
         assert {sheet["E2"].value, sheet["E3"].value} == {"AT-START", "AT-END"}
     finally:
         await db_session.rollback()
+        await db_session.execute(delete(AsusActivationScheme))
+        await db_session.commit()
+
+
+async def test_activation_edit_reprices_receipts_keeps_manual_cn_and_searches_all_months(
+    api_client, main_admin_headers, salesperson_headers, db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "webstudio_backend.services.asus_activation.local_today", lambda: date(2026, 11, 27)
+    )
+    headers = main_admin_headers
+    prior = _sale(MODEL, "EARLY-000001", 17)
+    selected = _sale(MODEL, "000002000003", 20)
+    selected.printed_invoice_number = "AES/0482/26-27"
+    outside = _sale(MODEL, "LATER-000004", 24)
+    new_model = _sale("NEW-MODEL", "NEW-000005", 22)
+    december = _sale(MODEL, "DECEMBER-000006", 2)
+    december.sold_at = december.sold_at.replace(month=12)
+    db_session.add_all([prior, selected, outside, new_model, december])
+    await db_session.commit()
+    dates = {"date_from": "2026-11-16", "date_to": "2026-11-30"}
+
+    async def claims(**params):
+        result = await api_client.get(API, params=params, headers=headers)
+        assert result.status_code == 200, result.text
+        return {claim["serial"]: claim for claim in result.json()["data"]["claims"]}
+
+    async def receive(sale, amount):
+        response = await api_client.post(
+            API + f"/claims/{sale.id}/receipt",
+            json={"action": "record", "amount": amount, "note": "Actual ASUS payment"},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+    async def correct(sale, amount, scope="sale"):
+        response = await api_client.put(
+            API + f"/claims/{sale.id}/expected",
+            json={"amount": amount, "note": "Checked the claim with ASUS", "scope": scope},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["data"]
+
+    try:
+        upload = await api_client.post(
+            API + "/schemes",
+            files={"file": ("original.xlsx", _scheme_book())},
+            data=dates,
+            headers=headers,
+        )
+        assert upload.status_code == 200, upload.text
+        original = upload.json()["data"]
+        assert original["editable"]
+        edit_url = API + f"/schemes/{original['id']}/edit"
+        assert (
+            await api_client.post(
+                edit_url, headers=salesperson_headers, data={**dates, "mode": "dates"}
+            )
+        ).status_code == 403
+        await receive(prior, "12949.15")
+        await receive(selected, "12900.00")
+        resolved = await api_client.post(
+            API + f"/claims/{selected.id}/receipt",
+            headers=headers,
+            json={"action": "resolve", "note": "Original variance accepted"},
+        )
+        assert resolved.json()["data"]["resolution_current"] is True
+
+        files = {
+            "file": (
+                "extra.xlsx",
+                _workbook(
+                    {
+                        "Gaming Price List": [
+                            [
+                                "Model Name",
+                                "NOV T2 DBP",
+                                "Supported SRP",
+                                "Supported DBP",
+                                "Support on SRP",
+                                "CN/Unit",
+                            ],
+                            [MODEL, 96500, 104990, 83500, 15000, 13000],
+                            ["NEW-MODEL", 33000, 38000, 32900, 120, 100],
+                        ],
+                    }
+                ),
+            )
+        }
+        form = {**dates, "mode": "supplement"}
+        preview = await api_client.post(edit_url, data=form, files=files, headers=headers)
+        assert preview.status_code == 200, preview.text
+        plan = preview.json()["data"]
+        assert plan["added_rate_count"] == 1
+        assert plan["conflicts"][0]["model"] == MODEL
+        assert plan["conflicts"][0]["existing"][0]["rate"]["cn"] == "12949.15"
+        assert plan["conflicts"][0]["incoming"]["cn"] == "13000.00"
+        assert len(await claims(month="2026-11")) == 3
+        confirm = {**form, "preview_id": plan["preview_id"]}
+        missing = await api_client.post(edit_url, data=confirm, files=files, headers=headers)
+        assert missing.status_code == 422
+        bad_dates = {MODEL: {"use": "incoming", "date_from": "2026-11-15", "date_to": "2026-11-22"}}
+        invalid_range = await api_client.post(
+            edit_url,
+            data={**confirm, "choices": json.dumps(bad_dates)},
+            files=files,
+            headers=headers,
+        )
+        assert invalid_range.status_code == 422
+        choices = {MODEL: {"use": "incoming", "date_from": "2026-11-19", "date_to": "2026-11-22"}}
+        applied = await api_client.post(
+            edit_url, data={**confirm, "choices": json.dumps(choices)}, files=files, headers=headers
+        )
+        assert applied.status_code == 200, applied.text
+        assert [change["filename"] for change in applied.json()["data"]["history"]] == [
+            "original.xlsx",
+            "extra.xlsx",
+        ]
+        stale = await api_client.post(
+            edit_url, data={**confirm, "choices": json.dumps(choices)}, files=files, headers=headers
+        )
+        assert stale.status_code == 409
+        data = await claims(month="2026-11")
+        assert data[prior.snapshot_serial_number]["status"] == "received"
+        assert data[outside.snapshot_serial_number]["expected_amount"] == "12949.15"
+        changed = data[selected.snapshot_serial_number]
+        assert changed["received_amount"] == "12900.00"
+        assert changed["original_expected"] == "12949.15"
+        assert changed["expected_amount"] == "13000.00"
+        assert changed["status"] == "discrepancy" and changed["variance"] == "-100.00"
+        assert changed["resolution_note"] == "Original variance accepted"
+        assert changed["resolution_current"] is False
+        assert changed["nov_t2_dbp"] == "96500.00"
+        assert changed["supported_srp"] == "104990.00"
+        assert changed["supported_dbp"] == "83500.00"
+        assert changed["support_on_srp"] == "15000.00"
+        assert changed["scheme_filename"] == "extra.xlsx"
+        for query in ("000002000003", "aes/0482", MODEL.lower()):
+            matches = await claims(month="2025-01", search=query)
+            assert selected.snapshot_serial_number in matches
+
+        export = await api_client.get(
+            API + "/export",
+            params={"month": "2025-01", "search": "0482", "status": "discrepancy"},
+            headers=headers,
+        )
+        sheet = load_workbook(io.BytesIO(export.content)).active
+        assert sheet.max_row == 2
+        labels = {cell.value: cell.column for cell in sheet[1]}
+        for key, expected in (
+            ("NOV T2 DBP", 96500),
+            ("Supported SRP", 104990),
+            ("Supported DBP", 83500),
+            ("Support on SRP", 15000),
+            ("CN/Unit (expected)", 13000),
+        ):
+            assert sheet.cell(2, labels[key]).value == expected
+
+        assert (await correct(selected, "12900"))["status"] == "received"
+        assert (await correct(selected, None))["status"] == "discrepancy"
+        await correct(outside, "99.25")
+        assert (await correct(selected, "110.00", "model"))["expected_amount"] == "110.00"
+        assert (await claims(month="2026-11"))[outside.snapshot_serial_number][
+            "expected_amount"
+        ] == "99.25"
+
+        date_form = {"mode": "dates", "date_from": "2026-11-18", "date_to": "2026-12-02"}
+        preview = await api_client.post(edit_url, data=date_form, headers=headers)
+        assert preview.status_code == 200, preview.text
+        changed_dates = await api_client.post(
+            edit_url,
+            data={**date_form, "preview_id": preview.json()["data"]["preview_id"]},
+            headers=headers,
+        )
+        assert changed_dates.status_code == 200, changed_dates.text
+        unmatched_receipt = (await claims(month="2026-11"))[prior.snapshot_serial_number]
+        assert unmatched_receipt["scheme_applies"] is False
+        assert unmatched_receipt["received_amount"] == "12949.15"
+        assert unmatched_receipt["date_from"] == "2026-11-16"
+        assert (await claims(month="2026-12"))[december.snapshot_serial_number][
+            "status"
+        ] == "pending"
+
+        replacement = {
+            "file": (
+                "replacement.xlsx",
+                _workbook(
+                    {
+                        "Gaming Price List": [["Model Name", "CN/Unit"], [MODEL, 150.50]],
+                    }
+                ),
+            )
+        }
+        replace_form = {**date_form, "mode": "replace"}
+        preview = await api_client.post(
+            edit_url, data=replace_form, files=replacement, headers=headers
+        )
+        replaced = await api_client.post(
+            edit_url,
+            data={**replace_form, "preview_id": preview.json()["data"]["preview_id"]},
+            files=replacement,
+            headers=headers,
+        )
+        assert replaced.status_code == 200, replaced.text
+        after = await claims(month="2026-11")
+        assert new_model.snapshot_serial_number not in after
+        assert after[selected.snapshot_serial_number]["expected_amount"] == "150.50"
+        assert after[selected.snapshot_serial_number]["received_amount"] == "12900.00"
+        assert after[outside.snapshot_serial_number]["expected_amount"] == "99.25"
+        assert after[prior.snapshot_serial_number]["scheme_filename"] == "original.xlsx"
+    finally:
+        await db_session.rollback()
+        await db_session.execute(delete(AsusActivationCNOverride))
+        await db_session.execute(delete(AsusActivationReceipt))
         await db_session.execute(delete(AsusActivationScheme))
         await db_session.commit()

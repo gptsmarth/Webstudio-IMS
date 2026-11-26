@@ -14,7 +14,7 @@
     "react": "^18.3.1"
   },
   "webstudio": {
-    "buildNumber": 10,
+    "buildNumber": 11,
     "releaseChannel": "stable",
     "releaseDate": "2026-11-26",
     "gitCommit": "",

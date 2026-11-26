@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     LargeBinary,
     Numeric,
     String,
@@ -33,6 +34,9 @@ class AsusActivationScheme(Base):
     rules: Mapped[dict[str, dict]] = mapped_column(JSONB)
     created_by: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, server_default="0")
+    rate_overrides: Mapped[dict[str, list[dict]]] = mapped_column(JSONB, server_default="{}")
+    history: Mapped[list[dict]] = mapped_column(JSONB, server_default="[]")
 
 
 class AsusActivationWorkbook(Base):
@@ -73,3 +77,17 @@ class AsusActivationReceipt(Base):
     resolution_note: Mapped[str | None] = mapped_column(Text())
     resolved_by: Mapped[int | None] = mapped_column(BigInteger)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_expected_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    scheme_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class AsusActivationCNOverride(Base):
+    __tablename__ = "asus_activation_cn_overrides"
+
+    sale_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey(f"{DATABASE_SCHEMA}.sales.id"), primary_key=True, autoincrement=False
+    )
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    note: Mapped[str] = mapped_column(Text())
+    updated_by: Mapped[int] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

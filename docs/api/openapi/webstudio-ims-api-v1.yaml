@@ -14,6 +14,10 @@ paths:
         - name: month
           in: query
           schema: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+        - name: search
+          in: query
+          description: Searches serial or IMEI, invoice and model across all months.
+          schema: { type: string, maxLength: 160 }
       responses:
         '200':
           description: Activation dashboard in the standard data envelope.
@@ -54,6 +58,40 @@ paths:
           description: An uploaded period overlaps the requested dates.
         '422':
           description: Invalid range, workbook, or conflicting model rates.
+  /api/v1/asus-activation/schemes/{scheme_id}/edit:
+    post:
+      summary: Preview or confirm edits to a recent activation scheme
+      description: Requires reports:export and settings:modify. Dates are inclusive. Supplement keeps the current period and previews conflicting model rates. Confirm with the same inputs, preview ID and one decision for each conflict.
+      parameters:
+        - name: scheme_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [mode, date_from, date_to]
+              properties:
+                mode: { type: string, enum: [dates, replace, supplement] }
+                date_from: { type: string, format: date }
+                date_to: { type: string, format: date }
+                file: { type: string, format: binary }
+                preview_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+                choices:
+                  type: string
+                  description: JSON object keyed by model. Each value has use set to existing or incoming. Incoming may include date_from and date_to for a subrange.
+      responses:
+        '200':
+          description: Preview ID, model conflicts with effective dates and rates, or the applied scheme and matched sale count.
+        '404':
+          description: Scheme does not exist.
+        '409':
+          description: Period overlaps, edit window expired, or the scheme changed since preview.
+        '422':
+          description: Invalid workbook, range, or conflict decisions.
   /api/v1/asus-activation/receipts:
     post:
       summary: Preview or confirm an ASUS credit-note workbook
@@ -102,6 +140,35 @@ paths:
           description: A receipt is already recorded or the claim has no unresolved variance.
         '422':
           description: Invalid amount or missing resolution note.
+  /api/v1/asus-activation/claims/{sale_id}/expected:
+    put:
+      summary: Correct the expected CN for a sale or the same model across its scheme
+      description: Requires reports:export and settings:modify. Actual receipts stay recorded and variance is recalculated. A null amount clears the individual sale correction.
+      parameters:
+        - name: sale_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, note]
+              properties:
+                amount: { type: [string, 'null'], maxLength: 32 }
+                note: { type: string, minLength: 1, maxLength: 2000 }
+                scope: { type: string, enum: [sale, model], default: sale }
+      responses:
+        '200':
+          description: Updated claim in the standard data envelope.
+        '404':
+          description: Claim no longer exists or has no applicable scheme.
+        '409':
+          description: Scheme edit window has expired for a model-wide correction.
+        '422':
+          description: Invalid amount or missing reason.
   /api/v1/asus-activation/export:
     get:
       summary: Download activation claims and receipt details in Excel
@@ -113,6 +180,9 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [pending, discrepancy, received, all], default: all }
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 160 }
       responses:
         '200':
           description: Workbook with claims for the selected sale month and status.
@@ -159,10 +229,37 @@ paths:
           description: Managed image.
         '404':
           description: No saved image file for the model.
+  /api/v1/comparison/inventory/{model_id}/processor:
+    post:
+      summary: Find additional processor facts for a selected in-stock laptop
+      description: Requires inventory:view. Uses the saved processor or verifies the exact laptop first. Returns additional comparison rows without updating inventory.
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Additional specifications in data, or an empty list when unavailable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [component, detail]
+                      properties:
+                        component: { type: string }
+                        detail: { type: string }
+        '404':
+          description: Inventory laptop unavailable.
   /api/v1/comparison/external:
     post:
       summary: Research an exact laptop model outside inventory
-      description: Requires inventory:view. Reuses verified Gemini research for 30 days.
+      description: Requires inventory:view. Uses exact-variant source evidence and reuses verified research for 30 days.
       requestBody:
         required: true
         content:
@@ -189,6 +286,8 @@ paths:
           description: Reliable specifications for an exact match are unavailable.
         '422':
           description: Invalid manufacturer or model number.
+        '429':
+          description: Gemini temporarily rate limited the lookup.
         '503':
           description: External research is unavailable.
   /api/v1/reports/asus-weekly:

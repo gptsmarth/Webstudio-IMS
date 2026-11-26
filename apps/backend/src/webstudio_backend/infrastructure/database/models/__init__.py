@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models."""
 
 from webstudio_backend.infrastructure.database.models.asus_activation import (
+    AsusActivationCNOverride,
     AsusActivationReceipt,
     AsusActivationScheme,
     AsusActivationWorkbook,
@@ -66,6 +67,7 @@ from webstudio_backend.infrastructure.database.models.tally_sync_log import Tall
 from webstudio_backend.infrastructure.database.models.user import User
 
 __all__ = [
+    "AsusActivationCNOverride",
     "AsusActivationReceipt",
     "AsusActivationScheme",
     "AsusActivationWorkbook",

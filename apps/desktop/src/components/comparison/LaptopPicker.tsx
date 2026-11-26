@@ -24,6 +24,7 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
   const [brand, setBrand] = useState(laptop?.source === 'external' ? laptop.brand : '');
   const [model, setModel] = useState(laptop?.source === 'external' ? laptop.model_number : '');
   const [researching, setResearching] = useState(false);
+  const [checkingProcessor, setCheckingProcessor] = useState(false);
   const [researchError, setResearchError] = useState('');
   const researchSequence = useRef(0);
 
@@ -71,6 +72,7 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
     setMode(next);
     setSearchOpen(false);
     setResearching(false);
+    setCheckingProcessor(false);
     setResearchError('');
   }
 
@@ -83,11 +85,54 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
     try {
       const result = await ComparisonService.research(brand.trim(), model.trim());
       if (sequence === researchSequence.current) onSelect(result);
-    } catch {
-      if (sequence === researchSequence.current) setResearchError(RESEARCH_UNAVAILABLE);
+    } catch (err) {
+      if (sequence === researchSequence.current) {
+        setResearchError(parseApiError(err, RESEARCH_UNAVAILABLE));
+      }
     } finally {
       if (sequence === researchSequence.current) setResearching(false);
     }
+  }
+
+  async function chooseStock(item: ComparisonLaptop) {
+    const sequence = ++researchSequence.current;
+    onSelect(item);
+    setSearch('');
+    setSearchOpen(false);
+    setCheckingProcessor(false);
+    if (
+      !item.model_id ||
+      ['CPU cores', 'CPU threads'].every((label) =>
+        item.specifications.some((spec) => spec.component === label),
+      )
+    ) {
+      return;
+    }
+    setCheckingProcessor(true);
+    try {
+      const extra = await ComparisonService.processor(item.model_id);
+      if (sequence !== researchSequence.current || !extra.length) return;
+      const labels = new Set(extra.map((spec) => spec.component));
+      onSelect({
+        ...item,
+        specifications: [
+          ...item.specifications.filter((spec) => !labels.has(spec.component)),
+          ...extra,
+        ],
+      });
+    } catch {
+      // The inventory selection remains usable when external CPU research is unavailable.
+    } finally {
+      if (sequence === researchSequence.current) setCheckingProcessor(false);
+    }
+  }
+
+  function clear() {
+    researchSequence.current += 1;
+    setCheckingProcessor(false);
+    setResearching(false);
+    setResearchError('');
+    onSelect(null);
   }
 
   return (
@@ -142,14 +187,7 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
                 <ul aria-label="Matching laptops">
                   {results.data.map((item) => (
                     <li key={item.model_id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelect(item);
-                          setSearch('');
-                          setSearchOpen(false);
-                        }}
-                      >
+                      <button type="button" onClick={() => void chooseStock(item)}>
                         <strong>
                           {item.brand} {item.model_number}
                         </strong>
@@ -234,11 +272,16 @@ export function LaptopPicker({ index, laptop, onSelect }: LaptopPickerProps): JS
           )}
         </form>
       )}
+      {checkingProcessor && (
+        <p className="comparison-picker__status" role="status">
+          Looking up processor details…
+        </p>
+      )}
       {laptop && (
         <button
           type="button"
           className="btn btn-ghost btn-sm comparison-picker__clear"
-          onClick={() => onSelect(null)}
+          onClick={clear}
         >
           Clear selection
         </button>

@@ -41,6 +41,12 @@ function fixture(source: 'inventory' | 'external'): ComparisonLaptop {
         component: 'Processor',
         detail: source === 'inventory' ? 'Intel Core i5-1335U' : processor,
       },
+      ...(source === 'external'
+        ? [
+            { component: 'CPU cores', detail: '10' },
+            { component: 'CPU threads', detail: '12' },
+          ]
+        : []),
     ],
   };
 }
@@ -136,7 +142,7 @@ describe('laptop comparison', () => {
     slots = setComparisonLaptop(slots, 2, fixture('external'));
     const rows = comparisonRows(slots);
     const cpu = rows.find((row) => row.heading === 'Processor');
-    expect(cpu?.values[0]).toEqual(['Intel Core i5-1335U', 'CPU cache: 12 MB']);
+    expect(cpu?.values[0]).toEqual(['Intel Core i5-1335U']);
     expect(cpu?.values[1]).toEqual([processor]);
     expect(cpu?.differs).toBe(true);
     expect(rows.find((row) => row.heading === 'RAM')?.values).toEqual([
@@ -145,7 +151,9 @@ describe('laptop comparison', () => {
     ]);
     expect(rows.find((row) => row.heading === 'Display')?.differs).toBe(false);
     expect(rows.some((row) => row.heading === 'Ambient light sensor')).toBe(true);
-    expect(rows.some((row) => row.heading === 'CPU cache')).toBe(false);
+    expect(rows.find((row) => row.heading === 'CPU cache')?.values).toEqual([['12 MB'], []]);
+    expect(rows.find((row) => row.heading === 'CPU cores')?.values).toEqual([[], ['10']]);
+    expect(rows.find((row) => row.heading === 'CPU threads')?.values).toEqual([[], ['12']]);
 
     const html = renderToStaticMarkup(
       <ComparisonTable slots={slots} customer showSellingPrice={false} />,

@@ -57,4 +57,14 @@ export class ComparisonService {
     const client = await ApiClientProvider.getClient();
     return client.getBlob('/api/v1/comparison/inventory/' + encodeURIComponent(modelId) + '/image');
   }
+
+  static async processor(modelId: string): Promise<ComparisonSpec[]> {
+    const client = await ApiClientProvider.getClient();
+    const specs = await client.post<ComparisonSpec[]>(
+      '/api/v1/comparison/inventory/' + encodeURIComponent(modelId) + '/processor',
+      undefined,
+      { timeoutMs: 85000 },
+    );
+    return Array.isArray(specs) ? specs : [];
+  }
 }

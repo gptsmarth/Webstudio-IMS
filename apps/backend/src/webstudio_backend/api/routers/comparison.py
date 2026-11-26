@@ -18,6 +18,7 @@ from webstudio_backend.services.ai.types import AIProviderError
 from webstudio_backend.services.laptop_comparison import (
     UNVERIFIED_MODEL,
     available_count,
+    inventory_processor,
     list_stock_laptops,
     research_external,
     stock_laptop_filters,
@@ -74,6 +75,24 @@ async def inventory_comparison_image(
     raise AppError("NOT_FOUND", "Saved product image is not available.", status_code=404)
 
 
+@router.post("/inventory/{model_id}/processor")
+async def inventory_comparison_processor(
+    request: Request,
+    model_id: UUID,
+    current: InventoryViewDep,
+    db_session: AsyncSession = DbSessionDep,
+    app_settings=AppSettingsDep,
+) -> dict:
+    try:
+        async with asyncio.timeout(75):
+            specs = await inventory_processor(db_session, app_settings, model_id)
+    except TimeoutError:
+        specs = []
+    if specs is None:
+        raise AppError("NOT_FOUND", "This laptop is no longer in stock.", status_code=404)
+    return build_envelope(request, [spec.model_dump(mode="json") for spec in specs])
+
+
 @router.post("/external")
 async def external_comparison(
     request: Request,
@@ -86,7 +105,9 @@ async def external_comparison(
         async with asyncio.timeout(75):
             result = await research_external(db_session, app_settings, body)
     except TimeoutError as exc:
-        raise AppError("TIMEOUT", UNVERIFIED_MODEL, status_code=503) from exc
+        raise AppError(
+            "TIMEOUT", "The specifications search timed out. Try again.", status_code=503
+        ) from exc
     except AIProviderError as exc:
         if exc.code == "NOT_FOUND":
             raise AppError("NOT_FOUND", UNVERIFIED_MODEL, status_code=404) from exc
@@ -96,5 +117,15 @@ async def external_comparison(
                 "External research is unavailable. Ask your administrator to check the Gemini settings.",
                 status_code=503,
             ) from exc
-        raise AppError("SERVICE_UNAVAILABLE", UNVERIFIED_MODEL, status_code=503) from exc
+        if exc.code == "RATE_LIMITED":
+            raise AppError(
+                "RATE_LIMITED",
+                "Gemini is temporarily limiting searches. Try again shortly.",
+                status_code=429,
+            ) from exc
+        raise AppError(
+            "SERVICE_UNAVAILABLE",
+            "Gemini could not complete the search. Try again shortly.",
+            status_code=503,
+        ) from exc
     return build_envelope(request, result.model_dump(mode="json"))

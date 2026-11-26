@@ -218,7 +218,11 @@ async def test_gemini_lookup_requests_grounding_and_rejects_ungrounded_variant(
     provider = GeminiProvider(
         AIProviderConfig(gemini=ProviderCredentials("gemini", "fixture-key", "gemini-fixture"))
     )
-    output = await provider.research_laptop_comparison(lookup.brand, lookup.model_number)
+    output = await provider.research_laptop_comparison(
+        lookup.brand,
+        lookup.model_number,
+        verify=lambda raw, grounded: _verified_payload(lookup, raw, grounded) is not None,
+    )
     assert output is not None
     laptop = _verified_payload(lookup, *output)
     assert laptop is not None
@@ -226,6 +230,144 @@ async def test_gemini_lookup_requests_grounding_and_rejects_ungrounded_variant(
     assert any(spec.detail == RAM for spec in laptop.specifications)
     body["candidates"][0].pop("groundingMetadata")
     assert _verified_payload(lookup, *output) is None
+
+
+@pytest.mark.asyncio
+async def test_external_retry_checks_exact_variant_and_reads_final_grounded_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lookup = ExternalLaptopRequest(brand="ASUS", model_number="UX5406AA-SU463WS")
+    raw, body = grounded_fixture(lookup.brand, lookup.model_number)
+    raw["specifications"] = {"CPU": "Intel Core Ultra 7 355, 8 cores, 8 threads"}
+    serialized = json.dumps(raw)
+    candidate = body["candidates"][0]
+    candidate["content"] = {
+        "parts": [
+            {"text": "Internal research plan", "thought": True},
+            {"text": serialized[:50]},
+            {"text": serialized[50:]},
+        ],
+    }
+    chunks = candidate["groundingMetadata"]["groundingChunks"]
+    candidate["groundingMetadata"].pop("groundingSupports")
+    chunks[0]["web"] = {
+        "title": "ASUS Zenbook S 14",
+        "uri": "https://in.store.asus.com/asus-zenbook-s14-ux5406aa-su362ws-copilot-pc.html",
+    }
+    models = []
+    fallback = "gemini-fixture-fallback"
+
+    async def generate(self, model, payload):
+        models.append(model)
+        if model == fallback:
+            chunks[0]["web"]["uri"] = chunks[0]["web"]["uri"].replace("su362ws", "su463ws")
+        return body
+
+    assert _verified_payload(lookup, raw, body) is None
+    monkeypatch.setattr(GeminiProvider, "_generate", generate)
+    monkeypatch.setattr(GeminiProvider, "_model_chain", lambda self: ["gemini-fixture", fallback])
+    provider = GeminiProvider(
+        AIProviderConfig(gemini=ProviderCredentials("gemini", "fixture-key", "gemini-fixture"))
+    )
+    result = await provider.research_laptop_comparison(
+        lookup.brand,
+        lookup.model_number,
+        verify=lambda entry, grounding: _verified_payload(lookup, entry, grounding) is not None,
+    )
+    assert models == ["gemini-fixture", fallback]
+    assert result is not None
+    laptop = _verified_payload(lookup, *result)
+    assert laptop is not None
+    assert {spec.component: spec.detail for spec in laptop.specifications} == {
+        "CPU": "Intel Core Ultra 7 355, 8 cores, 8 threads",
+        "CPU cores": "8",
+        "CPU threads": "8",
+    }
+    assert _verified_payload(lookup, {**raw, "specifications": {"CPU": "Unknown"}}, body) is None
+    # Google may cite a SKU by byte range and return only the source domain as its title.
+    candidate["content"]["parts"].append({"text": "® " + lookup.model_number})
+    chunks[0]["web"] = {
+        "title": "asus.com",
+        "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/citation",
+    }
+    candidate["groundingMetadata"]["groundingSupports"] = [
+        {
+            "segment": {"partIndex": 3, "startIndex": 3, "endIndex": 3 + len(lookup.model_number)},
+            "groundingChunkIndices": [0],
+        }
+    ]
+    assert _verified_payload(lookup, raw, body) is not None
+
+
+@pytest.mark.asyncio
+async def test_selected_stock_processor_checks_exact_laptop_and_caches_official_chip(
+    api_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    initialized_system,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chip = "Intel Core Ultra 9 386H"
+    brand = await BrandRepository(db_session).create("Comparison ASUS")
+    model = await ProductModelRepository(db_session).create(
+        brand_id=brand.id,
+        model_number="UX5406AA-SU362WS",
+        model_name="Stock Zenbook",
+        cpu="Intel Core Ultra 9",
+        ram_gb=16,
+        storage_value=Decimal("512"),
+        storage_unit=StorageUnit.GB,
+        storage_type=StorageType.SSD,
+    )
+    location = await LocationRepository(db_session).create(
+        "Comparison store", location_type=LocationType.WAREHOUSE
+    )
+    await InventoryItemRepository(db_session).create(
+        serial_number="comparison-zenbook",
+        product_model_id=model.id,
+        color="Black",
+        current_location_id=location.id,
+        status=InventoryStatus.AVAILABLE,
+    )
+    calls = []
+
+    async def research_laptop(self, manufacturer, sku, *, verify):
+        calls.append(sku)
+        assert sku == model.model_number
+        raw, body = grounded_fixture(manufacturer, sku)
+        raw["specifications"]["Processor"] = chip
+        assert verify(raw, body)
+        return raw, body
+
+    async def research_cpu(self, processor, *, verify):
+        calls.append(processor)
+        assert processor == chip.lower()
+        raw = {"processor": chip, "specifications": {"CPU cores": "16", "CPU threads": "16"}}
+        _, body = grounded_fixture("", "")
+        chunks = body["candidates"][0]["groundingMetadata"]["groundingChunks"]
+        chunks[0]["web"] = {
+            "title": "Intel® Core™ Ultra 9 Processor 386H",
+            "uri": "https://www.intel.com/content/www/us/en/products/sku/245529/specifications.html",
+        }
+        assert not verify({**raw, "processor": "Intel Core Ultra 7 355"}, body)
+        assert verify(raw, body)
+        return raw, body
+
+    monkeypatch.setattr(GeminiProvider, "research_laptop_comparison", research_laptop)
+    monkeypatch.setattr(GeminiProvider, "research_comparison_processor", research_cpu)
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    url = f"{STOCK}/{model.id}/processor"
+    assert (await api_client.post(url)).status_code == 401
+    data = (await api_client.post(url, headers=headers)).json()["data"]
+    assert {item["component"]: item["detail"] for item in data} == {
+        "Processor": chip,
+        "CPU cores": "16",
+        "CPU threads": "16",
+    }
+    assert (await api_client.post(url, headers=headers)).json()["data"] == data
+    assert calls == [model.model_number, chip.lower()]
+    assert await db_session.get(LaptopComparisonCache, (":cpu:", chip.lower())) is not None
+    await db_session.refresh(model)
+    assert model.cpu == "Intel Core Ultra 9"
 
 
 @pytest.mark.asyncio
@@ -237,7 +379,7 @@ async def test_external_lookup_rejects_ambiguous_results_and_caches_a_verified_r
 ) -> None:
     calls = 0
 
-    async def research(self, brand, sku):
+    async def research(self, brand, sku, *, verify):
         nonlocal calls
         calls += 1
         payload, proof = grounded_fixture(brand, sku)
@@ -292,7 +434,7 @@ async def test_cache_persists_coalesces_concurrent_request_and_refreshes_after_e
 ) -> None:
     calls: list[str] = []
 
-    async def research(self, brand, sku):
+    async def research(self, brand, sku, *, verify):
         calls.append(sku)
         await asyncio.sleep(0.04)
         return grounded_fixture(brand, sku)

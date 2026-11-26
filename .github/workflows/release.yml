@@ -6,6 +6,8 @@ name: Enterprise Release
 
 on:
   push:
+    branches:
+      - "release/2.8.0-build-20261127"
     tags:
       - "v*.*.*"
   workflow_dispatch:

@@ -280,6 +280,8 @@ class ReportRepository:
         *,
         serials: set[str] | None = None,
         include_cancelled: bool = False,
+        search: str = "",
+        sale_id: int | None = None,
     ) -> list[AsusWeeklySaleRow]:
         statement = (
             select(
@@ -309,6 +311,21 @@ class ReportRepository:
         if serials is not None:
             serial = func.coalesce(Sale.snapshot_serial_number, InventoryItem.serial_number)
             statement = statement.where(func.upper(func.trim(serial)).in_(serials))
+        if search:
+            statement = statement.where(
+                or_(
+                    func.coalesce(
+                        Sale.snapshot_serial_number, InventoryItem.serial_number
+                    ).icontains(search, autoescape=True),
+                    func.coalesce(Sale.snapshot_model_number, ProductModel.model_number).icontains(
+                        search, autoescape=True
+                    ),
+                    Sale.invoice_number.icontains(search, autoescape=True),
+                    Sale.printed_invoice_number.icontains(search, autoescape=True),
+                )
+            )
+        if sale_id is not None:
+            statement = statement.where(Sale.id == sale_id)
         result = await self._session.execute(statement)
         return [AsusWeeklySaleRow(*row) for row in result]
 

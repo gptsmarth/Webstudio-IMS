@@ -28,6 +28,8 @@ _SCHEME_CODE = re.compile(r"\b([A-Z]{1,5}\d{5,})\b", re.IGNORECASE)
 _CREDIT_HEADERS = {"cnunit", "cnperunit", "cntopartner", "cnamountperunit"}
 _PRICE_HEADERS = {"supportedsrp", "suportedsrp", "novsuportedsrp", "eventsupportedsrp"}
 _MODEL_HEADERS = ("modelname", "modelnumber", "model", "sku")
+RATE_FIELDS = ("dbp", "srp", "supported_dbp", "support_on_srp", "cn")
+_EMPTY_AMOUNT = {"", "-", "—", "N/A", "NA"}
 
 
 def invalid(message: str) -> AppError:
@@ -45,16 +47,16 @@ def scheme_code(value: str) -> str | None:
     return match[1].upper() if match else None
 
 
-def money(value: object) -> Decimal:
+def money(value: object, *, signed: bool = False) -> Decimal:
     if value is None or isinstance(value, bool):
         raise ValueError("Amount is missing.")
     text = str(value).strip().removeprefix("₹").replace(",", "").strip()
     try:
         amount = Decimal(text)
-        if not amount.is_finite() or not 0 <= amount < 10**10:
+        if not amount.is_finite() or not (signed or amount >= 0) or abs(amount) >= 10**10:
             raise ValueError("Amount is outside the supported range.")
         rounded = amount.quantize(CENT, rounding=ROUND_HALF_UP)
-        if rounded >= 10**10:
+        if abs(rounded) >= 10**10:
             raise ValueError("Amount is outside the supported range.")
         return rounded
     except InvalidOperation as exc:
@@ -113,6 +115,13 @@ def _index(labels: list[str], names) -> int | None:
     return next((i for i, label in enumerate(labels) if label in names), None)
 
 
+def _optional_amount(row: tuple, index: int | None, *, signed: bool = False) -> str | None:
+    value = _cell(row, index)
+    if value is None or str(value).strip().upper() in _EMPTY_AMOUNT:
+        return None
+    return str(money(value, signed=signed))
+
+
 def parse_scheme(content: bytes) -> dict[str, dict]:
     rules: dict[str, dict] = {}
     with _workbook(content) as workbook:
@@ -142,6 +151,25 @@ def parse_scheme(content: bytes) -> dict[str, dict]:
                 continue
             if line > 20 or model is None or cn is None:
                 continue
+            dbp = next(
+                (
+                    i
+                    for i, label in enumerate(labels)
+                    if label in {"dbp", "dealerbuyprice"}
+                    or label.endswith("t2dbp")
+                    and "supported" not in label
+                ),
+                None,
+            )
+            supported_dbp = next(
+                (
+                    i
+                    for i, label in enumerate(labels)
+                    if label.endswith(("supporteddbp", "supportedt2dbp"))
+                ),
+                None,
+            )
+            support_on_srp = _index(labels, {"supportonsrp"})
             part = _index(labels, {"partnumber", "partno"})
             claim = _index(labels, {"claimcode", "schemecode", "scheme"})
             period = _index(labels, {"programperiod", "programmeperiod", "period"})
@@ -151,14 +179,18 @@ def parse_scheme(content: bytes) -> dict[str, dict]:
             for line, row in rows:
                 sku = model_key(_cell(row, model))
                 raw_cn = _cell(row, cn)
-                if not sku or raw_cn is None or str(raw_cn).strip() in ("", "-", "—", "N/A", "NA"):
+                if not sku or raw_cn is None or str(raw_cn).strip().upper() in _EMPTY_AMOUNT:
                     continue
                 try:
                     cn_value = money(raw_cn)
                     if not cn_value:
                         continue
-                    raw_srp = _cell(row, srp)
-                    srp_value = money(raw_srp) if raw_srp not in (None, "") else None
+                    pricing = {
+                        "srp": _optional_amount(row, srp),
+                        "dbp": _optional_amount(row, dbp),
+                        "supported_dbp": _optional_amount(row, supported_dbp),
+                        "support_on_srp": _optional_amount(row, support_on_srp, signed=True),
+                    }
                 except ValueError as exc:
                     raise invalid(f"{sheet.title}, row {line}: {exc}") from exc
                 if len(sku) > 128:
@@ -167,7 +199,7 @@ def parse_scheme(content: bytes) -> dict[str, dict]:
                 code = scheme_code(_text(row, claim) or heading or source_period)
                 rule = {
                     "cn": str(cn_value),
-                    "srp": str(srp_value) if srp_value else None,
+                    **pricing,
                     "part_number": _text(row, part)[:128] or None,
                     "sheet": sheet.title,
                     "row": line,

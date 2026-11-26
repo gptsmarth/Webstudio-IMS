@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -9,8 +10,9 @@ import unicodedata
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import unquote, urlsplit
+from uuid import UUID
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,9 +37,23 @@ from webstudio_backend.infrastructure.database.models.product_model import Produ
 from webstudio_backend.services.ai.config import resolve_ai_config
 from webstudio_backend.services.ai.providers.gemini import GeminiProvider
 from webstudio_backend.services.ai.types import AIProviderError
+from webstudio_backend.services.comparison_processor import (
+    exact_chip,
+    has_cpu_totals,
+    processor_facts,
+    processor_text,
+    with_processor_facts,
+)
 from webstudio_backend.services.product_image_service import is_safe_public_https_url
 
 CACHE_LIFETIME = timedelta(days=30)
+PROCESSOR_CACHE_NAMESPACE = ":cpu:"
+PROCESSOR_SPECS = TypeAdapter(list[ComparisonSpec])
+MAIN_HARDWARE = re.compile(
+    r"^(processor|cpu(?! (cores|threads|core layout|cache|max turbo)\b)|"
+    r"ram|memory|storage|ssd|display|screen|graphics|gpu)\b",
+    re.I,
+)
 UNVERIFIED_MODEL = (
     "Sorry, we couldn't retrieve reliable specifications for this exact laptop model. "
     "Please verify the complete model number and try again."
@@ -131,11 +147,13 @@ def _stock_payload(model: ProductModel, brand: str, quantity: int) -> Comparison
         available_units=quantity,
         selling_price=str(model.selling_price) if model.selling_price is not None else None,
         saved_notes=model.notes,
-        specifications=[
-            ComparisonSpec(component=component, detail=detail)
-            for component, detail in specifications
-            if detail and detail.strip()
-        ],
+        specifications=with_processor_facts(
+            [
+                ComparisonSpec(component=component, detail=detail)
+                for component, detail in specifications
+                if detail and detail.strip()
+            ]
+        ),
     )
 
 
@@ -158,10 +176,7 @@ async def research_external(
         return cached
 
     # Recheck after locking: another request or worker may have just filled the cache.
-    lock_id = int.from_bytes(
-        hashlib.blake2b(json.dumps(key).encode(), digest_size=8).digest(), "big", signed=True
-    )
-    await session.execute(select(func.pg_advisory_xact_lock(lock_id)))
+    await session.execute(select(func.pg_advisory_xact_lock(_lock_id(key))))
     cached = await _cached_result(session, match)
     if cached is not None:
         return cached
@@ -169,20 +184,39 @@ async def research_external(
     config = await resolve_ai_config(session, settings)
     if not config.enrichment_enabled:
         raise AIProviderError("NOT_CONFIGURED", "External research is disabled.", provider="gemini")
-    research = await GeminiProvider(config).research_laptop_comparison(
-        lookup.brand, lookup.model_number
-    )
+    provider = GeminiProvider(config)
+    async with asyncio.timeout(60):
+        research = await provider.research_laptop_comparison(
+            lookup.brand,
+            lookup.model_number,
+            verify=lambda raw, body: _verified_payload(lookup, raw, body) is not None,
+        )
     result = _verified_payload(lookup, *research) if research else None
     if result is None:
         raise AIProviderError("NOT_FOUND", UNVERIFIED_MODEL, provider="gemini")
 
+    chip = exact_chip(processor_text(result.specifications))
+    if chip and not has_cpu_totals(processor_facts(result.specifications)):
+        extra = await _research_processor(session, provider, chip)
+        result.specifications = _supplement_processor(result.specifications, extra)
+    await _save_research(session, key, result.model_dump(mode="json"))
+    return result
+
+
+def _lock_id(key: tuple[str, str]) -> int:
+    return int.from_bytes(
+        hashlib.blake2b(json.dumps(key).encode(), digest_size=8).digest(), "big", signed=True
+    )
+
+
+async def _save_research(session: AsyncSession, key: tuple[str, str], payload: Any) -> None:
     now = datetime.now(UTC)
     insert_result = insert(LaptopComparisonCache).values(
         normalized_brand=key[0],
         normalized_model=key[1],
         created_at=now,
         expires_at=now + CACHE_LIFETIME,
-        payload=result.model_dump(mode="json"),
+        payload=payload,
     )
     await session.execute(
         insert_result.on_conflict_do_update(
@@ -194,22 +228,135 @@ async def research_external(
             },
         )
     )
-    return result
 
 
-async def _cached_result(session: AsyncSession, match: tuple) -> ComparisonLaptop | None:
-    payload = await session.scalar(
+async def _cached_payload(session: AsyncSession, *match) -> Any:
+    return await session.scalar(
         select(LaptopComparisonCache.payload).where(
             *match, LaptopComparisonCache.expires_at > datetime.now(UTC)
         )
     )
+
+
+async def _cached_result(session: AsyncSession, match: tuple) -> ComparisonLaptop | None:
+    payload = await _cached_payload(session, *match)
     if payload is None:
         return None
     try:
         result = ComparisonLaptop.model_validate(payload)
     except ValidationError:
         return None
-    return result if result.source == "external" else None
+    if result.source != "external" or not _has_hardware(result.specifications):
+        return None
+    result.specifications = with_processor_facts(result.specifications)
+    return result
+
+
+async def inventory_processor(
+    session: AsyncSession, settings: Settings, model_id: UUID
+) -> list[ComparisonSpec] | None:
+    count = available_count()
+    row = (
+        await session.execute(
+            select(ProductModel, Brand.name)
+            .join(Brand)
+            .where(ProductModel.id == model_id, *stock_laptop_filters(count))
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    model, brand = row
+    saved = [ComparisonSpec(component="Processor", detail=model.cpu)] if model.cpu else []
+    found = with_processor_facts(saved)[len(saved) :]
+    if has_cpu_totals(processor_facts(found)):
+        return found
+    chip = exact_chip(model.cpu or "")
+    if chip:
+        config = await resolve_ai_config(session, settings)
+        if config.enrichment_enabled:
+            return _supplement_processor(
+                found, await _research_processor(session, GeminiProvider(config), chip)
+            )
+        return found
+
+    try:
+        lookup = ExternalLaptopRequest(brand=brand, model_number=model.model_number)
+        laptop = await research_external(session, settings, lookup)
+    except (ValidationError, AIProviderError, TimeoutError):
+        return found
+    researched = processor_text(laptop.specifications)
+    if not exact_chip(researched):
+        return found
+    return [
+        ComparisonSpec(component="Processor", detail=researched),
+        *_supplement_processor(
+            found,
+            [
+                ComparisonSpec(component=label, detail=value)
+                for label, value in processor_facts(laptop.specifications).items()
+            ],
+        ),
+    ]
+
+
+def _supplement_processor(
+    existing: list[ComparisonSpec], extra: list[ComparisonSpec]
+) -> list[ComparisonSpec]:
+    known = processor_facts(existing)
+    additions = {spec.component: spec for spec in extra if spec.component not in known}
+    return [
+        *(spec for spec in existing if spec.component not in additions),
+        *additions.values(),
+    ][:60]
+
+
+async def _research_processor(
+    session: AsyncSession, provider: GeminiProvider, chip: str
+) -> list[ComparisonSpec]:
+    key = (PROCESSOR_CACHE_NAMESPACE, chip)
+    match = (
+        LaptopComparisonCache.normalized_brand == key[0],
+        LaptopComparisonCache.normalized_model == key[1],
+    )
+    cached = await _cached_payload(session, *match)
+    if cached is not None:
+        try:
+            return PROCESSOR_SPECS.validate_python(cached)
+        except ValidationError:
+            pass
+    # Optional detail should not wait behind another request researching the same chip.
+    if not await session.scalar(select(func.pg_try_advisory_xact_lock(_lock_id(key)))):
+        return []
+
+    def validated(raw: dict[str, Any], body: dict[str, Any]) -> list[ComparisonSpec]:
+        if exact_chip(_text(raw.get("processor"))) != chip:
+            return []
+        domain = "intel.com" if chip.startswith("intel ") else "amd.com"
+        chunks, supports = _grounding(body)
+        official = {index for index, chunk in chunks.items() if _official_chunk(chunk, (domain,))}
+        if not any(
+            exact_chip(_text(chunks[index].get("title"))) == chip for index in official
+        ) and not any(
+            exact_chip(span) == chip and bool(official.intersection(indexes))
+            for span, indexes in supports
+        ):
+            return []
+        return [
+            ComparisonSpec(component=label, detail=value)
+            for label, value in processor_facts(_specifications(raw.get("specifications"))).items()
+        ]
+
+    try:
+        async with asyncio.timeout(12):
+            result = await provider.research_comparison_processor(
+                chip, verify=lambda raw, body: bool(validated(raw, body))
+            )
+    except (AIProviderError, TimeoutError):
+        return []
+    facts = validated(*result) if result else []
+    if facts:
+        await _save_research(session, key, [spec.model_dump(mode="json") for spec in facts])
+    return facts
 
 
 def _is_public_https(url: str) -> bool:
@@ -230,16 +377,19 @@ def _contains_model(text: str, sku: str) -> bool:
     return bool(re.search(rf"(?<![\w/-]){re.escape(_normalize(sku))}(?![\w/-])", _normalize(text)))
 
 
-def _grounded_exact_model(body: dict[str, Any], evidence: str, brand: str, sku: str) -> bool:
+def _grounding(
+    body: dict[str, Any],
+) -> tuple[dict[int, dict[str, Any]], list[tuple[str, set[int]]]]:
     candidates = body.get("candidates")
     if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
-        return False
-    grounding = candidates[0].get("groundingMetadata")
+        return {}, []
+    candidate = candidates[0]
+    grounding = candidate.get("groundingMetadata")
     if not isinstance(grounding, dict):
-        return False
+        return {}, []
     chunks = grounding.get("groundingChunks")
     if not isinstance(chunks, list):
-        return False
+        return {}, []
     web_chunks = {
         index: chunk["web"]
         for index, chunk in enumerate(chunks)
@@ -248,19 +398,10 @@ def _grounded_exact_model(body: dict[str, Any], evidence: str, brand: str, sku: 
         and isinstance(chunk["web"].get("uri"), str)
         and _is_public_https(chunk["web"]["uri"])
     }
-    if not web_chunks:
-        return False
-    if any(
-        _contains_model(_text(chunk.get("title")), sku)
-        and _contains_model(_text(chunk.get("title")), brand)
-        for chunk in web_chunks.values()
-    ):
-        return True
     supports = grounding.get("groundingSupports")
     if not isinstance(supports, list):
-        return False
-    # Google also grounds response spans where the source title is not the full SKU.
-    proof = _normalize(evidence)
+        return web_chunks, []
+    citations = []
     for support in supports:
         if not isinstance(support, dict):
             continue
@@ -268,10 +409,103 @@ def _grounded_exact_model(body: dict[str, Any], evidence: str, brand: str, sku: 
         indexes = support.get("groundingChunkIndices")
         if not isinstance(segment, dict) or not isinstance(indexes, list):
             continue
-        span = _normalize(_text(segment.get("text")))
-        if proof in span and any(type(index) is int and index in web_chunks for index in indexes):
+        cited = {index for index in indexes if type(index) is int and index in web_chunks}
+        if cited:
+            citations.append((_citation_text(segment, candidate), cited))
+    return web_chunks, citations
+
+
+def _citation_text(segment: dict[str, Any], candidate: dict[str, Any]) -> str:
+    if text := _text(segment.get("text")):
+        return text
+    content = candidate.get("content")
+    parts = content.get("parts") if isinstance(content, dict) else None
+    index = segment.get("partIndex", 0)
+    if not isinstance(parts, list) or type(index) is not int or not 0 <= index < len(parts):
+        return ""
+    part = parts[index]
+    if not isinstance(part, dict) or part.get("thought") is True:
+        return ""
+    start, end = segment.get("startIndex", 0), segment.get("endIndex")
+    if type(start) is not int or type(end) is not int or not 0 <= start < end:
+        return ""
+    value = part.get("text")
+    return value.encode()[start:end].decode(errors="ignore") if isinstance(value, str) else ""
+
+
+def _matches_domain(host: str, domains: tuple[str, ...]) -> bool:
+    return any(host == domain or host.endswith(f".{domain}") for domain in domains)
+
+
+def _official_chunk(chunk: dict[str, Any], domains: tuple[str, ...]) -> bool:
+    host = urlsplit(chunk["uri"]).hostname or ""
+    return _matches_domain(host, domains) or (
+        host == "vertexaisearch.cloud.google.com"
+        and _matches_domain(_text(chunk.get("title")).lower(), domains)
+    )
+
+
+def _grounded_exact_model(body: dict[str, Any], brand: str, sku: str) -> bool:
+    chunks, supports = _grounding(body)
+    domains = OFFICIAL_IMAGE_DOMAINS.get(_normalize(brand), ())
+    official = {index for index, chunk in chunks.items() if _official_chunk(chunk, domains)}
+
+    def matches(text: str) -> bool:
+        return _contains_model(text, sku) and _contains_model(text, brand)
+
+    for chunk in chunks.values():
+        title = _text(chunk.get("title"))
+        if matches(title):
             return True
-    return False
+        url = urlsplit(chunk["uri"])
+        if not _matches_domain(url.hostname or "", domains):
+            continue
+        if _contains_model(title, sku):
+            return True
+        slug = _normalize(unquote(url.path.rsplit("/", 1)[-1]))
+        slug = re.sub(r"\.(?:html?|aspx?)$", "", slug)
+        normalized_sku = re.escape(_normalize(sku).replace(" ", "-"))
+        if re.search(rf"(?:^|-){normalized_sku}(?:-copilot-pc)?$", slug):
+            return True
+    return any(
+        matches(span) or (_contains_model(span, sku) and bool(indexes & official))
+        for span, indexes in supports
+    )
+
+
+def _specifications(facts: Any) -> list[ComparisonSpec]:
+    if not isinstance(facts, dict) or len(facts) > 60:
+        return []
+    specifications = []
+    for component, detail in facts.items():
+        label, value = _text(component), _text(detail)
+        if not label or _normalize(value) in {
+            "",
+            "not available",
+            "could not be verified",
+            "unknown",
+            "n/a",
+            "null",
+            "not published",
+            "not specified",
+            "unverified",
+            "unavailable",
+            "-",
+            "—",
+        }:
+            continue
+        try:
+            specifications.append(ComparisonSpec(component=label, detail=value))
+        except ValidationError:
+            continue
+    return specifications
+
+
+def _has_hardware(specifications: list[ComparisonSpec]) -> bool:
+    return any(
+        MAIN_HARDWARE.match(spec.component)
+        for spec in _specifications({spec.component: spec.detail for spec in specifications})
+    )
 
 
 def _verified_payload(
@@ -283,25 +517,12 @@ def _verified_payload(
         _text(raw.get("model_number"))
     ) != _normalize(lookup.model_number):
         return None
-    evidence = _text(raw.get("evidence"))
-    if not (
-        _contains_model(evidence, lookup.model_number)
-        and _contains_model(evidence, lookup.brand)
-        and _grounded_exact_model(grounded, evidence, lookup.brand, lookup.model_number)
-    ):
+    if not _grounded_exact_model(grounded, lookup.brand, lookup.model_number):
         return None
-    facts = raw.get("specifications")
-    if not isinstance(facts, dict) or not facts or len(facts) > 60:
+    specifications = with_processor_facts(_specifications(raw.get("specifications")))
+    if not _has_hardware(specifications):
         return None
     try:
-        specifications = [
-            ComparisonSpec(component=_text(component), detail=_text(detail))
-            for component, detail in facts.items()
-            if _normalize(_text(detail))
-            not in {"", "not available", "could not be verified", "unknown", "n/a"}
-        ]
-        if not specifications:
-            return None
         return ComparisonLaptop(
             source="external",
             brand=lookup.brand,
@@ -320,7 +541,7 @@ def _exact_image_url(url: str, lookup: ExternalLaptopRequest) -> str | None:
     parsed = urlsplit(url)
     host = parsed.hostname or ""
     domains = OFFICIAL_IMAGE_DOMAINS.get(_normalize(lookup.brand), ())
-    if not any(host == domain or host.endswith(f".{domain}") for domain in domains):
+    if not _matches_domain(host, domains):
         return None
     path = unquote(parsed.path)
     if not path.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".avif")):

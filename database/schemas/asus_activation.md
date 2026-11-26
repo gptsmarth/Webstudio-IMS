@@ -17,3 +17,24 @@ Claims are derived from saved sales and the uploaded rates by invoice date. This
 historical and newly synced sales visible through the same logic. There are no writes to
 Tally invoices or sales. Cancelled sales without receipts leave the claim list. A
 settlement remains visible with a cancellation flag if its sale is cancelled.
+
+Migration `0060_asus_activation_edits` adds the following fields and table.
+
+- Schemes keep a revision, dated model-rate overrides and a compact change history.
+  Rules retain workbook pricing fields and effective source metadata. The scheme
+  revision protects the preview from concurrent edits. Active and historical
+  schemes use the same six-calendar-month edit window measured from the end date.
+- Receipts keep the original rate and scheme snapshot and bind a resolution to
+  the expected amount used when it was recorded. When an edited scheme no longer
+  covers the sale, the receipt is still visible with its original reference.
+- `asus_activation_cn_overrides` stores one audited individual correction per sale.
+  It takes precedence over the current scheme amount for eligible sales. A cleared
+  correction retains its latest audit metadata. Model-wide corrections are dated
+  scheme rates. Subsequent workbook and date changes can replace those rates.
+  Sales and Tally rows are read only.
+
+The financial projection uses the currently applicable rate and correction to
+compute expected CN and variance. Actual receipt amounts and the expected amount
+captured at receipt time stay in the receipt record. Edited workbooks retain
+compact rate data and provenance. The expiring original workbook storage and
+its backup exclusion still apply.

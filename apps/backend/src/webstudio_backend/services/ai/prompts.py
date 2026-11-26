@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 
+def laptop_web_search_instructions(model_number: str, brand_name: str | None) -> str:
+    return (
+        "Use Google Search with these queries in order: "
+        f'1) "{model_number}" {brand_name or ""} specifications '
+        f'2) site: manufacturer "{model_number}". Prefer the official brand/PSREF/support page.\n\n'
+    )
+
+
 def build_spec_lookup_prompt(
     model_number: str,
     *,
@@ -13,9 +21,7 @@ def build_spec_lookup_prompt(
     brand_line = f"Brand: {brand_name}\n" if brand_name else ""
     name_line = f"Marketing name (if known): {model_name}\n" if model_name else ""
     search_line = (
-        f"Use Google Search with these queries in order: "
-        f'1) "{model_number}" {brand_name or ""} specifications '
-        f'2) site: manufacturer "{model_number}". Prefer the official brand/PSREF/support page.\n\n'
+        laptop_web_search_instructions(model_number, brand_name)
         if use_web_search
         else (
             "Use your knowledge of published manufacturer specifications.\n\n"

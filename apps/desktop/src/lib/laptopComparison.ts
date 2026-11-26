@@ -22,8 +22,23 @@ const DEFAULT_COMPONENTS = [
   'Keyboard and security',
   'Operating system and warranty',
 ];
+const CPU_COMPONENTS = [
+  'CPU cores',
+  'CPU threads',
+  'CPU core layout',
+  'CPU max turbo',
+  'CPU cache',
+];
 
 const COMPONENT_ALIASES: [string, RegExp][] = [
+  ['CPU cores', /^(?:(?:cpu|processor|total) )?cores?(?: count)?$/i],
+  ['CPU threads', /^(?:(?:cpu|processor|total) )?threads?(?: count)?$/i],
+  ['CPU core layout', /^(?:(?:cpu|processor) )?core (?:layout|configuration)$/i],
+  [
+    'CPU max turbo',
+    /^(?:(?:cpu|processor) )?(?:max(?:imum)? )?(?:turbo|boost)(?: clock| frequency)?$/i,
+  ],
+  ['CPU cache', /^(?:(?:cpu|processor) )?cache$/i],
   ['Processor', /^(processor|cpu|chipset|cores|threads|clock|architecture|cache|tdp)\b/i],
   ['RAM', /^(ram|memory|sodimm)\b/i],
   ['Storage', /^(storage|ssd|hdd|nvme|drive)\b/i],
@@ -75,7 +90,9 @@ function specsByComponent(laptop: ComparisonLaptop | null, customer: boolean) {
     const key = heading.toLocaleLowerCase();
     const existing = grouped.get(key);
     const value =
-      heading.toLocaleLowerCase() === label.toLocaleLowerCase() ? detail : label + ': ' + detail;
+      CPU_COMPONENTS.includes(heading) || heading.toLocaleLowerCase() === label.toLocaleLowerCase()
+        ? detail
+        : label + ': ' + detail;
     if (!existing) grouped.set(key, { heading, values: [value] });
     else if (!existing.values.includes(value)) existing.values.push(value);
   }
@@ -110,7 +127,15 @@ function specsByComponent(laptop: ComparisonLaptop | null, customer: boolean) {
 
 export function comparisonRows(slots: ComparisonSlot[], customer = false) {
   const specs = slots.map(({ laptop }) => specsByComponent(laptop, customer));
-  const headings = new Map(DEFAULT_COMPONENTS.map((label) => [label.toLocaleLowerCase(), label]));
+  const cpuHeadings = CPU_COMPONENTS.filter((label) =>
+    specs.some((grouped) => grouped.has(label.toLocaleLowerCase())),
+  );
+  const headings = new Map(
+    [DEFAULT_COMPONENTS[0], ...cpuHeadings, ...DEFAULT_COMPONENTS.slice(1)].map((label) => [
+      label.toLocaleLowerCase(),
+      label,
+    ]),
+  );
   for (const grouped of specs) {
     grouped.forEach(({ heading }, key) => {
       if (!headings.has(key)) headings.set(key, heading);

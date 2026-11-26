@@ -7,10 +7,16 @@ import {
   AsusActivationService,
   type ActivationClaim,
   type ActivationDashboard,
+  type ActivationScheme,
   type ClaimFilter,
   type ReceiptPreview,
 } from '../../services/api/AsusActivationService';
 import { useAuthStore } from '../../store';
+import {
+  ActivationDialog,
+  ActivationHistory,
+  ActivationSchemeEditor,
+} from './ActivationSchemeEditor';
 import './asusActivation.css';
 
 const moneyFormatter = new Intl.NumberFormat('en-IN', {
@@ -49,10 +55,11 @@ function monthLabel(month: string) {
   }).format(new Date(month + '-01T00:00:00Z'));
 }
 
-function rupees(value: string | null) {
-  return value === null ? '—' : moneyFormatter.format(Number(value));
+function rupees(value: string | null | undefined) {
+  return value == null ? '—' : moneyFormatter.format(Number(value));
 }
 
+type ClaimDialog = { claim: ActivationClaim; action: 'receipt' | 'expected' };
 function Pager({
   page,
   size,
@@ -190,7 +197,7 @@ function ClaimTable({
 }: {
   claims: ActivationClaim[];
   canWrite: boolean;
-  selectClaim: (claim: ActivationClaim) => void;
+  selectClaim: (value: ClaimDialog) => void;
 }) {
   return (
     <div className="activation__table-wrap" tabIndex={0} aria-label="ASUS activation claims">
@@ -201,8 +208,11 @@ function ClaimTable({
             <th>Invoice / customer</th>
             <th>Activation dates</th>
             <th>Unit price incl. GST</th>
+            <th>NOV T2 DBP</th>
             <th>Supported SRP</th>
-            <th>Expected CN</th>
+            <th>Supported DBP</th>
+            <th>Support on SRP</th>
+            <th className="activation__expected">CN/Unit (expected)</th>
             <th>Received CN</th>
             <th>Receipt / variance</th>
             {canWrite && <th>Action</th>}
@@ -224,15 +234,24 @@ function ClaimTable({
               <td>
                 {claim.date_from} to {claim.date_to}
                 <small title={claim.scheme_filename}>
-                  {claim.scheme_code ?? claim.source_sheet}
+                  {claim.scheme_code ?? claim.source_sheet ?? claim.scheme_filename}
                 </small>
+                {claim.scheme_applies === false && (
+                  <small>Original receipt period · scheme changed</small>
+                )}
               </td>
               <td>
                 {rupees(claim.unit_price)}
                 {claim.unit_price === null && <small>Price unavailable</small>}
               </td>
-              <td>{rupees(claim.supported_srp)}</td>
-              <td>{rupees(claim.expected_amount)}</td>
+              <td className="activation__money">{rupees(claim.nov_t2_dbp)}</td>
+              <td className="activation__money">{rupees(claim.supported_srp)}</td>
+              <td className="activation__money">{rupees(claim.supported_dbp)}</td>
+              <td className="activation__money">{rupees(claim.support_on_srp)}</td>
+              <td className="activation__expected activation__money">
+                {rupees(claim.expected_amount)}
+                {claim.expected_note && <small title={claim.expected_note}>Corrected CN</small>}
+              </td>
               <td>{rupees(claim.received_amount)}</td>
               <td>
                 <span className="activation__badge" data-status={claim.status}>
@@ -251,17 +270,31 @@ function ClaimTable({
                 )}
                 {claim.receipt_source === 'manual' && <small>Entered manually</small>}
                 {claim.record_note && <small>{claim.record_note}</small>}
-                {claim.resolution_note && <small>Resolved · {claim.resolution_note}</small>}
+                {claim.resolution_note && (
+                  <small>
+                    {claim.resolution_current === false ? 'Previous resolution' : 'Resolved'} ·{' '}
+                    {claim.resolution_note}
+                  </small>
+                )}
               </td>
               {canWrite && (
-                <td>
+                <td className="activation__claim-actions">
                   {!claim.cancelled && claim.status !== 'received' && (
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => selectClaim(claim)}
+                      onClick={() => selectClaim({ claim, action: 'receipt' })}
                     >
-                      {claim.status === 'pending' ? 'Record received' : 'Resolve'}
+                      {claim.status === 'pending' ? 'Mark received' : 'Resolve'}
+                    </button>
+                  )}
+                  {!claim.cancelled && claim.scheme_applies !== false && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => selectClaim({ claim, action: 'expected' })}
+                    >
+                      Edit expected CN
                     </button>
                   )}
                 </td>
@@ -276,87 +309,135 @@ function ClaimTable({
 
 function ManualReceiptForm({
   claim,
+  action,
+  error,
+  allowModelCorrection,
   busy,
   onClose,
   onSubmit,
 }: {
   claim: ActivationClaim;
+  action: ClaimDialog['action'];
+  error: string;
+  allowModelCorrection: boolean;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (amount: string, note: string) => void;
+  onSubmit: (amount: string | null, note: string, scope: 'sale' | 'model') => void;
 }) {
-  const [amount, setAmount] = useState('');
+  const editing = action === 'expected';
+  const [amount, setAmount] = useState(editing ? claim.expected_amount : '');
   const [note, setNote] = useState('');
-  const form = useRef<HTMLFormElement>(null);
-  const resolving = claim.status === 'discrepancy';
-  useEffect(() => {
-    form.current?.scrollIntoView({ block: 'nearest' });
-    form.current?.querySelector('input')?.focus({ preventScroll: true });
-  }, []);
+  const [scope, setScope] = useState<'sale' | 'model'>('sale');
+  const [clear, setClear] = useState(false);
+  const resolving = !editing && claim.status === 'discrepancy';
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSubmit(amount.trim(), note.trim());
+    onSubmit(clear ? null : amount.trim(), note.trim(), scope);
   }
   return (
-    <form ref={form} className="card activation__panel" onSubmit={submit}>
-      <div className="activation__toolbar">
-        <div>
-          <h2>{resolving ? 'Resolve discrepancy' : 'Record CN received'}</h2>
-          <p>
-            {claim.model} · {claim.serial} · {claim.invoice}
+    <ActivationDialog
+      title={editing ? 'Edit expected CN' : resolving ? 'Resolve discrepancy' : 'Mark received'}
+      busy={busy}
+      onClose={onClose}
+    >
+      <form className="activation__panel" onSubmit={submit}>
+        <p>
+          {claim.model} · {claim.serial} · {claim.invoice}
+        </p>
+        <p>
+          Expected {rupees(claim.expected_amount)}
+          {resolving &&
+            ' · Received ' +
+              rupees(claim.received_amount) +
+              ' · Variance ' +
+              rupees(claim.variance)}{' '}
+          before GST
+        </p>
+        {error && (
+          <p className="alert alert-danger" role="alert">
+            {error}
           </p>
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>
-          Cancel
-        </button>
-      </div>
-      <p>
-        Expected {rupees(claim.expected_amount)}
-        {resolving &&
-          ' · Received ' +
-            rupees(claim.received_amount) +
-            ' · Variance ' +
-            rupees(claim.variance)}{' '}
-        before GST
-      </p>
-      <div className="activation__fields">
-        {!resolving && (
+        )}
+        {editing && allowModelCorrection && (
           <label>
-            <span className="form-label">Received CN excluding GST</span>
-            <input
-              type="number"
+            <span className="form-label">Apply correction to</span>
+            <select
               className="input"
-              min="0"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={scope}
+              disabled={busy}
+              onChange={(event) => {
+                setScope(event.target.value as 'sale' | 'model');
+                setClear(false);
+              }}
+            >
+              <option value="sale">This sale only</option>
+              <option value="model">This model throughout the scheme</option>
+            </select>
+          </label>
+        )}
+        {editing && scope === 'model' && (
+          <p>
+            Applies to qualifying sales of this model in the scheme. Individual sale corrections
+            take precedence.
+          </p>
+        )}
+        {editing && scope === 'sale' && claim.manual_expected && (
+          <label className="activation__checkbox">
+            <input
+              type="checkbox"
+              checked={clear}
+              disabled={busy}
+              onChange={(event) => setClear(event.target.checked)}
+            />
+            Restore scheme amount ({rupees(claim.scheme_expected)})
+          </label>
+        )}
+        <div className="activation__fields">
+          {!resolving && !clear && (
+            <label>
+              <span className="form-label">
+                {editing ? 'Corrected CN excluding GST' : 'Received CN excluding GST'}
+              </span>
+              <input
+                type="number"
+                className="input"
+                min="0"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+          )}
+          <label>
+            <span className="form-label">
+              {resolving ? 'Resolution note' : editing ? 'Reason for correction' : 'Note'}
+            </span>
+            <input
+              className="input"
+              maxLength={2000}
+              required={resolving || editing}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
               disabled={busy}
             />
           </label>
-        )}
-        <label>
-          <span className="form-label">{resolving ? 'Resolution note' : 'Note'}</span>
-          <input
-            className="input"
-            maxLength={2000}
-            required={resolving}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            disabled={busy}
-          />
-        </label>
-      </div>
-      <div>
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={busy || (resolving && !note.trim())}
-        >
-          {resolving ? 'Resolve and mark received' : 'Save received amount'}
-        </button>
-      </div>
-    </form>
+        </div>
+        <div className="activation__dialog-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busy || ((resolving || editing) && !note.trim())}
+          >
+            {resolving ? 'Resolve and mark received' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </ActivationDialog>
   );
 }
 
@@ -364,6 +445,8 @@ export function AsusActivationPage(): JSX.Element {
   const permissions = useAuthStore((state) => state.session?.permissions);
   const canWrite = Boolean(permissions && canWriteSettings(permissions));
   const [month, setMonth] = useState(localMonth);
+  const [searchText, setSearchText] = useState('');
+  const [search, setSearch] = useState('');
   const [tab, setTab] = useState<ClaimFilter>('pending');
   const [page, setPage] = useState(0);
   const [dashboard, setDashboard] = useState<ActivationDashboard>();
@@ -376,14 +459,15 @@ export function AsusActivationPage(): JSX.Element {
   const [schemeFile, setSchemeFile] = useState<File>();
   const [receiptFile, setReceiptFile] = useState<File>();
   const [preview, setPreview] = useState<ReceiptPreview>();
-  const [selected, setSelected] = useState<ActivationClaim>();
+  const [selected, setSelected] = useState<ClaimDialog>();
+  const [editedScheme, setEditedScheme] = useState<ActivationScheme>();
   const schemeInput = useRef<HTMLInputElement>(null);
   const receiptInput = useRef<HTMLInputElement>(null);
   const requestSequence = useRef(0);
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
-      const result = await AsusActivationService.dashboard(month);
+      const result = await AsusActivationService.dashboard(month, search);
       if (request !== requestSequence.current) return;
       setDashboard(result);
       setLoadError('');
@@ -391,7 +475,12 @@ export function AsusActivationPage(): JSX.Element {
       if (request === requestSequence.current)
         setLoadError(parseApiError(err, 'Could not load activation claims.'));
     }
-  }, [month]);
+  }, [month, search]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchText.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
 
   useEffect(() => {
     void refresh();
@@ -437,6 +526,8 @@ export function AsusActivationPage(): JSX.Element {
       setTab('pending');
       setPage(0);
       setSelected(undefined);
+      setSearchText('');
+      setSearch('');
       const schemeMonth = scheme.date_from.slice(0, 7);
       if (schemeMonth === month) await refresh();
       else setMonth(schemeMonth);
@@ -468,7 +559,8 @@ export function AsusActivationPage(): JSX.Element {
     });
   }
 
-  const data = dashboard?.month === month ? dashboard : undefined;
+  const data =
+    dashboard?.month === month && (dashboard.search ?? '') === search ? dashboard : undefined;
   const filtered = data?.claims.filter((claim) => tab === 'all' || claim.status === tab) ?? [];
   const monthSchemes = data?.schemes.filter(
     (scheme) => scheme.date_from.slice(0, 7) <= month && scheme.date_to.slice(0, 7) >= month,
@@ -490,6 +582,15 @@ export function AsusActivationPage(): JSX.Element {
               <span>
                 Active scheme · {data.active_scheme.date_from} to {data.active_scheme.date_to}
               </span>
+              {canWrite && data.active_scheme.editable && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setEditedScheme(data.active_scheme ?? undefined)}
+                >
+                  Manage active scheme
+                </button>
+              )}
             </div>
           ) : (
             <div className="alert alert-warning activation__coverage" role="status">
@@ -622,16 +723,38 @@ export function AsusActivationPage(): JSX.Element {
         )}
         {selected && canWrite && (
           <ManualReceiptForm
-            key={selected.sale_id}
-            claim={selected}
+            key={selected.claim.sale_id + selected.action}
+            claim={selected.claim}
+            action={selected.action}
+            error={error}
+            allowModelCorrection={Boolean(
+              data?.schemes.some(
+                (scheme) => scheme.id === selected.claim.scheme_id && scheme.editable,
+              ),
+            )}
             busy={busy}
-            onClose={() => setSelected(undefined)}
-            onSubmit={(amount, note) => {
+            onClose={() => {
+              setSelected(undefined);
+              setError('');
+            }}
+            onSubmit={(amount, note, scope) => {
               void run(async () => {
+                if (selected.action === 'expected') {
+                  await AsusActivationService.correctExpected(
+                    selected.claim.sale_id,
+                    amount,
+                    note,
+                    scope,
+                  );
+                  setMessage('Expected CN updated. Any recorded receipt was checked again.');
+                  setSelected(undefined);
+                  await refresh();
+                  return;
+                }
                 const saved = await AsusActivationService.updateClaim(
-                  selected.sale_id,
-                  selected.status === 'pending' ? 'record' : 'resolve',
-                  amount,
+                  selected.claim.sale_id,
+                  selected.claim.status === 'pending' ? 'record' : 'resolve',
+                  amount ?? '',
                   note,
                 );
                 setMessage(
@@ -645,12 +768,30 @@ export function AsusActivationPage(): JSX.Element {
             }}
           />
         )}
+        {editedScheme && canWrite && (
+          <ActivationSchemeEditor
+            key={editedScheme.id}
+            scheme={editedScheme}
+            onClose={() => setEditedScheme(undefined)}
+            onApplied={(scheme) => {
+              setEditedScheme(undefined);
+              setMessage(
+                'Scheme updated. Matched ' + scheme.matched_sale_count + ' qualifying sales.',
+              );
+              setPage(0);
+              void refresh();
+            }}
+          />
+        )}
         <section className="card activation__panel" aria-label="Monthly activation claims">
           <div className="activation__toolbar">
             <div>
-              <h2>{monthLabel(month)}</h2>
-              <p>Grouped by invoice month · CN amounts exclude GST</p>
-              {monthSchemes && (
+              <h2>{search ? 'Claim search results' : monthLabel(month)}</h2>
+              <p>
+                {search ? 'All invoice months' : 'Grouped by invoice month'} · CN amounts exclude
+                GST
+              </p>
+              {!search && monthSchemes && (
                 <p>
                   {monthSchemes.length
                     ? monthSchemes
@@ -662,11 +803,28 @@ export function AsusActivationPage(): JSX.Element {
             </div>
             <div className="activation__actions">
               <label>
+                <span className="form-label">Search all months</span>
+                <input
+                  type="search"
+                  className="input"
+                  placeholder="Serial / IMEI, invoice, or model"
+                  maxLength={160}
+                  value={searchText}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (!searchText.trim() && value.trim()) setTab('all');
+                    setSearchText(value);
+                    setPage(0);
+                  }}
+                />
+              </label>
+              <label>
                 <span className="form-label">Invoice month</span>
                 <input
                   type="month"
                   className="input"
                   value={month}
+                  disabled={Boolean(searchText.trim())}
                   onChange={(e) => {
                     if (/^\d{4}-\d{2}$/.test(e.target.value)) {
                       setMonth(e.target.value);
@@ -720,25 +878,29 @@ export function AsusActivationPage(): JSX.Element {
               ))}
             </div>
             <div className="activation__actions">
-              <button
-                className="btn btn-secondary btn-sm"
-                type="button"
-                disabled={busy || !data}
-                title={'Download ' + currentTab + ' for ' + monthLabel(month)}
-                onClick={() => void run(() => AsusActivationService.download(month, tab))}
-              >
-                <Download size={15} aria-hidden />
-                Month Excel
-              </button>
+              {!search && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  disabled={busy || !data}
+                  title={'Download ' + currentTab + ' for ' + monthLabel(month)}
+                  onClick={() => void run(() => AsusActivationService.download(month, tab))}
+                >
+                  <Download size={15} aria-hidden />
+                  Month Excel
+                </button>
+              )}
               <button
                 className="btn btn-secondary btn-sm"
                 type="button"
                 disabled={busy || !data}
                 title={'Download ' + currentTab + ' across all months'}
-                onClick={() => void run(() => AsusActivationService.download(undefined, tab))}
+                onClick={() =>
+                  void run(() => AsusActivationService.download(undefined, tab, search))
+                }
               >
                 <Download size={15} aria-hidden />
-                All months Excel
+                {search ? 'Search results Excel' : 'All months Excel'}
               </button>
             </div>
           </div>
@@ -753,20 +915,43 @@ export function AsusActivationPage(): JSX.Element {
               <ClaimTable
                 claims={filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)}
                 canWrite={canWrite}
-                selectClaim={setSelected}
+                selectClaim={(claim) => {
+                  setError('');
+                  setSelected(claim);
+                }}
               />
             ) : (
               <div className="activation__empty">
                 <strong>
-                  No {currentTab.toLowerCase()} for {monthLabel(month)}.
+                  {search
+                    ? 'No matching ' + currentTab.toLowerCase() + '.'
+                    : 'No ' + currentTab.toLowerCase() + ' for ' + monthLabel(month) + '.'}
                 </strong>
-                <p>
-                  Eligible ASUS sales appear after a scheme covering their invoice date is uploaded.
-                </p>
+                {!search && (
+                  <p>
+                    Eligible ASUS sales appear after a scheme covering their invoice date is
+                    uploaded.
+                  </p>
+                )}
               </div>
             ))}
           <Pager page={currentPage} size={filtered.length} onChange={setPage} />
         </section>
+        {data && (
+          <ActivationHistory
+            schemes={data.schemes}
+            activeId={data.active_scheme?.id}
+            onManage={
+              canWrite
+                ? (scheme) => {
+                    setError('');
+                    setMessage('');
+                    setEditedScheme(scheme);
+                  }
+                : undefined
+            }
+          />
+        )}
       </div>
     </PageContainer>
   );

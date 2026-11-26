@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.8.0] - 2026-11-26
+## [2.8.0] - 2026-11-27
 
+- Add workbook pricing columns, claim search, expected CN corrections, and editable six-month scheme history to Asus Activation.
+- Preview workbook rate conflicts and recalculate expected CN and variances while preserving recorded payments.
+- Improve exact-model external Comparison searches and show detailed processor specifications.
 - Add Asus Activation with historical scheme matching, monthly claims, credit-note preview and confirmation, discrepancy resolution, and Excel exports.
 - Reuse the saved PostgreSQL connection on Windows Server upgrades. Show the manual provisioning choice on fresh setup when a connection is needed.
 - Repair and verify the NSSM service environment before starting the upgraded server.

@@ -10,10 +10,14 @@ selection and loading state.
   with pagination. The comparison shows saved configuration and grouped
   spec notes, the saved product image when available, and the stock count.
   The sales price follows the same inventory permission and begins with
-  the current Stock display preference. No Gemini or image discovery runs.
+  the current Stock display preference. Selecting a laptop with incomplete CPU
+  details can start a background lookup. The saved comparison remains visible,
+  and the lookup makes no changes to the product record.
 - **Outside Inventory** accepts the manufacturer and complete model number,
   including its variant. Gemini must return a grounded exact match before
-  the comparison can use the result. Missing component information remains
+  the comparison can use the result. It uses the same search queries and Gemini
+  model fallback as the specification lookup in Add Product. Missing component
+  information remains
   unavailable. An image appears when an official image URL identifies the
   exact variant. Other results display the standard laptop placeholder.
 - **Customer View** opens when two or more laptops have been selected. It
@@ -21,10 +25,16 @@ selection and loading state.
   highlighted. Use **Back to editing** or Escape to return. The presentation
   labels availability and excludes internal notes and research controls.
 
+The comparison displays core and thread counts, core layout, maximum turbo
+speed, and cache in separate rows where available. If counts are missing,
+the server can look up the exact processor through a cited chip manufacturer
+source. If the saved processor only names a family, it first looks up the
+exact laptop model. Available stock and saved images load independently.
+
 External research uses the server's existing Gemini configuration and sends
 only the submitted manufacturer and model identifier. If Google Search
 grounding cannot confirm the variant, staff can edit the identifiers and
-retry. Successful results are reusable for 30 days, including across server
+retry. Successful laptop and processor results are reusable for 30 days, including across server
 restarts. The maintenance scheduler removes expired entries. When maintenance
 is disabled, expired results are still ineligible and are replaced upon a
 successful new lookup.
