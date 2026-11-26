@@ -49,7 +49,7 @@ Deploy WEBSTUDIO IMS Tally synchronization for a retail showroom using Tally ERP
 2. Set **Tally acting as** → **Both** (or **Server**).
 3. Enable **Tally.NET** / port **9000** (default).
 4. Ensure the correct **company** is loaded when Tally is open.
-5. Confirm firewall allows inbound TCP **9000** from the WEBSTUDIO server IP (`infra/windows/configure-firewall.ps1` on server; allow outbound on Tally PC if needed).
+5. On the Tally PC, confirm its Private-profile firewall allows inbound TCP **9000** from the WEBSTUDIO server IP. The IMS server makes the outbound connection.
 
 ---
 

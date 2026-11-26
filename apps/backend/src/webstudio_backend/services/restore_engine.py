@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import time
 from dataclasses import dataclass
@@ -27,10 +26,7 @@ from webstudio_backend.infrastructure.repositories.restore_run_repository import
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
-from webstudio_backend.services.backup_completeness import (
-    DATABASE_DUMP_MODE_DATA_ONLY,
-    truncate_webstudio_data,
-)
+from webstudio_backend.services.backup_assets import restore_managed_files
 from webstudio_backend.services.backup_engine import BackupEngine
 from webstudio_backend.services.backup_format import (
     FORMAT_LEGACY_SQL,
@@ -246,8 +242,17 @@ class RestoreEngine:
         if not integrity_valid and not errors:
             errors.append("Archive integrity check failed.")
 
-        checksum_valid = await self._verify_checksum(filename, archive_path, manifest)
-        if manifest and not checksum_valid:
+        checksum_valid = inspection.checksum_valid
+        if integrity_valid:
+            run = await self._backup_runs.get_by_filename(filename)
+            if run and run.checksum_sha256:
+                checksum_valid = (
+                    self._backup_engine._checksum_file(archive_path) == run.checksum_sha256
+                )  # noqa: SLF001
+                if not checksum_valid:
+                    errors.append("Archive checksum does not match the recorded backup.")
+                    integrity_valid = False
+        if manifest and integrity_valid and not checksum_valid:
             warnings.append("Checksum could not be verified against stored metadata.")
 
         app_version = str(manifest.get("app_version")) if manifest.get("app_version") else None
@@ -262,7 +267,9 @@ class RestoreEngine:
             corruption_detected=corruption_detected,
             integrity_valid=integrity_valid,
         )
-        compatibility = self._compatibility_status(app_version, schema_version, current_schema)
+        compatibility = (
+            "compatible" if compat["app_version_match"] and compat["restore_allowed"] else "warning"
+        )
 
         if not compat["restore_allowed"]:
             errors.append(compat["summary"])
@@ -395,15 +402,12 @@ class RestoreEngine:
             errors.extend(validation.errors)
             if not errors:
                 errors.append("Restore is not allowed for this backup.")
-            raise RepositoryError("Backup validation failed. Resolve errors before restoring.")
+            raise RepositoryError(f"Backup validation failed. {errors[0]}")
 
         from webstudio_backend.services.backup_alert_service import BackupAlertService
 
         alerts = BackupAlertService(self._session)
-        data_only_restore = False
-        if restore_scope == "entire_database":
-            manifest = await self._load_manifest(filename)
-            data_only_restore = manifest.get("database_dump_mode") == DATABASE_DUMP_MODE_DATA_ONLY
+        full_restore = restore_scope == "entire_database"
 
         if create_emergency_backup is None:
             create_emergency_backup = restore_scope == "entire_database" and not rollback
@@ -432,7 +436,7 @@ class RestoreEngine:
                 actor_display_name=actor_display_name,
             )
 
-        if not data_only_restore:
+        if not full_restore:
             await _begin_restore_run()
 
         try:
@@ -443,26 +447,33 @@ class RestoreEngine:
                     creator_user_id=actor_user_id,
                     creator_display_name=actor_display_name or "System",
                 )
+                if emergency.errors or emergency.verification_status == "failed":
+                    raise RepositoryError(
+                        "The emergency backup failed verification. Restore was stopped."
+                    )
                 emergency_filename = emergency.filename
                 warnings.append(f"Emergency backup created: {emergency_filename}")
 
-            if restore_scope == "entire_database":
-                if data_only_restore:
-                    await truncate_webstudio_data(self._session)
-                self._backup_engine.restore_backup(filename)
+            restored_asset_count = 0
+            if full_restore:
+                # Release validation reads before psql takes exclusive table locks.
+                await self._session.commit()
+                restored_asset_count, manifest = self._backup_engine.restore_backup(filename)
                 self._session.expire_all()
-                if data_only_restore:
-                    await _begin_restore_run()
+                # Account IDs belong to different snapshots.
+                actor_user_id = None
+                await _begin_restore_run()
             elif restore_scope in {"settings_only", "company_config"}:
                 await self._restore_settings_from_archive(filename, restore_scope)
+                manifest = {}
             else:
                 raise RepositoryError(f"Restore scope '{restore_scope}' is not yet implemented.")
 
-            manifest = await self._load_manifest(filename)
             verification_status, verification_checks, verify_warnings = await self._verify_restore(
                 filename,
                 restore_scope,
                 expected_manifest=manifest,
+                restored_asset_count=restored_asset_count,
             )
             warnings.extend(verify_warnings)
             duration_ms = int((time.perf_counter() - started) * 1000)
@@ -632,7 +643,7 @@ class RestoreEngine:
         if len(content) > 512 * 1024 * 1024:
             raise RepositoryError("Imported backup exceeds maximum size (512 MB).")
 
-        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         extension = detect_import_extension(content, original_name)
         filename = f"webstudio-import-{stamp}{extension}"
         target = self._backup_root / filename
@@ -665,38 +676,13 @@ class RestoreEngine:
 
     def _resolve_archive_path(self, filename: str) -> Path:
         path = self._backup_root / filename
-        if not is_supported_backup_path(path):
+        if (
+            any(char in filename for char in "/\\:")
+            or path.is_symlink()
+            or not is_supported_backup_path(path)
+        ):
             raise RepositoryError("Invalid backup filename")
         return path
-
-    async def _verify_checksum(
-        self,
-        filename: str,
-        archive_path: Path,
-        manifest: dict[str, Any],
-    ) -> bool:
-        run = await self._backup_runs.get_by_filename(filename)
-        if run and run.checksum_sha256:
-            actual = self._backup_engine._checksum_file(archive_path)  # noqa: SLF001
-            return actual == run.checksum_sha256
-        expected = manifest.get("checksum")
-        if expected and manifest.get("checksum_algorithm") == "sha256":
-            return True
-        return bool(expected)
-
-    def _compatibility_status(
-        self,
-        backup_app_version: str | None,
-        backup_schema_version: str | None,
-        current_schema: str,
-    ) -> str:
-        if backup_schema_version and backup_schema_version != current_schema:
-            if backup_schema_version == "unknown" or current_schema == "unknown":
-                return "warning"
-            return "warning"
-        if backup_app_version and backup_app_version != self._settings.app_version:
-            return "warning"
-        return "compatible"
 
     async def _load_manifest(self, filename: str) -> dict[str, Any]:
         archive_path = self._resolve_archive_path(filename)
@@ -745,15 +731,14 @@ class RestoreEngine:
                     value_type=default_type,
                 )
             if restore_scope == "company_config":
-                company_assets = workspace / "assets" / "company"
-                if company_assets.is_dir():
-                    for logo_file in company_assets.iterdir():
-                        if logo_file.is_file():
-                            target_dir = self._backup_engine._find_repo_root()  # noqa: SLF001
-                            if target_dir is not None:
-                                dest = target_dir / "apps/desktop/public/assets/company"
-                                dest.mkdir(parents=True, exist_ok=True)
-                                shutil.copy2(logo_file, dest / logo_file.name)
+                from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
+
+                with restore_managed_files(
+                    workspace / "assets",
+                    resolve_managed_assets_dir(create=False, settings=self._settings),
+                    directories=("company",),
+                ):
+                    await self._session.commit()
 
     def _settings_keys_for_scope(self, restore_scope: str) -> set[str]:
         if restore_scope == "company_config":
@@ -766,6 +751,7 @@ class RestoreEngine:
         restore_scope: str,
         *,
         expected_manifest: dict[str, Any] | None = None,
+        restored_asset_count: int = 0,
     ) -> tuple[str, list, list[str]]:
         _ = filename
         status, checks, warnings = await verify_post_restore(
@@ -773,6 +759,8 @@ class RestoreEngine:
             self._settings_repo,
             restore_scope=restore_scope,
             expected_manifest=expected_manifest,
+            restored_asset_count=restored_asset_count,
+            app_settings=self._settings,
         )
         return status, checks, warnings
 

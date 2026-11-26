@@ -1,9 +1,10 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  External helper for Enterprise Deployment Engine - stop/start WEBSTUDIO Server during release swap.
+  Stop or start WEBSTUDIO Server, or migrate its installed database.
 .DESCRIPTION
-  Invoked by deployment_platform_adapter when the in-process API cannot restart itself.
+  Apply Windows production releases through WEBSTUDIO Server Setup. The migrate action
+  uses the installed Python runtime and database configuration while the service is stopped.
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -43,17 +44,12 @@ function Start-WebstudioService {
 }
 
 function Invoke-AlembicUpgrade {
-    $alembicIni = Join-Path $InstallRoot "database\migrations\alembic.ini"
-    if (-not (Test-Path $alembicIni)) {
-        throw "Alembic config not found: $alembicIni"
+    $service = Get-Service -Name $WebstudioServiceName -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -ne 'Stopped') {
+        throw "Stop $WebstudioServiceName before migrating the installed database."
     }
-    Push-Location (Split-Path $alembicIni)
-    try {
-        python -m alembic -c $alembicIni upgrade head
-        if ($LASTEXITCODE -ne 0) { throw "Alembic upgrade failed with exit code $LASTEXITCODE" }
-    } finally {
-        Pop-Location
-    }
+    $pythonExe = & "$PSScriptRoot\ensure-python-runtime.ps1" -InstallRoot $InstallRoot
+    & "$PSScriptRoot\run-alembic-upgrade.ps1" -InstallRoot $InstallRoot -PythonExe $pythonExe
 }
 
 switch ($Action) {

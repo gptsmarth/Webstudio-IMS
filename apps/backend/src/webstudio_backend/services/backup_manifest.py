@@ -178,7 +178,7 @@ def validate_manifest_structure(manifest: dict[str, Any]) -> tuple[list[str], li
             warnings.append(f"Manifest missing recommended field: {field}")
     backup_version = str(manifest.get("backup_version", "1.0"))
     if backup_version not in SUPPORTED_BACKUP_VERSIONS:
-        warnings.append(f"Unsupported backup version: {backup_version}")
+        errors.append(f"Unsupported backup version: {backup_version}")
     if manifest.get("encrypted") and not manifest.get("encryption_algorithm"):
         warnings.append("Archive marked encrypted but encryption_algorithm is missing.")
     return warnings, errors
@@ -232,33 +232,37 @@ def compatibility_report(
     app_match = not backup_app or backup_app == current_app_version
     backup_key = _revision_sort_key(backup_schema)
     current_key = _revision_sort_key(current_schema_version)
-    schema_match = not backup_schema or backup_schema == current_schema_version
-    backup_schema_newer = bool(
-        backup_schema and current_schema_version and not schema_match and backup_key > current_key
-    )
-    migration_required = bool(
-        backup_schema and current_schema_version and not schema_match and backup_key < current_key
-    )
+    known_schema = backup_schema not in {"", "unknown"} and current_schema_version not in {
+        "",
+        "unknown",
+    }
+    schema_match = known_schema and backup_schema == current_schema_version
+    backup_schema_newer = bool(known_schema and not schema_match and backup_key > current_key)
+    migration_required = bool(known_schema and not schema_match and backup_key < current_key)
     version_supported = backup_version in SUPPORTED_BACKUP_VERSIONS
-    backward_compatible = version_supported and not backup_schema_newer
-    restore_allowed = (
-        integrity_valid
-        and not corruption_detected
-        and version_supported
-        and not backup_schema_newer
-        and (schema_match or migration_required or not backup_schema)
-    )
+    data_only = manifest.get("database_dump_mode") == DATABASE_DUMP_MODE_DATA_ONLY
+    backward_compatible = version_supported and schema_match and data_only
+    restore_allowed = integrity_valid and not corruption_detected and backward_compatible
     if corruption_detected or not integrity_valid:
         summary = "Restore blocked: archive integrity failure."
     elif not version_supported:
         summary = "Restore blocked: unsupported backup version."
+    elif not data_only:
+        summary = "Restore blocked: Restore Center requires an IMS data-only archive."
+    elif not known_schema:
+        summary = (
+            "Restore blocked: the backup and destination must identify their database revisions."
+        )
     elif backup_schema_newer:
         summary = (
             "Restore blocked: backup was created with a newer database schema. "
             "Upgrade WEBSTUDIO IMS before restoring."
         )
     elif migration_required:
-        summary = "Restore allowed with caution: database migration may be required after restore."
+        summary = (
+            "Restore blocked: recover on an isolated server with the backup's schema revision, "
+            "then upgrade that server."
+        )
     elif not app_match:
         summary = "Restore allowed with caution: application version differs."
     else:

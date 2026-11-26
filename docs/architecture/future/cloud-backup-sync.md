@@ -3,9 +3,10 @@ Title: Future — Google Drive Cloud Backup Sync
 Version: 0.1.0
 Status: Spec — ready to implement
 Owner: WEBSTUDIO IMS Team
-Last Updated: 2026-08-16
+Last Updated: 2026-11-22
 Related Documents:
   - docs/internal/BACKUP_RESTORE.md
+  - docs/milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md
   - docs/milestones/m14/BACKUP_MANUAL.md
   - docs/operations/SERVER_RECOVERY_RUNBOOK.md
 ---
@@ -78,21 +79,21 @@ Additive only — nothing existing changes shape.
 
 ### 3.2 OAuth flow — read this carefully, it's the part most likely to be gotten wrong
 
-The WEBSTUDIO server runs plain HTTP on a LAN IP (e.g. `192.168.29.100:8000`), deliberately, with no public HTTPS endpoint (`TLS_CERT_PATH`/`TLS_KEY_PATH` stay empty by design — see `docs/operations/SERVER_RECOVERY_RUNBOOK.md` Part C5). Google's OAuth redirect URI rules require HTTPS for any "Web application" client type, except for `localhost`/`127.0.0.1`. **You cannot register `http://192.168.29.100:8000/...` as an OAuth redirect URI.** Don't attempt a server-side redirect flow — it will not pass Google's client registration validation.
-
-**Use the standard installed-app "loopback" pattern instead**, run from the **desktop Electron app**, not the server:
+Google redirects to a temporary loopback listener on the computer running
+**WEBSTUDIO Desktop**. This works with either the HTTP or HTTPS address of
+the IMS server because the OAuth callback stays on the Desktop PC. [Google OAuth for Desktop apps](https://developers.google.com/identity/protocols/oauth2/native-app)
 
 1. Register a Google Cloud OAuth Client ID of type **"Desktop app"** (see §7 for the human setup steps — this is a one-time thing the shop owner does in Google Cloud Console, not something the code does).
 2. In the desktop app, "Connect Google Drive" triggers the **Electron main process** (find the entry point — it builds to `dist-electron/main.js`, source is under `apps/desktop/electron/`) to:
    - Start a temporary local HTTP listener on `http://127.0.0.1:<ephemeral port>` (Node's built-in `http` module is enough — no new dependency needed).
    - Open the system browser (`shell.openExternal`) to Google's OAuth consent URL, with `redirect_uri` pointing at that loopback listener and the Drive scope (`https://www.googleapis.com/auth/drive.file` — this scope is enough; it only grants access to files the app itself creates, not the user's whole Drive, which is both more secure and avoids Google's stricter verification requirements for broader scopes).
-   - When Google redirects back to the loopback listener with an authorization code, exchange it for tokens by calling Google's token endpoint directly from the Electron process (using the Desktop client ID + secret — for installed apps, Google does not treat this secret as fully confidential, but still don't commit it in plaintext to the public repo; load it from a config/env value, same pattern as `WEBSTUDIO_GITHUB_TOKEN`).
+   - When Google redirects back to the loopback listener with an authorization code, Electron exchanges it for tokens using the Desktop OAuth client ID and secret from its own process environment. The server uses the same pair when it refreshes Drive access. [Windows OAuth credential setup](#8-webstudio-credential-setup-and-troubleshooting)
    - Send the resulting **refresh token** and the connected account's email up to the backend over the existing authenticated API (new endpoint, see §3.4) — the backend encrypts it immediately using `encrypt_secret()` and never returns it in plaintext again.
    - Close the loopback listener.
 
 This is exactly how the `gh` CLI and `gcloud` CLI do OAuth for installed apps — it's a well-established, Google-supported pattern, and it sidesteps the "no public HTTPS endpoint" constraint entirely because the redirect target is the admin's own machine, not the server.
 
-**OAuth consent screen mode:** set it up in "Testing" mode in Google Cloud Console with the shop's own Google account added as a test user (see §7) — this avoids Google's app-verification review process (unnecessary for a single-account internal tool) while still issuing long-lived refresh tokens to that specific test-user account.
+**OAuth publishing status:** for regular backups, the External OAuth app must be **In production**. Google issues seven-day refresh tokens to External apps in Testing that request Drive access. After publishing, reconnect in WEBSTUDIO to get a new authorization. [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration)
 
 ### 3.3 Upload + retention scheduler
 
@@ -217,32 +218,56 @@ The tag push triggers **Enterprise Release** (`.github/workflows/release.yml`) a
 
 ---
 
-## 7. Setup guide (what the shop owner does, once, by hand)
+## 7. Google Cloud setup
 
-This happens in Google Cloud Console, before the "Connect Google Drive" button in the app will work. None of it requires a paid plan.
+1. Sign in to Google Cloud Console with the account that will manage the OAuth
+   project. Create or select a project such as **WEBSTUDIO Backups**. [Google Cloud Console](https://console.cloud.google.com/)
+2. Open **APIs & Services → Library**, find **Google Drive API**, and enable it.
+3. In **Google Auth Platform**, complete **Branding** with an app name and
+   support contact. For a personal Google account, choose **External** under
+   **Audience**. Under **Data Access**, configure `https://www.googleapis.com/auth/drive.file`
+   for the files used with IMS and `https://www.googleapis.com/auth/userinfo.email`
+   for the connected account label. [Google OAuth scopes](https://developers.google.com/identity/protocols/oauth2/scopes)
+4. Open **Audience → Publish app** and confirm **In production** for regular
+   backups. Complete any requirements Google shows for your project. For an
+   External app in **Testing**, Drive access refresh tokens expire after seven
+   days. If you connected while it was in Testing, disconnect and reconnect
+   through Desktop after publishing. [Google refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration)
+5. Open **Google Auth Platform → Clients → Create client**, select **Desktop
+   app**, and create the client. Reuse an existing Desktop app client if it
+   belongs to this project. Keep its **Client ID** and **Client Secret** private
+   and use that pair in both locations in `8. [Google's Desktop app credential instructions](https://developers.google.com/workspace/guides/create-credentials)
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a new project (any name, e.g. "WEBSTUDIO Backups").
-2. **APIs & Services → Library** → search "Google Drive API" → Enable.
-3. **APIs & Services → OAuth consent screen**:
-   - User type: **External**.
-   - App name: "WEBSTUDIO IMS Backups" (or similar), your own email as support contact.
-   - Scopes: add `.../auth/drive.file` (only files this app creates — not full Drive access).
-   - Publishing status: leave as **Testing**.
-   - Test users: add the Google account (Gmail) you want backups to go to.
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Desktop app**.
-   - Name it, create it, note the **Client ID** and **Client Secret**.
-5. Provide the Client ID/Secret to the WEBSTUDIO Desktop app's configuration (exact mechanism is an implementation detail — e.g. an env value baked into the installer, or a one-time Settings field — the implementing session should pick whichever fits the existing config-distribution pattern, consistent with how `WEBSTUDIO_GITHUB_TOKEN` is handled).
-6. In the WEBSTUDIO desktop app: **Settings → Backup → Storage backend → Google Drive → Connect Google Drive**. A browser window opens, log into the Google account added as a test user in step 3, approve access. It closes automatically once done.
-7. Confirm in Settings: the connected account's email shows, and "Run manual backup" followed by a wait for the next cloud sync cycle (or a manual "Sync now" if you build one) shows a successful upload in the status.
-8. Storage: the free Google account tier includes 15GB, which comfortably fits a rolling 25-30 backups of a typical shop's database + product images. No payment needed unless that's ever exceeded (Google One paid tiers exist if so, but this isn't expected).
-
-**To change the connected Drive account later:** Settings → Backup → **Disconnect**, then **Connect Google Drive** again and sign into the new account. Nothing else needs to change.
+Choose cloud retention using the backup archive sizes and the account's
+available storage. A personal Google account includes up to 15 GB shared
+across Google services. [Google Drive storage limits](https://support.google.com/drive/answer/6374270)
 
 ---
 
-## 8. Open questions for the implementing session to resolve (not blocking, but worth a deliberate choice rather than a default)
+## 8. WEBSTUDIO credential setup and troubleshooting
 
-- Exact storage location for the OAuth Client ID/Secret (env var on server vs. baked into desktop installer config vs. entered once in Settings) — pick whichever matches this project's existing convention most closely once you've looked at how `WEBSTUDIO_GITHUB_TOKEN`/`GEMINI_API_KEY` are actually distributed to installs today.
-- Whether `integration_api_keys` table's existing schema is generic enough to reuse for the refresh token, or a dedicated table is cleaner — read the model first, decide based on what's actually there, don't guess.
-- Exact retry backoff timing once a connection enters `error` state (a reasonable starting point is suggested above — once per hour instead of every 15 minutes — but tune based on what's least annoying without being silent for too long).
+1. **IMS server.** Set `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET`
+   in the installed configuration so the backend loads both from
+   `D:\WEBSTUDIO-IMS\apps\backend\.env`. Server Setup manages that runtime
+   copy from `D:\WEBSTUDIO-IMS\config\env\.env`. Apply the settings and restart
+   **WEBSTUDIO Server**. [Server configuration and restart command](../../milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md#a-configure-the-ims-server)
+2. **Administrator's Windows Desktop PC.** Set the same pair as Windows
+   **Machine** environment variables on the PC where the administrator will
+   click **Connect Google Drive**. This may be the server itself or a separate
+   PC. When both roles share one PC, complete both steps there. Verify each
+   variable shows `PRESENT` without displaying either value. [Elevated PowerShell setup](../../milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md#b-configure-the-windows-pc-running-webstudio-desktop) · [Safe verification](../../milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md#verify-the-windows-variables)
+3. **Authorize and confirm.** Exit all Desktop processes and relaunch. In
+   **Settings → Backup → Backup policy**, choose **Google Drive** and click
+   **Connect Google Drive**. Check the connected account and verify that a
+   manual backup uploads on the next cloud sync cycle. The server service
+   restart only reloads the backend environment. [Desktop restart and authorization steps](../../milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md#restart-desktop-and-connect-google-drive)
+
+If Desktop reports `Google Drive is not configured on this installation` even
+when the backend loads its credentials, check Machine values on the PC running
+Desktop and relaunch it. Keep the client secret out of screenshots, logs, and
+support messages. [OAuth troubleshooting](../../milestones/m12a/PRODUCTION_ENVIRONMENT_CONFIGURATION.md#troubleshoot-google-drive-oauth)
+
+To switch the Drive account, open **Settings → Backup → Google Drive**, select
+**Disconnect**, then select **Connect Google Drive** and sign in to the other
+account. The server stores the resulting encrypted refresh token in the
+cloud backup connection record.

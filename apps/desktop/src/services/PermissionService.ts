@@ -151,6 +151,7 @@ export function canViewDashboardWidget(permissions: string[], widget: string): b
 const ROUTE_PERMISSIONS: Record<string, string> = {
   dashboard: P.dashboard.view,
   stock: P.inventory.view,
+  comparison: P.inventory.view,
   inventory: P.inventory.create,
   purchase: P.purchase.view,
   sales: P.sales.view,

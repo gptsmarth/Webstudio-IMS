@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -44,6 +45,57 @@ async def test_deployment_steps_order() -> None:
     assert DEPLOYMENT_STEPS[-1] == "deployment_completed"
     assert "run_health_checks" in DEPLOYMENT_STEPS
     assert "notify_desktop_clients" in DEPLOYMENT_STEPS
+
+
+@pytest.mark.asyncio
+async def test_windows_production_deploy_requires_server_setup(temp_bundle: Path) -> None:
+    settings = get_settings().model_copy(update={"app_env": "production"})
+    session = MagicMock(spec=AsyncSession)
+    platform = MagicMock(spec=DeploymentPlatformAdapter)
+    platform.is_windows = True
+    engine = EnterpriseDeploymentEngine(session, settings, platform=platform)
+
+    with pytest.raises(ValueError, match="WEBSTUDIO Server Setup.exe"):
+        await engine.execute_deploy(
+            job_id=1,
+            user_id=1,
+            release_version="0.2.0",
+            build_number=2,
+            release_channel=ReleaseChannel.DEVELOPMENT,
+            bundle_dir=str(temp_bundle),
+        )
+
+    assert not session.mock_calls
+    assert not platform.mock_calls
+
+
+def test_alembic_uses_running_python_and_configured_database(
+    temp_bundle: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    migrations_dir = temp_bundle / "migrations"
+    migrations_dir.mkdir()
+    (migrations_dir / "alembic.ini").touch()
+    fixture_url = "postgresql+asyncpg://webstudio_app@127.0.0.1:5434/webstudio_test"
+    settings = get_settings().model_copy(update={"database_url": fixture_url})
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://127.0.0.1/other_fixture")
+
+    with patch(
+        "webstudio_backend.services.deployment_platform_adapter.subprocess.run",
+        return_value=MagicMock(returncode=0, stdout=""),
+    ) as run:
+        DeploymentPlatformAdapter(settings).run_alembic_migrations(temp_bundle)
+
+    assert run.call_args.args[0] == [
+        sys.executable,
+        "-m",
+        "alembic",
+        "-c",
+        str(migrations_dir / "alembic.ini"),
+        "upgrade",
+        "head",
+    ]
+    assert run.call_args.kwargs["env"]["DATABASE_URL"] == fixture_url
+    assert run.call_args.kwargs["cwd"] == migrations_dir
 
 
 @pytest.mark.asyncio

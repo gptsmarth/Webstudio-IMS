@@ -3,7 +3,7 @@ Title: Production Environment Configuration
 Version: 1.0.0
 Status: Final — Awaiting Review
 Owner: WEBSTUDIO IMS Team
-Last Updated: 2026-07-02
+Last Updated: 2026-11-22
 Milestone: 12A
 ---
 
@@ -23,7 +23,7 @@ Milestone: 12A
 ├─────────────────────────────────────────────────────────┤
 │  Database settings table (wizard, Tally, schedulers)    │
 ├─────────────────────────────────────────────────────────┤
-│  Desktop: userData + build-time VITE_* (minimal today)  │
+│  Desktop: userData, OS variables, and Vite defaults     │
 ├─────────────────────────────────────────────────────────┤
 │  Flutter: shared_preferences (API URL, tokens)          │
 └─────────────────────────────────────────────────────────┘
@@ -142,6 +142,112 @@ JSON logging auto-enables when `APP_ENV=production` even if `LOG_JSON` unset.
 
 ---
 
+## Google Drive OAuth for Windows
+
+Use the **same Google OAuth Desktop app client ID and client secret** in both
+locations below. The server uses the pair to refresh access and upload backups.
+WEBSTUDIO Desktop uses it on the administrator's Windows computer for the
+one-time **Connect Google Drive** authorization in the browser. If the
+administrator runs Desktop on the server itself, complete both steps on that PC.
+If Desktop runs on a separate PC, complete the server step on the server and
+the Desktop step on that PC. [Google Cloud project and OAuth client setup](../../architecture/future/cloud-backup-sync.md#7-google-cloud-setup)
+
+### A. Configure the IMS server
+
+On the Windows server, the backend runtime file is
+`D:\WEBSTUDIO-IMS\apps\backend\.env`. It must contain both entries below,
+with the placeholders replaced by the credentials from the same OAuth client.
+
+```ini
+GOOGLE_DRIVE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_DRIVE_CLIENT_SECRET=your_google_oauth_client_secret
+```
+
+For a Server Setup installation, edit the source file
+`D:\WEBSTUDIO-IMS\config\env\.env` as an administrator. Add or update each
+entry once. Set `WEBSTUDIO_CLOUD_BACKUP_SYNC_SCHEDULER=1` if you want automatic
+uploads. Then run this in **Administrator Windows PowerShell** to copy the
+settings into `apps\backend\.env` and `apps\backend\config\env\.env` and
+restart **WEBSTUDIO Server**. Editing the runtime copy alone can be overwritten
+by a later sync or upgrade.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'D:\WEBSTUDIO-IMS\infra\windows\sync-backend-env.ps1' -InstallRoot 'D:\WEBSTUDIO-IMS' -RestartService
+```
+
+For a manually managed backend where `apps\backend\.env` is the active source,
+edit that file directly, then restart the service in **Administrator Windows
+PowerShell**. Use the actual installation path if it differs.
+
+```powershell
+Restart-Service -Name 'WEBSTUDIO Server' -ErrorAction Stop
+```
+
+### B. Configure the Windows PC running WEBSTUDIO Desktop
+
+Open **Windows PowerShell as Administrator** on the PC where the administrator
+will click **Connect Google Drive**. Replace both placeholders with the same
+pair used on the server. The commands write persistent Windows **Machine**
+environment variables, shown as **System variables** in Windows. Keep these
+credentials on the trusted administrator's PC. Never include the secret in
+screenshots, logs, support messages, or Git. Use a private session without
+transcription or saved command history when entering real values, or enter
+them under **Advanced system settings → Environment Variables → System
+variables**. [Microsoft guide to Windows environment variables](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables)
+
+```powershell
+[Environment]::SetEnvironmentVariable("GOOGLE_DRIVE_CLIENT_ID", "YOUR_CLIENT_ID", "Machine")
+[Environment]::SetEnvironmentVariable("GOOGLE_DRIVE_CLIENT_SECRET", "YOUR_CLIENT_SECRET", "Machine")
+```
+
+### Verify the Windows variables
+
+On the Desktop PC, run the following in PowerShell. Both entries should say
+`PRESENT`. The check shows whether a value is set and keeps the values private.
+
+```powershell
+foreach ($Key in @("GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET")) {
+    $Value = [Environment]::GetEnvironmentVariable($Key, "Machine")
+    Write-Output "$Key : $(if ([string]::IsNullOrWhiteSpace($Value)) {'MISSING'} else {'PRESENT'})"
+}
+```
+
+### Restart Desktop and connect Google Drive
+
+1. Completely exit **WEBSTUDIO Desktop**.
+2. Open **Task Manager** and make sure all **WEBSTUDIO Desktop** processes have closed.
+3. Launch Desktop again from the **Start menu** so it inherits the new variables.
+4. Sign in as Main Admin and open **Settings → Backup → Backup policy**.
+   Select **Google Drive** under **Storage backend** and save the policy.
+5. In **Google Drive**, select **Connect Google Drive**. Sign in to the account
+   that should receive backups and complete the browser authorization.
+6. Confirm **Connected account** shows the intended account. Run a manual backup
+   and after the next cloud sync cycle check **Last sync**, **Sync status**, and
+   the **WEBSTUDIO Backups** folder in Drive.
+
+A **WEBSTUDIO Server** service restart refreshes the backend configuration.
+Desktop reads its own Windows process environment at startup and needs its
+own restart, even when both programs run on the same PC.
+
+### Troubleshoot Google Drive OAuth
+
+> Google Drive is not configured on this installation. Set GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET and restart the app.
+
+If the server already loads both credentials and Desktop shows this message,
+check the [Machine variables](#verify-the-windows-variables) on the PC where
+Desktop is running. Set any missing value, close all Desktop processes, and
+relaunch from the Start menu. If both values are present and the message
+persists, sign out of Windows and back in, then reopen Desktop.
+
+If browser authorization completes but connecting or uploading fails, confirm
+privately that the server and Desktop use the **same** OAuth client pair and
+that the server restarted after the edit. If authorization expires after about
+a week, check the OAuth app's publishing status. An External app in **Testing**
+issues seven-day refresh tokens for Drive access. Publish the app and reconnect
+through Desktop for a fresh authorization. [Google's refresh-token rules](https://developers.google.com/identity/protocols/oauth2#expiration)
+
+---
+
 ## Flutter configuration
 
 | Mechanism | Contents |
@@ -176,6 +282,7 @@ Production: dedicated DB user with least privilege; not superuser.
 | Android keystore | CI secret / HSM | Commit |
 | Apple certs | CI secret / keychain | Commit |
 | Tally credentials | DB encrypted fields | Plaintext in logs |
+| Google Drive OAuth client secret | Server's restricted `.env` and administrator's Windows Machine environment | Commit, log, or share in screenshots |
 
 ---
 
@@ -219,3 +326,4 @@ Document in template (audit findings):
 - [RUNTIME_DEPENDENCIES.md](./RUNTIME_DEPENDENCIES.md)
 - [config/env/.env.example](../../../config/env/.env.example)
 - [DEPLOYMENT_GUIDE.md](../../deployment/DEPLOYMENT_GUIDE.md)
+- [Google Drive Cloud Backup Sync](../../architecture/future/cloud-backup-sync.md#7-google-cloud-setup)

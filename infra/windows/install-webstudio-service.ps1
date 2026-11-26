@@ -10,7 +10,8 @@ param(
     [string]$PythonExe = "",
     [string]$EnvFile = "",
     [string]$PostgresServiceName = "",
-    [switch]$SkipMigrations
+    [switch]$SkipMigrations,
+    [switch]$SkipPostgresCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,10 +41,10 @@ if (-not (Test-Path $EnvFile)) {
     throw "Missing env file: $EnvFile"
 }
 
-$resolvedPostgres = & "$PSScriptRoot\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
-
-Write-Step "Ensuring PostgreSQL is available..."
-& "$PSScriptRoot\ensure-postgresql.ps1" -PostgresServiceName $resolvedPostgres
+if (-not $SkipPostgresCheck) {
+    Write-Step "Ensuring PostgreSQL is available..."
+    & "$PSScriptRoot\ensure-postgresql.ps1" -PostgresServiceName $PostgresServiceName
+}
 
 Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $EnvFile
 Sync-BackendEnvFile -InstallRoot $InstallRoot

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webstudio_backend.core.config import Settings
@@ -26,6 +27,7 @@ from webstudio_backend.infrastructure.repositories import (
     LocationRepository,
     ProductModelRepository,
 )
+from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
@@ -33,6 +35,7 @@ from webstudio_backend.infrastructure.repositories.user_repository import UserRe
 from webstudio_backend.services.backup_completeness import (
     collect_business_snapshot,
     compare_restored_business_snapshots,
+    prepare_data_only_restore_sql,
     truncate_webstudio_data,
 )
 from webstudio_backend.services.backup_engine import BackupEngine
@@ -45,6 +48,44 @@ pytestmark = pytest.mark.skipif(
     shutil.which("pg_dump") is None or shutil.which("psql") is None,
     reason="pg_dump and psql are required for disaster recovery integration test",
 )
+
+
+@pytest.mark.asyncio
+async def test_failed_data_only_restore_preserves_existing_rows(
+    db_session: AsyncSession,
+    test_settings: Settings,
+    disaster_recovery_backup_dir: Path,
+) -> None:
+    await BrandRepository(db_session).create("Brand to preserve")
+    await db_session.commit()
+    schema = await db_session.scalar(text("SELECT version_num FROM webstudio.alembic_version"))
+    sequence_before = await db_session.scalar(
+        text("SELECT last_value FROM webstudio.brands_id_seq")
+    )
+    await db_session.commit()
+    payload = prepare_data_only_restore_sql(
+        "COPY webstudio.password_history (id, user_id, password_hash) FROM stdin;\n"
+        "1\t99999\tfixture\n\\.\n"
+        "SELECT pg_catalog.setval('webstudio.brands_id_seq', 750, true);\n"
+    )
+    backup = BackupEngine(db_session, test_settings, backup_dir=disaster_recovery_backup_dir)
+
+    with pytest.raises(RepositoryError, match="fk_password_history_user"):
+        backup._restore_prepared_sql(payload, schema=schema)
+
+    assert await db_session.scalar(text("SELECT name FROM webstudio.brands")) == "Brand to preserve"
+    assert (
+        await db_session.scalar(text("SELECT last_value FROM webstudio.brands_id_seq"))
+        == sequence_before
+    )
+    assert (
+        await db_session.scalar(
+            text(
+                "SELECT condeferrable FROM pg_constraint WHERE conname = 'fk_password_history_user'"
+            )
+        )
+        is False
+    )
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -133,7 +174,19 @@ async def test_disaster_recovery_full_business_state(
     initialized_system,
     disaster_recovery_backup_dir,
 ) -> None:
-    await _seed_representative_business_data(db_session)
+    actor = await _seed_representative_business_data(db_session)
+    role_id = await db_session.scalar(
+        text(
+            "INSERT INTO webstudio.custom_access_roles (name, is_active, created_by_user_id) "
+            "VALUES ('Disaster recovery role', true, :user_id) RETURNING id"
+        ),
+        {"user_id": actor.user_id},
+    )
+    await db_session.execute(
+        text("UPDATE webstudio.users SET custom_access_role_id = :role_id WHERE id = :user_id"),
+        {"role_id": role_id, "user_id": actor.user_id},
+    )
+    await db_session.commit()
     settings_repo = SystemSettingRepository(db_session)
     before = await collect_business_snapshot(db_session, settings_repo)
     assert before.inventory_count >= 1
@@ -175,6 +228,22 @@ async def test_disaster_recovery_full_business_state(
     after = await collect_business_snapshot(db_session, settings_repo)
     mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Business state mismatch after restore: {mismatches}"
+    assert (
+        await db_session.scalar(
+            text("SELECT custom_access_role_id FROM webstudio.users WHERE id = :id"),
+            {"id": actor.user_id},
+        )
+        == role_id
+    )
+    assert (
+        await db_session.scalar(
+            text(
+                "SELECT bool_and(tgenabled = 'O') FROM pg_trigger "
+                "WHERE tgrelid = 'webstudio.users'::regclass AND tgisinternal"
+            )
+        )
+        is True
+    )
 
 
 @pytest.mark.asyncio
@@ -186,6 +255,19 @@ async def test_disaster_recovery_clean_database_restore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await _seed_representative_business_data(db_session)
+    test_settings = test_settings.model_copy(
+        update={"webstudio_data_root": str(disaster_recovery_backup_dir / "IMS Server")}
+    )
+    image = Path(test_settings.webstudio_data_root) / "assets" / "product-images" / "fixture.png"
+    image.parent.mkdir(parents=True)
+    image.write_bytes(b"archived image")
+    await db_session.execute(
+        text(
+            "UPDATE webstudio.product_models SET product_image_url = '/assets/product-images/fixture.png'"
+        )
+    )
+    await db_session.execute(text("SELECT pg_catalog.setval('webstudio.brands_id_seq', 400, true)"))
+    await db_session.commit()
     settings_repo = SystemSettingRepository(db_session)
     before = await collect_business_snapshot(db_session, settings_repo)
 
@@ -213,6 +295,7 @@ async def test_disaster_recovery_clean_database_restore(
 
     await truncate_webstudio_data(db_session)
     db_session.expire_all()
+    image.unlink()
 
     restore_engine = RestoreEngine(
         db_session,
@@ -226,8 +309,18 @@ async def test_disaster_recovery_clean_database_restore(
         confirmed=True,
     )
     assert result.success is True
+    assert image.read_bytes() == b"archived image"
+    assert (
+        next(
+            check
+            for check in result.verification_checks
+            if check["key"] == "managed_image_references"
+        )["status"]
+        == "passed"
+    )
 
     db_session.expire_all()
     after = await collect_business_snapshot(db_session, settings_repo)
     mismatches = compare_restored_business_snapshots(before, after)
     assert mismatches == [], f"Clean-database restore mismatch: {mismatches}"
+    assert (await BrandRepository(db_session).create("After restored sequence")).id == 401

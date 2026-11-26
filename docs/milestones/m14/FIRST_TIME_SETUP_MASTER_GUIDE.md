@@ -389,15 +389,10 @@ Run **PowerShell as Administrator** on **WEBSTUDIO-SERVER**.
 
 ```powershell
 cd D:\WEBSTUDIO-IMS\infra\windows
-.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.29.0/24
+.\configure-firewall.ps1 -Enable -ApiPort 8000
 ```
 
-Creates:
-
-| Rule | Port | Purpose |
-|------|------|---------|
-| WEBSTUDIO IMS API Inbound | TCP **8000** | Desktop + mobile apps |
-| WEBSTUDIO IMS mDNS | UDP **5353** | Auto-discovery on LAN |
+The helper creates or updates **WEBSTUDIO IMS - Office LAN** for TCP **8000** on the Private office connection. If you use automatic discovery, check the separate UDP **5353** rule. [Firewall configuration](FIREWALL_CONFIGURATION_GUIDE.md#2-automated-configuration)
 
 ## B2 — Before install (if testing port early)
 
@@ -548,7 +543,7 @@ powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\finaliz
 ## C6 — Run firewall script
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1" -ApiPort 8000 -Subnet 192.168.29.0/24
+powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1" -Enable -ApiPort 8000
 powershell -ExecutionPolicy Bypass -File "D:\WEBSTUDIO-IMS\infra\windows\validate-production-network.ps1" -ApiPort 8000
 ```
 

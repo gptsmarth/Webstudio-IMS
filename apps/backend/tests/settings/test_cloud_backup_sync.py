@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from google.auth.exceptions import RefreshError
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +25,28 @@ from webstudio_backend.infrastructure.security.secret_encryption import encrypt_
 from webstudio_backend.services import cloud_backup_sync_scheduler as scheduler_module
 from webstudio_backend.services import google_drive_client as drive_client_module
 from webstudio_backend.services.cloud_backup_sync_scheduler import run_cloud_backup_sync
-from webstudio_backend.services.google_drive_client import GoogleDriveClient, GoogleDriveError
+from webstudio_backend.services.google_drive_client import (
+    GoogleDriveAuthError,
+    GoogleDriveClient,
+    GoogleDriveError,
+)
+
+
+@pytest.mark.parametrize(
+    ("oauth_error", "expected"),
+    [
+        ("invalid_grant", GoogleDriveAuthError),
+        ("temporarily_unavailable", GoogleDriveError),
+        ("invalid_client", GoogleDriveError),
+    ],
+)
+def test_drive_refresh_error_classification(oauth_error: str, expected: type[GoogleDriveError]):
+    error = RefreshError("provider response", {"error": oauth_error})
+
+    classified = drive_client_module._classify_http_error(error)  # noqa: SLF001
+
+    assert type(classified) is expected
+    assert "provider response" not in str(classified)
 
 
 @pytest_asyncio.fixture

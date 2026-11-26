@@ -11,6 +11,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+& (Join-Path $PSScriptRoot 'test-server-database-setup.ps1')
+& (Join-Path $PSScriptRoot 'test-server-firewall-setup.ps1')
+& (Join-Path $PSScriptRoot 'test-server-environment-setup.ps1')
+
 if (-not $SkipPayloadStaging) {
     & (Join-Path $PSScriptRoot "stage-server-payload.ps1") -RepoRoot $RepoRoot
 }

@@ -5,18 +5,17 @@
 #>
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",
-    [string]$PostgresServiceName = ""
+    [string]$PostgresServiceName = "",
+    [switch]$ManualDatabase
 )
 
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\..\webstudio-env.ps1"
+. "$PSScriptRoot\postgres-setup.ps1"
 
 function Write-Step($Message) {
     Write-Host "[WEBSTUDIO] $Message"
 }
-
-$resolvedPostgres = & "$PSScriptRoot\..\resolve-postgresql-service.ps1" -PostgresServiceName $PostgresServiceName
-Write-Step "Using PostgreSQL service: $resolvedPostgres"
 
 $dirs = @(
     "$InstallRoot\logs",
@@ -37,9 +36,6 @@ foreach ($dir in $dirs) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 }
-
-Write-Step "Ensuring PostgreSQL..."
-& "$PSScriptRoot\..\ensure-postgresql.ps1" -PostgresServiceName $resolvedPostgres
 
 $pythonExe = & "$PSScriptRoot\..\ensure-python-runtime.ps1" -InstallRoot $InstallRoot
 Write-Step "Using Python: $pythonExe"
@@ -72,6 +68,8 @@ if (-not (Test-Path $envFile)) {
         -replace 'JWT_SECRET=GENERATED_BY_INSTALLER', "JWT_SECRET=$jwt" `
         -replace 'API_PORT=8443', 'API_PORT=8000' `
         -replace '@localhost:5432', '@127.0.0.1:5432' | Set-Content $envFile
+    Set-DotEnvValue -Path $envFile -Key 'WEBSTUDIO_DATA_ROOT' -Value $InstallRoot
+    Set-DotEnvValue -Path $envFile -Key 'WEBSTUDIO_RELEASE_UPDATES_ROOT' -Value (Join-Path $InstallRoot 'Updates')
 }
 
 Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $envFile
@@ -98,20 +96,39 @@ try {
     Pop-Location
 }
 
-Write-Step "Configuring database connection (pgAdmin user webstudio_app)..."
-Ensure-DatabaseUrlConfigured -InstallRoot $InstallRoot -EnvFile $envFile -PromptIfPlaceholder | Out-Null
+Write-Step "Configuring database connection..."
+Ensure-SetupDatabase -EnvFile $envFile -PostgresServiceName $PostgresServiceName -Manual:$ManualDatabase
 Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $envFile
 Sync-BackendEnvFile -InstallRoot $InstallRoot
+
+$existingService = Get-Service -Name 'WEBSTUDIO Server' -ErrorAction SilentlyContinue
+if ($existingService -and $existingService.Status -ne 'Stopped') {
+    Stop-Service -InputObject $existingService
+    $existingService.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+}
 
 Write-Step "Running Alembic migrations..."
 & "$PSScriptRoot\..\run-alembic-upgrade.ps1" -InstallRoot $InstallRoot -PythonExe $pythonExe
 
-Write-Step "Installing WEBSTUDIO Server Windows Service..."
-& "$PSScriptRoot\..\install-webstudio-service.ps1" `
-    -InstallRoot $InstallRoot `
-    -PostgresServiceName $resolvedPostgres `
-    -PythonExe $pythonExe `
-    -NssmPath $nssmPath `
-    -SkipMigrations
+if ($existingService) {
+    Write-Step 'Updating the existing WEBSTUDIO Server service environment...'
+    Apply-NssmServiceEnvironment -InstallRoot $InstallRoot -EnvFile $envFile
+    Start-Service -InputObject $existingService
+} else {
+    Write-Step "Installing WEBSTUDIO Server Windows Service..."
+    & "$PSScriptRoot\..\install-webstudio-service.ps1" `
+        -InstallRoot $InstallRoot -PythonExe $pythonExe -NssmPath $nssmPath -SkipMigrations -SkipPostgresCheck
+}
+
+$settings = Read-DotEnvFile -Path $envFile
+if (-not $settings['TLS_CERT_PATH']) {
+    $apiAddress = $settings['API_HOST']
+    if (-not $apiAddress -or $apiAddress -eq '0.0.0.0') { $apiAddress = '127.0.0.1' }
+    $apiPort = $settings['API_PORT']
+    if (-not $apiPort) { $apiPort = 8000 }
+    Wait-WebstudioReadiness -ApiBaseUrl "http://${apiAddress}:${apiPort}"
+} else {
+    Write-Step 'TLS is configured. Confirm /health/ready using the existing certified HTTPS URL.'
+}
 
 Write-Step "WEBSTUDIO Server post-install complete."

@@ -2,8 +2,8 @@
 ; Compile: scripts/release/build-server-setup.ps1 (stages Python + NSSM automatically)
 
 #define MyAppName "WEBSTUDIO Server"
-#define MyAppVersion "2.6.0"
-#define MyAppBuild 6
+#define MyAppVersion "2.0.8"
+#define MyAppBuild 8
 #define MyAppPublisher "WEBSTUDIO"
 #define MyAppURL "https://webstudio.local"
 #define InstallRoot "D:\WEBSTUDIO-IMS"
@@ -16,6 +16,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={#InstallRoot}
 DefaultGroupName=WEBSTUDIO
 DisableProgramGroupPage=yes
+UsePreviousTasks=no
 OutputBaseFilename=WEBSTUDIO Server Setup
 OutputDir=..\..\..\release\server
 Compression=lzma2
@@ -24,80 +25,102 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
 SetupIconFile=..\..\..\apps\desktop\public\assets\webstudio\icon.ico
-UninstallDisplayIcon={#InstallRoot}\assets\webstudio\icon.ico
+UninstallDisplayIcon={app}\assets\webstudio\icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Tasks]
+Name: "manualdatabase"; Description: "Use a PostgreSQL database I set up myself (skip automatic provisioning)"; Flags: unchecked; Check: NeedsDatabaseSetup
+
 [Files]
-Source: "..\..\..\apps\desktop\public\assets\webstudio\icon.ico"; DestDir: "{#InstallRoot}\assets\webstudio"; Flags: ignoreversion
-Source: "..\..\..\VERSION.json"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
-Source: "..\..\..\VERSION"; DestDir: "{#InstallRoot}"; Flags: ignoreversion
-Source: "..\..\..\apps\backend\pyproject.toml"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion
-Source: "..\..\..\apps\backend\README.md"; DestDir: "{#InstallRoot}\apps\backend"; Flags: ignoreversion
-Source: "..\..\..\apps\backend\src\*"; DestDir: "{#InstallRoot}\apps\backend\src"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
-Source: "..\..\..\database\migrations\*"; DestDir: "{#InstallRoot}\database\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
-Source: "..\..\..\config\env\.env.production.template"; DestDir: "{#InstallRoot}\config\env"; DestName: ".env.production.template"; Flags: ignoreversion
-Source: "..\*.ps1"; DestDir: "{#InstallRoot}\infra\windows"; Flags: ignoreversion
-Source: "server-install-post.ps1"; DestDir: "{#InstallRoot}\infra\windows\server-installer"; Flags: ignoreversion
-Source: "invoke-server-post-install.ps1"; DestDir: "{#InstallRoot}\infra\windows\server-installer"; Flags: ignoreversion
-Source: "..\..\..\release\server\staging\runtime\python\*"; DestDir: "{#InstallRoot}\runtime\python"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\..\..\release\server\staging\tools\nssm\nssm.exe"; DestDir: "{#InstallRoot}\tools\nssm"; Flags: ignoreversion
-Source: "payload\*"; DestDir: "{#InstallRoot}\payload"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\..\..\apps\desktop\public\assets\webstudio\icon.ico"; DestDir: "{app}\assets\webstudio"; Flags: ignoreversion
+Source: "..\..\..\VERSION.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\VERSION"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\apps\backend\pyproject.toml"; DestDir: "{app}\apps\backend"; Flags: ignoreversion
+Source: "..\..\..\apps\backend\README.md"; DestDir: "{app}\apps\backend"; Flags: ignoreversion
+Source: "..\..\..\apps\backend\src\*"; DestDir: "{app}\apps\backend\src"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
+Source: "..\..\..\database\migrations\*"; DestDir: "{app}\database\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "__pycache__\*,*.pyc,.env*,*.key,*.pem"
+Source: "..\..\..\config\env\.env.production.template"; DestDir: "{app}\config\env"; DestName: ".env.production.template"; Flags: ignoreversion
+Source: "..\*.ps1"; DestDir: "{app}\infra\windows"; Flags: ignoreversion
+Source: "server-install-post.ps1"; DestDir: "{app}\infra\windows\server-installer"; Flags: ignoreversion
+Source: "invoke-server-post-install.ps1"; DestDir: "{app}\infra\windows\server-installer"; Flags: ignoreversion
+Source: "postgres-setup.ps1"; DestDir: "{app}\infra\windows\server-installer"; Flags: ignoreversion
+Source: "..\..\..\release\server\staging\runtime\python\*"; DestDir: "{app}\runtime\python"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\..\release\server\staging\tools\nssm\nssm.exe"; DestDir: "{app}\tools\nssm"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\WEBSTUDIO Server Logs"; Filename: "{#InstallRoot}\logs\webstudio-api.log"
+Name: "{group}\WEBSTUDIO Server Logs"; Filename: "{app}\logs\webstudio-api.log"
 Name: "{group}\Uninstall WEBSTUDIO Server"; Filename: "{uninstallexe}"
 
-[Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{#InstallRoot}\infra\windows\server-installer\invoke-server-post-install.ps1"" -InstallRoot ""{#InstallRoot}"""; Flags: waituntilterminated; StatusMsg: "Configuring WEBSTUDIO Server service and database..."
-
 [Code]
-function PostgresServiceFound(): Boolean;
+const
+  WebstudioServiceKey = 'SYSTEM\CurrentControlSet\Services\WEBSTUDIO Server';
+
+function NeedsDatabaseSetup(): Boolean;
 var
-  Version: Integer;
-  ServiceName: String;
+  Lines: TArrayOfString;
+  I, Separator: Integer;
+  Value: String;
 begin
   Result := False;
-  for Version := 14 to 22 do
-  begin
-    ServiceName := 'postgresql-x64-' + IntToStr(Version);
-    if RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\' + ServiceName) then
+  if RegKeyExists(HKLM, WebstudioServiceKey) then
+    exit;
+
+  Result := True;
+  if LoadStringsFromFile(AddBackslash(WizardDirValue) + 'config\env\.env', Lines) then
+    for I := 0 to GetArrayLength(Lines) - 1 do
     begin
-      Result := True;
-      exit;
+      Separator := Pos('=', Lines[I]);
+      if (Separator > 0) and
+        (CompareText(Trim(Copy(Lines[I], 1, Separator - 1)), 'DATABASE_URL') = 0) then
+      begin
+        Value := Trim(Copy(Lines[I], Separator + 1, Length(Lines[I])));
+        Result := (Value = '') or (Value = '""') or (Value = '''''') or
+          (Pos(':CHANGE_ME@', Uppercase(Value)) > 0);
+      end;
     end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  AppDirectory: String;
+  InstallRoot: String;
+  ResultCode: Integer;
+begin
+  Result := '';
+  InstallRoot := ExpandConstant('{app}');
+  if RegKeyExists(HKLM, WebstudioServiceKey) then
+  begin
+    if not RegQueryStringValue(HKLM, WebstudioServiceKey + '\Parameters',
+      'AppDirectory', AppDirectory) or
+      (CompareText(RemoveBackslashUnlessRoot(AppDirectory), InstallRoot + '\apps\backend') <> 0) then
+      Result := 'An existing WEBSTUDIO Server uses a different installation folder. Upgrade it using its current installation folder.';
+    if (Result = '') and not FileExists(InstallRoot + '\config\env\.env') then
+      Result := 'Restore the existing WEBSTUDIO configuration file before upgrading this server.';
+    if (Result = '') and
+      (not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+        '-NoProfile -Command "$ErrorActionPreference = ''Stop''; $service = Get-Service ''WEBSTUDIO Server''; if ($service.Status -ne ''Stopped'') { Stop-Service -InputObject $service; $service.WaitForStatus(''Stopped'', [TimeSpan]::FromSeconds(30)) }"',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0)) then
+      Result := 'Could not stop the existing WEBSTUDIO Server service. Resolve the service issue before retrying.';
   end;
 end;
 
-function InitializeSetup(): Boolean;
+procedure CurStepChanged(CurStep: TSetupStep);
 var
+  Params: String;
   ResultCode: Integer;
 begin
-  if not PostgresServiceFound() then
-  begin
-    if FileExists(ExpandConstant('{src}\payload\postgresql-installer.exe')) then
-    begin
-      if MsgBox('PostgreSQL was not detected. Install PostgreSQL 16 now?', mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        Exec(ExpandConstant('{src}\payload\postgresql-installer.exe'), '--mode unattended --superpassword postgres --servicename postgresql-x64-16', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
-      end
-      else
-      begin
-        MsgBox('PostgreSQL is required. Install PostgreSQL 16+ manually, create the webstudio database, then re-run this installer.', mbError, MB_OK);
-        Result := False;
-        exit;
-      end;
-    end
-    else
-    begin
-      MsgBox('PostgreSQL service (postgresql-x64-*) not found.' + #13#10 + #13#10 +
-        'Install PostgreSQL 16 or newer, create database webstudio and user webstudio_app, then re-run setup.',
-        mbInformation, MB_OK);
-    end;
-  end;
-  Result := True;
+  if CurStep <> ssPostInstall then
+    exit;
+  WizardForm.StatusLabel.Caption := 'Configuring WEBSTUDIO Server service and database...';
+  Params := ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\infra\windows\server-installer\invoke-server-post-install.ps1" -InstallRoot "{app}"');
+  if NeedsDatabaseSetup() and WizardIsTaskSelected('manualdatabase') then
+    Params := Params + ' -ManualDatabase';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Params,
+    '', SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    RaiseException(ExpandConstant('WEBSTUDIO Server setup did not finish. See {app}\logs\install-post.log before rerunning setup.'));
 end;
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{#InstallRoot}\infra\windows\uninstall-webstudio-service.ps1"" -InstallRoot ""{#InstallRoot}"""; Flags: runhidden waituntilterminated
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\infra\windows\uninstall-webstudio-service.ps1"" -InstallRoot ""{app}"""; Flags: runhidden waituntilterminated

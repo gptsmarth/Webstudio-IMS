@@ -21,7 +21,7 @@ Milestone: 12H
 | Network | Same LAN as server |
 | Distribution | TestFlight, Ad Hoc IPA, or Enterprise (when configured) |
 
-**Bundle ID:** `com.webstudio.webstudio_ims`
+**Bundle ID:** `com.webstudio.webstudioIms`
 
 ---
 
@@ -33,8 +33,9 @@ WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST=/absolute/path/to/ExportOptions.plist \
 ```
 
 Requires Xcode, an Apple signing identity, and a provisioning profile.
-CI keeps an unsigned archive for compile validation. See
-[M12C Installer Guide](../m12c/INSTALLER_GUIDE.md).
+CI keeps an unsigned archive for compile validation. Follow the
+[TestFlight setup](../m12c/INSTALLER_GUIDE.md#set-up-testflight-on-a-mac) to
+install a signed build for a pilot.
 
 ---
 

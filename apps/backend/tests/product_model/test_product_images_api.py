@@ -67,7 +67,7 @@ async def test_proxy_serves_webp_with_explicit_content_type(
     # Minimal RIFF/WEBP header is enough for content-type routing tests.
     webp_bytes = b"RIFF\x00\x00\x00\x00WEBP" + (_PNG_BYTES[:64])
     webp_path.write_bytes(webp_bytes)
-    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda **_: [assets])
     monkeypatch.setattr(
         module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
     )
@@ -114,7 +114,7 @@ async def test_proxy_serves_jpg_when_db_points_at_missing_webp(
     assets = tmp_path / "assets"
     (assets / "product-images").mkdir(parents=True)
     (assets / "product-images" / f"{model.id}.jpg").write_bytes(_PNG_BYTES)
-    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda **_: [assets])
     monkeypatch.setattr(
         module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
     )
@@ -148,7 +148,9 @@ async def test_proxy_serves_asset_from_any_search_dir(
     (legacy / "product-images" / "legacy-image.png").write_bytes(_PNG_BYTES)
     primary.mkdir(parents=True)
 
-    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [primary, legacy])
+    monkeypatch.setattr(
+        web_image_scraper, "managed_asset_search_dirs", lambda **_: [primary, legacy]
+    )
     monkeypatch.setattr(
         module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
     )
@@ -195,7 +197,7 @@ async def test_proxy_missing_managed_image_self_heals(
 
     empty_dir = tmp_path / "assets"
     empty_dir.mkdir(parents=True)
-    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [empty_dir])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda **_: [empty_dir])
     monkeypatch.setattr(
         module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
     )
@@ -260,7 +262,7 @@ async def test_proxy_junk_pixel_image_is_deleted_and_healed(
     Image.new("RGB", (8, 8)).save(buffer, format="JPEG")
     junk_file.write_bytes(buffer.getvalue())
 
-    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda: [assets_dir])
+    monkeypatch.setattr(web_image_scraper, "managed_asset_search_dirs", lambda **_: [assets_dir])
     monkeypatch.setattr(
         module, "find_managed_product_image_path", web_image_scraper.find_managed_product_image_path
     )

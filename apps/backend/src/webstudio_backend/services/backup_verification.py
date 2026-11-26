@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from webstudio_backend.core.config import Settings
 from webstudio_backend.infrastructure.database.models.audit_log import AuditLog
 from webstudio_backend.infrastructure.database.models.brand import Brand
 from webstudio_backend.infrastructure.database.models.integration_api_key import IntegrationApiKey
@@ -19,15 +19,17 @@ from webstudio_backend.infrastructure.database.models.notification import Notifi
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.user import User
+from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
 from webstudio_backend.services.backup_completeness import (
     BACKUP_DATABASE_TABLES,
-    count_local_asset_files,
     verify_foreign_key_integrity,
 )
+from webstudio_backend.services.backup_format import detect_backup_format
 from webstudio_backend.services.backup_manifest import validate_manifest_structure
+from webstudio_backend.services.web_image_scraper import find_managed_product_image_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +59,6 @@ class BackupIntegrityResult:
 REQUIRED_TABLES = BACKUP_DATABASE_TABLES
 
 
-def _count_restored_managed_assets() -> int:
-    cwd = Path.cwd()
-    for candidate in (cwd, cwd.parent, cwd.parent.parent, cwd.parent.parent.parent):
-        assets = candidate / "apps/desktop/public/assets"
-        if assets.is_dir():
-            return count_local_asset_files(assets)
-    return 0
-
-
 async def verify_backup_integrity(
     *,
     filename: str,
@@ -82,26 +75,17 @@ async def verify_backup_integrity(
     compression_valid = True
     manifest_valid = True
 
+    checksum_valid = False
     try:
-        with tarfile.open(archive_path, "r:gz") as archive:
-            names = archive.getnames()
-            for required in ("manifest.json", "database.sql"):
-                present = required in names
-                checks.append(
-                    VerificationCheck(
-                        key=f"member_{required}",
-                        name=f"Archive member {required}",
-                        status="passed" if present else "failed",
-                        message="Present" if present else "Missing",
-                    ),
-                )
-                if not present:
-                    errors.append(f"Missing required archive member: {required}")
-                    integrity_valid = False
-            db_info = archive.getmember("database.sql")
-            if db_info.size < 16:
-                warnings.append("Database dump appears unusually small.")
-    except tarfile.TarError as exc:
+        inspection = detect_backup_format(archive_path).inspect(archive_path)
+        integrity_valid = inspection.integrity_valid
+        corruption_detected = inspection.corruption_detected
+        compression_valid = not corruption_detected
+        manifest_valid = inspection.manifest_valid
+        checksum_valid = inspection.checksum_valid
+        warnings.extend(inspection.warnings)
+        errors.extend(inspection.errors)
+    except (RepositoryError, OSError) as exc:
         corruption_detected = True
         integrity_valid = False
         compression_valid = False
@@ -113,7 +97,6 @@ async def verify_backup_integrity(
     if manifest_errors:
         manifest_valid = False
 
-    checksum_valid = False
     if stored_checksum:
         actual = checksum_file_fn(archive_path)
         checksum_valid = actual == stored_checksum
@@ -125,16 +108,17 @@ async def verify_backup_integrity(
                 message="Matches stored checksum" if checksum_valid else "Checksum mismatch",
             ),
         )
-    elif manifest.get("checksum"):
+        if not checksum_valid:
+            errors.append("Archive checksum does not match the recorded backup.")
+    elif checksum_valid:
         checks.append(
             VerificationCheck(
                 key="content_checksum",
                 name="Manifest checksum",
-                status="warning",
-                message="Content checksum present; archive checksum not stored.",
+                status="passed",
+                message="Matches the backup manifest.",
             ),
         )
-        checksum_valid = True
     else:
         warnings.append("No checksum available for verification.")
 
@@ -191,6 +175,8 @@ async def verify_post_restore(
     *,
     restore_scope: str,
     expected_manifest: dict[str, Any] | None = None,
+    restored_asset_count: int = 0,
+    app_settings: Settings | None = None,
 ) -> tuple[str, list[VerificationCheck], list[str]]:
     checks: list[VerificationCheck] = []
     warnings: list[str] = []
@@ -377,17 +363,31 @@ async def verify_post_restore(
         ),
     )
 
-    managed_asset_count = _count_restored_managed_assets()
     checks.append(
         VerificationCheck(
             key="images_folder",
             name="Managed asset files",
             status="passed",
-            message=(
-                f"{managed_asset_count} managed file(s) available"
-                if managed_asset_count
-                else "Product images stored as URLs; managed asset folders ready"
-            ),
+            message=f"{restored_asset_count} archived managed file(s) restored and verified",
+        ),
+    )
+    references: set[str] = set()
+    for column in (ProductModel.product_image_url, Brand.logo_filename):
+        for url in await session.scalars(select(column).where(column.is_not(None)).distinct()):
+            if isinstance(url, str):
+                normalized = url.replace("\\", "/").lstrip("/")
+                if normalized.startswith("assets/"):
+                    references.add(normalized.removeprefix("assets/"))
+    missing_files = sum(
+        find_managed_product_image_path(relative, settings=app_settings) is None
+        for relative in references
+    )
+    checks.append(
+        VerificationCheck(
+            key="managed_image_references",
+            name="Managed image references",
+            status="warning" if missing_files else "passed",
+            message=f"{missing_files} of {len(references)} managed image paths could not be resolved.",
         ),
     )
 

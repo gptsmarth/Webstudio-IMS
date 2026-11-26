@@ -6,6 +6,78 @@ info:
   version: 1.0.0
   description: WEBSTUDIO IMS version 1 API
 paths:
+  /api/v1/comparison/inventory:
+    get:
+      summary: Search available inventory laptops for comparison
+      description: Requires inventory:view. Returns saved model data and saleable stock without enrichment.
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 30, default: 8 }
+      responses:
+        '200':
+          description: Comparison laptops in data and pagination in meta.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ComparisonLaptop' } }
+                  meta: { type: object }
+        '403':
+          description: Inventory view permission required.
+  /api/v1/comparison/inventory/{model_id}/image:
+    get:
+      summary: Read the saved managed image for an in-stock laptop
+      description: Requires inventory:view. A missing image is not researched or repaired.
+      parameters:
+        - name: model_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Managed image.
+        '404':
+          description: No saved image file for the model.
+  /api/v1/comparison/external:
+    post:
+      summary: Research an exact laptop model outside inventory
+      description: Requires inventory:view. Reuses verified Gemini research for 30 days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [brand, model_number]
+              properties:
+                brand: { type: string, minLength: 1, maxLength: 80 }
+                model_number: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '200':
+          description: External model specifications in data.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ComparisonLaptop' }
+        '403':
+          description: Inventory view permission required.
+        '404':
+          description: Reliable specifications for an exact match are unavailable.
+        '422':
+          description: Invalid manufacturer or model number.
+        '503':
+          description: External research is unavailable.
   /api/v1/reports/asus-weekly:
     get:
       summary: Download the ASUS weekly sell-out workbook
@@ -69,6 +141,28 @@ paths:
           description: Sale not found.
 components:
   schemas:
+    ComparisonLaptop:
+      type: object
+      required: [source, brand, model_number, specifications]
+      properties:
+        source: { type: string, enum: [inventory, external] }
+        model_id: { type: [string, 'null'], format: uuid }
+        brand: { type: string }
+        model_number: { type: string }
+        model_name: { type: [string, 'null'] }
+        image_url: { type: [string, 'null'] }
+        managed_image: { type: boolean }
+        available_units: { type: [integer, 'null'] }
+        selling_price: { type: [string, 'null'] }
+        saved_notes: { type: [string, 'null'] }
+        specifications:
+          type: array
+          items:
+            type: object
+            required: [component, detail]
+            properties:
+              component: { type: string }
+              detail: { type: string }
     SaleInvoiceItem:
       type: object
       required: [line_index, product_name, quantity, tracking]

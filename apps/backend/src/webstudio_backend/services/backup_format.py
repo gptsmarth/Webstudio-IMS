@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import re
 import tarfile
 import tempfile
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
+from webstudio_backend.services.backup_completeness import BACKUP_MANAGED_ASSET_DIRS
 from webstudio_backend.services.backup_manifest import validate_manifest_structure
 
 GZIP_MAGIC = b"\x1f\x8b"
@@ -29,6 +33,13 @@ FORMAT_TAR_GZ = "tar_gz"
 FORMAT_WSB = "wsb"
 FORMAT_LEGACY_SQL = "legacy_sql"
 
+CHECKSUM_MEMBERS = (
+    "config/asset-manifest.json",
+    "config/settings-registry.json",
+    "database.sql",
+)
+_WINDOWS_DEVICE = re.compile(r"^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)", re.I)
+
 
 @dataclass(frozen=True, slots=True)
 class BackupArchiveInspection:
@@ -41,6 +52,7 @@ class BackupArchiveInspection:
     manifest_valid: bool = True
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    checksum_valid: bool = False
 
 
 class BackupFormatLoader(ABC):
@@ -111,23 +123,124 @@ def detect_import_extension(content: bytes, original_name: str = "") -> str:
         temp_path.unlink(missing_ok=True)
 
 
-def _payload_offset(path: Path) -> int:
-    header = path.read_bytes()[:WSB_HEADER_LENGTH]
-    if header.startswith(WSB_MAGIC):
-        return WSB_HEADER_LENGTH
-    return 0
+def _read_header(path: Path) -> bytes:
+    with path.open("rb") as raw:
+        return raw.read(WSB_HEADER_LENGTH)
 
 
-def _gzip_payload_bytes(path: Path) -> bytes:
-    offset = _payload_offset(path)
-    return path.read_bytes()[offset:]
+@contextmanager
+def _open_tar_archive(path: Path) -> Iterator[tarfile.TarFile]:
+    with path.open("rb") as raw:
+        header = raw.read(WSB_HEADER_LENGTH)
+        if header.startswith(WSB_MAGIC):
+            source = io.BytesIO(raw.read())
+        else:
+            raw.seek(0)
+            source = raw
+        with tarfile.open(fileobj=source, mode="r:gz") as archive:
+            yield archive
 
 
-def _open_tar_archive(path: Path) -> tarfile.TarFile:
-    payload = _gzip_payload_bytes(path)
-    if not payload.startswith(GZIP_MAGIC):
-        raise tarfile.TarError("Missing gzip payload")
-    return tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz")
+def _validate_members(members: list[tarfile.TarInfo]) -> None:
+    seen: set[str] = set()
+    files: set[str] = set()
+    spellings: dict[str, str] = {}
+    for member in members:
+        parts = member.name.split("/")
+        if not (member.isfile() or member.isdir()) or any(
+            not part
+            or part in {".", ".."}
+            or part.endswith((" ", "."))
+            or _WINDOWS_DEVICE.match(part)
+            or any(ord(char) < 32 or char in '\\:<>|?*"' for char in part)
+            for part in parts
+        ):
+            raise ValueError("Archive contains an unsafe path or an unsupported file type.")
+        for length in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:length])
+            if spellings.setdefault(prefix.casefold(), prefix) != prefix:
+                raise ValueError("Archive contains conflicting paths on Windows.")
+        name = member.name
+        if name in seen:
+            raise ValueError("Archive contains duplicate paths.")
+        seen.add(name)
+        if member.isfile():
+            files.add(name)
+    for name in seen:
+        parts = name.split("/")
+        if any("/".join(parts[:length]) in files for length in range(1, len(parts))):
+            raise ValueError("Archive contains a file where a directory is required.")
+
+
+def _verify_content_checksum(archive: tarfile.TarFile, manifest: dict[str, Any]) -> bool:
+    expected = manifest.get("checksum")
+    if manifest.get("checksum_algorithm") != "sha256" or not expected:
+        if str(manifest.get("backup_version")) == "2.1":
+            raise ValueError("Backup format 2.1 requires a SHA-256 content checksum.")
+        return False
+    if not all(name in archive.getnames() for name in CHECKSUM_MEMBERS):
+        if str(manifest.get("backup_version")) == "2.1":
+            raise ValueError("Archive is missing files required for its content checksum.")
+        return False
+    digest = hashlib.sha256()
+    for name in CHECKSUM_MEMBERS:
+        stream = archive.extractfile(name)
+        if stream is None:
+            raise ValueError("Archive checksum member is not a file.")
+        with stream:
+            digest.update(name.encode("utf-8"))
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    if digest.hexdigest() != expected:
+        raise ValueError("Archive content checksum does not match.")
+    return True
+
+
+def _verify_archived_assets(
+    archive: tarfile.TarFile, members: list[tarfile.TarInfo], manifest: dict[str, Any]
+) -> None:
+    prefixes = tuple(f"assets/{folder}/" for folder in BACKUP_MANAGED_ASSET_DIRS)
+    paths = {
+        member.name
+        for member in members
+        if member.isfile()
+        and member.name.startswith(prefixes)
+        and not member.name.endswith("/.gitkeep")
+    }
+    expected = manifest.get("managed_asset_file_count")
+    if expected is not None and (type(expected) is not int or expected != len(paths)):
+        raise ValueError("The archive asset count does not match its manifest.")
+    if "config/asset-manifest.json" not in archive.getnames():
+        return
+    stream = archive.extractfile("config/asset-manifest.json")
+    if stream is None:
+        raise ValueError("Asset manifest is not a file.")
+    with stream:
+        asset_manifest = json.load(stream)
+    if not isinstance(asset_manifest, dict):
+        raise ValueError("Asset manifest must contain a JSON object.")
+    names = asset_manifest.get("directories")
+    if names is not None:
+        if not isinstance(names, dict) or any(
+            not isinstance(group, list) or not all(isinstance(item, str) for item in group)
+            for group in names.values()
+        ):
+            raise ValueError("Asset manifest contains an invalid file list.")
+        listed = {f"assets/{folder}/{item}" for folder, group in names.items() for item in group}
+        if listed != paths:
+            raise ValueError("Asset manifest file list does not match the archive.")
+    checksums = asset_manifest.get("sha256")
+    if checksums is None:
+        return
+    if not isinstance(checksums, dict) or checksums.keys() != paths:
+        raise ValueError("Asset checksums do not cover the archived files.")
+    for name in sorted(paths, key=lambda item: archive.getmember(item).offset_data):
+        stream = archive.extractfile(name)
+        if stream is None:
+            raise ValueError("A managed asset is not a file.")
+        with stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != checksums[name]:
+                raise ValueError("A managed asset does not match its archive checksum.")
 
 
 def _inspect_tar_archive(
@@ -135,14 +248,20 @@ def _inspect_tar_archive(
     *,
     format_id: str,
     format_label: str,
+    workspace: Path | None = None,
 ) -> BackupArchiveInspection:
     warnings: list[str] = []
     errors: list[str] = []
     manifest: dict[str, Any] = {}
     try:
         with _open_tar_archive(path) as archive:
+            members = archive.getmembers()
+            _validate_members(members)
             names = tuple(archive.getnames())
-            if "manifest.json" not in names or "database.sql" not in names:
+            if any(
+                name not in names or not archive.getmember(name).isfile()
+                for name in ("manifest.json", "database.sql")
+            ):
                 errors.append("Archive is missing required members (manifest.json, database.sql).")
                 return BackupArchiveInspection(
                     format_id=format_id,
@@ -166,8 +285,19 @@ def _inspect_tar_archive(
                     warnings=warnings,
                     errors=["manifest.json could not be read."],
                 )
-            manifest = json.loads(extracted.read().decode("utf-8"))
-    except (tarfile.TarError, json.JSONDecodeError, OSError) as exc:
+            payload = json.loads(extracted.read().decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("Archive manifest must contain a JSON object.")
+            manifest = payload
+            checksum_valid = _verify_content_checksum(archive, manifest)
+            _verify_archived_assets(archive, members, manifest)
+            # Read through the gzip trailer, beyond tar's end marker.
+            while archive.fileobj.read(1024 * 1024):
+                pass
+            manifest_warnings, manifest_errors = validate_manifest_structure(manifest)
+            if workspace is not None and not manifest_errors:
+                archive.extractall(workspace, members=members, filter="data")
+    except (tarfile.TarError, EOFError, ValueError, OSError) as exc:
         return BackupArchiveInspection(
             format_id=format_id,
             format_label=format_label,
@@ -178,7 +308,6 @@ def _inspect_tar_archive(
             errors=[f"Archive integrity check failed: {exc}"],
         )
 
-    manifest_warnings, manifest_errors = validate_manifest_structure(manifest)
     warnings.extend(manifest_warnings)
     errors.extend(manifest_errors)
     integrity_valid = not errors
@@ -192,6 +321,7 @@ def _inspect_tar_archive(
         manifest_valid=not manifest_errors,
         warnings=warnings,
         errors=errors,
+        checksum_valid=checksum_valid,
     )
 
 
@@ -202,12 +332,9 @@ def _extract_tar_archive(
     format_id: str,
     format_label: str,
 ) -> BackupArchiveInspection:
-    inspection = _inspect_tar_archive(path, format_id=format_id, format_label=format_label)
-    if inspection.corruption_detected or not inspection.integrity_valid:
-        return inspection
-    with _open_tar_archive(path) as archive:
-        archive.extractall(workspace, filter="data")
-    return inspection
+    return _inspect_tar_archive(
+        path, format_id=format_id, format_label=format_label, workspace=workspace
+    )
 
 
 class TarGzBackupLoader(BackupFormatLoader):
@@ -216,12 +343,7 @@ class TarGzBackupLoader(BackupFormatLoader):
     preferred_extension = ".tar.gz"
 
     def can_load(self, path: Path) -> bool:
-        if path.suffixes[-2:] == [".tar", ".gz"] or path.suffix == ".gz":
-            payload = path.read_bytes()[:2]
-            return payload == GZIP_MAGIC
-        if path.name.endswith(".tar.gz"):
-            return path.read_bytes()[:2] == GZIP_MAGIC
-        return path.read_bytes()[:2] == GZIP_MAGIC and _payload_offset(path) == 0
+        return _read_header(path).startswith(GZIP_MAGIC)
 
     def inspect(self, path: Path) -> BackupArchiveInspection:
         return _inspect_tar_archive(path, format_id=self.format_id, format_label=self.format_label)
@@ -243,10 +365,10 @@ class WsbBackupLoader(BackupFormatLoader):
     preferred_extension = ".wsb"
 
     def can_load(self, path: Path) -> bool:
-        header = path.read_bytes()[:WSB_HEADER_LENGTH]
+        header = _read_header(path)
         if header.startswith(WSB_MAGIC):
             return True
-        return path.suffix.lower() == ".wsb" and path.read_bytes()[:2] == GZIP_MAGIC
+        return path.suffix.lower() == ".wsb" and header.startswith(GZIP_MAGIC)
 
     def inspect(self, path: Path) -> BackupArchiveInspection:
         return _inspect_tar_archive(path, format_id=self.format_id, format_label=self.format_label)

@@ -84,6 +84,37 @@ pnpm desktop:package:win
 
 ## 2. macOS Desktop — `WEBSTUDIO Desktop.dmg`
 
+### Sign and notarize for office Macs
+
+An Apple Developer Program Account Holder can create a **Developer ID Application**
+certificate in **Xcode → Settings → Accounts → team → Manage Certificates**.
+Use **Keychain Access → My Certificates** to export the certificate and private
+key together as a password-protected `.p12` file. Store the file outside the
+repository. [Apple certificate setup](https://developer.apple.com/help/account/certificates/create-developer-id-certificates)
+
+Create an app-specific password in **Apple Account → Sign-In and Security →
+App-Specific Passwords**. Use the Apple Account authorized for notarization and the
+Team ID shown under **Apple Developer → Membership details**.
+[Apple app-specific passwords](https://support.apple.com/en-us/102654)
+
+For a GitHub build, enter these values under **Settings → Secrets and variables →
+Actions → New repository secret** in the authorized release repository.
+
+| Secret | Value |
+|--------|-------|
+| `MAC_CSC_LINK` | Base64 of the exported `.p12` |
+| `MAC_CSC_KEY_PASSWORD` | Password set during the export |
+| `APPLE_ID` | Apple Account email authorized for notarization |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+
+With GitHub CLI authenticated to the authorized repository, you can send the
+Base64 certificate directly to the secret without printing it.
+
+```bash
+base64 -i "/path/to/WEBSTUDIO-signing.p12" | gh secret set MAC_CSC_LINK --repo OWNER/REPO
+```
+
 ### Build
 
 ```bash
@@ -91,19 +122,17 @@ pnpm install
 pnpm desktop:package:mac
 ```
 
-The packaging script verifies that the universal app contains both the Intel
-(`x86_64`) and Apple silicon (`arm64`) executable slices. GitHub Actions publishes
-`WEBSTUDIO Desktop.dmg` after verifying its Developer ID signature and notarization.
-Set `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`,
-`APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` in the authorized release repository's
-Actions secrets. Locally, electron-builder reads the certificate from `CSC_LINK`
-and its password from `CSC_KEY_PASSWORD`.
+For a local signed build, provide the `.p12` path as `CSC_LINK`, its password
+as `CSC_KEY_PASSWORD`, and the three `APPLE_*` values in the build environment.
+With signing credentials, the script checks the Intel and Apple silicon slices,
+the app signature, the attached notarization ticket, and Gatekeeper acceptance.
+It produces `apps/desktop/release/desktop/WEBSTUDIO Desktop.dmg`. The
+`WEBSTUDIO Desktop-dev.dmg` output is for build validation.
 
-Without signing credentials, the output is `WEBSTUDIO Desktop-dev.dmg` for
-build validation. The packaging script clears the empty certificate settings
-GitHub Actions provides when its signing secrets are absent. For the signed
-installer, drag WEBSTUDIO Desktop to Applications
-and launch it with Gatekeeper enabled.
+Open the signed DMG, drag **WEBSTUDIO Desktop** into **Applications**, and launch
+it with Gatekeeper enabled. From Terminal, you can also confirm the installed copy
+with `spctl --assess --type execute -vv "/Applications/WEBSTUDIO Desktop.app"`.
+[Apple notarization guide](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 
 ---
 
@@ -151,40 +180,72 @@ pnpm release:android
 
 ## 4. iOS — Release / IPA
 
-### Configure signing
+### Set up TestFlight on a Mac
 
-1. Open `apps/mobile_flutter/ios/Runner.xcworkspace` in Xcode  
-2. Set **Team** on Runner target (Signing & Capabilities)  
-3. Or set `DEVELOPMENT_TEAM` in `ios/Flutter/Release.xcconfig`  
+1. Install full Xcode 26 or later with the iOS SDK, Flutter 3.44.4, and CocoaPods.
+   Open Xcode once to finish setup. In **Xcode → Settings → Locations**, select
+   that Xcode version under **Command Line Tools**. Confirm with
+   `xcodebuild -version`, then add your Apple Developer team account in
+   **Xcode → Settings → Accounts**.
+   [Apple upload requirements](https://developer.apple.com/news/upcoming-requirements/)
+2. Register or reuse the explicit iOS App ID `com.webstudio.webstudioIms` on that
+   team. In **App Store Connect → Apps**, create or open the iOS app record using
+   the same ID. [App record setup](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/)
+3. Prepare the corrected checkout from the repository root.
 
-Bundle ID: `com.webstudio.webstudio_ims` (aligned with Android)
+   ```bash
+   bash scripts/release/sync-branding-assets.sh
+   cd apps/mobile_flutter
+   flutter config --no-enable-swift-package-manager
+   flutter pub get --enforce-lockfile
+   dart run flutter_launcher_icons
+   dart run flutter_native_splash:create
+   flutter build ios --config-only --release --no-codesign --no-pub
+   open ios/Runner.xcworkspace
+   ```
 
-### Build a signed IPA
+4. In Xcode, select the **Runner** target, then **Signing & Capabilities**. Enable
+   **Automatically manage signing** and select the Apple Developer team. Keep
+   team-specific settings local. Choose the **Runner** scheme and a generic iOS
+   device destination, then **Product → Archive**.
+5. In **Organizer → Archives**, select the archive and choose **Distribute App →
+   App Store Connect → Upload**. Use a unique build number for each upload. If
+   needed, add `--build-number=<number>` to the Flutter configuration command
+   before archiving.
+   [Apple upload instructions](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/)
+6. After processing in **App Store Connect → TestFlight**, add the build to a
+   tester group and invite users by email. Use internal testing for authorized
+   App Store Connect users. The first build used for external testing goes
+   through TestFlight App Review. On the iPhone, install **TestFlight** from the
+   App Store and accept the invitation. TestFlight builds expire after 90 days.
+   [Apple TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/)
+
+For ongoing private staff distribution, use a **Custom App** assigned to your
+organization through Apple Business.
+[Apple private distribution](https://developer.apple.com/custom-apps/)
+
+### Export a signed IPA for registered devices
 
 ```bash
 WEBSTUDIO_IOS_EXPORT_OPTIONS_PLIST=/absolute/path/to/ExportOptions.plist \
   bash scripts/release/build-ios-ipa.sh
 ```
 
-Use Xcode on a Mac with the signing identity and provisioning for the intended
-distribution method. The output is `release/mobile/WEBSTUDIO IMS.ipa`. An Ad Hoc
-IPA installs on registered devices. For TestFlight, distribute the signed build
-through App Store Connect.
+Use a provisioned Mac with the intended Apple Developer team. The
+`apps/mobile_flutter/ios/ExportOptions.plist` in the repository is for
+registered-device export. The signed output is `release/mobile/WEBSTUDIO IMS.ipa`.
 
-The release script uses CocoaPods. With no export options, GitHub Actions keeps
-an unsigned archive for compile validation. The release bundle contains
-staff-installable assets. On first launch, allow Local Network access and use
-the office server's HTTPS address for the connection test.
+GitHub Actions keeps an unsigned `.xcarchive` for compile validation. For device
+acceptance, join the office Wi-Fi, grant **Local Network** permission, and connect
+to the office server's trusted HTTPS address. Verify login, inventory search,
+barcode scanning with **Camera** permission, and reopening the app on a physical
+iPhone.
 
 ---
 
 ## 5. Windows Server — `WEBSTUDIO Server Setup.exe`
 
 ### Payload preparation
-
-Optional: place PostgreSQL 16 installer at:
-
-`infra/windows/server-installer/payload/postgresql-installer.exe`
 
 **CI / release build** (`build-server-setup.ps1`) automatically stages:
 
@@ -206,20 +267,60 @@ powershell -ExecutionPolicy Bypass -File scripts/release/build-server-setup.ps1
 
 ### Installer actions
 
-1. **Detect PostgreSQL** — any Windows service `postgresql-x64-*` (16, 17, 18, …)
-2. **Install PostgreSQL** — silent install from optional payload if bundled and missing
-3. **Copy bundled runtime** — Python + NSSM (no separate Python install on server)
-4. **Create directories** — `logs`, `backups`, `certs`, `exports`
-5. **Generate production `.env`** — from template + random JWT secret (`API_PORT=8000`)
-6. **Run Alembic** — `alembic upgrade head` (requires existing `webstudio` database)
-7. **Configure WEBSTUDIO Server Service** — NSSM, Automatic Delayed Start
-8. **Configure recovery** — restart on failure
+1. **Fresh setup** — leave the manual database task unchecked. If no PostgreSQL
+   service is found, Setup downloads the pinned PostgreSQL 18 Windows installer
+   from EDB over HTTPS, checks its SHA-256, and prompts for the PostgreSQL
+   administrator password. It installs the engine and database tools, then
+   limits the new instance to loopback. Internet access is required for this download.
+2. **Database setup** — supply the `webstudio_app` password when prompted. If a
+   PostgreSQL service is already installed, Setup asks which instance and port
+   to use when needed. It reuses a working `webstudio` login, or asks for the
+   existing PostgreSQL administrator password to create missing database objects.
+   Password entry is masked. The service uses the application password from
+   the restricted `.env`, while the administrator password is used during setup.
+3. **Manual setup** — provision PostgreSQL 16 or newer, `webstudio`, and
+   `webstudio_app` first. Select **Use a PostgreSQL database I set up myself
+   (skip automatic provisioning)** in Setup. You can also configure
+   `DATABASE_URL` beforehand for an existing/custom PostgreSQL installation.
+4. **Upgrade** — run Setup into the existing server's installation folder. It
+   skips the database choice when the server service or a configured `.env`
+   already exists. It uses the saved database connection and existing Windows
+   service, then applies pending Alembic migrations. If the connection fails,
+   correct it and rerun Setup with the same database. Deployment Center can download packages for
+   Windows production. Apply the verified server installer on the server during
+   a maintenance window after verifying a full backup and saving the live
+   `.env` privately.
+5. **Start and verify** — Setup starts the IMS service and checks the HTTP
+   readiness endpoint. If you already use TLS, verify `/health/ready` at the
+   certified HTTPS URL. Installation problems are reported in `logs\install-post.log`.
+   Restore the chosen backup from the Desktop Restore Center after Setup is ready.
+6. **Office LAN access** — after local setup or recovery is complete, run the
+   bundled `infra\windows\configure-firewall.ps1 -Enable` in Administrator
+   Windows PowerShell. Setup prints the installed command in
+   `logs\install-post.log`. It selects a single eligible Private IPv4
+   connection and uses the configured API port, with TCP 8000 as the default.
+   Use `-ServerIp`, `-Subnet`, and `-ApiPort` to specify the firewall
+   scope. Rerun it when that scope changes. Use `-Disable` to close the
+   managed API rule. Keep the staff connection Private and leave PostgreSQL
+   on loopback. [Office firewall configuration](../m14/FIREWALL_CONFIGURATION_GUIDE.md#2-automated-configuration)
 
-Post-install runs **visibly**; failures are logged to `logs\install-post.log`.
-
-**Administrator prerequisite:** PostgreSQL installed with `webstudio` database and `webstudio_app` user before or after setup (migrations need a reachable database).
+Enterprise Release and Server Release both compile this installer from the
+selected Git commit using `scripts/release/build-server-setup.ps1`.
 
 See [M12B Windows Service Guide](../m12b/WINDOWS_SERVICE_GUIDE.md).
+
+If an upgrade already copied the files and then failed while configuring
+`AppEnvironmentExtra`, rerun the corrected installer in the same folder. To
+recover before a corrected installer is available, replace the installed
+`infra\windows\webstudio-env.ps1` with the corrected script and resume post-install
+in Administrator Windows PowerShell.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'D:\WEBSTUDIO-IMS\infra\windows\server-installer\invoke-server-post-install.ps1' -InstallRoot 'D:\WEBSTUDIO-IMS'
+```
+
+Check `logs\install-post.log` for `Post-install completed successfully.` and
+verify `/health/ready` at the server's configured API URL.
 
 ---
 

@@ -53,7 +53,7 @@ Office Deployment Wizard recommends **DHCP Reservation** when mDNS is active, el
 | 5353 | UDP | LAN | mDNS discovery |
 | 9000 | TCP | Server → Tally laptop | Tally XML |
 
-Run `infra/windows/configure-firewall.ps1` on the server.
+Run `infra/windows/configure-firewall.ps1 -Enable` on the server in Administrator Windows PowerShell. Check the separate UDP 5353 rule if you use mDNS. [Firewall configuration](../m14/FIREWALL_CONFIGURATION_GUIDE.md#2-automated-configuration)
 
 ---
 

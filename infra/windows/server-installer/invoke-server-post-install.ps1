@@ -5,7 +5,8 @@
 #>
 param(
     [string]$InstallRoot = "D:\WEBSTUDIO-IMS",
-    [string]$PostgresServiceName = ""
+    [string]$PostgresServiceName = "",
+    [switch]$ManualDatabase
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,11 +26,9 @@ function Write-Log([string]$Message) {
 try {
     Write-Log "Starting WEBSTUDIO Server post-install..."
     $PostScript = Join-Path $PSScriptRoot "server-install-post.ps1"
-    & $PostScript -InstallRoot $InstallRoot -PostgresServiceName $PostgresServiceName
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        throw "server-install-post.ps1 exited with code $LASTEXITCODE"
-    }
+    & $PostScript -InstallRoot $InstallRoot -PostgresServiceName $PostgresServiceName -ManualDatabase:$ManualDatabase
     Write-Log "Post-install completed successfully."
+    Write-Log ('To enable office LAN access, run in Administrator Windows PowerShell: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}\infra\windows\configure-firewall.ps1" -Enable' -f $InstallRoot)
     exit 0
 } catch {
     $errorText = $_.Exception.Message

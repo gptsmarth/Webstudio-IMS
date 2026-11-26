@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from webstudio_backend.infrastructure.database.models.notification import Notifi
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
 from webstudio_backend.infrastructure.database.models.sale import Sale
 from webstudio_backend.infrastructure.database.models.user import User
+from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
@@ -63,44 +65,189 @@ MANUAL_BACKUP_RECOMMENDATION = (
 DATABASE_DUMP_MODE_DATA_ONLY = "data_only"
 DATABASE_DUMP_MODE_FULL = "full"
 ALEMBIC_VERSION_TABLE = "alembic_version"
+_IDENTIFIER = r'(?:"[a-z_][a-z0-9_]*"|[a-z_][a-z0-9_]*)'
+_DUMP_RELATION = rf'(?:"webstudio"|webstudio)\.{_IDENTIFIER}'
+_DUMP_COPY = re.compile(rf"COPY {_DUMP_RELATION} \({_IDENTIFIER}(?:, {_IDENTIFIER})*\) FROM stdin;")
+_DUMP_SEQUENCE = re.compile(
+    rf"SELECT pg_catalog\.setval\('({_DUMP_RELATION})', (-?\d+), (true|false)\);"
+)
+_DUMP_TRIGGER = re.compile(
+    rf"ALTER TABLE (?:ONLY )?{_DUMP_RELATION} (?:DISABLE|ENABLE) TRIGGER ALL;"
+)
+_DUMP_SETTINGS = {
+    "SET statement_timeout = 0;",
+    "SET lock_timeout = 0;",
+    "SET idle_in_transaction_session_timeout = 0;",
+    "SET client_encoding = 'UTF8';",
+    "SET standard_conforming_strings = on;",
+    "SELECT pg_catalog.set_config('search_path', '', false);",
+    "SET check_function_bodies = false;",
+    "SET xmloption = content;",
+    "SET client_min_messages = warning;",
+    "SET row_security = off;",
+    "SET SESSION AUTHORIZATION DEFAULT;",
+    "SET default_table_access_method = heap;",
+    "SET default_tablespace = '';",
+}
+SNAPSHOT_COUNT_TABLES = {
+    "inventory_count": "inventory_items",
+    "sales_count": "sales",
+    "users_count": "users",
+    "product_models_count": "product_models",
+}
+
+
+def dump_snapshot_counts(path: Path) -> dict[str, int]:
+    """Count rows from the same PostgreSQL snapshot as the SQL in the archive."""
+    fields = {table: field for field, table in SNAPSHOT_COUNT_TABLES.items()}
+    counts: dict[str, int] = {}
+    in_copy = False
+    field = None
+    with path.open(encoding="utf-8") as dump:
+        for line in dump:
+            statement = line.rstrip("\r\n")
+            if in_copy:
+                if statement == r"\.":
+                    in_copy = False
+                elif field is not None:
+                    counts[field] += 1
+            elif _DUMP_COPY.fullmatch(statement):
+                in_copy = True
+                field = fields.get(statement.split()[1].replace('"', "").split(".")[1])
+                if field is not None:
+                    counts[field] = 0
+    return counts if counts.keys() == SNAPSHOT_COUNT_TABLES.keys() else {}
 
 
 def filter_alembic_version_copy_blocks(sql: str) -> str:
     """Drop alembic_version COPY blocks from a data-only pg_dump (schema state is not restored)."""
     lines = sql.splitlines(keepends=True)
     out: list[str] = []
-    skip = False
+    in_copy = False
+    skip_copy = False
     for line in lines:
         stripped = line.strip()
-        if not skip and (
-            "Data for Name: alembic_version" in line
-            or (stripped.startswith("COPY ") and "alembic_version" in stripped)
-        ):
-            skip = True
+        if in_copy:
+            if not skip_copy:
+                out.append(line)
+            in_copy = stripped != r"\."
             continue
-        if skip:
-            if stripped == r"\.":
-                skip = False
+        if stripped.startswith("-- Data for Name: alembic_version;"):
             continue
-        out.append(line)
+        if stripped.startswith("COPY ") and stripped.endswith(" FROM stdin;"):
+            in_copy = True
+            table = stripped.split(maxsplit=2)[1].replace('"', "")
+            skip_copy = table in {"alembic_version", f"{DATABASE_SCHEMA}.alembic_version"}
+        if not in_copy or not skip_copy:
+            out.append(line)
     return "".join(out)
 
 
 def prepare_data_only_restore_sql(sql: str) -> str:
-    """Keep the dump's timeout reset on server versions that support it."""
-    lines = sql.splitlines(keepends=True)
-    for index, line in enumerate(lines):
+    """Accept PostgreSQL data-only COPY dumps for the IMS schema."""
+    dump = filter_alembic_version_copy_blocks(sql)
+    out: list[str] = []
+    in_copy = False
+    for number, line in enumerate(dump.splitlines(keepends=True), 1):
         statement = line.strip()
-        if not statement or statement.startswith(("--", "\\restrict ", "SET ")):
-            if statement == "SET transaction_timeout = 0;":
-                # pg_dump 17+ emits this even when it connects to PostgreSQL 16.
-                lines[index] = (
-                    "SELECT pg_catalog.set_config('transaction_timeout', '0', false) "
-                    "WHERE pg_catalog.current_setting('server_version_num')::integer >= 170000;\n"
-                )
+        if in_copy:
+            in_copy = line.rstrip("\r\n") != r"\."
+        elif _DUMP_COPY.fullmatch(statement):
+            in_copy = True
+        elif _DUMP_TRIGGER.fullmatch(statement) or re.fullmatch(
+            r"\\(?:un)?restrict [a-zA-Z0-9]+", statement
+        ):
             continue
-        break
-    return filter_alembic_version_copy_blocks("".join(lines))
+        elif statement == "SET transaction_timeout = 0;":
+            # pg_dump 17+ emits this even when it connects to PostgreSQL 16.
+            line = (
+                "SELECT pg_catalog.set_config('transaction_timeout', '0', false) "
+                "WHERE pg_catalog.current_setting('server_version_num')::integer >= 170000;\n"
+            )
+        elif sequence := _DUMP_SEQUENCE.fullmatch(statement):
+            name, value, called = sequence.groups()
+            line = f"SELECT pg_temp.restore_sequence('{name}', {value}, {called});\n"
+        elif statement not in _DUMP_SETTINGS and statement and not statement.startswith("--"):
+            raise RepositoryError(f"Unsupported command on line {number} of the data-only dump.")
+        out.append(line)
+    if in_copy:
+        raise RepositoryError("The backup contains an incomplete PostgreSQL COPY block.")
+    return "".join(out)
+
+
+# Only the owner can change FK timing. Keep the checks enabled and validate all
+# pending rows before restoring the original constraints and committing.
+DATA_ONLY_RESTORE_START = """
+SET LOCAL search_path = pg_catalog;
+SET LOCAL lock_timeout = '15s';
+CREATE TEMP TABLE restore_immediate_fks ON COMMIT DROP AS
+SELECT n.nspname AS schema_name, t.relname AS table_name, c.conname AS constraint_name
+FROM pg_constraint c
+JOIN pg_class t ON t.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+WHERE n.nspname = 'webstudio' AND c.contype = 'f' AND NOT c.condeferrable
+  AND c.conparentid = 0;
+
+CREATE FUNCTION pg_temp.restore_sequence(sequence_name regclass, seq_value bigint, called boolean)
+RETURNS void LANGUAGE plpgsql AS $sequence$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_depend d
+        JOIN pg_class t ON t.oid = d.refobjid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE d.classid = 'pg_class'::regclass AND d.objid = sequence_name
+          AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')
+          AND n.nspname = 'webstudio' AND t.relname <> 'alembic_version'
+          AND t.relkind IN ('r', 'p')
+    ) THEN
+        RAISE EXCEPTION 'Backup sequence is not owned by an IMS table';
+    END IF;
+    PERFORM pg_catalog.setval(sequence_name, seq_value, called);
+END
+$sequence$;
+
+DO $restore$
+DECLARE
+    target_tables text;
+    fk record;
+BEGIN
+    IF current_setting('webstudio.restore_revision', true) IS NOT NULL AND NOT EXISTS (
+        SELECT FROM webstudio.alembic_version
+        WHERE version_num = current_setting('webstudio.restore_revision')
+    ) THEN
+        RAISE EXCEPTION 'The destination migration revision changed; revalidate the backup';
+    END IF;
+    SELECT string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename)
+    INTO target_tables
+    FROM pg_tables
+    WHERE schemaname = 'webstudio' AND tablename <> 'alembic_version';
+    IF target_tables IS NULL THEN
+        RAISE EXCEPTION 'Run the WEBSTUDIO database migrations before restoring data';
+    END IF;
+    EXECUTE 'TRUNCATE TABLE ' || target_tables || ' RESTART IDENTITY';
+    FOR fk IN SELECT * FROM pg_temp.restore_immediate_fks ORDER BY table_name, constraint_name LOOP
+        EXECUTE format('ALTER TABLE %I.%I ALTER CONSTRAINT %I DEFERRABLE INITIALLY IMMEDIATE',
+                       fk.schema_name, fk.table_name, fk.constraint_name);
+    END LOOP;
+END
+$restore$;
+SET CONSTRAINTS ALL DEFERRED;
+"""
+
+
+DATA_ONLY_RESTORE_FINISH = """
+SET CONSTRAINTS ALL IMMEDIATE;
+DO $restore$
+DECLARE
+    fk record;
+BEGIN
+    FOR fk IN SELECT * FROM pg_temp.restore_immediate_fks ORDER BY table_name, constraint_name LOOP
+        EXECUTE format('ALTER TABLE %I.%I ALTER CONSTRAINT %I NOT DEFERRABLE',
+                       fk.schema_name, fk.table_name, fk.constraint_name);
+    END LOOP;
+END
+$restore$;
+"""
 
 
 def use_real_database_dump() -> bool:

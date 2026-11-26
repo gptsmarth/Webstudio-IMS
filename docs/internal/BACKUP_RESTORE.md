@@ -18,9 +18,32 @@ config/settings-registry.json
 config/asset-manifest.json
 ```
 
-The PostgreSQL dump uses `--schema=webstudio --data-only` so archives restore onto a migrated schema (portable disaster recovery). For data-only restores, IMS applies the `transaction_timeout` reset emitted by PostgreSQL 17 and later clients only when the destination supports it. Legacy archives without `database_dump_mode` are treated as full dumps.
+The PostgreSQL dump uses `--schema=webstudio --data-only`. Restore Center
+accepts supported data-only archives with the same Alembic revision as the
+destination. An app-version difference generates a warning. Use an isolated
+installation at the matching revision to recover an older schema, then upgrade
+it. A trusted legacy SQL or full dump requires separate administrator recovery.
 
-Legacy `.sql` dumps remain supported for restore but lack manifest metadata.
+Restore Center verifies archive integrity and recalculates the format 2.1
+content checksum. New backups include a SHA-256 checksum for each managed file.
+Use archives from a trusted source because checksums verify integrity without
+establishing who created the backup.
+
+The ordinary IMS database owner loads a restricted set of data-only `pg_dump`
+statements in one transaction. It checks the destination revision on that
+connection, preserves migration state, keeps foreign-key triggers enabled,
+defers foreign-key checks for loading, and restores the original constraint
+timing. Owned sequence positions are restored transactionally. For new backups,
+the inventory, sales, user and product model counts come from the dump and are
+checked before commit. The PostgreSQL 17+ timeout line remains compatible with
+older destination servers.
+
+The server stages and verifies files under the configured `WEBSTUDIO_DATA_ROOT/assets`.
+It merges brand logos, product images, company assets and uploads into existing
+or newly created folders. On a failed database load it reverts the files changed
+by the attempt. PostgreSQL and the filesystem have separate commit mechanisms.
+After an interrupted recovery, keep the service closed to staff, inspect the
+verification result, and use the emergency backup to recover if needed.
 
 ### Manifest (`manifest.json`)
 
@@ -98,7 +121,7 @@ Checks database connectivity, required tables, settings, users, inventory/sales/
 
 ## Rollback process
 
-1. Every full-database restore creates an emergency backup (`trigger_type=emergency`).
+1. Restore Center creates and verifies an emergency backup before a full-database restore (`trigger_type=emergency`).
 2. Emergency filename stored on `restore_runs.emergency_backup_filename`.
 3. If post-restore verification fails, API returns `rollback_recommended: true`.
 4. Rollback reuses `execute_restore` against the emergency archive with `create_emergency_backup=False`.

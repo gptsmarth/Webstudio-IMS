@@ -26,37 +26,45 @@ WEBSTUDIO IMS runs on a **dedicated Windows 11 Pro server PC** on the store LAN.
 | **5432** | TCP | **Localhost only** | `127.0.0.1` | PostgreSQL — **never** expose to LAN |
 | **9000** | TCP | **Outbound** server → Tally laptop | N/A on server inbound | Tally XML (billing PC) |
 
-Default API port is **8000** (see `WEBSTUDIO_API_PORT` in production `.env`). If you use a custom port, pass `-ApiPort` to both scripts below.
+The helper reads `API_PORT` from the installation's `config\env\.env`. The default is TCP `8000`.
 
 ---
 
-## 2. Automated configuration (recommended)
+## 2. Automated configuration
 
-Run **elevated PowerShell** on the server:
+After verifying the service locally, run the bundled helper in **Administrator Windows PowerShell**. Adjust the installation path if needed.
 
 ```powershell
-cd C:\WEBSTUDIO\ims\infra\windows
-.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.1.0/24
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1' -Enable
 ```
 
-This creates or refreshes:
+The helper detects a single eligible Private IPv4 address and its connected subnet. For an explicit selection, use the actual server IP, office CIDR, and app port. These values are examples.
 
-| Rule display name | Action |
-|-------------------|--------|
-| `WEBSTUDIO IMS API Inbound` | Allow TCP inbound on API port from `-Subnet` |
-| `WEBSTUDIO IMS mDNS` | Allow UDP 5353 inbound from `-Subnet` |
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1' -Enable -ServerIp '10.20.30.10' -Subnet '10.20.30.0/24' -ApiPort 8000
+```
 
-**Subnet:** Use your store LAN CIDR (e.g. `192.168.1.0/24`). Restrict to the office subnet — do not use `Any` in production.
+The helper creates or updates **WEBSTUDIO IMS - Office LAN** on the selected interface. It scopes inbound TCP to the local IPv4 address and the connected private subnet or a narrower subnet on that connection. Edge traversal is blocked. Keep PostgreSQL on loopback and leave router port forwarding off. Configure optional mDNS discovery separately for UDP `5353` on the trusted staff subnet.
+
+If the active office profile is Public, open **Windows Settings → Network & internet**, select the trusted office connection, and set **Network profile type → Private**. Then rerun the helper. Keep untrusted networks Public. [Microsoft network profile settings](https://support.microsoft.com/en-us/windows/experience/connectivity-networking/essential-network-settings-and-tasks-in-windows#make-a-network-public-or-private)
+
+Run this from **Administrator Windows PowerShell** to disable the managed API rule.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'D:\WEBSTUDIO-IMS\infra\windows\configure-firewall.ps1' -Disable
+```
+
+When changing the app port, update `API_PORT`, apply the server configuration, and rerun the helper. When changing a DHCP reservation, verify the server received the new IP before rerunning the helper.
 
 ---
 
-## 3. Verify rules
+## 3. Verify the rule
 
 ```powershell
-Get-NetFirewallRule -DisplayName "WEBSTUDIO IMS*" | Format-Table DisplayName, Enabled, Direction, Action
+Get-NetFirewallRule -DisplayName 'WEBSTUDIO IMS - Office LAN' | Format-Table DisplayName, Enabled, Profile, Direction, Action
 ```
 
-Expected: two **Enabled** **Allow** **Inbound** rules.
+Expect an enabled **Private**, **Inbound**, **Allow** rule. From a staff laptop, check `/health/ready` using the server's LAN address and verify TCP `5432` is inaccessible. [Microsoft firewall rule parameters](https://learn.microsoft.com/en-us/powershell/module/netsecurity/set-netfirewallrule)
 
 ---
 
@@ -100,7 +108,7 @@ If PowerShell execution policy blocks scripts:
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| API works on server browser (`localhost`) but not from desktop | Firewall or API bound to `127.0.0.1` only | Run `configure-firewall.ps1`; set `WEBSTUDIO_API_HOST=0.0.0.0` / `API_HOST=0.0.0.0` |
+| API works on server browser (`localhost`) but not from desktop | Firewall or API bound to `127.0.0.1` only | Check `API_HOST` and run `configure-firewall.ps1 -Enable` |
 | Desktop works on server PC but fails on Wi‑Fi laptops after restart | Client still using `http://127.0.0.1:8000` (localhost is the laptop itself) | Open **Connection** setup and save `http://<server-lan-ip>:8000` (e.g. `http://192.168.29.100:8000`). Restart desktop — URL must persist. Startup also auto-discovers via mDNS + LAN probes. |
 | Mobile / desktop should find server without typing IP | Discovery only ran on Connection screen before | Startup bootstrap + reconnect now auto-fetch via mDNS, saved servers, and shop LAN candidates (`192.168.29.100`, etc.) |
 | Mobile shows `Startup failed: type '_Map<dynamic, dynamic>'…` | Hive cache typed-map cast bug on session restore | Install mobile build that opens Hive boxes as untyped and uses safe JSON map coercion |
@@ -123,6 +131,6 @@ If PowerShell execution policy blocks scripts:
 
 | File | Purpose |
 |------|---------|
-| `infra/windows/configure-firewall.ps1` | Create inbound API + mDNS rules |
+| `infra/windows/configure-firewall.ps1` | Manage the scoped inbound API rule |
 | `infra/windows/validate-production-network.ps1` | Post-config LAN probe script |
 | `docs/milestones/m12h/NETWORKING_GUIDE.md` | Full networking topology |

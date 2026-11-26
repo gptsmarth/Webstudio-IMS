@@ -145,10 +145,13 @@ async def run_cloud_backup_sync(session: AsyncSession, settings: Settings) -> No
             status="completed",
             interval_seconds=CLOUD_SYNC_POLL_INTERVAL_SECONDS,
         )
-    except GoogleDriveAuthError as exc:
-        detail = "Google Drive access was revoked or expired. Reconnect in Settings → Backup."
+    except GoogleDriveAuthError:
+        detail = (
+            "Google Drive authorization expired or was revoked. If your Google OAuth app is "
+            "in Testing, publish it to Production, then reconnect in Settings → Backup."
+        )
         await connections.set_status(connection, status="error", error=detail)
-        await connections.record_sync_result(connection, status="error", error=str(exc))
+        await connections.record_sync_result(connection, status="error", error=detail)
         await alerts.notify_cloud_reconnect_needed(detail=detail)
         await runtime.record_run(
             "cloud_backup_sync",

@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import httpx
 from loguru import logger
 
+from webstudio_backend.core.config import Settings
 from webstudio_backend.services.product_image_service import (
     _content_looks_like_image,
     _dedupe_urls,
@@ -597,7 +598,9 @@ def find_public_assets_dir() -> Path | None:
     return None
 
 
-def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
+def resolve_managed_assets_dir(
+    *, create: bool = True, settings: Settings | None = None
+) -> Path | None:
     """Resolve the writable root directory for server-managed assets.
 
     Managed uploads (product images, brand logos) are served to clients under
@@ -617,7 +620,7 @@ def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
     """
     from webstudio_backend.core.config import get_settings
 
-    data_root = get_settings().webstudio_data_root.strip().strip('"').strip("'")
+    data_root = (settings or get_settings()).webstudio_data_root.strip().strip('"').strip("'")
     if data_root:
         base = Path(data_root).expanduser() / "assets"
         if create:
@@ -629,7 +632,7 @@ def resolve_managed_assets_dir(*, create: bool = True) -> Path | None:
     return find_public_assets_dir()
 
 
-def managed_asset_search_dirs() -> list[Path]:
+def managed_asset_search_dirs(*, settings: Settings | None = None) -> list[Path]:
     """Every on-disk location that may hold managed ``/assets/...`` files.
 
     Writes always go to :func:`resolve_managed_assets_dir`, but historical
@@ -638,7 +641,7 @@ def managed_asset_search_dirs() -> list[Path]:
     working after configuration changes.
     """
     dirs: list[Path] = []
-    primary = resolve_managed_assets_dir(create=False)
+    primary = resolve_managed_assets_dir(create=False, settings=settings)
     if primary is not None:
         try:
             if primary.is_dir():
@@ -658,7 +661,9 @@ def managed_asset_search_dirs() -> list[Path]:
 _ALT_PRODUCT_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
 
 
-def find_managed_product_image_path(relative: str) -> Path | None:
+def find_managed_product_image_path(
+    relative: str, *, settings: Settings | None = None
+) -> Path | None:
     """Locate a managed asset, tolerating Windows path separators and extension drift.
 
     Background scrapers historically saved ``{model_id}.webp`` while some clients
@@ -674,7 +679,7 @@ def find_managed_product_image_path(relative: str) -> Path | None:
             if alt not in candidates:
                 candidates.append(alt)
 
-    for assets_root in managed_asset_search_dirs():
+    for assets_root in managed_asset_search_dirs(settings=settings):
         try:
             root = assets_root.resolve()
         except OSError:

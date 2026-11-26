@@ -18,6 +18,9 @@ from webstudio_backend.infrastructure.database.models.enterprise_rollback_run im
 )
 from webstudio_backend.infrastructure.database.models.integration_api_key import IntegrationApiKey
 from webstudio_backend.infrastructure.database.models.inventory_item import InventoryItem
+from webstudio_backend.infrastructure.database.models.laptop_comparison_cache import (
+    LaptopComparisonCache,
+)
 from webstudio_backend.infrastructure.database.models.location import Location
 from webstudio_backend.infrastructure.database.models.notification import Notification
 from webstudio_backend.infrastructure.database.models.product_model import ProductModel
@@ -68,6 +71,7 @@ __all__ = [
     "EnterpriseRollbackRun",
     "IntegrationApiKey",
     "InventoryItem",
+    "LaptopComparisonCache",
     "Location",
     "Notification",
     "ProductModel",

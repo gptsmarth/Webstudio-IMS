@@ -22,6 +22,7 @@ from webstudio_backend.api.routers import (
     brands,
     client_deployment,
     client_updates,
+    comparison,
     dashboard,
     deployment,
     deployment_center,
@@ -382,6 +383,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(product_models.router)
     app.include_router(product_images.router)
     app.include_router(inventory.router)
+    app.include_router(comparison.router)
     app.include_router(purchase.router)
     app.include_router(sales.router)
     app.include_router(dashboard.router)

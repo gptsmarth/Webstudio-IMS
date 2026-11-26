@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,12 @@ RELEASE_SYNC_SCHEDULER_KEY = "github_release_sync"
 MANIFEST_ASSET_NAMES = {"version-manifest.json"}
 CHECKSUM_ASSET_NAMES = {"checksums.sha256"}
 NOTES_ASSET_NAMES = {"RELEASE_NOTES.md"}
+
+
+class GitHubReleaseRateLimited(ValueError):
+    def __init__(self, retry_at: datetime) -> None:
+        self.retry_at = retry_at
+        super().__init__(f"GitHub limited release checks. Try again after {retry_at.isoformat()}.")
 
 
 async def ensure_github_release_sync_enabled(
@@ -98,26 +105,93 @@ class GitHubReleaseSyncService:
             return configured
         return (await self._settings_repo.get_string("github_release_repo") or "").strip()
 
+    async def list_github_releases(self, repo: str) -> list[GitHubRelease]:
+        runtime = SchedulerRuntimeService(self._session)
+        state = await runtime.get_state(RELEASE_SYNC_SCHEDULER_KEY)
+        cooldown = (state.state_json or {}).get("rate_limit_until")
+        previous_count = int((state.state_json or {}).get("rate_limit_failures") or 0)
+        now = datetime.now(UTC)
+        if cooldown and datetime.fromisoformat(cooldown) > now:
+            raise GitHubReleaseRateLimited(datetime.fromisoformat(cooldown))
+
+        client = GitHubReleaseClient(token=self._settings.github_token)
+        try:
+            releases = await client.list_releases(repo)
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+            remaining = response.headers.get("x-ratelimit-remaining")
+            retry_after = response.headers.get("retry-after", "")
+            reset = response.headers.get("x-ratelimit-reset", "")
+            if response.status_code != 429 and not (
+                response.status_code == 403
+                and (
+                    remaining == "0"
+                    or retry_after
+                    or "rate limit" in response.text.lower()
+                    or "rate limit" in response.reason_phrase.lower()
+                )
+            ):
+                raise
+            now = datetime.now(UTC)
+            attempt = previous_count + 1
+            fallback = min(60 * 2 ** min(previous_count, 6), 3600)
+            retry_at = now + timedelta(seconds=int(retry_after)) if retry_after.isdecimal() else now
+            if remaining == "0" and reset.isdecimal():
+                retry_at = max(retry_at, datetime.fromtimestamp(int(reset), UTC))
+            if retry_at <= now:
+                retry_at = now + timedelta(seconds=fallback)
+            await runtime.record_run(
+                RELEASE_SYNC_SCHEDULER_KEY,
+                status="rate_limited",
+                interval_seconds=self._settings.release_sync_interval_seconds,
+                state_patch={
+                    "rate_limit_until": retry_at.isoformat(),
+                    "rate_limit_failures": attempt,
+                },
+                next_run_at=retry_at,
+            )
+            await self._session.commit()
+            logger.warning(
+                "github.release.rate_limited",
+                status_code=response.status_code,
+                retry_at=retry_at.isoformat(),
+            )
+            raise GitHubReleaseRateLimited(retry_at) from None
+        if cooldown:
+            await runtime.persist_checkpoint(
+                RELEASE_SYNC_SCHEDULER_KEY,
+                state_patch={"rate_limit_until": None, "rate_limit_failures": 0},
+            )
+        return releases
+
     async def run_sync_cycle(self, *, force: bool = False) -> dict[str, Any]:
         if not force and not await self.is_enabled():
             return {"status": "disabled"}
 
         repo = await self.resolve_github_repo()
-        client = GitHubReleaseClient(token=self._settings.github_token)
         channel = self._enterprise.resolve_channel()
 
-        await self._download_repo.mark_stale_downloading_failed()
         discovered = 0
         queued = 0
         completed = 0
         failed = 0
 
         try:
-            releases = await client.list_releases(repo)
-        except Exception as exc:
-            logger.warning("github.release.list_failed", error=str(exc))
-            return {"status": "failed", "detail": str(exc)}
+            releases = await self.list_github_releases(repo)
+        except GitHubReleaseRateLimited as exc:
+            return {"status": "rate_limited", "detail": str(exc)}
+        except Exception:
+            detail = "Could not check GitHub releases. Verify the server's repository and access."
+            logger.warning("github.release.list_failed")
+            await SchedulerRuntimeService(self._session).record_run(
+                RELEASE_SYNC_SCHEDULER_KEY,
+                status="failed",
+                interval_seconds=self._settings.release_sync_interval_seconds,
+                state_patch={"detail": detail},
+            )
+            return {"status": "failed", "detail": detail}
 
+        await self._download_repo.mark_stale_downloading_failed()
         for release in releases:
             if release.draft:
                 continue

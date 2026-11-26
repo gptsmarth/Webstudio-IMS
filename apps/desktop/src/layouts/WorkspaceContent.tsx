@@ -7,6 +7,7 @@ import {
 import { useAuthStore, useNavigationStore } from '../store';
 import {
   AsusWeeklyReportPage,
+  ComparisonPage,
   AuditPage,
   CataloguePage,
   DashboardPage,
@@ -23,6 +24,7 @@ import {
 const ROUTE_COMPONENTS: Record<WorkspaceRoute, () => JSX.Element> = {
   dashboard: DashboardPage,
   stock: StockPage,
+  comparison: ComparisonPage,
   inventory: InventoryPage,
   purchase: PurchasePage,
   sales: SalesPage,

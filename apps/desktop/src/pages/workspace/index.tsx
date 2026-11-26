@@ -6,6 +6,7 @@ export { SalesPage } from './SalesPage';
 export { CataloguePage } from './CataloguePage';
 export { ReportsPage } from './ReportsPage';
 export { AsusWeeklyReportPage } from './AsusWeeklyReportPage';
+export { ComparisonPage } from './ComparisonPage';
 export { NotificationsPage } from './NotificationsPage';
 export { TallyPage } from './TallyPage';
 export { SettingsPage } from './SettingsPage';

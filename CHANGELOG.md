@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.8] - 2026-11-26
+
+- Reuse the saved PostgreSQL connection on Windows Server upgrades. Show the manual provisioning choice on fresh setup when a connection is needed.
+- Repair and verify the NSSM service environment before starting the upgraded server.
+- Compare two to four laptops in the Desktop workspace and present the specs in Customer View. Look up outside-inventory models with Gemini and keep verified results for 30 days.
+- Improve backup verification and restore, Google Drive upload authorization, and GitHub update rate-limit handling.
+
 ## [2.6.0] - 2026-11-21
 
 ### Added

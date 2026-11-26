@@ -41,7 +41,7 @@ File map for production release configuration. **Stop point:** configuration com
 | `apps/mobile_flutter/ios/ExportOptions.plist` | IPA export (release-testing) |
 | `apps/mobile_flutter/ios/Flutter/Release.xcconfig` | Release signing placeholders |
 | `apps/mobile_flutter/ios/Runner/Info.plist` | Display name WEBSTUDIO IMS |
-| `apps/mobile_flutter/ios/Runner.xcodeproj/project.pbxproj` | Bundle ID `com.webstudio.webstudio_ims` |
+| `apps/mobile_flutter/ios/Runner.xcodeproj/project.pbxproj` | iOS bundle ID `com.webstudio.webstudioIms` |
 
 **Artifact name:** `WEBSTUDIO IMS.apk` (also Gradle output `WEBSTUDIO-IMS-{version}.apk`)
 

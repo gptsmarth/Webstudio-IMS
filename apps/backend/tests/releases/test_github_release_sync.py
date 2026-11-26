@@ -5,12 +5,12 @@ from __future__ import annotations
 pytest_plugins = ["auth.conftest"]
 
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, HTTPStatusError, Request, Response
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,15 +20,64 @@ from webstudio_backend.core.config import Settings, get_settings
 from webstudio_backend.core.dependencies import get_db_session
 from webstudio_backend.infrastructure.database.enums import ReleaseChannel, ReleaseDownloadStatus
 from webstudio_backend.infrastructure.database.models.release_download_job import ReleaseDownloadJob
+from webstudio_backend.infrastructure.database.models.scheduler_runtime_state import (
+    SchedulerRuntimeState,
+)
 from webstudio_backend.infrastructure.database.models.software_release import SoftwareRelease
 from webstudio_backend.infrastructure.repositories.release_download_repository import (
     ReleaseDownloadRepository,
 )
 from webstudio_backend.services.github_release_client import GitHubRelease, GitHubReleaseAsset
 from webstudio_backend.services.github_release_sync_service import (
+    RELEASE_SYNC_SCHEDULER_KEY,
+    GitHubReleaseRateLimited,
     GitHubReleaseSyncService,
     ensure_github_release_sync_enabled,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "headers", "minimum_seconds"),
+    [
+        (429, {"retry-after": "120"}, 120),
+        (403, {}, 60),
+    ],
+)
+async def test_rate_limited_release_sync_records_cooldown_for_manual_and_scheduled_checks(
+    db_session: AsyncSession,
+    test_settings: Settings,
+    code: int,
+    headers: dict[str, str],
+    minimum_seconds: int,
+) -> None:
+    settings = test_settings.model_copy(update={"github_repo": "fixture/example"})
+    response = Response(
+        code,
+        headers=headers,
+        json={"message": "API rate limit exceeded"},
+        request=Request("GET", "https://api.github.com/repos/fixture/example/releases"),
+    )
+    with patch(
+        "webstudio_backend.services.github_release_sync_service.GitHubReleaseClient.list_releases",
+        side_effect=HTTPStatusError("Rate limited", request=response.request, response=response),
+    ) as list_releases:
+        before = datetime.now(UTC)
+        result = await GitHubReleaseSyncService(db_session, settings).run_sync_cycle(force=True)
+        assert result["status"] == "rate_limited"
+        service = GitHubReleaseSyncService(db_session, settings)
+        status = await service.get_sync_status()
+        retry_at = datetime.fromisoformat(status["state"]["rate_limit_until"])
+        assert retry_at >= before + timedelta(seconds=minimum_seconds)
+        with pytest.raises(GitHubReleaseRateLimited):
+            await service.list_github_releases("fixture/example")
+        list_releases.assert_awaited_once()
+    await db_session.execute(
+        delete(SchedulerRuntimeState).where(
+            SchedulerRuntimeState.scheduler_key == RELEASE_SYNC_SCHEDULER_KEY
+        )
+    )
+    await db_session.commit()
 
 
 @pytest_asyncio.fixture

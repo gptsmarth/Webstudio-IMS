@@ -569,7 +569,8 @@ async def restore_backup(
             filename=body.filename,
             restore_scope=body.restore_scope,
             source=body.source,
-            create_emergency_backup=body.create_emergency_backup,
+            create_emergency_backup=body.restore_scope == "entire_database"
+            or body.create_emergency_backup,
             confirmed=body.confirmed,
             actor_user_id=current.user.id,
             actor_display_name=current.user.display_name or current.user.username,

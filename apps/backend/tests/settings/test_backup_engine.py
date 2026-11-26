@@ -23,10 +23,69 @@ from webstudio_backend.infrastructure.database.repositories.pagination import Pa
 from webstudio_backend.infrastructure.repositories.audit_log_filters import AuditLogSearchFilters
 from webstudio_backend.infrastructure.repositories.audit_log_repository import AuditLogRepository
 from webstudio_backend.infrastructure.repositories.backup_run_repository import BackupRunRepository
+from webstudio_backend.infrastructure.repositories.exceptions import RepositoryError
+from webstudio_backend.services.backup_assets import restore_managed_files
+from webstudio_backend.services.backup_completeness import prepare_data_only_restore_sql
 from webstudio_backend.services.backup_schedule import (
     backup_health_status,
     compute_next_scheduled_backup,
 )
+
+
+@pytest.mark.parametrize("existing", ["empty", "populated", "missing"])
+def test_managed_asset_restore_merges_directories(tmp_path: Path, existing: str) -> None:
+    source = tmp_path / "extracted"
+    destination = tmp_path / "server" / "assets"
+    paths = [
+        source / "brand-logos" / "brand.png",
+        source / "product-images" / "product.png",
+        source / "company" / "logo.png",
+        source / "uploads" / "nested" / "file.dat",
+    ]
+    for file in paths:
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"archived")
+    existing_file = destination / "product-images" / "unrelated.png"
+    if existing != "missing":
+        existing_file.parent.mkdir(parents=True)
+    if existing == "populated":
+        existing_file.write_bytes(b"preserve")
+
+    with restore_managed_files(source, destination, expected_count=4) as count:
+        assert count == 4
+
+    for file in paths:
+        assert (destination / file.relative_to(source)).read_bytes() == b"archived"
+    if existing == "populated":
+        assert existing_file.read_bytes() == b"preserve"
+
+
+def test_managed_asset_restore_rolls_back_overwritten_files(tmp_path: Path) -> None:
+    source = tmp_path / "extracted" / "product-images"
+    destination = tmp_path / "server" / "assets"
+    current = destination / "product-images"
+    source.mkdir(parents=True)
+    current.mkdir(parents=True)
+    (source / "existing.png").write_bytes(b"replacement")
+    (source / "new.png").write_bytes(b"new")
+    (current / "existing.png").write_bytes(b"original")
+
+    with pytest.raises(RepositoryError, match="injected"):
+        with restore_managed_files(source.parent, destination, expected_count=2):
+            assert (current / "existing.png").read_bytes() == b"replacement"
+            raise RepositoryError("injected database failure")
+
+    assert (current / "existing.png").read_bytes() == b"original"
+    assert not (current / "new.png").exists()
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [r"\echo unexpected", "COMMIT;", "SELECT 1;", "COPY public.some_table (id) FROM stdin;"],
+)
+def test_data_only_restore_rejects_commands_outside_the_dump_format(statement: str) -> None:
+    with pytest.raises(RepositoryError, match="Unsupported command"):
+        prepare_data_only_restore_sql(statement)
 
 
 @pytest_asyncio.fixture
@@ -181,7 +240,7 @@ def test_backup_health_status_degraded_when_database_unhealthy() -> None:
     )
 
 
-def test_postgres_connection_uses_database_url_and_tcp_host() -> None:
+def test_postgres_connection_preserves_the_configured_tcp_host() -> None:
     from webstudio_backend.core.config import Settings
     from webstudio_backend.services.backup_engine import BackupEngine
 
@@ -194,12 +253,12 @@ def test_postgres_connection_uses_database_url_and_tcp_host() -> None:
     user, password, host, port, db_name = engine._postgres_connection()
     assert user == "webstudio_app"
     assert password == "secret"
-    assert host == "127.0.0.1"
+    assert host == "localhost"
     assert port == "5432"
     assert db_name == "webstudio_dev"
 
 
-def test_psql_restore_falls_back_when_docker_compose_unavailable(
+def test_psql_restore_uses_configured_database_in_a_single_transaction(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -212,8 +271,7 @@ def test_psql_restore_falls_back_when_docker_compose_unavailable(
 
     def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
         calls.append(list(cmd))
-        if cmd[0] == "docker":
-            raise subprocess.CalledProcessError(1, cmd)
+        assert kwargs["env"]["PGPASSWORD"] == "fixture@password"
         return subprocess.CompletedProcess(cmd, 0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -224,16 +282,16 @@ def test_psql_restore_falls_back_when_docker_compose_unavailable(
     engine = BackupEngine(
         session=object(),  # type: ignore[arg-type]
         app_settings=Settings(
-            database_url="postgresql+asyncpg://webstudio_app:secret@localhost:5432/webstudio_test",
+            database_url="postgresql+asyncpg://webstudio_app:fixture%40password@localhost:5544/webstudio_test",
             app_env="test",
         ),
     )
-    engine._psql_restore_from_file(sql_path, on_error_stop=True)
+    engine._psql_restore_from_file(sql_path, schema="0057_asus_live_price")
 
-    assert calls[0][0] == "docker"
-    assert Path(calls[1][0]).name == "psql"
-    assert "127.0.0.1" in calls[1]
-    assert "webstudio_test" in calls[1]
+    assert len(calls) == 1
+    assert Path(calls[0][0]).name == "psql"
+    assert calls[0][-1] == "webstudio_test"
+    assert {"localhost", "5544", "ON_ERROR_STOP=1", "--single-transaction"} <= set(calls[0])
 
 
 def test_filter_alembic_version_copy_blocks_removes_migration_state() -> None:

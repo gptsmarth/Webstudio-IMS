@@ -3,7 +3,7 @@
 .SYNOPSIS
   Copy config/env/.env to apps/backend after manual .env edits.
 .DESCRIPTION
-  Repairs production .env (POSTGRES_BIN, DATABASE_URL localhost fix, etc.) and copies
+  Fills missing production defaults and copies
   the file to apps\backend\.env and apps\backend\config\env\.env so the Python API
   loads the same values as the Windows service.
 .EXAMPLE

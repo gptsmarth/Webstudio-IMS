@@ -29,6 +29,25 @@ function Import-DotEnvIntoProcess {
     }
 }
 
+function Wait-WebstudioReadiness {
+    param([string]$ApiBaseUrl)
+
+    $url = $ApiBaseUrl.TrimEnd('/') + '/health/ready'
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3
+            if ($response.StatusCode -eq 200) {
+                Write-Host '[WEBSTUDIO] /health/ready -> 200'
+                return
+            }
+        } catch {
+            # During service startup the listener or database may not be ready.
+            Start-Sleep -Seconds 2
+        }
+    }
+    throw 'WEBSTUDIO Server did not become ready. Verify the API URL and check logs\webstudio-api-error.log.'
+}
+
 function Sync-BackendEnvFile {
     param([string]$InstallRoot)
     $source = Join-Path $InstallRoot "config\env\.env"
@@ -39,8 +58,26 @@ function Sync-BackendEnvFile {
     if (-not (Test-Path $destDir)) {
         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
     }
-    Copy-Item $source (Join-Path $destDir ".env") -Force
-    Copy-Item $source (Join-Path $InstallRoot "apps\backend\.env") -Force
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='WEBSTUDIO Server'"
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+        $identity = [System.Security.Principal.SecurityIdentifier]::new($sid)
+        $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'Allow'))
+    }
+    if ($service.StartName -and $service.StartName -ne 'LocalSystem') {
+        $name = $service.StartName -replace '^\.\\', "$env:COMPUTERNAME\"
+        $identity = [System.Security.Principal.NTAccount]::new($name)
+        $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($identity, 'Read', 'Allow'))
+    }
+    Set-Acl -LiteralPath $source -AclObject $acl
+    foreach ($destination in @((Join-Path $destDir '.env'), (Join-Path $InstallRoot 'apps\backend\.env'))) {
+        if (-not (Test-Path -LiteralPath $destination)) {
+            New-Item -Path $destination -ItemType File | Out-Null
+        }
+        Set-Acl -LiteralPath $destination -AclObject $acl
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
 }
 
 function Set-DotEnvValue {
@@ -53,7 +90,7 @@ function Set-DotEnvValue {
         throw "Env file not found: $Path"
     }
     $updated = $false
-    $lines = Get-Content $Path | ForEach-Object {
+    $lines = @(Get-Content -LiteralPath $Path | ForEach-Object {
         $line = $_.TrimEnd("`r")
         if ($line -match "^$([regex]::Escape($Key))=") {
             $updated = $true
@@ -61,11 +98,11 @@ function Set-DotEnvValue {
         } else {
             $line
         }
-    }
+    })
     if (-not $updated) {
         $lines += "$Key=$Value"
     }
-    Set-Content -Path $Path -Value $lines -Encoding UTF8
+    [System.IO.File]::WriteAllLines($Path, [string[]]$lines, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Build-DatabaseUrl {
@@ -87,11 +124,6 @@ function Repair-ProductionEnvFile {
     )
     $vars = Read-DotEnvFile -Path $EnvFile
 
-    if ($vars.ContainsKey("DATABASE_URL") -and $vars["DATABASE_URL"] -match '@localhost') {
-        Set-DotEnvValue -Path $EnvFile -Key "DATABASE_URL" -Value ($vars["DATABASE_URL"] -replace '@localhost', '@127.0.0.1')
-        $vars = Read-DotEnvFile -Path $EnvFile
-    }
-
     foreach ($tlsKey in @("TLS_CERT_PATH", "TLS_KEY_PATH")) {
         if (-not $vars.ContainsKey($tlsKey)) {
             continue
@@ -100,10 +132,6 @@ function Repair-ProductionEnvFile {
         if ($path -and -not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "Configured $tlsKey file is missing. Restore the file or correct its path."
         }
-    }
-
-    if ($vars.ContainsKey("API_PORT") -and $vars["API_PORT"] -eq "8443") {
-        Set-DotEnvValue -Path $EnvFile -Key "API_PORT" -Value "8000"
     }
 
     if (-not $vars.ContainsKey("POSTGRES_BIN") -or -not $vars["POSTGRES_BIN"]) {
@@ -171,7 +199,7 @@ function Ensure-DatabaseUrlConfigured {
     $vars = Read-DotEnvFile -Path $EnvFile
     $dbUrl = $vars["DATABASE_URL"]
 
-    if ($dbUrl -and $dbUrl -notmatch 'CHANGE_ME') {
+    if ($dbUrl -and $dbUrl -notmatch ':CHANGE_ME@') {
         return $dbUrl
     }
 
@@ -184,8 +212,8 @@ Edit .env or run: infra\windows\finalize-server-setup.ps1
 
     Write-Host ""
     Write-Host "=== WEBSTUDIO database password ===" -ForegroundColor Cyan
-    Write-Host "Enter the password for PostgreSQL user 'webstudio_app' (from pgAdmin Part C2)."
-    $password = Read-Host "webstudio_app password"
+    Write-Host "Enter the password for PostgreSQL user 'webstudio_app' (the IMS database login)."
+    $password = [pscredential]::new('webstudio_app', (Read-Host 'webstudio_app password' -AsSecureString)).GetNetworkCredential().Password
     if (-not $password) {
         throw "Database password is required to continue setup."
     }
@@ -215,9 +243,7 @@ function Get-NssmEnvironmentPairs {
         "APP_ENV",
         "API_HOST",
         "API_PORT",
-        "DATABASE_URL",
         "POSTGRES_BIN",
-        "JWT_SECRET",
         "WEBSTUDIO_DATA_ROOT",
         "WEBSTUDIO_DISCOVERY_CANDIDATES",
         "TLS_CERT_PATH",
@@ -235,12 +261,8 @@ function Get-NssmEnvironmentPairs {
         "WEBSTUDIO_RELEASE_UPDATES_ROOT",
         "WEBSTUDIO_RELEASE_CHANNEL",
         "WEBSTUDIO_GITHUB_REPO",
-        "WEBSTUDIO_GITHUB_TOKEN",
-        "GEMINI_API_KEY",
-        "OPENAI_API_KEY",
         "WEBSTUDIO_CLOUD_BACKUP_SYNC_SCHEDULER",
-        "GOOGLE_DRIVE_CLIENT_ID",
-        "GOOGLE_DRIVE_CLIENT_SECRET"
+        "GOOGLE_DRIVE_CLIENT_ID"
     )
 
     $pairs = @()
@@ -269,7 +291,7 @@ function Get-NssmEnvironmentPairs {
         $pairs += "PATH=${pgBin};C:\Windows\System32;C:\Windows"
     }
 
-    return ,@($pairs)
+    return $pairs
 }
 
 function Get-NssmServiceParametersRegPath {
@@ -293,7 +315,7 @@ function Apply-NssmServiceEnvironment {
     if (-not (Test-Path $NssmPath)) {
         throw "NSSM not found at $NssmPath"
     }
-    $pairs = @(Get-NssmEnvironmentPairs -InstallRoot $InstallRoot -EnvFile $EnvFile)
+    [string[]]$pairs = @(Get-NssmEnvironmentPairs -InstallRoot $InstallRoot -EnvFile $EnvFile)
     if ($pairs.Count -eq 0) {
         throw "No NSSM environment pairs generated from $EnvFile"
     }
@@ -303,18 +325,13 @@ function Apply-NssmServiceEnvironment {
         throw "Service Parameters registry key not found: $regPath"
     }
 
-    # Registry write is reliable when PowerShell argument parsing breaks nssm.exe set.
-    Set-ItemProperty -Path $regPath -Name "AppEnvironmentExtra" -Value $pairs -Type MultiString
+    # The backend loads secrets from its restricted .env files. Avoid exposing any
+    # service settings in a native process command line.
+    Set-ItemProperty -LiteralPath $regPath -Name "AppEnvironmentExtra" -Value $pairs -Type MultiString -ErrorAction Stop
 
-    & $NssmPath set $ServiceName AppEnvironmentExtra @pairs
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to apply NSSM environment for $ServiceName"
+    $stored = (Get-ItemProperty -LiteralPath $regPath -Name "AppEnvironmentExtra" -ErrorAction Stop).AppEnvironmentExtra
+    if ($stored -isnot [string[]] -or ($stored -join "`0") -cne ($pairs -join "`0")) {
+        throw "The NSSM environment was not stored correctly in $regPath\AppEnvironmentExtra"
     }
-
-    $stored = @((Get-ItemProperty -Path $regPath -Name "AppEnvironmentExtra" -ErrorAction Stop).AppEnvironmentExtra)
-    $tallyPair = @($stored | Where-Object { $_ -like "WEBSTUDIO_TALLY_SCHEDULER=*" })
-    if ($tallyPair.Count -eq 0) {
-        throw "WEBSTUDIO_TALLY_SCHEDULER was not stored in $regPath\AppEnvironmentExtra"
-    }
-    Write-Host "[WEBSTUDIO] NSSM environment applied ($($pairs.Count) vars). $($tallyPair[0])"
+    Write-Host "[WEBSTUDIO] NSSM environment applied ($($pairs.Count) vars)."
 }

@@ -60,9 +60,7 @@ class SchedulerRuntimeService:
         interval = row.interval_seconds or default_interval
         now = datetime.now(UTC)
         if row.next_run_at is not None:
-            remaining = (row.next_run_at - now).total_seconds()
-            if remaining > 0:
-                return remaining
+            return max(0.0, (row.next_run_at - now).total_seconds())
         if row.last_run_at is not None:
             elapsed = (now - row.last_run_at).total_seconds()
             remaining = interval - elapsed
@@ -77,6 +75,7 @@ class SchedulerRuntimeService:
         status: str,
         interval_seconds: int | None = None,
         state_patch: dict[str, Any] | None = None,
+        next_run_at: datetime | None = None,
     ) -> None:
         default_interval = interval_seconds or DEFAULT_INTERVALS.get(scheduler_key, 300)
         row = await self._repo.get_or_create(
@@ -84,7 +83,7 @@ class SchedulerRuntimeService:
         )
         interval = interval_seconds or row.interval_seconds or default_interval
         now = datetime.now(UTC)
-        next_run = now + timedelta(seconds=interval)
+        next_run = next_run_at or now + timedelta(seconds=interval)
         state_json = dict(row.state_json or {})
         if state_patch:
             state_json.update(state_patch)

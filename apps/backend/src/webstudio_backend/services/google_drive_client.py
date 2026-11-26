@@ -49,7 +49,13 @@ def _classify_http_error(exc: Exception) -> GoogleDriveError:
     from google.auth.exceptions import RefreshError
 
     if isinstance(exc, RefreshError):
-        return GoogleDriveAuthError(str(exc))
+        payload = exc.args[1] if len(exc.args) > 1 else None
+        reason = payload.get("error") if isinstance(payload, dict) else None
+        if reason == "invalid_grant":
+            return GoogleDriveAuthError("Google rejected the stored Drive authorization.")
+        if reason in ("invalid_client", "unauthorized_client"):
+            return GoogleDriveError("Google rejected the OAuth client. Check its configuration.")
+        return GoogleDriveError("Google Drive could not refresh its access token. Try again later.")
 
     try:
         from googleapiclient.errors import HttpError

@@ -80,6 +80,11 @@ class EnterpriseDeploymentEngine:
         release_channel,
         bundle_dir: str,
     ) -> dict[str, Any]:
+        if self._settings.is_production and self._platform.is_windows:
+            raise ValueError(
+                "Apply this Windows release with WEBSTUDIO Server Setup.exe on the server. "
+                "The running IMS service cannot replace its own installed runtime."
+            )
         current_release = await self._release_repo.get_current(release_channel)
         previous_release_id = current_release.id if current_release else None
 

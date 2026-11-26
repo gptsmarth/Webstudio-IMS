@@ -134,7 +134,7 @@ When contacting support, provide:
 |--------|-----|
 | `infra/windows/start-business-day.ps1` | Morning start after unplanned overnight off |
 | `infra/windows/recover-server.ps1` | Full server recovery (M12B) |
-| `infra/windows/configure-firewall.ps1` | Restore port 8000/5432 rules |
+| `infra/windows/configure-firewall.ps1 -Enable` | Restore scoped API access on TCP 8000. PostgreSQL stays on loopback. |
 
 ---
 

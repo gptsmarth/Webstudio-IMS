@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import os
 import shutil
@@ -15,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,11 +29,18 @@ from webstudio_backend.infrastructure.repositories.exceptions import RepositoryE
 from webstudio_backend.infrastructure.repositories.system_setting_repository import (
     SystemSettingRepository,
 )
+from webstudio_backend.services.backup_assets import (
+    asset_file_checksum,
+    managed_backup_files,
+    restore_managed_files,
+)
 from webstudio_backend.services.backup_completeness import (
     BACKUP_MANAGED_ASSET_DIRS,
+    DATA_ONLY_RESTORE_FINISH,
+    DATA_ONLY_RESTORE_START,
     DATABASE_DUMP_MODE_DATA_ONLY,
-    DATABASE_DUMP_MODE_FULL,
-    count_local_asset_files,
+    SNAPSHOT_COUNT_TABLES,
+    dump_snapshot_counts,
     prepare_data_only_restore_sql,
     use_real_database_dump,
 )
@@ -113,7 +119,7 @@ class BackupEngine:
         storage = create_storage_backend(storage_backend, self._backup_root)
         storage.ensure_ready()
 
-        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         filename = f"webstudio-backup-{stamp}.tar.gz"
         archive_path = storage.resolve_path(filename)
 
@@ -154,13 +160,14 @@ class BackupEngine:
                 workspace = Path(temp_dir)
                 db_path = workspace / "database.sql"
                 await asyncio.to_thread(self._dump_database, db_path)
+                snapshot_counts = dump_snapshot_counts(db_path)
+                if snapshot_counts:
+                    manifest.update(snapshot_counts)
+                    manifest["database_snapshot_counts"] = True
 
                 assets_dir = workspace / "assets"
                 assets_dir.mkdir()
-                managed_asset_file_count = self._copy_managed_assets(
-                    assets_dir,
-                    company_logo=await self._settings_repo.get_string("company_logo"),
-                )
+                managed_asset_file_count = self._copy_managed_assets(assets_dir)
                 manifest["managed_asset_file_count"] = managed_asset_file_count
 
                 config_dir = workspace / "config"
@@ -199,10 +206,7 @@ class BackupEngine:
             if encryption.is_enabled():
                 encryption.encrypt_archive(archive_path)
 
-            verification_status, verify_warnings, verify_errors = self._verify_archive(
-                archive_path,
-                manifest,
-            )
+            verification_status, verify_warnings, verify_errors = self._verify_archive(archive_path)
             warnings.extend(verify_warnings)
             errors.extend(verify_errors)
 
@@ -233,7 +237,8 @@ class BackupEngine:
                 value_type=SettingValueType.STRING,
                 updated_by_user_id=creator_user_id,
             )
-            await self._apply_retention()
+            if trigger_type != "emergency":
+                await self._apply_retention()
             await self._audit_backup(
                 actor_id=creator_user_id,
                 actor_name=creator_display_name,
@@ -307,27 +312,49 @@ class BackupEngine:
             return entries
         return [self._legacy_entry(path) for path in self._legacy_sql_files()[:limit]]
 
-    def restore_backup(self, filename: str) -> None:
+    def restore_backup(self, filename: str) -> tuple[int, dict[str, Any]]:
         archive_path = self._backup_root / filename
-        if not archive_path.is_file():
+        if (
+            any(char in filename for char in "/\\:")
+            or archive_path.is_symlink()
+            or not archive_path.is_file()
+        ):
             raise RepositoryError(f"Backup not found: {filename}")
         loader = detect_backup_format(archive_path)
         if loader.format_id == FORMAT_LEGACY_SQL:
-            self._restore_sql_file(archive_path)
-            return
-        manifest = loader.read_manifest(archive_path)
-        dump_mode = str(manifest.get("database_dump_mode") or DATABASE_DUMP_MODE_FULL)
+            raise RepositoryError("Restore Center requires an IMS data-only archive.")
         with tempfile.TemporaryDirectory(prefix="webstudio-restore-") as temp_dir:
             workspace = Path(temp_dir)
             inspection = loader.extract(archive_path, workspace)
             if inspection.corruption_detected or not inspection.integrity_valid:
                 detail = "; ".join(inspection.errors) or "Archive integrity check failed."
                 raise RepositoryError(detail)
+            manifest = inspection.manifest
+            if manifest.get("database_dump_mode") != DATABASE_DUMP_MODE_DATA_ONLY:
+                raise RepositoryError("Restore Center requires an IMS data-only archive.")
+            schema = manifest.get("schema_version")
+            if not isinstance(schema, str) or schema in {"", "unknown"}:
+                raise RepositoryError("The backup does not identify its database revision.")
             sql_path = workspace / "database.sql"
-            if not sql_path.is_file():
-                raise RepositoryError("Backup archive is missing database.sql")
-            self._restore_sql_file(sql_path, dump_mode=dump_mode)
-            self.restore_managed_assets_from_workspace(workspace)
+            # Validate and prepare SQL before changing any managed files.
+            sql = None
+            if not self._settings.is_test or use_real_database_dump():
+                sql = prepare_data_only_restore_sql(sql_path.read_text(encoding="utf-8"))
+            expected_counts = {}
+            if manifest.get("database_snapshot_counts"):
+                for field, table in SNAPSHOT_COUNT_TABLES.items():
+                    count = manifest.get(field)
+                    if type(count) is not int or count < 0:
+                        raise RepositoryError("The backup has invalid database record counts.")
+                    expected_counts[table] = count
+            with restore_managed_files(
+                workspace / "assets",
+                self._find_public_assets_dir(),
+                expected_count=manifest.get("managed_asset_file_count"),
+            ) as restored_count:
+                if sql is not None:
+                    self._restore_prepared_sql(sql, schema=schema, expected_counts=expected_counts)
+                return restored_count, manifest
 
     def _run_to_dict(self, run: Any) -> dict:
         return {
@@ -416,12 +443,17 @@ class BackupEngine:
     def _postgres_connection(self) -> tuple[str, str, str, str, str]:
         """Return pg_dump/psql connection params derived from DATABASE_URL."""
         parsed = urlparse(self._settings.database_url.replace("+asyncpg", ""))
-        user = parsed.username or os.environ.get("POSTGRES_USER", "webstudio_app")
-        password = parsed.password or os.environ.get("POSTGRES_PASSWORD", "")
+        user = (
+            unquote(parsed.username)
+            if parsed.username
+            else os.environ.get("POSTGRES_USER", "webstudio_app")
+        )
+        password = (
+            unquote(parsed.password)
+            if parsed.password is not None
+            else os.environ.get("POSTGRES_PASSWORD", "")
+        )
         host = parsed.hostname or "127.0.0.1"
-        if host in {"localhost", "::1"}:
-            # Force TCP so pg_dump hits Docker-mapped Postgres instead of a local socket.
-            host = "127.0.0.1"
         port = str(parsed.port or 5432)
         db_name = (parsed.path or "/webstudio_dev").lstrip("/") or "webstudio_dev"
         return user, password, host, port, db_name
@@ -431,51 +463,19 @@ class BackupEngine:
             output_path.write_text("-- WEBSTUDIO IMS test backup\nSELECT 1;\n", encoding="utf-8")
             return
 
-        docker_root = self._find_compose_root()
         dump_args = [
             "--schema",
             DATABASE_SCHEMA,
             "--data-only",
             "--no-owner",
             "--no-privileges",
-            # users <-> custom_access_roles is a circular FK (0029_custom_access_roles):
-            # users.custom_access_role_id -> custom_access_roles.id, and
-            # custom_access_roles.created_by_user_id -> users.id. A data-only restore has
-            # no valid COPY order that satisfies both at once. --disable-triggers wraps each
-            # COPY with ALTER TABLE ... DISABLE/ENABLE TRIGGER ALL, which also suspends the
-            # internal FK-check triggers during load, so load order stops mattering. No
-            # user-defined triggers exist on any WEBSTUDIO table, so nothing else is affected.
+            # Preserve compatibility with previous IMS releases and their administrator
+            # recovery procedure. The current restore handles FK checks transactionally.
             "--disable-triggers",
             f"--exclude-table-data={DATABASE_SCHEMA}.alembic_version",
+            f"--exclude-table-data={DATABASE_SCHEMA}.laptop_comparison_cache",
         ]
         user, _password, _host, _port, db_name = self._postgres_connection()
-        if docker_root is not None:
-            cmd = [
-                "docker",
-                "compose",
-                "exec",
-                "-T",
-                "postgres",
-                "pg_dump",
-                "-U",
-                user,
-                *dump_args,
-                db_name,
-            ]
-            try:
-                with output_path.open("w", encoding="utf-8") as handle:
-                    subprocess.run(
-                        cmd,
-                        check=True,
-                        stdout=handle,
-                        cwd=docker_root,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                    )
-                return
-            except (OSError, subprocess.CalledProcessError):
-                pass
-
         try:
             self._dump_database_direct(output_path, extra_args=dump_args)
         except subprocess.CalledProcessError as exc:
@@ -509,174 +509,102 @@ class BackupEngine:
                 f"Could not run pg_dump at {pg_dump}. Set POSTGRES_BIN and restart the server."
             ) from exc
 
-    def _restore_sql_file(self, path: Path, *, dump_mode: str = DATABASE_DUMP_MODE_FULL) -> None:
-        if self._settings.is_test and not use_real_database_dump():
-            return
-        if dump_mode == DATABASE_DUMP_MODE_DATA_ONLY:
-            self._restore_data_only_sql_file(path)
-            return
-        self._psql_restore_from_file(path, on_error_stop=False)
-
-    def _restore_data_only_sql_file(self, path: Path) -> None:
-        sql = prepare_data_only_restore_sql(path.read_text(encoding="utf-8"))
+    def _restore_prepared_sql(
+        self, sql: str, *, schema: str, expected_counts: dict[str, int] | None = None
+    ) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
             suffix=".sql",
             delete=False,
         ) as handle:
+            handle.write(
+                "SELECT pg_catalog.set_config('webstudio.restore_revision', :'revision', true);\n"
+            )
+            handle.write(DATA_ONLY_RESTORE_START)
             handle.write(sql)
+            handle.write(DATA_ONLY_RESTORE_FINISH)
+            for table, count in (expected_counts or {}).items():
+                handle.write(
+                    f"DO $$ BEGIN IF (SELECT count(*) FROM webstudio.{table}) <> {count} "
+                    f"THEN RAISE EXCEPTION 'Restore count does not match the backup for {table}'; "
+                    "END IF; END $$;\n"
+                )
             filtered_path = Path(handle.name)
         try:
-            self._psql_restore_from_file(filtered_path, on_error_stop=True)
+            self._psql_restore_from_file(filtered_path, schema=schema)
         finally:
             filtered_path.unlink(missing_ok=True)
 
-    def _psql_restore_from_file(self, path: Path, *, on_error_stop: bool) -> None:
+    def _psql_restore_from_file(self, path: Path, *, schema: str) -> None:
         user, password, host, port, db_name = self._postgres_connection()
-        docker_root = self._find_compose_root()
-        if docker_root is not None:
-            cmd = ["docker", "compose", "exec", "-T", "postgres", "psql"]
-            if on_error_stop:
-                cmd.extend(["-v", "ON_ERROR_STOP=1"])
-            cmd.extend(["-U", user, db_name])
-            try:
-                with path.open("r", encoding="utf-8") as handle:
-                    subprocess.run(
-                        cmd,
-                        check=True,
-                        stdin=handle,
-                        cwd=docker_root,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                    )
-                return
-            except (OSError, subprocess.CalledProcessError):
-                pass
-
         env = os.environ.copy()
         if password:
             env["PGPASSWORD"] = password
         psql = resolve_postgres_tool("psql", postgres_bin=self._settings.postgres_bin)
-        cmd = [psql, "-h", host, "-p", port, "-U", user]
-        if on_error_stop:
-            cmd.extend(["-v", "ON_ERROR_STOP=1"])
-        cmd.append(db_name)
+        cmd = [
+            psql,
+            "-X",
+            "--no-password",
+            "-h",
+            host,
+            "-p",
+            port,
+            "-U",
+            user,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-v",
+            f"revision={schema}",
+            "--single-transaction",
+            "-f",
+            "-",
+            db_name,
+        ]
         try:
             with path.open("r", encoding="utf-8") as handle:
                 subprocess.run(
-                    cmd, check=True, stdin=handle, env=env, stderr=subprocess.PIPE, text=True
+                    cmd,
+                    check=True,
+                    stdin=handle,
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
                 )
         except OSError as exc:
             raise RepositoryError(
                 f"Could not run psql at {psql}. Set POSTGRES_BIN and restart the server."
             ) from exc
         except subprocess.CalledProcessError as exc:
-            detail = (exc.stderr or str(exc)).strip()
+            detail = next(
+                (line.strip() for line in (exc.stderr or "").splitlines() if line.strip()),
+                f"psql exited with code {exc.returncode}.",
+            )
             raise RepositoryError(
-                "Restore failed. Check database connectivity. "
+                "PostgreSQL could not load the backup. "
                 f"Attempted {user}@{host}:{port}/{db_name}. {detail}",
             ) from exc
 
-    def _copy_managed_assets(self, assets_dir: Path, *, company_logo: str | None) -> int:
-        self._copy_brand_logos(assets_dir / "brand-logos")
-        self._copy_company_logo_sync(assets_dir / "company", company_logo)
-        # Prefer the live managed root (WEBSTUDIO_DATA_ROOT/assets on servers),
-        # then any legacy search locations so product images are not skipped.
+    def _copy_managed_assets(self, assets_dir: Path) -> int:
         from webstudio_backend.services.web_image_scraper import managed_asset_search_dirs
 
-        seen: set[Path] = set()
-        for public_assets in managed_asset_search_dirs():
-            resolved = public_assets.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            for subdir in BACKUP_MANAGED_ASSET_DIRS:
-                if subdir in {"brand-logos", "company"}:
-                    continue
-                source = public_assets / subdir
-                if source.is_dir():
-                    self._copy_directory_files(source, assets_dir / subdir)
-        return count_local_asset_files(assets_dir)
-
-    def _copy_directory_files(self, source: Path, target: Path) -> None:
-        if not source.is_dir():
-            return
-        target.mkdir(parents=True, exist_ok=True)
-        for item in source.iterdir():
-            if item.is_file() and item.name != ".gitkeep":
-                shutil.copy2(item, target / item.name)
-
-    def _copy_company_logo_sync(self, target: Path, company_logo: str | None) -> None:
-        if not company_logo or not company_logo.strip():
-            return
-        logo = company_logo.strip()
-        candidates: list[Path] = []
-        path = Path(logo)
-        if path.is_file():
-            candidates.append(path)
-        repo = self._find_repo_root()
-        if repo is not None:
-            candidates.append(repo / "apps/desktop/public" / logo.lstrip("/"))
-        for candidate in candidates:
-            if candidate.is_file():
-                target.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(candidate, target / candidate.name)
-                return
+        for source in reversed(managed_asset_search_dirs(settings=self._settings)):
+            for relative, item in managed_backup_files(source, BACKUP_MANAGED_ASSET_DIRS).items():
+                target = assets_dir / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, target)
+        return len(managed_backup_files(assets_dir, BACKUP_MANAGED_ASSET_DIRS))
 
     def _build_asset_manifest(self, assets_dir: Path) -> dict[str, Any]:
-        manifest: dict[str, Any] = {"directories": {}, "total_files": 0}
-        if not assets_dir.is_dir():
-            return manifest
-        for subdir in BACKUP_MANAGED_ASSET_DIRS:
-            folder = assets_dir / subdir
-            if not folder.is_dir():
-                continue
-            files = sorted(
-                item.name for item in folder.iterdir() if item.is_file() and item.name != ".gitkeep"
-            )
-            manifest["directories"][subdir] = files
-            manifest["total_files"] += len(files)
-        return manifest
-
-    def restore_managed_assets_from_workspace(self, workspace: Path) -> None:
-        assets_root = workspace / "assets"
-        if not assets_root.is_dir():
-            return
-        public_assets = self._find_public_assets_dir()
-        if public_assets is None:
-            return
-        for subdir in BACKUP_MANAGED_ASSET_DIRS:
-            source = assets_root / subdir
-            if not source.is_dir():
-                continue
-            self._copy_directory_files(source, public_assets / subdir)
-
-    def _copy_brand_logos(self, target: Path) -> None:
-        source = self._find_brand_logos_dir()
-        if source is None or not source.is_dir():
-            return
-        target.mkdir(parents=True, exist_ok=True)
-        for item in source.iterdir():
-            if item.is_file() and item.name != ".gitkeep":
-                shutil.copy2(item, target / item.name)
-
-    async def _copy_company_logo(self, target: Path, company_logo: str | None) -> None:
-        if not company_logo or not company_logo.strip():
-            return
-        logo = company_logo.strip()
-        candidates: list[Path] = []
-        path = Path(logo)
-        if path.is_file():
-            candidates.append(path)
-        repo = self._find_repo_root()
-        if repo is not None:
-            candidates.append(repo / "apps/desktop/public" / logo.lstrip("/"))
-        for candidate in candidates:
-            if candidate.is_file():
-                target.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(candidate, target / candidate.name)
-                return
+        files = managed_backup_files(assets_dir, BACKUP_MANAGED_ASSET_DIRS)
+        directories: dict[str, list[str]] = {}
+        checksums: dict[str, str] = {}
+        for relative, item in files.items():
+            directory, *path = relative.parts
+            directories.setdefault(directory, []).append("/".join(path))
+            checksums[f"assets/{relative.as_posix()}"] = asset_file_checksum(item)
+        return {"directories": directories, "total_files": len(files), "sha256": checksums}
 
     def _write_application_config(self, target: Path) -> None:
         lines = [
@@ -688,33 +616,17 @@ class BackupEngine:
         ]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def _verify_archive(
-        self,
-        archive_path: Path,
-        manifest: dict[str, Any],
-    ) -> tuple[str, list[str], list[str]]:
+    def _verify_archive(self, archive_path: Path) -> tuple[str, list[str], list[str]]:
         warnings: list[str] = []
         errors: list[str] = []
         try:
-            with tarfile.open(archive_path, "r:gz") as archive:
-                names = archive.getnames()
-                for required in ("manifest.json", "database.sql"):
-                    if required not in names:
-                        errors.append(f"Missing required archive member: {required}")
-                db_info = archive.getmember("database.sql")
-                if db_info.size < 16:
-                    warnings.append("Database dump appears unusually small.")
-        except tarfile.TarError as exc:
+            inspection = detect_backup_format(archive_path).inspect(archive_path)
+            errors.extend(inspection.errors)
+            warnings.extend(inspection.warnings)
+        except (RepositoryError, OSError) as exc:
             errors.append(f"Archive integrity check failed: {exc}")
             return "failed", warnings, errors
 
-        if manifest.get("checksum_algorithm") != "sha256":
-            warnings.append("Unexpected checksum algorithm in manifest.")
-        from webstudio_backend.services.backup_manifest import validate_manifest_structure
-
-        manifest_warnings, manifest_errors = validate_manifest_structure(manifest)
-        warnings.extend(manifest_warnings)
-        errors.extend(manifest_errors)
         if errors:
             return "failed", warnings, errors
         if warnings:
@@ -742,11 +654,7 @@ class BackupEngine:
             return {}
 
     def _checksum_file(self, path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
+        return asset_file_checksum(path)
 
     async def _apply_retention(self) -> None:
         policy = await self._settings_repo.get_string("backup_retention_policy") or "last_30"
@@ -807,29 +715,6 @@ class BackupEngine:
         folder.mkdir(parents=True, exist_ok=True)
         return folder.resolve()
 
-    def _find_compose_root(self) -> Path | None:
-        cwd = Path.cwd()
-        for candidate in (cwd, cwd.parent, cwd.parent.parent):
-            has_compose = (candidate / "docker-compose.yml").is_file()
-            has_compose_yaml = (candidate / "compose.yaml").is_file()
-            if has_compose or has_compose_yaml:
-                return candidate
-        return None
-
-    def _find_repo_root(self) -> Path | None:
-        cwd = Path.cwd()
-        for candidate in (cwd, cwd.parent, cwd.parent.parent, cwd.parent.parent.parent):
-            if (candidate / "apps" / "desktop").is_dir():
-                return candidate
-        return None
-
-    def _find_brand_logos_dir(self) -> Path | None:
-        public_assets = self._find_public_assets_dir()
-        if public_assets is None:
-            return None
-        logos = public_assets / "brand-logos"
-        return logos if logos.is_dir() else None
-
     def _find_public_assets_dir(self) -> Path | None:
         """Writable managed-assets root used by backups and restores.
 
@@ -838,4 +723,4 @@ class BackupEngine:
         """
         from webstudio_backend.services.web_image_scraper import resolve_managed_assets_dir
 
-        return resolve_managed_assets_dir(create=True)
+        return resolve_managed_assets_dir(create=False, settings=self._settings)

@@ -19,6 +19,11 @@ Milestone: 13B
 
 Milestone 13B implements **GitHub Release Integration** for WEBSTUDIO IMS. The WEBSTUDIO Server periodically polls GitHub Releases, compares versions, validates manifests, downloads artifacts with resumable transfers and SHA256 verification, and stores bundles under the enterprise updates directory.
 
+When GitHub rate-limits release listing, the server persists the next permitted
+check using GitHub's response headers or a bounded backoff. Scheduled and manual
+checks share that cooldown. Other listing failures wait for the configured
+polling interval before the scheduler retries.
+
 **Downloads never auto-deploy.** Administrator approval remains mandatory before any release is activated on the server.
 
 This milestone extends M13A (Enterprise Release Management). No desktop or Flutter UI changes were made.

@@ -9,6 +9,7 @@ import {
   Shield,
   X,
 } from 'lucide-react';
+import { parseApiError } from '../../lib/apiError';
 import { formatDateTime } from '../../lib/datetime';
 import { formatBytes } from '../../lib/settings';
 import {
@@ -70,6 +71,8 @@ export function RestoreWizard({
   const [validation, setValidation] = useState<BackupValidateResult | null>(null);
   const [preview, setPreview] = useState<BackupPreviewResult | null>(null);
   const [result, setResult] = useState<BackupRestoreResult | null>(null);
+  const emergencyBackupRequired = restoreScope === 'entire_database';
+  const willCreateEmergencyBackup = emergencyBackupRequired || createEmergencyBackup;
 
   const selectedBackup = useMemo(
     () => backups.find((item) => item.filename === selectedFilename) ?? null,
@@ -107,8 +110,8 @@ export function RestoreWizard({
       const response = await SettingsService.validateBackup(selectedFilename, source);
       setValidation(response);
       setStep(2);
-    } catch {
-      setError('Validation failed. Check the backup file and try again.');
+    } catch (err) {
+      setError(parseApiError(err, 'Validation failed. Check the backup file and try again.'));
     } finally {
       setBusy(false);
     }
@@ -139,14 +142,17 @@ export function RestoreWizard({
         filename: selectedFilename,
         restore_scope: restoreScope,
         source,
-        create_emergency_backup: createEmergencyBackup,
+        create_emergency_backup: willCreateEmergencyBackup,
         confirmed: true,
       });
       setResult(response);
       setStep(6);
-      await onComplete();
-    } catch {
-      setError('Restore failed. Your emergency backup may still be available for rollback.');
+      // The restored database may invalidate the session used to refresh Settings.
+      await onComplete().catch(() => undefined);
+    } catch (err) {
+      setError(
+        parseApiError(err, 'Restore failed. Check Restore Center for the emergency backup.'),
+      );
       setStep(4);
     } finally {
       setBusy(false);
@@ -426,17 +432,20 @@ export function RestoreWizard({
                   <AlertTriangle size={14} aria-hidden />
                   <span>
                     This will overwrite live data for <strong>{scopeOption?.label}</strong>.
-                    {createEmergencyBackup && ' An emergency backup will be created automatically.'}
+                    {willCreateEmergencyBackup &&
+                      ' An emergency backup will be created automatically.'}
                   </span>
                 </div>
-                <label className="stg-restore-confirm">
-                  <input
-                    type="checkbox"
-                    checked={createEmergencyBackup}
-                    onChange={(event) => setCreateEmergencyBackup(event.target.checked)}
-                  />
-                  <span>Create emergency backup before restore (recommended)</span>
-                </label>
+                {!emergencyBackupRequired && (
+                  <label className="stg-restore-confirm">
+                    <input
+                      type="checkbox"
+                      checked={createEmergencyBackup}
+                      onChange={(event) => setCreateEmergencyBackup(event.target.checked)}
+                    />
+                    <span>Create emergency backup before restore (recommended)</span>
+                  </label>
+                )}
                 <Field label="Type RESTORE to confirm">
                   <input
                     className="input"

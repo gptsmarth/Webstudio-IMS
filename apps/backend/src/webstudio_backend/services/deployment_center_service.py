@@ -28,7 +28,6 @@ from webstudio_backend.infrastructure.repositories.software_release_repository i
 from webstudio_backend.services.enterprise_deployment_engine import EnterpriseDeploymentEngine
 from webstudio_backend.services.enterprise_release_service import EnterpriseReleaseService
 from webstudio_backend.services.enterprise_rollback_engine import EnterpriseRollbackEngine
-from webstudio_backend.services.github_release_client import GitHubReleaseClient
 from webstudio_backend.services.github_release_sync_service import GitHubReleaseSyncService
 from webstudio_backend.services.release_download_service import ReleaseDownloadService
 from webstudio_backend.services.release_manifest_validator import validate_release_manifest
@@ -84,8 +83,7 @@ class DeploymentCenterService:
             repo = await self._sync.resolve_github_repo()
             if not repo:
                 raise ValueError("GitHub repository is not configured")
-            client = GitHubReleaseClient(token=self._settings.github_token)
-            releases = await client.list_releases(repo)
+            releases = await self._sync.list_github_releases(repo)
             current = await self._enterprise.get_current_release()
             available = []
             for release in releases:
@@ -121,7 +119,12 @@ class DeploymentCenterService:
     ) -> dict[str, Any]:
         event = await self._start_event("download", user_id=user_id)
         try:
-            await self._sync.run_sync_cycle(force=True)
+            result = await self._sync.run_sync_cycle(force=True)
+            if result["status"] in {"failed", "rate_limited"}:
+                await self._deployment_repo.complete_event(
+                    event, status="failed", error_message=result["detail"]
+                )
+                return {"status": "failed", "detail": result["detail"]}
             jobs = await self._download_repo.list_retryable_jobs(limit=5)
             if job_id is not None:
                 jobs = [job for job in jobs if job.id == job_id]
@@ -130,7 +133,6 @@ class DeploymentCenterService:
                 if job is not None:
                     jobs = [job]
             if not jobs:
-                result = await self._sync.run_sync_cycle()
                 await self._deployment_repo.complete_event(
                     event, status="completed", detail_patch=result
                 )

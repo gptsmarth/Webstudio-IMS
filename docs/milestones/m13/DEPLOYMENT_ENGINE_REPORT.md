@@ -111,8 +111,15 @@ Steps are defined in `DEPLOYMENT_STEPS` and recorded in `release_deployment_runs
 
 | Environment | Stop/restart | Migrations | Binary swap |
 |-------------|--------------|------------|-------------|
-| Windows production | PowerShell service scripts | External `alembic upgrade head` | Copy from `D:\WEBSTUDIO-IMS\Updates\vX.Y.Z` |
+| Windows production | Server Setup manages the Windows service | Server Setup uses installed Python and the saved database connection | Apply the verified `WEBSTUDIO Server Setup.exe` on the server |
 | Development / test | Dry-run graceful shutdown | Skipped in `app_env=test` | Skipped if bundle missing |
+
+The Windows production Deployment Center supports release discovery and download.
+Apply the update using the server installer. Administrators running
+`infra/windows/deploy-release.ps1 -Action migrate` separately must stop IMS
+first. That command delegates to the installed Alembic helper and uses the
+installation's runtime and `.env`. See the
+[Windows installer guide](../m12c/INSTALLER_GUIDE.md#5-windows-server--webstudio-server-setupexe).
 
 ---
 
@@ -178,7 +185,7 @@ cd apps/backend && pytest tests/releases/test_enterprise_deployment_engine.py -q
 
 ## Known limitations
 
-1. **In-process restart** — On Windows Service, stop/replace/migrate/restart delegates to external PowerShell; the in-process API cannot restart itself mid-request.
+1. **Windows production updates** — Windows Server Setup runs separately from the service and applies the server update. The deployment API rejects in-process installation on Windows production.
 2. **Desktop polling** — Clients receive deploy-complete via system notifications (60s poll) and health checks (15s poll); no WebSocket push.
 3. **Rollback binary swap** — Database and catalog rollback are fully automated; reversing a partial binary copy on disk may require the previous bundle in `Updates/` (future enhancement).
 

@@ -122,6 +122,30 @@ async def test_restore_settings_scope(
 
 
 @pytest.mark.asyncio
+async def test_full_restore_creates_emergency_backup_even_when_client_opts_out(
+    api_client: AsyncClient,
+    initialized_system,
+    backup_filename: str,
+) -> None:
+    headers = await login_headers(api_client, MAIN_ADMIN_USERNAME, TEST_PASSWORD)
+    response = await api_client.post(
+        "/api/v1/settings/backups/restore",
+        headers=headers,
+        json={
+            "filename": backup_filename,
+            "restore_scope": "entire_database",
+            "create_emergency_backup": False,
+            "confirmed": True,
+        },
+    )
+    assert response.status_code == 200
+    result = response.json()["data"]
+    assert result["success"] is True
+    assert result["emergency_backup_filename"] != backup_filename
+    assert result["rollback_available"] is True
+
+
+@pytest.mark.asyncio
 async def test_restore_requires_confirmation(
     api_client: AsyncClient,
     initialized_system,

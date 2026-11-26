@@ -393,10 +393,10 @@ PowerShell, as Administrator, on the server, adjusting the subnet to match your 
 
 ```powershell
 cd D:\WEBSTUDIO-IMS\infra\windows
-.\configure-firewall.ps1 -ApiPort 8000 -Subnet 192.168.29.0/24
+.\configure-firewall.ps1 -Enable -ApiPort 8000
 ```
 
-This opens exactly TCP 8000 and UDP 5353, scoped to your LAN subnet — nothing wider.
+This configures the Private-profile TCP 8000 rule for the office subnet. Check the separate UDP 5353 rule if you use automatic discovery. [Firewall configuration](../milestones/m14/FIREWALL_CONFIGURATION_GUIDE.md#2-automated-configuration)
 
 ### F3. Validate
 

@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -130,7 +131,7 @@ class DeploymentPlatformAdapter:
         if not alembic_ini.is_file():
             alembic_ini = Path.cwd() / "database" / "migrations" / "alembic.ini"
         cmd = [
-            "python",
+            sys.executable,
             "-m",
             "alembic",
             "-c",
@@ -139,7 +140,7 @@ class DeploymentPlatformAdapter:
             "head",
         ]
         env = os.environ.copy()
-        env.setdefault("DATABASE_URL", self._settings.database_url.replace("+asyncpg", ""))
+        env["DATABASE_URL"] = self._settings.database_url
         result = subprocess.run(
             cmd, capture_output=True, text=True, cwd=alembic_ini.parent, env=env, check=False
         )

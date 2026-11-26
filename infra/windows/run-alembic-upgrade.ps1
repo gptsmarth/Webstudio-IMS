@@ -25,16 +25,17 @@ if (-not (Test-Path $alembicIni)) {
 
 $envFile = Join-Path $InstallRoot "config\env\.env"
 Repair-ProductionEnvFile -InstallRoot $InstallRoot -EnvFile $envFile
-Sync-BackendEnvFile -InstallRoot $InstallRoot
-Import-DotEnvIntoProcess -Path $envFile
 
-$dbUrl = $env:DATABASE_URL
-if (-not $dbUrl -or $dbUrl -match 'CHANGE_ME') {
+$dbUrl = (Read-DotEnvFile -Path $envFile)["DATABASE_URL"]
+if (-not $dbUrl -or $dbUrl -match ':CHANGE_ME@') {
     throw @"
 DATABASE_URL in $envFile still contains CHANGE_ME or is empty.
 Run: powershell -ExecutionPolicy Bypass -File "$InstallRoot\infra\windows\finalize-server-setup.ps1"
 "@
 }
+
+Sync-BackendEnvFile -InstallRoot $InstallRoot
+Import-DotEnvIntoProcess -Path $envFile
 
 $migrationsDir = Join-Path $InstallRoot "database\migrations"
 Push-Location $migrationsDir

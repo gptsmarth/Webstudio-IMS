@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Settings,
   Boxes,
+  Columns3,
 } from 'lucide-react';
 import { ROUTE_PERMISSIONS } from '../services/PermissionService';
 
@@ -20,6 +21,7 @@ export type UserRole = 'main_admin' | 'admin' | 'salesperson';
 export type WorkspaceRoute =
   | 'dashboard'
   | 'stock'
+  | 'comparison'
   | 'inventory'
   | 'purchase'
   | 'sales'
@@ -105,6 +107,14 @@ export const NAV_ITEMS: NavItemConfig[] = [
     group: 'administration',
     permission: ROUTE_PERMISSIONS.reports,
     description: 'Inventory, sales, audit exports and report previews.',
+  },
+  {
+    id: 'comparison',
+    label: 'Comparison',
+    icon: Columns3,
+    group: 'operations',
+    permission: ROUTE_PERMISSIONS.comparison,
+    description: 'Compare laptop specifications side by side.',
   },
   {
     id: 'asus-weekly-report',

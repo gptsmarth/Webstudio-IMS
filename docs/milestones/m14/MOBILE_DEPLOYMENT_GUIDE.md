@@ -25,10 +25,10 @@ Production guide for **Flutter** clients: **Android APK** and **iOS**.
 | Platform | Artifact | Build |
 |----------|----------|-------|
 | **Android** | `WEBSTUDIO IMS.apk` | `pnpm release:android` |
-| **iOS** | IPA (Ad Hoc / TestFlight / Enterprise) | `bash scripts/release/build-ios-ipa.sh` |
+| **iOS** | TestFlight build or signed Ad Hoc IPA | [iOS signing and distribution](../m12c/INSTALLER_GUIDE.md#4-ios--release--ipa) |
 
-Paths: `release/mobile/`  
-Bundle ID: `com.webstudio.webstudio_ims`
+Local artifacts are stored in `release/mobile/`. The Android application ID is
+`com.webstudio.webstudio_ims`. The iOS bundle ID is `com.webstudio.webstudioIms`.
 
 Updates: server-only via `/api/v1/client-updates/check` — **never GitHub**.
 
@@ -56,7 +56,7 @@ Updates: server-only via `/api/v1/client-updates/check` — **never GitHub**.
 
 1. Join **store Wi‑Fi** (same subnet as server).
 2. Open app → allow **Local Network** when prompted (iOS 14+).
-3. Server discovered automatically or enter `http://<server-ip>:8000`.
+3. Select the discovered server or enter the office server's trusted HTTPS address.
 4. **Test connection** → Save.
 5. Log in with staff credentials.
 
