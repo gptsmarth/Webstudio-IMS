@@ -3,7 +3,7 @@
 
 #define MyAppName "WEBSTUDIO Server"
 #define MyAppVersion "2.8.0"
-#define MyAppBuild 9
+#define MyAppBuild 10
 #define MyAppPublisher "WEBSTUDIO"
 #define MyAppURL "https://webstudio.local"
 #define InstallRoot "D:\WEBSTUDIO-IMS"

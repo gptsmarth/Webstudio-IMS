@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.0] - 2026-11-26
 
+- Add Asus Activation with historical scheme matching, monthly claims, credit-note preview and confirmation, discrepancy resolution, and Excel exports.
 - Reuse the saved PostgreSQL connection on Windows Server upgrades. Show the manual provisioning choice on fresh setup when a connection is needed.
 - Repair and verify the NSSM service environment before starting the upgraded server.
 - Compare two to four laptops in the Desktop workspace and present the specs in Customer View. Look up outside-inventory models with Gemini and keep verified results for 30 days.
